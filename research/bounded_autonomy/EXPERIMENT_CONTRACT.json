@@ -1,0 +1,86 @@
+{
+  "ai_incremental_value_boundary": {
+    "ai_arm_can_expand_deterministic_eligible_set": false,
+    "ai_arm_can_raise_risk_or_size": false,
+    "ai_arm_primary_role": "VETO_OR_LOWER_CONFIDENCE",
+    "canonical_arithmetic_by_ai": false,
+    "deterministic_autonomy_is_required_baseline": true
+  },
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "historical_market_release_authorized": false,
+    "historical_replay_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "non_signing_shadow_authorized": false,
+    "paper_order_submission_authorized": false,
+    "signed_testnet_actions_authorized": false
+  },
+  "comparison_modes": [
+    "SOURCE_WALLET_DIAGNOSTIC",
+    "THEORETICAL_ZERO_LATENCY",
+    "DETERMINISTIC_AUTONOMOUS",
+    "DETERMINISTIC_PLUS_AI_CRITIC",
+    "HUMAN_ONE_CLICK",
+    "HUMAN_MANUAL",
+    "NO_TRADE",
+    "MATCHED_RANDOM_WALLET",
+    "MATCHED_EXPOSURE_RANDOM_ENTRY",
+    "MATCHED_TURNOVER_RANDOM_ENTRY",
+    "SIMPLE_PRICE_MOMENTUM"
+  ],
+  "contract_id": "DEX_COPY_AUTONOMY_EXPERIMENT_CONTRACT_V1",
+  "data_boundary": {
+    "empirical_result": null,
+    "market_data_ingested_under_this_contract": false,
+    "parent_data_contract": "research/wallet_copyability/DATA_CONTRACT.json",
+    "parent_market_release_required_before_replay": true,
+    "point_in_time_rule": "first_seen_at <= selection_timestamp"
+  },
+  "initial_instruments": [
+    "BTC",
+    "ETH",
+    "SOL"
+  ],
+  "initial_products": [
+    "PERPETUALS"
+  ],
+  "latency_arms_milliseconds": [
+    200,
+    1000,
+    3000,
+    5000,
+    10000,
+    15000,
+    30000,
+    60000,
+    120000,
+    300000
+  ],
+  "live_risk_parameters": {
+    "defaults_allowed": false,
+    "state": "UNSET_LIVE_BLOCKER"
+  },
+  "parent_immutability": {
+    "future_cluster_links_allowed": false,
+    "future_wallet_performance_allowed": false,
+    "parent_cost_model_can_be_rewritten": false,
+    "parent_labels_can_be_rewritten": false,
+    "parent_signal_set_can_be_rewritten": false,
+    "parent_terminal_result_can_be_rewritten": false
+  },
+  "parent_study": "WALLET-COPYABILITY-STUDY-001",
+  "primary_estimand": "NET_FOLLOWER_EXPECTANCY",
+  "required_terminal_decisions": [
+    "GO_TO_SHADOW_DESIGN",
+    "REPAIR_AND_RERUN",
+    "NO_GO_BOUNDED_AUTONOMY",
+    "NO_GO_NO_COPYABLE_ALPHA"
+  ],
+  "schema_version": "1.0",
+  "stage": "RESEARCH",
+  "status": "PREREGISTERED_GOVERNANCE_ONLY_NO_EXECUTION",
+  "study_id": "DEX-COPY-AUTONOMY-001",
+  "venue": "HYPERLIQUID_PUBLIC_MAINNET"
+}
