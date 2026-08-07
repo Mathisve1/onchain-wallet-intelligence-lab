@@ -27,7 +27,7 @@ class ArchiveCostGuardTests(unittest.TestCase):
         with self.assertRaises(GuardViolation):
             guard.record_response("market_data", response_bytes=100, entry_count=10, next_continuation_token="same")
 
-    def test_runtime_retry_family_and_byte_limits(self) -> None:
+    def test_runtime_retry_family_byte_and_per_response_entry_limits(self) -> None:
         guard = InventoryGuard(started_monotonic=0.0)
         with self.assertRaises(GuardViolation):
             guard.before_request("market_data", now_monotonic=901.0, retry_index=0)
@@ -35,10 +35,16 @@ class ArchiveCostGuardTests(unittest.TestCase):
             guard.before_request("market_data", now_monotonic=1.0, retry_index=2)
         with self.assertRaises(GuardViolation):
             guard.before_request("unknown", now_monotonic=1.0, retry_index=0)
+
         guard = InventoryGuard(started_monotonic=0.0)
         guard.before_request("asset_ctxs", now_monotonic=1.0, retry_index=0)
         with self.assertRaises(GuardViolation):
             guard.record_response("asset_ctxs", response_bytes=268435457, entry_count=1, next_continuation_token=None)
+
+        guard = InventoryGuard(started_monotonic=0.0)
+        guard.before_request("node_fills_by_block", now_monotonic=1.0, retry_index=0)
+        with self.assertRaises(GuardViolation):
+            guard.record_response("node_fills_by_block", response_bytes=1000, entry_count=1001, next_continuation_token=None)
 
 
 if __name__ == "__main__":
