@@ -9,18 +9,27 @@
             "node_fills/*",
             "node_trades/*",
             "explorer_blocks/*",
-            "replica_cmds/*",
+            "replica_cmds/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:aws:s3:::hl-mainnet-node-data",
+      "Sid": "AllowNodeDataExactPrefixListing"
+    },
+    {
+      "Action": "s3:ListBucket",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
             "market_data/*",
             "asset_ctxs/*"
           ]
         }
       },
       "Effect": "Allow",
-      "Resource": [
-        "arn:aws:s3:::hl-mainnet-node-data",
-        "arn:aws:s3:::hyperliquid-archive"
-      ],
-      "Sid": "AllowExactArchivePrefixListing"
+      "Resource": "arn:aws:s3:::hyperliquid-archive",
+      "Sid": "AllowArchiveExactPrefixListing"
     },
     {
       "Action": [
