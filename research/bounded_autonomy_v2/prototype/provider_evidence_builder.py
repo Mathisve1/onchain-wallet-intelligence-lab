@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from signature_backend_adapter import SignatureAdapterError
 
 ROOT = Path(__file__).resolve().parents[1]
 MUTABLE_KEY_MARKERS = {"latest", "current", "primary"}
+AWS_KEY_ID_RE = re.compile(r"^[0-9a-fA-F-]{32,64}$")
 MIN_LATENCY_SAMPLES_FOR_COMPATIBLE_CANDIDATE = 100
 
 
@@ -56,6 +58,33 @@ def _mutate_digest(digest: bytes) -> bytes:
     return bytes([digest[0] ^ 1]) + digest[1:]
 
 
+def _validate_immutable_key_resource(provider: str, resource: str) -> None:
+    low = resource.lower().strip()
+    if len(resource) < 8 or low in MUTABLE_KEY_MARKERS:
+        raise ProviderEvidenceError("capture:key_version_not_immutable")
+    provider_upper = provider.upper()
+    if "AWS" in provider_upper:
+        if "alias/" in low or ":alias/" in low:
+            raise ProviderEvidenceError("capture:aws_alias_forbidden")
+        if not (":key/" in low or AWS_KEY_ID_RE.fullmatch(resource)):
+            raise ProviderEvidenceError("capture:aws_exact_key_id_or_arn_required")
+    elif "GOOGLE" in provider_upper or "GCP" in provider_upper:
+        marker = "/cryptokeyversions/"
+        if marker not in low:
+            raise ProviderEvidenceError("capture:gcp_exact_key_version_required")
+        version = low.rsplit(marker, 1)[1]
+        if not version.isdigit():
+            raise ProviderEvidenceError("capture:gcp_numeric_key_version_required")
+    elif "AZURE" in provider_upper:
+        parts = [part for part in resource.rstrip("/").split("/") if part]
+        lowered = [part.lower() for part in parts]
+        if "keys" not in lowered:
+            raise ProviderEvidenceError("capture:azure_key_version_required")
+        index = lowered.index("keys")
+        if len(parts) < index + 3 or not parts[index + 2]:
+            raise ProviderEvidenceError("capture:azure_exact_key_version_required")
+
+
 def _normalize_public_key(capture: dict[str, Any]) -> tuple[bytes, str]:
     format_name = capture.get("public_key_format")
     if format_name == "SPKI_DER_BASE64":
@@ -72,9 +101,9 @@ def _normalize_public_key(capture: dict[str, Any]) -> tuple[bytes, str]:
 def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None = None) -> dict[str, Any]:
     if capture.get("schema_version") != "0.3-local-ephemeral":
         raise ProviderEvidenceError("capture:schema")
+    provider = str(capture.get("provider", ""))
     resource = str(capture.get("key_resource_version", ""))
-    if len(resource) < 8 or resource.lower() in MUTABLE_KEY_MARKERS:
-        raise ProviderEvidenceError("capture:key_version_not_immutable")
+    _validate_immutable_key_resource(provider, resource)
 
     fixtures_path = fixtures_path or (ROOT / "PROVIDER_PARITY_FIXTURES.json")
     fixture = _fixture(fixtures_path, capture["fixture_id"])
@@ -87,7 +116,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
 
     digest_mode = str(capture["digest_mode"])
     config = BackendConfig(
-        provider=str(capture["provider"]),
+        provider=provider,
         key_version=resource,
         algorithm=str(capture["algorithm"]),
         encoding=str(capture["signature_encoding"]),
@@ -160,7 +189,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
 
     return {
         "schema_version": "0.4",
-        "provider": str(capture["provider"]),
+        "provider": provider,
         "service": str(capture["service"]),
         "region_or_location": str(capture["region_or_location"]),
         "key_resource_version_hash": _sha(resource.encode("utf-8")),
