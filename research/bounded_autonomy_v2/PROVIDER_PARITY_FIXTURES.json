@@ -1,0 +1,122 @@
+{
+  "schema_version": "0.1",
+  "status": "OFFLINE_FIXTURES_NO_PROVIDER_CALL_AUTHORIZATION",
+  "official_sdk_pin": "2fdb18f9517675ea03695a0962bd19eece9c83f0",
+  "fixtures": [
+    {
+      "id": "HL-OFFICIAL-DUMMY-MAINNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {"type": "dummy", "num": 100000000000},
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "MAINNET",
+      "action_hash": "f528daee6a0bd11407b483cfcd9a48c56884180b70ee86f124053e5fc1bf4d57",
+      "eip712_digest": "e0aabfac88a47d3e7028b6ba6a94b30c8afcfffac26cbce788cf362b1312eafa"
+    },
+    {
+      "id": "HL-OFFICIAL-DUMMY-TESTNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {"type": "dummy", "num": 100000000000},
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "TESTNET",
+      "action_hash": "f528daee6a0bd11407b483cfcd9a48c56884180b70ee86f124053e5fc1bf4d57",
+      "eip712_digest": "c05ce2df9d9d18fab3570746cc27e1136a4020a28561171a24f60c2258989224"
+    },
+    {
+      "id": "HL-OFFICIAL-ORDER-MAINNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 1, "b": true, "p": "100", "s": "100", "r": false, "t": {"limit": {"tif": "Gtc"}}}],
+        "grouping": "na"
+      },
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "MAINNET",
+      "action_hash": "884f2c32bb6dbdd65f6033e32fb28c0cb6f5b345db0f6471fd3366d85c9252c1",
+      "eip712_digest": "a5cfed1f2d7948de30aecacc7fea3c5e05c1e759020e96239847879b906f801e"
+    },
+    {
+      "id": "HL-OFFICIAL-ORDER-TESTNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 1, "b": true, "p": "100", "s": "100", "r": false, "t": {"limit": {"tif": "Gtc"}}}],
+        "grouping": "na"
+      },
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "TESTNET",
+      "action_hash": "884f2c32bb6dbdd65f6033e32fb28c0cb6f5b345db0f6471fd3366d85c9252c1",
+      "eip712_digest": "606be2d25f68768f876dc04a2c3c86ceafd2d6a3c3cbb963454462d6734ebfa6"
+    },
+    {
+      "id": "HL-OFFICIAL-CLOID-MAINNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 1, "b": true, "p": "100", "s": "100", "r": false, "t": {"limit": {"tif": "Gtc"}}, "c": "0x00000000000000000000000000000001"}],
+        "grouping": "na"
+      },
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "MAINNET",
+      "action_hash": "0ba500cedd8f4ba6ded620a0b1cd04f124d9ba745e2e2893fcc763bcc1444af5",
+      "eip712_digest": "54a60f6e5107c3ebbd5600ce51c5c208b66c4acdaddf159d34f380f4985f4a3f"
+    },
+    {
+      "id": "HL-OFFICIAL-CLOID-TESTNET",
+      "provenance": "OFFICIAL_SIGNING_TEST_VECTOR_REPRODUCED_INDEPENDENTLY",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 1, "b": true, "p": "100", "s": "100", "r": false, "t": {"limit": {"tif": "Gtc"}}, "c": "0x00000000000000000000000000000001"}],
+        "grouping": "na"
+      },
+      "nonce": 0,
+      "vault_address": null,
+      "expires_after": null,
+      "network": "TESTNET",
+      "action_hash": "0ba500cedd8f4ba6ded620a0b1cd04f124d9ba745e2e2893fcc763bcc1444af5",
+      "eip712_digest": "40529778f312dd898fe2e3b86a6f8ad38db2e4fb6e2d8012349b6021407c5328"
+    },
+    {
+      "id": "OWIL-IOC-EXPIRY-MAINNET",
+      "provenance": "PROJECT_SYNTHETIC_EXPIRY_FIXTURE_NOT_OFFICIAL_SIGNATURE_VECTOR",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 0, "b": true, "p": "50000", "s": "0.01", "r": false, "t": {"limit": {"tif": "Ioc"}}, "c": "0x11111111111111111111111111111111"}],
+        "grouping": "na"
+      },
+      "nonce": 1700000000000,
+      "vault_address": null,
+      "expires_after": 1700000005000,
+      "network": "MAINNET",
+      "action_hash": "8b2c7722ec3a4cb3e18ebe87d8741e635195c8d1eba4f524b0d35299201374df",
+      "eip712_digest": "7abf7eed616b9d5e6e7dd13e7c4b81c395987a941e00eebc5065c2f74983bc83"
+    },
+    {
+      "id": "OWIL-IOC-EXPIRY-TESTNET",
+      "provenance": "PROJECT_SYNTHETIC_EXPIRY_FIXTURE_NOT_OFFICIAL_SIGNATURE_VECTOR",
+      "action": {
+        "type": "order",
+        "orders": [{"a": 0, "b": true, "p": "50000", "s": "0.01", "r": false, "t": {"limit": {"tif": "Ioc"}}, "c": "0x11111111111111111111111111111111"}],
+        "grouping": "na"
+      },
+      "nonce": 1700000000000,
+      "vault_address": null,
+      "expires_after": 1700000005000,
+      "network": "TESTNET",
+      "action_hash": "8b2c7722ec3a4cb3e18ebe87d8741e635195c8d1eba4f524b0d35299201374df",
+      "eip712_digest": "93857172c1a60ec0ba526faf1591128c81997c5af7f663adcd24599b3a9826b0"
+    }
+  ],
+  "provider_network_call_authorized": false,
+  "hyperliquid_testnet_authorized": false,
+  "hyperliquid_mainnet_authorized": false
+}
