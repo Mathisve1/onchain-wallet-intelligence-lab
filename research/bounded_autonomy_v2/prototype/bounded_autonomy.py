@@ -11,10 +11,12 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ADDRESS_RE = re.compile(r"^0x[0-9a-f]{40}$")
 CLOID_RE = re.compile(r"^0x[0-9a-f]{32}$")
 ORDER_REF_RE = re.compile(r"^[A-Za-z0-9._:-]{8,160}$")
+REASON_RE = re.compile(r"^[A-Z0-9_]{2,80}$")
 
 ALLOWED_ACTIONS = {"PLACE_IOC_LIMIT", "REDUCE_ONLY_IOC", "CANCEL_BY_CLOID"}
 ALLOWED_INSTRUMENTS = {"BTC", "ETH", "SOL"}
-AI_STATUSES = {"NOT_USED", "PASS", "VETO", "TIMEOUT", "ERROR"}
+AI_STATUSES = {"PASS", "VETO", "TIMEOUT", "ERROR"}
+DECISION_MODES = {"DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC", "DETERMINISTIC_SAFETY"}
 UPWARD_STATES = ["DISABLED", "RESEARCH_ONLY", "SHADOW_ONLY", "SIGNED_TEST_ONLY", "ACTIVE_BOUNDED"]
 
 
@@ -96,6 +98,11 @@ def validate_risk_envelope(envelope: dict[str, Any], now_ms: int) -> None:
         "max_strategy_drawdown_usd",
     ):
         decimal_string(envelope.get(key), f"envelope:{key}", allow_zero=True)
+    inst_caps = envelope.get("max_instrument_exposure_usd")
+    if not isinstance(inst_caps, dict):
+        raise PolicyError("envelope:instrument_caps")
+    for instrument in instruments:
+        decimal_string(inst_caps.get(instrument), f"envelope:instrument_cap:{instrument}", allow_zero=True)
     if envelope.get("max_unreconciled_actions") != 0:
         raise PolicyError("envelope:unreconciled_must_be_zero")
     if not isinstance(envelope.get("max_slippage_bps"), int) or not (0 <= envelope["max_slippage_bps"] <= 10000):
@@ -108,6 +115,33 @@ def validate_risk_envelope(envelope: dict[str, Any], now_ms: int) -> None:
         raise PolicyError("envelope:open_positions")
     if not isinstance(envelope.get("min_cancel_action_reserve"), int) or envelope["min_cancel_action_reserve"] <= 0:
         raise PolicyError("envelope:cancel_reserve")
+    if envelope.get("ai_critic_mode") not in {"DISABLED", "VETO_ONLY_REQUIRED", "VETO_ONLY_BEST_EFFORT_RESEARCH"}:
+        raise PolicyError("envelope:ai_critic_mode")
+
+
+def _validate_ai_mode(intent: dict[str, Any], envelope: dict[str, Any], action: str) -> Decision | None:
+    mode = intent.get("decision_mode")
+    if mode not in DECISION_MODES:
+        return Decision(False, "BLOCK_DECISION_MODE")
+    if action == "PLACE_IOC_LIMIT" and mode == "DETERMINISTIC_SAFETY":
+        return Decision(False, "BLOCK_SAFETY_MODE_ENTRY")
+
+    ai = intent.get("ai_assessment")
+    model_hash = intent.get("model_version_hash")
+    if mode == "DETERMINISTIC_PLUS_AI_CRITIC":
+        require_sha256(model_hash, "intent:model_version_hash")
+        if not isinstance(ai, dict) or ai.get("status") not in AI_STATUSES:
+            return Decision(False, "BLOCK_AI_ASSESSMENT")
+        if ai.get("veto") is True or ai.get("status") == "VETO":
+            return Decision(False, "BLOCK_AI_VETO")
+        if action == "PLACE_IOC_LIMIT" and envelope["ai_critic_mode"] == "VETO_ONLY_REQUIRED" and ai.get("status") != "PASS":
+            return Decision(False, "SKIP_AI_REQUIRED")
+    else:
+        if ai is not None or model_hash is not None:
+            return Decision(False, "BLOCK_UNEXPECTED_AI_FIELDS")
+        if action == "PLACE_IOC_LIMIT" and envelope["ai_critic_mode"] == "VETO_ONLY_REQUIRED":
+            return Decision(False, "SKIP_AI_REQUIRED")
+    return None
 
 
 def _validate_common_intent(
@@ -117,7 +151,7 @@ def _validate_common_intent(
     now_ms: int,
     current_policy_hash: str,
 ) -> Decision | None:
-    if intent.get("schema_version") != "0.2-design":
+    if intent.get("schema_version") != "0.3-design":
         return Decision(False, "BLOCK_INTENT_SCHEMA")
     action = intent.get("action")
     instrument = intent.get("instrument")
@@ -135,20 +169,20 @@ def _validate_common_intent(
     policy_hash = require_sha256(intent.get("policy_version_hash"), "intent:policy_hash")
     if policy_hash != current_policy_hash or current_policy_hash != envelope["policy_hash"]:
         return Decision(False, "BLOCK_POLICY_HASH")
-    for key in ("strategy_version_hash", "model_version_hash", "data_snapshot_hash", "risk_snapshot_hash"):
+    for key in ("strategy_version_hash", "data_snapshot_hash", "risk_snapshot_hash"):
         require_sha256(intent.get(key), f"intent:{key}")
-    ai = intent.get("ai_assessment")
-    if not isinstance(ai, dict) or ai.get("status") not in AI_STATUSES:
-        return Decision(False, "BLOCK_AI_ASSESSMENT")
-    if ai.get("veto") is True or ai.get("status") == "VETO":
-        return Decision(False, "BLOCK_AI_VETO")
-    mode = envelope.get("ai_critic_mode")
-    if mode == "VETO_ONLY_REQUIRED" and ai.get("status") != "PASS":
-        return Decision(False, "SKIP_AI_REQUIRED")
+    ai_decision = _validate_ai_mode(intent, envelope, action)
+    if ai_decision is not None:
+        return ai_decision
     return None
 
 
 def _validate_owned_cancel(intent: dict[str, Any], risk_state: dict[str, Any]) -> Decision:
+    if intent.get("decision_mode") not in {"DETERMINISTIC_ONLY", "DETERMINISTIC_SAFETY"}:
+        return Decision(False, "BLOCK_CANCEL_AI_MODE")
+    reason = intent.get("reason_code")
+    if not isinstance(reason, str) or REASON_RE.fullmatch(reason) is None:
+        return Decision(False, "BLOCK_REASON_CODE")
     ref = intent.get("target_strategy_order_id")
     if not isinstance(ref, str) or ORDER_REF_RE.fullmatch(ref) is None:
         return Decision(False, "BLOCK_CANCEL_TARGET")
@@ -172,6 +206,9 @@ def _validate_reduce_only(
     now_ms: int,
     envelope: dict[str, Any],
 ) -> Decision | None:
+    reason = intent.get("reason_code")
+    if not isinstance(reason, str) or REASON_RE.fullmatch(reason) is None:
+        return Decision(False, "BLOCK_REASON_CODE")
     if intent.get("side") not in {"BUY", "SELL"}:
         return Decision(False, "BLOCK_SIDE")
     if intent.get("reduce_only") is not True:
@@ -215,14 +252,15 @@ def evaluate_intent(
             return Decision(False, "BLOCK_KILL_SWITCH")
         if risk_state.get("unreconciled_actions") != 0:
             return Decision(False, "BLOCK_UNRECONCILED")
-        if risk_state.get("cancel_action_reserve", 0) < envelope["min_cancel_action_reserve"]:
-            return Decision(False, "BLOCK_CANCEL_RESERVE")
         common = _validate_common_intent(
             intent, envelope, now_ms=now_ms, current_policy_hash=current_policy_hash
         )
         if common is not None:
             return common
         action = intent["action"]
+
+        # Cancel and reduce-only are safety-preserving surfaces and are not blocked
+        # by entry exposure/loss caps or entry rate-budget reserve checks.
         if action == "CANCEL_BY_CLOID":
             return _validate_owned_cancel(intent, risk_state)
 
@@ -239,6 +277,11 @@ def evaluate_intent(
             return Decision(True, "ALLOW_REDUCE_ONLY")
 
         # From here on only new risk / PLACE_IOC_LIMIT remains.
+        if risk_state.get("cancel_action_reserve", 0) < envelope["min_cancel_action_reserve"]:
+            return Decision(False, "BLOCK_CANCEL_RESERVE")
+        source_signal_id = intent.get("source_signal_id")
+        if not isinstance(source_signal_id, str) or len(source_signal_id) < 8:
+            return Decision(False, "BLOCK_SOURCE_SIGNAL")
         if intent.get("side") not in {"BUY", "SELL"}:
             return Decision(False, "BLOCK_SIDE")
         if intent.get("reduce_only") is not False:
