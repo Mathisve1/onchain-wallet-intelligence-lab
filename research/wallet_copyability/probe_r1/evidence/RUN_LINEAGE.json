@@ -79,10 +79,10 @@
       "technical_route_result": "PUBLIC_PROBE_PASS"
     },
     {
-      "accepted_for_final_attestation": true,
+      "accepted_for_final_attestation": false,
       "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
       "checked_out_merge_commit": "3de0cb4ee963357fa6fae4c215643cc2ce22acdc",
-      "classification": "FINAL_CANDIDATE_PUBLIC_PROBE_PASS",
+      "classification": "SUPERSEDED_EQUIVALENT_PR_MERGE_REF_PASS_EXACT_SOURCE_HEAD_REQUIRED",
       "fail_count": 0,
       "head_commit": "facd8b26778eb483a4917fc4418069c35b981e8b",
       "lineage_order": 4,
@@ -107,9 +107,39 @@
         "run_id": 31179660399
       },
       "technical_route_result": "PUBLIC_PROBE_PASS"
+    },
+    {
+      "accepted_for_final_attestation": true,
+      "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+      "checked_out_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+      "checked_out_commit_matches_reviewed_commit": true,
+      "classification": "FINAL_EXACT_SOURCE_HEAD_PUBLIC_PROBE_PASS",
+      "fail_count": 0,
+      "head_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+      "lineage_order": 5,
+      "market_result": null,
+      "network_executed": true,
+      "pass_count": 16,
+      "public_probe": {
+        "artifact_digest": "sha256:5a30c6e9a2b80e49eac6d341e0c93f9e182a408b1f10f81270795054eee5534e",
+        "artifact_id": 8999652912,
+        "artifact_name": "hyperliquid-public-probe-r1-31193129277-1",
+        "artifact_zip_sha256": "5a30c6e9a2b80e49eac6d341e0c93f9e182a408b1f10f81270795054eee5534e",
+        "conclusion": "success",
+        "job_id": 92914689054,
+        "probe_output_sha256": "c4cd5f6c087da712c4ce5c23351a672704ae402b9b05577830bed8872152c3ac",
+        "run_attempt": 1,
+        "run_id": 31193129277
+      },
+      "research_ci": {
+        "conclusion": "success",
+        "job_id": 92914022092,
+        "run_id": 31192935736
+      },
+      "technical_route_result": "PUBLIC_PROBE_PASS"
     }
   ],
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "study_id": "WALLET-COPYABILITY-STUDY-001",
-  "updated_at_utc": "2026-08-07T13:13:21Z"
+  "updated_at_utc": "2026-08-07T15:37:49Z"
 }
