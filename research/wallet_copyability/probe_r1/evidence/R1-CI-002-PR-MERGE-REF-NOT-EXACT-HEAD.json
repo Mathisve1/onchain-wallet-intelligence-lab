@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "finding_id": "R1-CI-002-PR-MERGE-REF-NOT-EXACT-HEAD",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "classification": "INTEGRITY_DEFECT_REPAIRED_BEFORE_ACCEPTED_NETWORK_RUN",
+  "observed_at_utc": "2026-08-07T12:14:48Z",
+  "pull_request": 5,
+  "declared_source_head": "2689e1b7b3ef46909b298230ee53499b30d13772",
+  "observed_checked_out_commit": "f60c13aba871295e886cc8aa816b11afd759f85a",
+  "observed_ref_class": "TEMPORARY_PULL_REQUEST_MERGE_COMMIT",
+  "affected_run_id": 31177376738,
+  "affected_job_id": 92862275918,
+  "network_execution_started": false,
+  "accepted_technical_evidence": false,
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "root_cause": "actions/checkout used the default pull_request merge ref while the evidence contract claimed exact source-head review",
+  "repair": {
+    "checkout_ref": "github.event.pull_request.head.sha for pull_request; github.sha for workflow_dispatch",
+    "explicit_git_head_equality_check": true,
+    "run_context_uses_exact_reviewed_commit": true,
+    "old_run_reusable_as_exact_head_evidence": false
+  },
+  "integration_authorized": false,
+  "paper_authorized": false,
+  "shadow_authorized": false,
+  "live_authorized": false,
+  "leverage_authorized": false,
+  "capital_allocation_authorized": false
+}
