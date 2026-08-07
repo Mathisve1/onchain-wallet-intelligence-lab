@@ -1,0 +1,114 @@
+{
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "empirical_result": null,
+  "lineage_id": "HL-PUBLIC-PROBE-001R1-RUN-LINEAGE",
+  "market_data_ingested": false,
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "runs": [
+    {
+      "accepted_for_final_attestation": false,
+      "classification": "FAILED_PRE_NETWORK_PACKAGING",
+      "finding_id": "R1-CI-001-MISSING-COLLECTOR-MODULES",
+      "head_commit": "2689e1b7b3ef46909b298230ee53499b30d13772",
+      "lineage_order": 1,
+      "market_result": null,
+      "network_executed": false,
+      "public_probe": {
+        "artifact_digest": "sha256:53e8e890f0cd73491645bb113e412a0617ca90f02aeaa87bc6b8cb165bbed591",
+        "artifact_id": 8993336751,
+        "conclusion": "failure",
+        "job_id": 92862275918,
+        "run_id": 31177376738
+      },
+      "research_ci": {
+        "conclusion": "failure",
+        "job_id": 92862280886,
+        "run_id": 31177378135
+      },
+      "technical_route_result": null
+    },
+    {
+      "accepted_for_final_attestation": false,
+      "classification": "FAILED_PRE_NETWORK_AST_TEST_FALSE_POSITIVE",
+      "finding_id": "R1-CI-002-REGEX-COMPILE-MISCLASSIFIED",
+      "head_commit": "884f950ec97624c6c2a35c7691b2e05220f5e606",
+      "lineage_order": 2,
+      "market_result": null,
+      "network_executed": false,
+      "public_probe": {
+        "artifact_digest": "sha256:7d438ce743c0a50ed679d1a9e52413891cc36bb01ab3e8d8beef8b849d6dd2fd",
+        "artifact_id": 8994053130,
+        "conclusion": "failure",
+        "job_id": 92868161050,
+        "run_id": 31179201416
+      },
+      "research_ci": {
+        "conclusion": "failure",
+        "job_id": 92868161308,
+        "run_id": 31179201440
+      },
+      "technical_route_result": null
+    },
+    {
+      "accepted_for_final_attestation": false,
+      "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+      "classification": "SUPERSEDED_TECHNICAL_PASS_BEFORE_FINAL_HARDENING",
+      "head_commit": "7db329e6bd356125812be694005b4ac9140aea83",
+      "lineage_order": 3,
+      "market_result": null,
+      "network_executed": true,
+      "public_probe": {
+        "artifact_digest": "sha256:47395f4bbf35cd4a3692d4522d3b683c15c3554c9e04f0464c7924518e1c1668",
+        "artifact_id": 8994080161,
+        "conclusion": "success",
+        "job_id": 92868403043,
+        "run_id": 31179276949
+      },
+      "research_ci": {
+        "conclusion": "success",
+        "job_id": 92868403753,
+        "run_id": 31179277245
+      },
+      "technical_route_result": "PUBLIC_PROBE_PASS"
+    },
+    {
+      "accepted_for_final_attestation": true,
+      "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+      "checked_out_merge_commit": "3de0cb4ee963357fa6fae4c215643cc2ce22acdc",
+      "classification": "FINAL_CANDIDATE_PUBLIC_PROBE_PASS",
+      "fail_count": 0,
+      "head_commit": "facd8b26778eb483a4917fc4418069c35b981e8b",
+      "lineage_order": 4,
+      "market_result": null,
+      "merge_tree_file_diff_count": 0,
+      "network_executed": true,
+      "pass_count": 16,
+      "public_probe": {
+        "artifact_digest": "sha256:12d98fd48ac0c9503e213efa8f93ae2f777e00ca11cfb989a4e5a3100ad8ee11",
+        "artifact_id": 8994227729,
+        "artifact_name": "hyperliquid-public-probe-r1-31179660372-1",
+        "artifact_zip_sha256": "12d98fd48ac0c9503e213efa8f93ae2f777e00ca11cfb989a4e5a3100ad8ee11",
+        "conclusion": "success",
+        "job_id": 92869634761,
+        "probe_output_sha256": "67aa8f6ef1b4399573c775eeb03c0c32bed12def7494c8461893fcab36247d12",
+        "run_attempt": 1,
+        "run_id": 31179660372
+      },
+      "research_ci": {
+        "conclusion": "success",
+        "run_id": 31179660399
+      },
+      "technical_route_result": "PUBLIC_PROBE_PASS"
+    }
+  ],
+  "schema_version": "1.0",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "updated_at_utc": "2026-08-07T13:13:21Z"
+}
