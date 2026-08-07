@@ -1,0 +1,12 @@
+{
+  "encoded_file": "hl-public-probe-r1.json.gz.b64",
+  "encoded_sha256": "5df707227aae2c1cfae7ddb2ab7de69d0aab43ea84663377ec1d9d9c22a384f9",
+  "encoded_size_in_bytes": 8429,
+  "encoding": "GZIP_LEVEL_9_MTIME_0_THEN_BASE64_RFC4648_WITH_TRAILING_NEWLINE",
+  "gzip_sha256": "0a46c50d57422ba72fdc9f98b62f9fe46a83e47baed180a737691a8733347cf1",
+  "gzip_size_in_bytes": 6320,
+  "raw_file_name": "hl-public-probe-r1.json",
+  "raw_sha256": "cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89",
+  "raw_size_in_bytes": 34137,
+  "schema_version": "1.0"
+}
