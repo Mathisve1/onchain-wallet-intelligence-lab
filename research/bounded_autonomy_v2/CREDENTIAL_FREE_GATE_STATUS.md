@@ -17,8 +17,8 @@ by the parallel data lane
 autonomy branch:
 research/bounded-autonomy-execution-v2-20260807
 
-branch relation at verification:
-ahead of main = 106 commits
+branch relation at final verification:
+ahead of main = 108 commits
 behind main = 2 commits
 merge base = c11046bf288687c6945fe9b8f17141204d24aae6
 ```
