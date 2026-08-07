@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from provider_fixture_harness import BackendConfig, adapt_candidate_signature
-from public_key_adapter import parse_secp256k1_spki
+from public_key_adapter import parse_secp256k1_jwk_xy, parse_secp256k1_spki
 from signature_backend_adapter import SignatureAdapterError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,8 +56,21 @@ def _mutate_digest(digest: bytes) -> bytes:
     return bytes([digest[0] ^ 1]) + digest[1:]
 
 
+def _normalize_public_key(capture: dict[str, Any]) -> tuple[bytes, str]:
+    format_name = capture.get("public_key_format")
+    if format_name == "SPKI_DER_BASE64":
+        spki = _b64(capture.get("public_key_spki_base64", ""), "capture:public_key_spki")
+        return parse_secp256k1_spki(spki)
+    if format_name == "JWK_XY_BASE64URL":
+        return parse_secp256k1_jwk_xy(
+            str(capture.get("public_key_jwk_x", "")),
+            str(capture.get("public_key_jwk_y", "")),
+        )
+    raise ProviderEvidenceError("capture:public_key_format")
+
+
 def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None = None) -> dict[str, Any]:
-    if capture.get("schema_version") != "0.2-local-ephemeral":
+    if capture.get("schema_version") != "0.3-local-ephemeral":
         raise ProviderEvidenceError("capture:schema")
     resource = str(capture.get("key_resource_version", ""))
     if len(resource) < 8 or resource.lower() in MUTABLE_KEY_MARKERS:
@@ -69,8 +82,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
     if len(digest) != 32:
         raise ProviderEvidenceError("fixture:digest_length")
 
-    public_key = _b64(capture["public_key_spki_base64"], "capture:public_key")
-    _, derived_address = parse_secp256k1_spki(public_key)
+    normalized_point, derived_address = _normalize_public_key(capture)
     raw_signature = _b64(capture["raw_signature_base64"], "capture:signature")
 
     digest_mode = str(capture["digest_mode"])
@@ -147,12 +159,13 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         decision = "COMPATIBLE_CANDIDATE"
 
     return {
-        "schema_version": "0.3",
+        "schema_version": "0.4",
         "provider": str(capture["provider"]),
         "service": str(capture["service"]),
         "region_or_location": str(capture["region_or_location"]),
         "key_resource_version_hash": _sha(resource.encode("utf-8")),
-        "public_key_sha256": _sha(public_key),
+        "public_key_format": str(capture["public_key_format"]),
+        "public_key_sha256": _sha(normalized_point),
         "expected_signer_address": derived_address,
         "curve": "secp256k1",
         "algorithm": str(capture["algorithm"]),
