@@ -1,0 +1,147 @@
+name: Hyperliquid public technical probe R1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - .github/workflows/hyperliquid-public-probe.yml
+      - governance/validate_probe_evidence.py
+      - research/wallet_copyability/PROBE_CONTRACT.json
+      - research/wallet_copyability/OFFICIAL_SOURCE_REGISTER.json
+      - research/wallet_copyability/scripts/probe_public_api.py
+      - tests/test_probe_*.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hyperliquid-public-probe-r1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  public-probe:
+    name: Execute bounded read-only probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REVIEWED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      REVIEWED_REF: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - name: Check out exact reviewed commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.REVIEWED_COMMIT }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Verify exact checkout and static safety gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_COMMIT"
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest tests.test_probe_static tests.test_probe_evidence -v
+          python governance/validate_probe_evidence.py
+
+      - name: Execute registered public requests
+        id: execute
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          output=/tmp/hyperliquid-public-probe-r1.json
+          set +e
+          python research/wallet_copyability/scripts/probe_public_api.py \
+            --contract research/wallet_copyability/PROBE_CONTRACT.json \
+            --source-register research/wallet_copyability/OFFICIAL_SOURCE_REGISTER.json \
+            --output "$output" \
+            --reviewed-commit "$REVIEWED_COMMIT" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --workflow-job-name "$GITHUB_JOB" \
+            --repository "$GITHUB_REPOSITORY" \
+            --ref "$REVIEWED_REF" \
+            | tee /tmp/hyperliquid-public-probe-r1.log
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "output=$output" >> "$GITHUB_OUTPUT"
+          test -s "$output"
+
+      - name: Independently validate generated output
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/validate_probe_evidence.py \
+            --output "${{ steps.execute.outputs.output }}"
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          path = Path("${{ steps.execute.outputs.output }}")
+          data = path.read_bytes()
+          payload = json.loads(data)
+          print("PROBE_OUTPUT_SHA256=" + hashlib.sha256(data).hexdigest())
+          print("PROBE_TERMINAL_STATUS=" + payload["derived"]["terminal_status"])
+          print("PROBE_REVIEWED_COMMIT=" + payload["reviewed_commit"])
+          print("PROBE_OBSERVATION_COUNT=" + str(len(payload["observations"])))
+          PY
+
+      - name: Upload exact immutable probe output
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          path: /tmp/hyperliquid-public-probe-r1.json
+          if-no-files-found: error
+          retention-days: 30
+          archive: false
+
+      - name: Record artifact identity in logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PROBE_ARTIFACT_ID=${{ steps.upload.outputs.artifact-id }}"
+          echo "PROBE_ARTIFACT_URL=${{ steps.upload.outputs.artifact-url }}"
+          echo "PROBE_ARTIFACT_DIGEST=${{ steps.upload.outputs.artifact-digest }}"
+          echo "PROBE_SCRIPT_EXIT_CODE=${{ steps.execute.outputs.exit_code }}"
+
+      - name: Enforce terminal fail-closed result
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("${{ steps.execute.outputs.output }}").read_text())
+          print(payload["derived"]["terminal_status"])
+          PY
+          )
+          case "$status" in
+            PUBLIC_PROBE_PASS|PUBLIC_PROBE_PARTIAL)
+              exit 0
+              ;;
+            PUBLIC_PROBE_FAIL)
+              echo "Required public capability failed; see immutable artifact."
+              exit 1
+              ;;
+            *)
+              echo "Unknown terminal status: $status"
+              exit 1
+              ;;
+          esac
