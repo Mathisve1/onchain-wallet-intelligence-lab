@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1",
+  "status": "NOT_AUTHORIZED",
+  "purpose": "G4B_DISPOSABLE_PROVIDER_KEY_EXACT_DIGEST_PARITY",
+  "human_governor_approval_required": true,
+  "provider_network_call_authorized": false,
+  "providers": {
+    "AWS_KMS": false,
+    "GOOGLE_CLOUD_KMS": false,
+    "AZURE_KEY_VAULT_OR_MANAGED_HSM": false,
+    "OTHER": false
+  },
+  "budget": {
+    "currency": "EUR",
+    "maximum_one_time_spend": null,
+    "maximum_recurring_spend": "0",
+    "maximum_provider_sign_requests": null,
+    "maximum_key_count": null
+  },
+  "credential_scope": {
+    "account_project_subscription": null,
+    "runtime_principal": null,
+    "key_admin_principal": null,
+    "credentials_registered": false
+  },
+  "required_before_authorization": [
+    "EXPLICIT_PROVIDER_SELECTION",
+    "EXPLICIT_ONE_TIME_EUR_BUDGET",
+    "EXPLICIT_MAX_SIGN_REQUEST_COUNT",
+    "DISPOSABLE_ACCOUNT_PROJECT_OR_SUBSCRIPTION_CONTEXT",
+    "MINIMUM_PRIVILEGE_RUNTIME_IDENTITY_PLAN",
+    "KEY_TEARDOWN_OR_DESTRUCTION_PLAN",
+    "CURRENT_PROVIDER_PRICING_REVIEW",
+    "EXACT_CANONICAL_AUTONOMY_COMMIT_AFTER_FUTURE_RECONCILIATION"
+  ],
+  "forbidden_even_after_g4b_provider_authorization": [
+    "REGISTER_PROVIDER_KEY_AS_HYPERLIQUID_AGENT",
+    "HYPERLIQUID_TESTNET_ORDER",
+    "HYPERLIQUID_MAINNET_ORDER",
+    "TRANSFER",
+    "WITHDRAWAL",
+    "LEVERAGE_CHANGE",
+    "CAPITAL_ALLOCATION"
+  ],
+  "hyperliquid_testnet_authorized": false,
+  "hyperliquid_mainnet_authorized": false,
+  "capital_allocation_authorized": false
+}
