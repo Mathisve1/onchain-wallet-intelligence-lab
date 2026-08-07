@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROBE_ROOT = ROOT / "research/wallet_copyability/probe_r1"
 EVIDENCE_ROOT = PROBE_ROOT / "evidence"
-RUN_ROOT = EVIDENCE_ROOT / "run-31179660372"
+RUN_ROOT = EVIDENCE_ROOT / "run-31193129277"
 sys.path.insert(0, str(PROBE_ROOT))
 
 import contract
@@ -89,6 +89,9 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             (evidence["pass_count"], evidence["fail_count"]),
             (16, 0),
         )
+        self.assertEqual(evidence["total_request_attempts"], 16)
+        self.assertEqual(evidence["total_declared_request_weight"], 586)
+        self.assertEqual(evidence["remaining_declared_weight_margin"], 614)
         self.assertFalse(evidence["market_data_ingested"])
         self.assertIsNone(evidence["empirical_result"])
 
@@ -106,11 +109,15 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(
             record["reviewed_commit"],
-            "facd8b26778eb483a4917fc4418069c35b981e8b",
+            "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
         )
-        self.assertEqual(record["workflow_run_id"], 31179660372)
-        self.assertEqual(record["workflow_job_id"], 92869634761)
-        self.assertEqual(record["artifact_id"], 8994227729)
+        self.assertEqual(record["workflow_run_id"], 31193129277)
+        self.assertEqual(record["workflow_job_id"], 92914689054)
+        self.assertEqual(record["artifact_id"], 8999652912)
+        self.assertEqual(
+            record["artifact_zip_sha256"],
+            "5a30c6e9a2b80e49eac6d341e0c93f9e182a408b1f10f81270795054eee5534e",
+        )
         self.assertEqual(
             record["review_status"],
             "CLEAN_CONTEXT_REVIEW_PASS",
@@ -153,12 +160,41 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         self.assertTrue(
             verification["artifact"]["provider_digest_matches_download"]
         )
+        self.assertTrue(
+            verification["checked_out_commit_matches_reviewed_commit"]
+        )
+        self.assertEqual(
+            verification["checked_out_commit"],
+            verification["reviewed_commit"],
+        )
+        self.assertTrue(
+            verification["probe_output"]["request_hashes_match_frozen_contract"]
+        )
+        self.assertTrue(
+            verification["probe_output"]["response_classes_match_frozen_contract"]
+        )
+        self.assertTrue(
+            verification["validation"]["request_hashes_recomputed"]
+        )
+        self.assertTrue(
+            verification["validation"][
+                "terminal_and_archive_states_independently_derived"
+            ]
+        )
         self.assertEqual(
             verification["privacy_checks"]["ethereum_address_patterns_found"],
             0,
         )
         self.assertFalse(
             verification["privacy_checks"]["raw_response_bodies_present"]
+        )
+        self.assertFalse(
+            verification["privacy_checks"]["credential_or_secret_material_found"]
+        )
+        self.assertTrue(
+            verification["privacy_checks"][
+                "observations_contain_only_structural_metadata"
+            ]
         )
         self.assertFalse(verification["market_data_ingested"])
         self.assertIsNone(verification["empirical_result"])
@@ -174,7 +210,7 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         runs = lineage["runs"]
         self.assertEqual(
             [row["lineage_order"] for row in runs],
-            [1, 2, 3, 4],
+            [1, 2, 3, 4, 5],
         )
         self.assertFalse(runs[0]["network_executed"])
         self.assertFalse(runs[1]["network_executed"])
@@ -186,13 +222,22 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             runs[1]["classification"],
             "FAILED_PRE_NETWORK_AST_TEST_FALSE_POSITIVE",
         )
+        self.assertFalse(runs[3]["accepted_for_final_attestation"])
+        self.assertEqual(
+            runs[3]["classification"],
+            "SUPERSEDED_EQUIVALENT_PR_MERGE_REF_PASS_EXACT_SOURCE_HEAD_REQUIRED",
+        )
         accepted = [
             row for row in runs if row["accepted_for_final_attestation"]
         ]
         self.assertEqual(len(accepted), 1)
         self.assertEqual(
             accepted[0]["head_commit"],
-            "facd8b26778eb483a4917fc4418069c35b981e8b",
+            "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+        )
+        self.assertEqual(
+            accepted[0]["checked_out_commit"],
+            accepted[0]["head_commit"],
         )
         self.assertEqual(
             accepted[0]["technical_route_result"],
@@ -210,6 +255,8 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         review = (EVIDENCE_ROOT / "CLEAN_CONTEXT_REVIEW.md").read_text()
         for token in (
             "CLEAN_CONTEXT_REVIEW_PASS",
+            "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+            "31193129277",
             "independent external scientific",
             "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
             "No archive object was listed or downloaded",
