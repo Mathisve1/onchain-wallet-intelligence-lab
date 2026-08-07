@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:owil:bounded-autonomy:signer-backend-evidence:0.1",
+  "title": "Signer backend compatibility evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "service",
+    "region_or_location",
+    "key_resource_version_hash",
+    "public_key_sha256",
+    "expected_signer_address",
+    "curve",
+    "algorithm",
+    "request_mode",
+    "signature_encoding",
+    "fixture_id",
+    "input_digest_sha256",
+    "raw_signature_sha256",
+    "normalized_signature",
+    "recovered_address",
+    "exact_digest_recovery_pass",
+    "wrong_digest_rejected",
+    "wrong_signer_rejected",
+    "key_disable_revoke_tested",
+    "latency_ms",
+    "software_versions",
+    "terminal_decision",
+    "testnet_action_authorized",
+    "live_action_authorized"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "provider": {"type": "string", "minLength": 2, "maxLength": 80},
+    "service": {"type": "string", "minLength": 2, "maxLength": 120},
+    "region_or_location": {"type": "string", "minLength": 1, "maxLength": 120},
+    "key_resource_version_hash": {"$ref": "#/$defs/sha256"},
+    "public_key_sha256": {"$ref": "#/$defs/sha256"},
+    "expected_signer_address": {"$ref": "#/$defs/address"},
+    "curve": {"const": "secp256k1"},
+    "algorithm": {"type": "string", "minLength": 2, "maxLength": 120},
+    "request_mode": {"type": "string", "minLength": 2, "maxLength": 120},
+    "signature_encoding": {"type": "string", "enum": ["DER", "P1363", "OTHER_EXACTLY_DOCUMENTED"]},
+    "fixture_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$"},
+    "input_digest_sha256": {"$ref": "#/$defs/sha256"},
+    "raw_signature_sha256": {"$ref": "#/$defs/sha256"},
+    "normalized_signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["r", "s", "v"],
+      "properties": {
+        "r": {"type": "string", "pattern": "^0x[0-9a-f]{1,64}$"},
+        "s": {"type": "string", "pattern": "^0x[0-9a-f]{1,64}$"},
+        "v": {"type": "integer", "enum": [27, 28]}
+      }
+    },
+    "recovered_address": {"$ref": "#/$defs/address"},
+    "exact_digest_recovery_pass": {"type": "boolean"},
+    "wrong_digest_rejected": {"type": "boolean"},
+    "wrong_signer_rejected": {"type": "boolean"},
+    "key_disable_revoke_tested": {"type": "boolean"},
+    "latency_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "p50", "p75", "p90", "p95", "p99"],
+      "properties": {
+        "sample_count": {"type": "integer", "minimum": 1},
+        "p50": {"type": "number", "minimum": 0},
+        "p75": {"type": "number", "minimum": 0},
+        "p90": {"type": "number", "minimum": 0},
+        "p95": {"type": "number", "minimum": 0},
+        "p99": {"type": "number", "minimum": 0}
+      }
+    },
+    "software_versions": {"type": "object", "additionalProperties": {"type": "string"}},
+    "terminal_decision": {
+      "type": "string",
+      "enum": [
+        "COMPATIBLE_CANDIDATE",
+        "COMPATIBLE_BUT_LATENCY_NO_GO",
+        "COMPATIBLE_BUT_SECURITY_NO_GO",
+        "DIGEST_TRANSFORMATION_INCOMPATIBLE",
+        "SIGNATURE_ENCODING_UNRESOLVED",
+        "RECOVERY_FAILED",
+        "OPERATIONAL_NO_GO"
+      ]
+    },
+    "testnet_action_authorized": {"const": false},
+    "live_action_authorized": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "address": {"type": "string", "pattern": "^0x[0-9a-f]{40}$"}
+  }
+}
