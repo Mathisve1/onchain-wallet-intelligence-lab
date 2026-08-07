@@ -1,0 +1,82 @@
+{
+  "allowed_future_operation_after_separate_approval": "ListObjectsV2",
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "cost_gate": {
+    "aws_region_pricing_status": "UNBOUND_BEFORE_CANARY",
+    "data_transfer_price_source": "https://aws.amazon.com/s3/pricing/",
+    "human_approval_required": true,
+    "list_request_price_source": "https://aws.amazon.com/s3/pricing/",
+    "maximum_monthly_budget_eur": 0,
+    "maximum_one_time_budget_eur": null,
+    "paid_request_authorized": false
+  },
+  "empirical_result": null,
+  "execution": {
+    "aws_identity_bound": false,
+    "decompression_authorized": false,
+    "get_object_authorized": false,
+    "head_object_authorized": false,
+    "list_objects_authorized": false,
+    "network_execution_authorized": false,
+    "object_body_download_authorized": false,
+    "range_get_authorized": false,
+    "requester_pays_authorized": false
+  },
+  "forbidden_operations": [
+    "GetObject",
+    "HeadObject",
+    "GetObjectAttributes",
+    "SelectObjectContent",
+    "RestoreObject",
+    "PutObject",
+    "DeleteObject",
+    "DeleteObjects",
+    "CopyObject"
+  ],
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "listing": {
+    "continuation_tokens_are_opaque": true,
+    "delimiter_discovery_first": true,
+    "fetch_owner": false,
+    "max_keys_per_request": 1000,
+    "repeated_continuation_token_fails_closed": true,
+    "request_payer": "requester"
+  },
+  "market_data_ingested": false,
+  "metadata_fields": [
+    "bucket",
+    "dataset_family",
+    "key",
+    "size_bytes",
+    "last_modified",
+    "etag",
+    "storage_class",
+    "page_ordinal",
+    "entry_ordinal",
+    "request_charged"
+  ],
+  "next_gate": "REVIEW_PREREGISTRATION_THEN_SEPARATE_HUMAN_BUDGET_AND_AWS_IDENTITY_DECISION",
+  "parent_archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+  "parent_canonical_main_commit": "cf5585c45fc8f1ac5f79df6e210cf4d37a591452",
+  "parent_probe_id": "HL-PUBLIC-PROBE-001R1",
+  "parent_probe_status": "ATTESTED_PUBLIC_PROBE_PASS",
+  "parent_study_id": "WALLET-COPYABILITY-STUDY-001",
+  "proposed_canary": {
+    "authorized": false,
+    "max_pages_per_family": 40,
+    "max_retries_per_request": 1,
+    "max_runtime_seconds": 900,
+    "max_total_entries": 250000,
+    "max_total_list_requests": 300,
+    "max_total_response_bytes": 268435456
+  },
+  "schema_version": "1.0",
+  "status": "PREREGISTERED_METADATA_ONLY_NO_EXECUTION"
+}
