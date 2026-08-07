@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-07 against canonical main run `31200124642` on reviewed commit `c11046bf288687c6945fe9b8f17141204d24aae6`.
+Verified: 2026-08-07 against canonical public-probe evidence commit `cf5585c45fc8f1ac5f79df6e210cf4d37a591452`.
 
 ## Current status
 
@@ -11,14 +11,19 @@ Verified: 2026-08-07 against canonical main run `31200124642` on reviewed commit
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
+| archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
+| archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
 | public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
-| implementation pull request | `#7` |
-| implementation commit | `33683532ca3e6cf7512a728157791d3bfef1375f` |
 | canonical reviewed commit | `c11046bf288687c6945fe9b8f17141204d24aae6` |
 | canonical workflow run / job | `31200124642` / `92937868268` |
 | canonical artifact | `9002459643` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
+| AWS identity bound | `false` |
+| requester-pays authorized | `false` |
+| ListObjectsV2 authorized | `false` |
+| GetObject authorized | `false` |
+| object-body download authorized | `false` |
 | empirical result | `null` |
 | integration authorized | `false` |
 | paper authorized | `false` |
@@ -29,51 +34,41 @@ Verified: 2026-08-07 against canonical main run `31200124642` on reviewed commit
 
 ## Canonical technical evidence
 
-The canonical workflow was manually dispatched from `refs/heads/main`. Before network access it proved:
+The canonical public probe was manually dispatched from `refs/heads/main` and proved exact identity before network access. It ended `PUBLIC_PROBE_PASS` with 16/16 registered probes passing and classified the official S3 archive routes as `ROUTES_CONFIRMED_ACCESS_RESTRICTED`.
+
+The public-probe evidence remains immutable under `research/wallet_copyability/probe_r1/evidence/`.
+
+## Archive inventory preregistration
+
+`HL-ARCHIVE-INVENTORY-001` is preregistered as a metadata/access/cost-only successor. Its deterministic code can build and validate exact `ListObjectsV2` request plans and enforce request/page/entry/byte/runtime caps, but it contains no network-capable AWS SDK/client in this phase.
+
+The proposed future canary is not authorized:
 
 ```text
-inputs.reviewed_commit = c11046bf288687c6945fe9b8f17141204d24aae6
-github.sha = c11046bf288687c6945fe9b8f17141204d24aae6
-git rev-parse HEAD = c11046bf288687c6945fe9b8f17141204d24aae6
-```
-
-The run completed with:
-
-```text
-pass_count = 16
-fail_count = 0
-total_request_attempts = 16
-total_declared_request_weight = 586
-remaining_declared_weight_margin = 614
-probe_output_sha256 = cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89
-artifact_zip_sha256 = 388ad766d0e71f315533362ed0605b6d6d6cf13895656e84b9aa0afc80cf8fe6
-```
-
-The independently downloaded artifact ZIP matched GitHub's provider digest exactly. Internal retained artifact files also matched the workflow-generated SHA-256 ledger.
-
-All thirteen registered `/info` probes returned the preregistered coarse JSON response class. All three official S3 archive routes returned recognized HTTP 403 S3 access-error responses. This confirms route behavior only; it does not prove list permission, archive completeness, requester-pays configuration, object counts, retrievable volume or cost.
-
-The fixed historical fills, funding and non-funding-ledger fixture queries were structurally valid but empty. Therefore non-empty historical event schemas, pagination and completeness remain unresolved.
-
-## Hard boundary
-
-```text
+network_execution_authorized = false
+aws_identity_bound = false
+requester_pays_authorized = false
+list_objects_authorized = false
+get_object_authorized = false
+head_object_authorized = false
+range_get_authorized = false
+object_body_download_authorized = false
+decompression_authorized = false
+paid_request_authorized = false
+maximum_one_time_budget_eur = null
+maximum_monthly_budget_eur = 0
 market_data_ingested = false
 empirical_result = null
-integration_authorized = false
-paper_authorized = false
-shadow_authorized = false
-live_authorized = false
-leverage_authorized = false
-capital_allocation_authorized = false
 ```
-
-No archive object has been listed or downloaded. No wallet ledger, wallet P&L, ranking, copyability result, entity cluster or alpha claim exists.
 
 ## Exact next gate
 
-The only permitted successor is a separately preregistered `HL-ARCHIVE-INVENTORY-001` proposal. It must remain metadata/access/cost-only and must establish the restricted/requester-pays access method, bounded listing limits, object metadata fields, temporal coverage, schema families, estimated retrieval cost and fail-closed stop rules before any historical object body may be downloaded.
+1. Review and merge the `HL-ARCHIVE-INVENTORY-001` metadata-only preregistration/implementation.
+2. Refresh official AWS pricing and resolve the requesting AWS billing identity without exposing credentials.
+3. Review a listing-only IAM boundary and bind an exact canonical commit.
+4. Obtain a separate explicit human one-time euro budget/Requester Pays approval.
+5. Only then implement/enable a network adapter and run a bounded metadata canary.
 
-Any paid requester-pays request, bulk object retrieval, analytical market-data release, wallet-performance calculation or execution stage requires a separate reviewed decision.
+No paid S3 call, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
 
 Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.
