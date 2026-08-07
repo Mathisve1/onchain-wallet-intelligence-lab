@@ -21,11 +21,16 @@ def main() -> int:
     manifest = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
     observed_manifest = manifest.read_text(encoding="utf-8")
     expected_manifest = render_manifest(ROOT)
-    require(
-        observed_manifest == expected_manifest,
-        "repository manifest is incomplete, stale or non-canonical; run "
-        "python governance/regenerate_manifest.py --write",
-    )
+    if observed_manifest != expected_manifest:
+        print("REPOSITORY_MANIFEST_OUT_OF_DATE")
+        print("EXPECTED_MANIFEST_BEGIN")
+        print(expected_manifest, end="")
+        print("EXPECTED_MANIFEST_END")
+        raise SystemExit(
+            "REPOSITORY_VALIDATION_FAIL: repository manifest is incomplete, "
+            "stale or non-canonical; run "
+            "python governance/regenerate_manifest.py --write"
+        )
 
     seen: set[str] = set()
     for line in observed_manifest.splitlines():
