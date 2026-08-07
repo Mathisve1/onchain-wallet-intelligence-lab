@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "status": "PENDING_PUBLIC_PROBE_R1",
+  "observations": [],
+  "output_sha256": null,
+  "reviewed_commit": null,
+  "workflow_run_id": null,
+  "workflow_job_id": null,
+  "artifact_id": null,
+  "artifact_digest": null,
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "authorizations": {
+    "integration_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false,
+    "live_authorized": false,
+    "leverage_authorized": false,
+    "capital_allocation_authorized": false
+  }
+}
