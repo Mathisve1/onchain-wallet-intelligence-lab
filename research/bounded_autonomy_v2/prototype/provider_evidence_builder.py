@@ -35,7 +35,6 @@ def _sha(data: bytes) -> str:
 
 
 def _percentile(samples: list[float], probability: float) -> float:
-    """Deterministic nearest-rank percentile for evidence reproducibility."""
     if not samples:
         raise ProviderEvidenceError("latency:no_samples")
     ordered = sorted(float(value) for value in samples)
@@ -58,7 +57,7 @@ def _mutate_digest(digest: bytes) -> bytes:
 
 
 def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None = None) -> dict[str, Any]:
-    if capture.get("schema_version") != "0.1-local-ephemeral":
+    if capture.get("schema_version") != "0.2-local-ephemeral":
         raise ProviderEvidenceError("capture:schema")
     resource = str(capture.get("key_resource_version", ""))
     if len(resource) < 8 or resource.lower() in MUTABLE_KEY_MARKERS:
@@ -74,13 +73,14 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
     _, derived_address = parse_secp256k1_spki(public_key)
     raw_signature = _b64(capture["raw_signature_base64"], "capture:signature")
 
+    digest_mode = str(capture["digest_mode"])
     config = BackendConfig(
         provider=str(capture["provider"]),
         key_version=resource,
         algorithm=str(capture["algorithm"]),
         encoding=str(capture["signature_encoding"]),
         expected_signer_address=derived_address,
-        digest_mode=str(capture["request_mode"]),
+        digest_mode=digest_mode,
     )
 
     normalized = None
@@ -146,8 +146,8 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
     else:
         decision = "COMPATIBLE_CANDIDATE"
 
-    evidence = {
-        "schema_version": "0.2",
+    return {
+        "schema_version": "0.3",
         "provider": str(capture["provider"]),
         "service": str(capture["service"]),
         "region_or_location": str(capture["region_or_location"]),
@@ -157,6 +157,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         "curve": "secp256k1",
         "algorithm": str(capture["algorithm"]),
         "request_mode": str(capture["request_mode"]),
+        "digest_mode": digest_mode,
         "signature_encoding": str(capture["signature_encoding"]),
         "fixture_id": str(capture["fixture_id"]),
         "input_digest_sha256": _sha(digest),
@@ -175,7 +176,6 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         "testnet_action_authorized": False,
         "live_action_authorized": False,
     }
-    return evidence
 
 
 def evidence_json(capture: dict[str, Any], fixtures_path: Path | None = None) -> str:
