@@ -1,34 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:signer-backend-capture-input:0.2",
+  "$id": "urn:owil:bounded-autonomy:signer-backend-capture-input:0.3",
   "title": "Ephemeral local signer backend capture input — do not commit instances",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version",
-    "provider",
-    "service",
-    "region_or_location",
-    "key_resource_version",
-    "public_key_spki_base64",
-    "curve",
-    "algorithm",
-    "request_mode",
-    "digest_mode",
-    "signature_encoding",
-    "fixture_id",
-    "raw_signature_base64",
-    "latency_samples_ms",
-    "key_disable_revoke_tested",
-    "software_versions"
+    "schema_version", "provider", "service", "region_or_location", "key_resource_version",
+    "public_key_format", "curve", "algorithm", "request_mode", "digest_mode",
+    "signature_encoding", "fixture_id", "raw_signature_base64", "latency_samples_ms",
+    "key_disable_revoke_tested", "software_versions"
   ],
   "properties": {
-    "schema_version": {"const": "0.2-local-ephemeral"},
+    "schema_version": {"const": "0.3-local-ephemeral"},
     "provider": {"type": "string", "minLength": 2, "maxLength": 80},
     "service": {"type": "string", "minLength": 2, "maxLength": 120},
     "region_or_location": {"type": "string", "minLength": 1, "maxLength": 120},
     "key_resource_version": {"type": "string", "minLength": 8, "maxLength": 2048},
+    "public_key_format": {"type": "string", "enum": ["SPKI_DER_BASE64", "JWK_XY_BASE64URL"]},
     "public_key_spki_base64": {"type": "string", "minLength": 20, "maxLength": 4096},
+    "public_key_jwk_x": {"type": "string", "minLength": 40, "maxLength": 64},
+    "public_key_jwk_y": {"type": "string", "minLength": 40, "maxLength": 64},
     "curve": {"const": "secp256k1"},
     "algorithm": {"type": "string", "minLength": 2, "maxLength": 120},
     "request_mode": {"type": "string", "minLength": 2, "maxLength": 160},
@@ -37,12 +28,26 @@
     "fixture_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$"},
     "raw_signature_base64": {"type": "string", "minLength": 8, "maxLength": 4096},
     "latency_samples_ms": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 10000,
+      "type": "array", "minItems": 1, "maxItems": 10000,
       "items": {"type": "number", "minimum": 0, "maximum": 60000}
     },
     "key_disable_revoke_tested": {"type": "boolean"},
     "software_versions": {"type": "object", "additionalProperties": {"type": "string"}, "maxProperties": 32}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"public_key_format": {"const": "SPKI_DER_BASE64"}}, "required": ["public_key_format"]},
+      "then": {
+        "required": ["public_key_spki_base64"],
+        "not": {"anyOf": [{"required": ["public_key_jwk_x"]}, {"required": ["public_key_jwk_y"]}]}
+      }
+    },
+    {
+      "if": {"properties": {"public_key_format": {"const": "JWK_XY_BASE64URL"}}, "required": ["public_key_format"]},
+      "then": {
+        "required": ["public_key_jwk_x", "public_key_jwk_y"],
+        "not": {"required": ["public_key_spki_base64"]}
+      }
+    }
+  ]
 }
