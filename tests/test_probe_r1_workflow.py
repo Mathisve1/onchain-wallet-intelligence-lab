@@ -25,11 +25,17 @@ class ProbeR1WorkflowTests(unittest.TestCase):
     def test_exact_reviewed_sha_is_checked_out_and_verified(self) -> None:
         for token in (
             "EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}",
+            "DISPATCH_REF: ${{ github.ref }}",
+            "DISPATCH_SHA: ${{ github.sha }}",
             "ref: ${{ env.EXACT_REVIEWED_COMMIT }}",
+            'test "${DISPATCH_REF}" = "refs/heads/main"',
+            'test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"',
             'observed="$(git rev-parse HEAD)"',
             'test "${observed}" = "${EXACT_REVIEWED_COMMIT}"',
             "REVIEWED_COMMIT: ${{ env.EXACT_REVIEWED_COMMIT }}",
             "CHECKED_OUT_COMMIT: ${{ env.EXACT_REVIEWED_COMMIT }}",
+            "'dispatch_ref': os.environ['DISPATCH_REF']",
+            "'dispatch_sha': os.environ['DISPATCH_SHA']",
         ):
             self.assertIn(token, self.text)
         self.assertNotIn("REVIEWED_COMMIT: ${{ github.sha }}", self.text)
