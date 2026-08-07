@@ -1,0 +1,6 @@
+[project]
+name = "onchain-wallet-intelligence-lab"
+version = "0.1.0"
+description = "Point-in-time on-chain wallet intelligence and copyability research"
+requires-python = ">=3.12"
+dependencies = []
