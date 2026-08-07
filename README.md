@@ -31,15 +31,31 @@ This repository is research-only.
 ETH and SOL perpetuals on Hyperliquid, with follower-latency sensitivities of
 1 second, 5 seconds, 30 seconds, 2 minutes, 5 minutes and 15 minutes.
 
-No market dataset or empirical result has been released.
+The active gate is `HL-PUBLIC-PROBE-001R1`. It verifies public technical
+capability and retains response hashes and structural metadata only. No market
+dataset or empirical result has been released.
 
 ## Reading order
 
 1. `PROJECT_STATE.md`
 2. `research/wallet_copyability/PREREGISTRATION.md`
 3. `research/wallet_copyability/DATA_CONTRACT.json`
-4. `research/wallet_copyability/COPY_EXECUTION_MODEL.md`
-5. `research/wallet_copyability/ENTITY_CLUSTERING_BOUNDARY.md`
-6. `ROADMAP.md`
-7. `DECISION_LOG.md`
-8. `MIGRATION_PROVENANCE.md`
+4. `research/wallet_copyability/PROBE_CONTRACT.json`
+5. `research/wallet_copyability/PROBE_METHODOLOGY.md`
+6. `research/wallet_copyability/TECHNICAL_PROBE_EVIDENCE.json`
+7. `research/wallet_copyability/COPY_EXECUTION_MODEL.md`
+8. `research/wallet_copyability/ENTITY_CLUSTERING_BOUNDARY.md`
+9. `ROADMAP.md`
+10. `DECISION_LOG.md`
+11. `MIGRATION_PROVENANCE.md`
+
+## Validation
+
+```bash
+python -m unittest discover -s tests -v
+python governance/validate_probe_evidence.py
+python governance/validate_repository.py
+```
+
+The repository manifest must cover every tracked file except the manifest
+itself. Every external GitHub Action is pinned to a full commit SHA.

@@ -1,0 +1,417 @@
+{
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "contract_id": "HYPERLIQUID_PUBLIC_TECHNICAL_PROBE_CONTRACT_R1",
+  "data_minimization": {
+    "aggregate_counts_and_time_bounds_retained": true,
+    "maximum_schema_depth": 4,
+    "maximum_schema_paths": 256,
+    "raw_response_bytes_retained": false,
+    "response_hash_retained": true,
+    "response_shape_retained": true,
+    "response_values_retained": false,
+    "selected_response_headers": [
+      "content-type",
+      "content-length",
+      "etag",
+      "last-modified",
+      "x-amz-request-id",
+      "x-amz-id-2"
+    ]
+  },
+  "documentation_examples": {
+    "address_source": "OFFICIAL_HYPERLIQUID_INFO_ENDPOINT_EXAMPLES",
+    "identity_claim": "DOCUMENTATION_EXAMPLE_ONLY_NO_REAL_WORLD_IDENTITY_INFERENCE",
+    "master_address": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d",
+    "subaccount_address": "0x035605fc2f24d65300227189025e90a0d947f16c",
+    "vault_address": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303"
+  },
+  "empirical_result": null,
+  "execution_boundary": {
+    "authorization_headers_allowed": false,
+    "credentials_allowed": false,
+    "environment_secrets_allowed": false,
+    "exchange_action_endpoint_allowed": false,
+    "live_orders_allowed": false,
+    "orders_allowed": false,
+    "paper_orders_allowed": false,
+    "read_only": true,
+    "signed_actions_allowed": false,
+    "withdrawals_allowed": false
+  },
+  "frozen_at_utc": "2026-08-07T00:00:00Z",
+  "market_data_ingested": false,
+  "network_policy": {
+    "allowed_methods": [
+      "GET",
+      "POST"
+    ],
+    "allowed_origins": [
+      "https://api.hyperliquid.xyz",
+      "https://hl-mainnet-node-data.s3.amazonaws.com",
+      "https://hyperliquid-archive.s3.amazonaws.com"
+    ],
+    "cross_origin_redirects_allowed": false,
+    "info_path": "/info",
+    "inter_request_delay_ms": 250,
+    "maximum_attempts": 3,
+    "maximum_declared_base_weight": 500,
+    "maximum_request_count": 18,
+    "maximum_response_bytes": 8388608,
+    "retry_backoff_seconds": [
+      0.5,
+      1.0
+    ],
+    "retryable_http_statuses": [
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "timeout_seconds": 20,
+    "user_agent": "onchain-wallet-intelligence-read-only-probe/1.0"
+  },
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "probes": [
+    {
+      "allow_empty": false,
+      "assertion": "META_CONTAINS_UNIVERSE",
+      "base_weight": 20,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "meta"
+      },
+      "probe_id": "P001_META",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "ALL_MIDS_REQUIRED_INSTRUMENTS_PRESENT",
+      "base_weight": 2,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "allMids"
+      },
+      "probe_id": "P002_ALL_MIDS",
+      "required": true,
+      "required_instruments": [
+        "BTC",
+        "ETH",
+        "SOL"
+      ],
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "ROLE_EQUALS",
+      "base_weight": 60,
+      "expected_role": "user",
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "userRole",
+        "user": "$MASTER"
+      },
+      "probe_id": "P003_MASTER_USER_ROLE",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "SUBACCOUNT_RELATION_PRESENT",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "subAccounts",
+        "user": "$MASTER"
+      },
+      "probe_id": "P004_MASTER_SUBACCOUNTS",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "SUBACCOUNT_ROLE_AND_MASTER",
+      "base_weight": 60,
+      "expected_role": "subAccount",
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "userRole",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P005_SUBACCOUNT_USER_ROLE",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "CLEARINGHOUSE_STATE_FIELDS",
+      "base_weight": 2,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "clearinghouseState",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P006_SUBACCOUNT_STATE",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "USER_FEES_FIELDS",
+      "base_weight": 20,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "userFees",
+        "user": "$MASTER"
+      },
+      "probe_id": "P007_MASTER_USER_FEES",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "EVENT_ARRAY_TIME_BOUNDS",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "aggregateByTime": true,
+        "type": "userFills",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P008_SUBACCOUNT_RECENT_FILLS",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "EVENT_ARRAY_TIME_BOUNDS",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "aggregateByTime": true,
+        "endTime": "$FIXED_END_MS",
+        "startTime": "$FIXED_START_MS",
+        "type": "userFillsByTime",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P009_SUBACCOUNT_FILLS_BY_TIME_FIXED",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "EVENT_ARRAY_TIME_BOUNDS",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "endTime": "$FIXED_END_MS",
+        "startTime": "$FIXED_START_MS",
+        "type": "userFunding",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P010_SUBACCOUNT_FUNDING_FIXED",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "EVENT_ARRAY_TIME_BOUNDS",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "endTime": "$FIXED_END_MS",
+        "startTime": "$FIXED_START_MS",
+        "type": "userNonFundingLedgerUpdates",
+        "user": "$SUBACCOUNT"
+      },
+      "probe_id": "P011_SUBACCOUNT_NON_FUNDING_LEDGER_FIXED",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "ROLE_EQUALS",
+      "base_weight": 60,
+      "expected_role": "vault",
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "userRole",
+        "user": "$VAULT"
+      },
+      "probe_id": "P012_VAULT_USER_ROLE",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "VAULT_DETAILS_ADDRESS",
+      "base_weight": 20,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "type": "vaultDetails",
+        "vaultAddress": "$VAULT"
+      },
+      "probe_id": "P013_VAULT_DETAILS",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "ACTIVE_FILL_LIMIT_DIAGNOSTIC",
+      "base_weight": 20,
+      "expected_top_level": "array",
+      "failure_impact": "PARTIAL",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "aggregateByTime": false,
+        "endTime": "$ANCHOR_END_MS",
+        "startTime": "$ANCHOR_START_MS",
+        "type": "userFillsByTime",
+        "user": "$VAULT"
+      },
+      "probe_id": "P014_VAULT_FILLS_BY_TIME_RECENT_24H",
+      "required": false,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": false,
+      "assertion": "L2_BOOK_FIELDS_NO_VALUES_RETAINED",
+      "base_weight": 2,
+      "expected_top_level": "object",
+      "method": "POST",
+      "origin": "https://api.hyperliquid.xyz",
+      "parser": "JSON",
+      "path": "/info",
+      "payload": {
+        "coin": "BTC",
+        "type": "l2Book"
+      },
+      "probe_id": "P015_L2_BOOK_BTC",
+      "required": true,
+      "success_policy": "HTTP_2XX_VALID_JSON"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "S3_LISTING_OR_ACCESS_CONTROL",
+      "base_weight": 0,
+      "expected_top_level": "xml",
+      "method": "GET",
+      "origin": "https://hl-mainnet-node-data.s3.amazonaws.com",
+      "parser": "XML",
+      "path": "/?list-type=2&prefix=node_fills_by_block/&max-keys=5",
+      "probe_id": "P016_NODE_FILL_ARCHIVE_LISTING",
+      "required": true,
+      "success_policy": "S3_LIST_OR_EXPECTED_REQUESTER_PAYS_DENIAL"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "S3_LISTING_OR_ACCESS_CONTROL",
+      "base_weight": 0,
+      "expected_top_level": "xml",
+      "method": "GET",
+      "origin": "https://hyperliquid-archive.s3.amazonaws.com",
+      "parser": "XML",
+      "path": "/?list-type=2&prefix=market_data/&max-keys=5",
+      "probe_id": "P017_MARKET_DATA_ARCHIVE_LISTING",
+      "required": true,
+      "success_policy": "S3_LIST_OR_EXPECTED_REQUESTER_PAYS_DENIAL"
+    },
+    {
+      "allow_empty": true,
+      "assertion": "S3_LISTING_OR_ACCESS_CONTROL",
+      "base_weight": 0,
+      "expected_top_level": "xml",
+      "method": "GET",
+      "origin": "https://hyperliquid-archive.s3.amazonaws.com",
+      "parser": "XML",
+      "path": "/?list-type=2&prefix=asset_ctxs/&max-keys=5",
+      "probe_id": "P018_ASSET_CTXS_ARCHIVE_LISTING",
+      "required": true,
+      "success_policy": "S3_LIST_OR_EXPECTED_REQUESTER_PAYS_DENIAL"
+    }
+  ],
+  "purpose": "Verify public read-only endpoint and archive availability, response structure, documented account relationships, pagination-limit observations, and security boundaries before any analytical market-data release.",
+  "schema_version": "1.0",
+  "status": "FROZEN_PRE_EXECUTION",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "terminal_logic": {
+    "allowed_terminal_statuses": [
+      "PUBLIC_PROBE_PASS",
+      "PUBLIC_PROBE_PARTIAL",
+      "PUBLIC_PROBE_FAIL"
+    ],
+    "fail": "At least one required probe is FAIL, the output violates the contract, or a security invariant fails.",
+    "partial": "No required probe is FAIL and at least one probe is DEGRADED or an optional diagnostic probe is FAIL.",
+    "pass": "Every required probe has outcome PASS and no probe is DEGRADED or FAIL."
+  },
+  "time_windows": {
+    "active_vault_lookback_ms": 86400000,
+    "anchor_rounding_ms": 60000,
+    "fixed_end_ms": 1734048000000,
+    "fixed_start_ms": 1733875200000,
+    "fixed_window_utc": "2024-12-11T00:00:00Z/2024-12-13T00:00:00Z"
+  }
+}

@@ -22,12 +22,22 @@ class ContractTests(unittest.TestCase):
                 self.assertFalse(value, key)
         for key, value in contract["authorizations"].items():
             self.assertFalse(value, key)
+        probe = contract["technical_probe"]
+        self.assertEqual(probe["probe_id"], "HL-PUBLIC-PROBE-001R1")
+        self.assertTrue(probe["public_read_only_only"])
+        self.assertFalse(probe["raw_response_bytes_retained"])
+        self.assertFalse(probe["response_values_retained"])
+        self.assertFalse(probe["analytical_market_partition_opened"])
 
     def test_probe_evidence_is_pending(self) -> None:
         evidence = json.loads((ROOT / "research/wallet_copyability/TECHNICAL_PROBE_EVIDENCE.json").read_text())
         self.assertEqual(evidence["status"], "PENDING_PUBLIC_PROBE")
-        self.assertEqual(evidence["observations"], [])
+        self.assertEqual(evidence["observation_count"], 0)
+        self.assertIsNone(evidence["evidence_path"])
+        self.assertIsNone(evidence["output_sha256"])
         self.assertIsNone(evidence["empirical_result"])
+        for key, value in evidence["authorizations"].items():
+            self.assertFalse(value, key)
 
 
 if __name__ == "__main__":

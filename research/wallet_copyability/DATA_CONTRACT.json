@@ -117,5 +117,19 @@
   "source_006_opened": false,
   "status": "PRE_DATA_INTAKE_FROZEN_NO_MARKET_RELEASE",
   "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "technical_probe": {
+    "analytical_market_partition_opened": false,
+    "archive_access_conflict_resolved": false,
+    "archive_objects_downloaded": false,
+    "contract_path": "research/wallet_copyability/PROBE_CONTRACT.json",
+    "market_payload_values_retained": false,
+    "probe_id": "HL-PUBLIC-PROBE-001R1",
+    "public_read_only_only": true,
+    "raw_response_bytes_retained": false,
+    "response_hashes_and_shapes_only": true,
+    "response_values_retained": false,
+    "result_limit_conflict_resolved": false,
+    "status": "PENDING_PUBLIC_PROBE"
+  },
   "venue": "HYPERLIQUID_PUBLIC_MAINNET"
 }

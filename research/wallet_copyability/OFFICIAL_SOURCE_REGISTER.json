@@ -7,18 +7,44 @@
     "paper_authorized": false,
     "shadow_authorized": false
   },
-  "captured_at_utc": "2026-08-06T00:00:00Z",
+  "captured_at_utc": "2026-08-07T00:00:00Z",
   "documentation_conflicts_to_probe": [
     {
       "analytical_release_allowed": false,
+      "claim_a": "time-range responses return at most 500 elements or distinct blocks",
+      "claim_b": "userFillsByTime returns at most 2000 fills and only the 10000 most recent fills",
       "conflict_id": "HL-DOC-LIMIT-001",
-      "status": "UNRESOLVED_REQUIRE_EMPIRICAL_PROBE_AND_VERSIONED_CAPTURE",
-      "topic": "time-range result limits and historical fill availability"
+      "status": "UNRESOLVED_PENDING_ACTIVE_PUBLIC_PROBE",
+      "topic": "time-range response ceiling"
+    },
+    {
+      "analytical_release_allowed": false,
+      "claim_a": "official S3 routes are named and documented",
+      "claim_b": "requesters must pay transfer costs and anonymous listing may be access controlled",
+      "conflict_id": "HL-ARCHIVE-ACCESS-001",
+      "status": "UNRESOLVED_PENDING_PUBLIC_ARCHIVE_PROBE",
+      "topic": "anonymous archive listing versus requester-pays access"
+    },
+    {
+      "analytical_release_allowed": false,
+      "claim_a": "official archives expose historical fills and selected market snapshots",
+      "claim_b": "uploads may be delayed and data may be missing",
+      "conflict_id": "HL-ARCHIVE-COMPLETENESS-001",
+      "status": "UNRESOLVED_REQUIRES_SEPARATE_OBJECT_INVENTORY_AND_GAP_AUDIT",
+      "topic": "historical archive completeness and timeliness"
     }
   ],
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "sources": [
     {
+      "claims_used": [
+        "node_fills_by_block contains fills streamed by a non-validating node",
+        "older node_fills and node_trades use different formats",
+        "market_data contains L2 book snapshots",
+        "asset_ctxs contains asset-context snapshots",
+        "requester pays transfer costs",
+        "uploads are not guaranteed timely and data may be missing"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
       "source_id": "HL-OFFICIAL-001",
@@ -26,6 +52,12 @@
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data"
     },
     {
+      "claims_used": [
+        "time-range responses are documented as returning at most 500 elements or distinct blocks",
+        "userFillsByTime is also documented as returning at most 2000 fills and only the 10000 most recent fills",
+        "master and subaccount account data requires the actual account address rather than an agent wallet",
+        "subAccounts, userRole, userFees and vaultDetails are public info requests"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
       "source_id": "HL-OFFICIAL-002",
@@ -33,37 +65,73 @@
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint"
     },
     {
+      "claims_used": [
+        "userFunding and userNonFundingLedgerUpdates are public info requests",
+        "non-funding ledger updates include deposits, transfers and withdrawals"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
       "source_id": "HL-OFFICIAL-003",
+      "title": "Perpetuals info endpoint",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals"
+    },
+    {
+      "claims_used": [
+        "user-specific fills, funding and ledger updates can be streamed for known users",
+        "WebSockets are intended for low-latency live data"
+      ],
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-004",
       "title": "WebSocket subscriptions",
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
     },
     {
+      "claims_used": [
+        "public REST requests share a 1200-weight-per-minute IP limit",
+        "userRole has base weight 60",
+        "l2Book, allMids and clearinghouseState have base weight 2",
+        "most other documented info requests have base weight 20",
+        "result-rich endpoints add weight based on response size",
+        "WebSocket usage is capped by connections, subscriptions and unique users"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
-      "source_id": "HL-OFFICIAL-004",
+      "source_id": "HL-OFFICIAL-005",
       "title": "Rate limits and user limits",
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits"
     },
     {
+      "claims_used": [
+        "fee tiers and maker/taker schedules affect follower execution",
+        "subaccounts are treated as independent accounts for some fee and referral rules"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
-      "source_id": "HL-OFFICIAL-005",
+      "source_id": "HL-OFFICIAL-006",
       "title": "Fees",
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees"
     },
     {
+      "claims_used": [
+        "funding is a separate economic component that must be included in copied P&L"
+      ],
       "publisher": "Hyperliquid",
       "source_class": "OFFICIAL_DOCUMENTATION",
-      "source_id": "HL-OFFICIAL-006",
+      "source_id": "HL-OFFICIAL-007",
       "title": "Funding",
       "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding"
     },
     {
+      "claims_used": [
+        "a non-validator can write fills, order statuses, raw book diffs and miscellaneous events",
+        "batch-by-block and stream-with-block-info include local time, block time and block number",
+        "the local info server supports a subset of current-state requests but not historical time-series queries or WebSockets",
+        "the published non-validator baseline is 16 vCPU, 128 GB RAM and 500 GB SSD"
+      ],
       "publisher": "hyperliquid-dex",
       "source_class": "OFFICIAL_CODE_REPOSITORY",
-      "source_id": "HL-OFFICIAL-007",
+      "source_id": "HL-OFFICIAL-008",
       "title": "Hyperliquid node",
       "url": "https://github.com/hyperliquid-dex/node"
     }
