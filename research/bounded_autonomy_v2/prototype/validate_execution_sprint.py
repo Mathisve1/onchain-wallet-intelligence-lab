@@ -17,7 +17,7 @@ RUNTIME_FILES = [
 FIXTURE_ONLY_MODULES = {"crypto_fixture_oracle", "signature_backend_adapter"}
 FORBIDDEN_IMPORTS = {
     "requests", "urllib", "httpx", "socket", "websocket", "websockets",
-    "hyperliquid", "eth_account", "web3", "boto3", "google", "azure",
+    "hyperliquid", "eth_account", "web3", "boto3", "botocore", "google", "azure",
 }
 FORBIDDEN_SOURCE_MARKERS = [
     "PRIVATE_KEY",
@@ -74,7 +74,7 @@ def scan_fixture_boundaries() -> None:
     require("recover_address" in adapter, "signature_adapter:recovery_missing")
     require("adapt_der_signature" in adapter, "signature_adapter:der_missing")
     require("adapt_p1363_signature" in adapter, "signature_adapter:p1363_missing")
-    for forbidden in ("requests", "urllib", "httpx", "websocket", "boto3", "google.cloud", "azure."):
+    for forbidden in ("requests", "urllib", "httpx", "websocket", "boto3", "botocore", "google.cloud", "azure."):
         require(forbidden not in crypto and forbidden not in adapter, f"fixture:network_provider_import:{forbidden}")
 
 
@@ -108,16 +108,37 @@ def main() -> int:
         "crypto_contract:status",
     )
     promotion = crypto_contract.get("promotion_constraints", {})
-    require(promotion.get("fixture_code_may_be_used_as_production_signer") is False, "crypto_contract:fixture_runtime_open")
-    require(promotion.get("private_key_may_be_added_to_runtime") is False, "crypto_contract:private_key_open")
-    require(promotion.get("testnet_action_authorized") is False, "crypto_contract:testnet_open")
-    require(promotion.get("mainnet_action_authorized") is False, "crypto_contract:mainnet_open")
+    for field in (
+        "fixture_code_may_be_used_as_production_signer",
+        "private_key_may_be_added_to_runtime",
+        "provider_network_call_authorized",
+        "testnet_action_authorized",
+        "mainnet_action_authorized",
+        "cloud_kms_backend_authorized",
+        "mpc_backend_authorized",
+    ):
+        require(promotion.get(field) is False, f"crypto_contract:authorization_open:{field}")
 
     backend_sources = load("SIGNER_BACKEND_SOURCE_REGISTER.json")
+    require(backend_sources.get("status") == "DOCUMENTED_PREHASHED_PATHS_HANDS_ON_PARITY_NOT_RUN", "backend_sources:status")
     require(backend_sources.get("selection_status") == "UNSCORED", "backend_sources:premature_selection")
+    require(backend_sources.get("provider_network_call_authorized") is False, "backend_sources:provider_network_open")
     require(backend_sources.get("testnet_authorized") is False, "backend_sources:testnet_open")
     require(backend_sources.get("live_authorized") is False, "backend_sources:live_open")
     require(all(candidate.get("authorization") is False for candidate in backend_sources.get("candidates", [])), "backend_sources:candidate_authorized")
+
+    provider_gate = load("SIGNER_PROVIDER_RUN_AUTHORIZATION.json")
+    require(provider_gate.get("status") == "NOT_AUTHORIZED", "provider_gate:status")
+    require(provider_gate.get("provider_network_call_authorized") is False, "provider_gate:network_open")
+    require(all(v is False for v in provider_gate.get("providers", {}).values()), "provider_gate:provider_selected_without_auth")
+    budget = provider_gate.get("budget", {})
+    require(budget.get("maximum_one_time_spend") is None, "provider_gate:one_time_budget_invented")
+    require(budget.get("maximum_recurring_spend") == "0", "provider_gate:recurring_budget_open")
+    require(budget.get("maximum_provider_sign_requests") is None, "provider_gate:request_budget_invented")
+    require(provider_gate.get("credential_scope", {}).get("credentials_registered") is False, "provider_gate:credentials_registered")
+    require(provider_gate.get("hyperliquid_testnet_authorized") is False, "provider_gate:testnet_open")
+    require(provider_gate.get("hyperliquid_mainnet_authorized") is False, "provider_gate:mainnet_open")
+    require(provider_gate.get("capital_allocation_authorized") is False, "provider_gate:capital_open")
 
     golden = (ROOT / "GOLDEN_HYPERLIQUID_SERIALIZATION.md").read_text(encoding="utf-8")
     require(PINNED_SDK_COMMIT in golden, "golden:sdk_pin_missing")
