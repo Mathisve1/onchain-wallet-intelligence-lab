@@ -57,16 +57,19 @@ Before the durable sprint, the control/reconciliation layer had:
 PASS
 ```
 
-The new durable permit/signer/fake-venue/wire sprint was independently exercised with:
+The new durable permit/signer/fake-venue/wire sprint was independently exercised in one local discovery run with:
 
 ```text
-30 new local regression/torture tests
+31 new regression/torture tests
 PASS
+runtime: ~1.8 s in the local tool environment
 ```
 
-The new set covers concurrent nonce allocation, at-most-one concurrent permit consumption, action mutation denial, policy rotation, signer revocation, kill switch, append-only audit enforcement, process restart, partial fills, lost acknowledgements, duplicate acknowledgements and official-wire structural fixtures.
+One of those tests performs **1,000 deterministic one-field action mutations** against a valid unconsumed permit. Every mutation was denied and the permit remained `ISSUED`. Another concurrency test sends 32 simultaneous signer requests to one permit and requires exactly one success.
 
-These figures are **local engineering feedback**, not a single canonical CI run and not empirical market evidence. Before any promotion the branch must be reconciled onto stable canonical `main`, added to the repository manifest, run through repository CI/validators and reviewed in clean context.
+The sprint also covers concurrent nonce allocation, policy rotation, signer revocation, kill switch, append-only audit enforcement, process restart, partial fills, lost acknowledgements, duplicate acknowledgements and official-wire structural fixtures.
+
+These figures are **local engineering feedback**, not a canonical repository CI result and not empirical market evidence. Before any promotion the branch must be reconciled onto stable canonical `main`, added to the repository manifest, run through repository CI/validators and reviewed in clean context.
 
 ## Golden serialization boundary
 
