@@ -1,0 +1,73 @@
+{
+  "schema_version": "0.1",
+  "status": "PROPOSAL_ONLY_NOT_AUTHORIZED",
+  "retrieved_date": "2026-08-07",
+  "purpose": "G4B_DISPOSABLE_PROVIDER_KEY_EXACT_DIGEST_PARITY",
+  "recommended_test_sequence": [
+    "GOOGLE_CLOUD_KMS_SOFTWARE_SECP256K1",
+    "AWS_KMS_ECC_SECG_P256K1",
+    "AZURE_KEY_VAULT_STANDARD_SOFTWARE_P256K"
+  ],
+  "rationale": {
+    "GOOGLE_CLOUD_KMS_SOFTWARE_SECP256K1": "Official documentation explicitly supports EC_SIGN_SECP256K1_SHA256 and states ECDSA may sign a same-length non-SHA digest such as Keccak. Software protection is sufficient for the first compatibility/latency experiment and is materially cheaper than HSM for a disposable test.",
+    "AWS_KMS_ECC_SECG_P256K1": "Official documentation supports ECC_SECG_P256K1, ECDSA_SHA_256 and MessageType=DIGEST, which skips the KMS hashing step. Asymmetric signing is excluded from the free tier but the canary volume is tiny.",
+    "AZURE_KEY_VAULT_STANDARD_SOFTWARE_P256K": "Official documentation supports software-protected P-256K/secp256k1 and ES256K. The first test should avoid Premium/HSM key charges until exact output encoding and compatibility are proven. Exact current numeric transaction pricing must be frozen from the Azure calculator/current SKU before authorization because the public dynamic pricing table did not expose numeric values in the registered retrieval."
+  },
+  "hard_proposed_envelope": {
+    "currency": "EUR",
+    "maximum_total_one_time_spend": "5.00",
+    "maximum_recurring_spend": "0",
+    "maximum_providers": 3,
+    "maximum_disposable_keys_total": 3,
+    "maximum_sign_requests_per_provider": 150,
+    "maximum_sign_requests_total": 450,
+    "maximum_test_duration_hours_per_provider": 2,
+    "key_teardown_required_same_day": true
+  },
+  "documented_cost_reference": {
+    "GOOGLE_CLOUD_KMS_SOFTWARE": {
+      "active_ec_key_version_usd_per_hour": "0.000082192",
+      "cryptographic_operations_usd_per_10000": "0.03",
+      "illustrative_150_signs_plus_2_hours_usd": "0.000614384",
+      "note": "Illustrative upper-level arithmetic from the official general Cloud KMS software price sheet; actual billing SKU/currency remains authoritative."
+    },
+    "AWS_KMS": {
+      "customer_managed_key_usd_per_month_prorated_hourly": "1.00",
+      "asymmetric_signing_usd_per_10000_requests": "0.15",
+      "illustrative_150_signs_plus_2_hours_usd_30_day_month_assumption": "0.005027778",
+      "note": "AWS states asymmetric Sign/GetPublicKey requests are excluded from the KMS free tier. The key-storage estimate uses a simple 30-day month solely as a planning approximation; actual AWS prorated billing is authoritative."
+    },
+    "AZURE_KEY_VAULT_STANDARD_SOFTWARE": {
+      "numeric_rate_status": "MUST_FREEZE_FROM_CURRENT_AZURE_CALCULATOR_OR_SKU_BEFORE_AUTHORIZATION",
+      "public_pricing_structure_observed": "software-protected advanced ECC keys are transaction-priced; no Managed HSM pool is required for the software parity canary",
+      "note": "No numeric Azure rate is asserted from the dynamic public table in this preregistration."
+    }
+  },
+  "hsm_followup": {
+    "included_in_first_parity_canary": false,
+    "reason": "First prove exact digest/signature/recovery compatibility with the lowest-cost protection tier. Compare HSM-backed protection and latency only for provider(s) that pass cryptographic compatibility.",
+    "google_cloud_hsm_ec_reference_hourly_usd_first_2000_month": "0.003424658",
+    "google_cloud_hsm_followup_estimate_150_operations_plus_2_hours_usd_if_0_15_per_10000_applies": "0.009099316",
+    "azure_premium_or_managed_hsm": "SEPARATE_BUDGET_GATE",
+    "aws_cloudhsm_custom_key_store": "OUT_OF_SCOPE_FOR_INITIAL_PARITY"
+  },
+  "stop_rules": [
+    "STOP_IF_ANY_PROVIDER_REQUIRES_A_PAID_COMMITMENT_OR_RESOURCE_OUTSIDE_THIS_ENVELOPE",
+    "STOP_IF_ESTIMATED_TOTAL_COST_CAN_EXCEED_5_EUR",
+    "STOP_IF_EXACT_PROVIDER_PRICING_OR_BILLING_SCOPE_IS_UNCLEAR_AT_AUTHORIZATION_TIME",
+    "STOP_IF_KEY_TEARDOWN_OR_DISABLE_CANNOT_BE_CONFIRMED",
+    "STOP_IF_CREDENTIAL_SCOPE_EXCEEDS_MINIMUM_REQUIRED_SIGN_PUBLIC_KEY_AND_TEST_KEY_LIFECYCLE_PERMISSIONS"
+  ],
+  "proposal_does_not_authorize": {
+    "provider_network_calls": true,
+    "cloud_key_creation": true,
+    "provider_spend": true,
+    "hyperliquid_agent_registration": true,
+    "hyperliquid_testnet": true,
+    "hyperliquid_mainnet": true,
+    "capital_allocation": true
+  },
+  "provider_network_call_authorized": false,
+  "provider_spend_authorized": false,
+  "human_governor_approval_required": true
+}
