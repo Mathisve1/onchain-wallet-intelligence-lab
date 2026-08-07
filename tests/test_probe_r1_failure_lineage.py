@@ -30,11 +30,24 @@ class ProbeR1FailureLineageTests(unittest.TestCase):
         self.assertFalse(record["accepted_technical_evidence"])
         self.assertFalse(record["repair"]["old_run_reusable_as_exact_head_evidence"])
 
-    def test_no_final_candidate_exists_before_main_run(self) -> None:
+    def test_only_canonical_main_run_is_final_candidate(self) -> None:
         lineage = load_record("RUN_LINEAGE.json")
-        self.assertEqual(lineage["canonical_result_status"], "PENDING_CANONICAL_MAIN_RUN")
-        self.assertEqual(lineage["accepted_final_candidate_count"], 0)
-        self.assertFalse(any(row["accepted_for_final_attestation"] for row in lineage["runs"]))
+        self.assertEqual(lineage["canonical_result_status"], "ATTESTED_PUBLIC_PROBE_PASS")
+        self.assertEqual(lineage["accepted_final_candidate_count"], 1)
+        accepted = [row for row in lineage["runs"] if row["accepted_for_final_attestation"]]
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual(
+            accepted[0]["head_commit"],
+            "c11046bf288687c6945fe9b8f17141204d24aae6",
+        )
+        self.assertEqual(accepted[0]["technical_route_result"], "PUBLIC_PROBE_PASS")
+        self.assertEqual(
+            accepted[0]["archive_access_status"],
+            "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+        )
+        self.assertEqual(accepted[0]["public_probe"]["run_id"], 31200124642)
+        self.assertEqual(accepted[0]["public_probe"]["job_id"], 92937868268)
+        self.assertEqual(accepted[0]["public_probe"]["artifact_id"], 9002459643)
         self.assertFalse(lineage["market_data_ingested"])
         self.assertIsNone(lineage["empirical_result"])
         self.assertTrue(all(value is False for value in lineage["authorizations"].values()))
