@@ -1,0 +1,99 @@
+{
+  "artifact": {
+    "artifact_id": 8999652912,
+    "artifact_name": "hyperliquid-public-probe-r1-31193129277-1",
+    "downloaded_zip_sha256": "5a30c6e9a2b80e49eac6d341e0c93f9e182a408b1f10f81270795054eee5534e",
+    "exact_file_count": 5,
+    "expired": false,
+    "expires_at_utc": "2026-11-05T15:32:35Z",
+    "provider_digest": "sha256:5a30c6e9a2b80e49eac6d341e0c93f9e182a408b1f10f81270795054eee5534e",
+    "provider_digest_matches_download": true,
+    "size_in_bytes": 36249
+  },
+  "artifact_file_ledger_complete": true,
+  "artifact_files": {
+    "ARTIFACT_FILES.sha256": {
+      "ledger_self_sha256": "fdd84603d989f92cee4a68b98199d2631a67cb35e84b28bc48a18d1d4d94bec2",
+      "sha256": "fdd84603d989f92cee4a68b98199d2631a67cb35e84b28bc48a18d1d4d94bec2",
+      "size_in_bytes": 448
+    },
+    "hl-public-probe-r1.json": {
+      "ledger_match": true,
+      "ledger_sha256": "c4cd5f6c087da712c4ce5c23351a672704ae402b9b05577830bed8872152c3ac",
+      "sha256": "c4cd5f6c087da712c4ce5c23351a672704ae402b9b05577830bed8872152c3ac",
+      "size_in_bytes": 34137
+    },
+    "probe-run-context.json": {
+      "ledger_match": true,
+      "ledger_sha256": "851be98f8e71c94ad168fd3386fa66395bd81f83a80aaae62288217f66512ecc",
+      "sha256": "851be98f8e71c94ad168fd3386fa66395bd81f83a80aaae62288217f66512ecc",
+      "size_in_bytes": 893
+    },
+    "probe-validation.log": {
+      "ledger_match": true,
+      "ledger_sha256": "9170376f6626bfa5aba7e5982f18756aa87d5b975b01a58a2a59ae10bc849f32",
+      "sha256": "9170376f6626bfa5aba7e5982f18756aa87d5b975b01a58a2a59ae10bc849f32",
+      "size_in_bytes": 77
+    },
+    "probe-validation.rc": {
+      "ledger_match": true,
+      "ledger_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "size_in_bytes": 2
+    }
+  },
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "checked_out_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+  "checked_out_commit_matches_reviewed_commit": true,
+  "empirical_result": null,
+  "market_data_ingested": false,
+  "privacy_checks": {
+    "credential_or_secret_material_found": false,
+    "ethereum_address_patterns_found": 0,
+    "observations_contain_only_structural_metadata": true,
+    "raw_response_bodies_present": false
+  },
+  "probe_output": {
+    "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+    "authorizations_all_false": true,
+    "empirical_result": null,
+    "fail_count": 0,
+    "market_data_ingested": false,
+    "observation_count": 16,
+    "pass_count": 16,
+    "remaining_declared_weight_margin": 614,
+    "request_hashes_match_frozen_contract": true,
+    "response_classes_match_frozen_contract": true,
+    "security_assertions_all_false": true,
+    "sha256": "c4cd5f6c087da712c4ce5c23351a672704ae402b9b05577830bed8872152c3ac",
+    "terminal_status": "PUBLIC_PROBE_PASS",
+    "total_declared_request_weight": 586,
+    "total_request_attempts": 16
+  },
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "reviewed_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+  "schema_version": "1.1",
+  "validation": {
+    "all_checks_pass": true,
+    "artifact_file_hashes_recomputed": true,
+    "artifact_zip_digest_recomputed": true,
+    "independent_external_review": false,
+    "request_hashes_recomputed": true,
+    "terminal_and_archive_states_independently_derived": true,
+    "validation_log": "PROBE_R1_EVIDENCE_VALID:PUBLIC_PROBE_PASS:ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+    "validation_return_code": 0
+  },
+  "verification_id": "HL-PUBLIC-PROBE-001R1-INDEPENDENT-ARTIFACT-VERIFY-20260807-EXACT-SOURCE-HEAD",
+  "verified_at_utc": "2026-08-07T15:37:49Z",
+  "workflow_conclusion": "success",
+  "workflow_job_id": 92914689054,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31193129277
+}
