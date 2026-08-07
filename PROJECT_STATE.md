@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-07 against canonical `main` and implementation PR #7.
+Verified: 2026-08-07 against canonical implementation commit `33683532ca3e6cf7512a728157791d3bfef1375f`.
 
 ## Current status
 
@@ -11,7 +11,9 @@ Verified: 2026-08-07 against canonical `main` and implementation PR #7.
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_DATA` |
 | experiment status | `PREREGISTERED_NO_MARKET_RELEASE` |
-| public-probe implementation | `PENDING_MERGE_TO_CANONICAL_MAIN` |
+| public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
+| implementation pull request | `#7` |
+| implementation commit | `33683532ca3e6cf7512a728157791d3bfef1375f` |
 | canonical public-probe result | `PENDING_CANONICAL_MAIN_RUN` |
 | empirical result | `null` |
 | integration authorized | `false` |
@@ -23,16 +25,16 @@ Verified: 2026-08-07 against canonical `main` and implementation PR #7.
 
 ## Exact next gate
 
-1. Merge the reviewed read-only `HL-PUBLIC-PROBE-001R1` implementation to
-   canonical `main` without adding final run evidence.
-2. Dispatch the installed workflow from `refs/heads/main` with the exact current
-   `main` SHA, which must equal GitHub's dispatch SHA and the checked-out commit.
-3. Freeze the new run, job, artifact and output identities through a separate
-   immutable evidence/attestation pull request.
-4. Only after exact evidence and clean-context review may a separate official
+1. Dispatch the installed `Hyperliquid Public Probe R1` workflow from
+   `refs/heads/main` with the exact current `main` SHA.
+2. The workflow must prove that `inputs.reviewed_commit`, GitHub's dispatch SHA
+   and `git rev-parse HEAD` are byte-identical before network access.
+3. Independently inspect the workflow, job and immutable artifact and recompute
+   the artifact ZIP, internal file and probe-output SHA-256 values.
+4. Freeze those exact identities through a separate evidence/attestation pull
+   request; no earlier run may be promoted.
+5. Only after exact evidence and clean-context review may a separate official
    archive-inventory proposal be considered.
-5. Build and reconcile a deterministic wallet ledger only after a later reviewed
-   historical-data release decision.
 
 No archive inventory, bulk object download, analytical market partition, wallet
 performance calculation or execution stage is currently open.
