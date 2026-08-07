@@ -67,8 +67,17 @@ def _forbidden_required_fields(conditional: dict[str, Any]) -> set[str]:
     return result
 
 
-def validate_prototype_static(root: Path = ROOT) -> None:
-    path = root / "prototype/bounded_autonomy.py"
+def _literal_assignment(source: str, name: str) -> Any:
+    tree = ast.parse(source)
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == name:
+                    return ast.literal_eval(node.value)
+    raise DesignValidationError(f"prototype:missing_literal_assignment:{name}")
+
+
+def _validate_static_file(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
     imports: set[str] = set()
@@ -78,15 +87,21 @@ def validate_prototype_static(root: Path = ROOT) -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".", 1)[0])
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            require(node.func.id not in {"eval", "exec", "compile"}, f"prototype:dynamic_execution:{node.func.id}")
-    require(not (imports & FORBIDDEN_PROTOTYPE_IMPORT_ROOTS), f"prototype:forbidden_imports:{sorted(imports & FORBIDDEN_PROTOTYPE_IMPORT_ROOTS)}")
-    require(imports <= ALLOWED_PROTOTYPE_IMPORT_ROOTS, f"prototype:unregistered_imports:{sorted(imports - ALLOWED_PROTOTYPE_IMPORT_ROOTS)}")
+            require(node.func.id not in {"eval", "exec", "compile"}, f"prototype:dynamic_execution:{path.name}:{node.func.id}")
+    require(not (imports & FORBIDDEN_PROTOTYPE_IMPORT_ROOTS), f"prototype:forbidden_imports:{path.name}:{sorted(imports & FORBIDDEN_PROTOTYPE_IMPORT_ROOTS)}")
+    require(imports <= ALLOWED_PROTOTYPE_IMPORT_ROOTS, f"prototype:unregistered_imports:{path.name}:{sorted(imports - ALLOWED_PROTOTYPE_IMPORT_ROOTS)}")
+
+
+def validate_prototype_static(root: Path = ROOT) -> None:
+    for rel in ("prototype/bounded_autonomy.py", "prototype/reconciliation.py"):
+        _validate_static_file(root / rel)
 
 
 def validate_documents(root: Path = ROOT) -> None:
     policy = load_json("BOUND_AUTONOMY_POLICY.json", root)
     surface = load_json("HYPERLIQUID_ACTION_SURFACE.json", root)
     experiment = load_json("EXECUTION_EXPERIMENT_CONTRACT.json", root)
+    reconciliation = load_json("RECONCILIATION_CONTRACT.json", root)
     risk_schema = load_json("RISK_ENVELOPE.schema.json", root)
     intent_schema = load_json("TRADE_INTENT.schema.json", root)
     permit_schema = load_json("TRADE_PERMIT.schema.json", root)
@@ -145,6 +160,20 @@ def validate_documents(root: Path = ROOT) -> None:
     require(ai_rule.get("deterministic_safety_actions_bypass_ai_requirement") is True, "experiment:safety_ai_dependency")
     require(set(ai_rule.get("deterministic_safety_action_types", [])) == EXPECTED_SAFETY_ACTIONS, "experiment:safety_action_drift")
     require(ai_rule.get("deterministic_safety_may_open_new_risk") is False, "experiment:safety_can_open_risk")
+
+    require(reconciliation.get("status") == "DESIGN_ONLY_NO_VENUE_ACTION", "reconciliation:status")
+    require(all(value is False for value in reconciliation.get("current_authorizations", {}).values()), "reconciliation:authorization_open")
+    require(reconciliation.get("risk_gate", {}).get("new_risk_requires_unresolved_risk_increasing_action_count") == 0, "reconciliation:risk_gate")
+    require(reconciliation.get("risk_gate", {}).get("blind_resubmit_after_uncertainty_allowed") is False, "reconciliation:blind_retry_open")
+    require(reconciliation.get("quantity_rules", {}).get("cancel_action_may_be_risk_increasing") is False, "reconciliation:cancel_risk_open")
+
+    recon_source = (root / "prototype/reconciliation.py").read_text(encoding="utf-8")
+    code_terminal = set(_literal_assignment(recon_source, "TERMINAL_STATES"))
+    code_uncertain = set(_literal_assignment(recon_source, "UNCERTAIN_STATES"))
+    transition_states = set(_literal_assignment(recon_source, "ALLOWED_TRANSITIONS"))
+    require(code_terminal == set(reconciliation.get("terminal_states", [])), "reconciliation:terminal_state_parity")
+    require(code_uncertain == set(reconciliation.get("uncertain_states", [])), "reconciliation:uncertain_state_parity")
+    require(transition_states == set(reconciliation.get("states", [])), "reconciliation:state_surface_parity")
 
     validate_prototype_static(root)
 
