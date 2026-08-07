@@ -1,7 +1,7 @@
 {
-  "schema_version": "0.1-design",
+  "schema_version": "0.2-design",
   "status": "LOCAL_FIXTURE_PARITY_NO_SIGNER_AUTHORIZATION",
-  "scope": "G2_G4_OFFLINE_CRYPTOGRAPHIC_PARITY",
+  "scope": "G2_G4_AND_PROVIDER_ADAPTER_OFFLINE_PARITY",
   "official_reference": {
     "repository": "hyperliquid-dex/hyperliquid-python-sdk",
     "commit": "2fdb18f9517675ea03695a0962bd19eece9c83f0",
@@ -19,6 +19,7 @@
     "python": "3.13.5",
     "msgpack": "1.1.2",
     "network_used": false,
+    "provider_credential_used": false,
     "real_secret_used": false,
     "real_signer_backend_used": false,
     "venue_request_used": false
@@ -32,7 +33,10 @@
     "SECP256K1_RFC6979_TEST_SIGNATURE",
     "LOW_S_NORMALIZATION",
     "RECOVERABLE_V_27_28",
-    "SECP256K1_ADDRESS_RECOVERY"
+    "SECP256K1_ADDRESS_RECOVERY",
+    "STRICT_DER_ECDSA_PARSE",
+    "P1363_FIXED_WIDTH_ECDSA_PARSE",
+    "EXPECTED_SIGNER_RECOVERY_GATE"
   ],
   "official_vectors_matched": [
     "PRODUCTION_PHANTOM_AGENT_CONNECTION_ID",
@@ -47,7 +51,8 @@
     "SCHEDULE_CANCEL_MAINNET_SIGNATURE",
     "SCHEDULE_CANCEL_TESTNET_SIGNATURE",
     "SCHEDULE_CANCEL_WITH_TIME_MAINNET_SIGNATURE",
-    "SCHEDULE_CANCEL_WITH_TIME_TESTNET_SIGNATURE"
+    "SCHEDULE_CANCEL_WITH_TIME_TESTNET_SIGNATURE",
+    "PUBLIC_FIXTURE_SIGNER_ADDRESS_RECOVERY"
   ],
   "critical_findings": [
     {
@@ -69,6 +74,11 @@
       "id": "CRYPTO-FINDING-004",
       "finding": "MAINNET_TESTNET_SOURCE_BYTE_CHANGES_EIP712_DIGEST",
       "consequence": "Network identity must remain permit-bound and cannot be inferred or mutated by the signer."
+    },
+    {
+      "id": "CRYPTO-FINDING-005",
+      "finding": "CLOUD_SECP256K1_SUPPORT_DOES_NOT_PROVE_EXACT_HYPERLIQUID_DIGEST_COMPATIBILITY",
+      "consequence": "Every candidate backend must sign the exact frozen 32-byte digest hands-on and recover the exact pre-registered signer address."
     }
   ],
   "field_order_contract": {
@@ -76,19 +86,33 @@
     "order_action": ["type", "orders", "grouping"],
     "cancel_by_cloid_action": ["type", "cancels"]
   },
-  "local_test_result": {
-    "test_file": "prototype/test_crypto_fixture_oracle.py",
-    "test_count": 14,
-    "result": "PASS",
-    "canonical_ci_evidence": false
-  },
+  "local_test_results": [
+    {
+      "test_file": "prototype/test_crypto_fixture_oracle.py",
+      "test_count": 14,
+      "result": "PASS"
+    },
+    {
+      "test_file": "prototype/test_signature_backend_adapter.py",
+      "test_count": 8,
+      "result": "PASS"
+    },
+    {
+      "test_file": "prototype/test_provider_fixture_harness.py",
+      "test_count": 6,
+      "result": "PASS"
+    }
+  ],
+  "local_crypto_test_count_total": 28,
+  "canonical_ci_evidence": false,
   "promotion_constraints": {
     "fixture_code_may_be_used_as_production_signer": false,
     "private_key_may_be_added_to_runtime": false,
+    "provider_network_call_authorized": false,
     "testnet_action_authorized": false,
     "mainnet_action_authorized": false,
     "cloud_kms_backend_authorized": false,
     "mpc_backend_authorized": false,
-    "next_gate": "CANDIDATE_SIGNER_BACKEND_DIGEST_AND_RECOVERY_PARITY"
+    "next_gate": "DISPOSABLE_PROVIDER_KEY_EXACT_DIGEST_SIGNATURE_PARITY"
   }
 }
