@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:signer-backend-evidence:0.1",
-  "title": "Signer backend compatibility evidence",
+  "$id": "urn:owil:bounded-autonomy:signer-backend-evidence:0.2",
+  "title": "Sanitized signer backend compatibility evidence",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,15 +24,17 @@
     "exact_digest_recovery_pass",
     "wrong_digest_rejected",
     "wrong_signer_rejected",
+    "double_hash_signature_detected",
     "key_disable_revoke_tested",
     "latency_ms",
     "software_versions",
     "terminal_decision",
+    "provider_network_call_authorized_after_evidence",
     "testnet_action_authorized",
     "live_action_authorized"
   ],
   "properties": {
-    "schema_version": {"const": "0.1"},
+    "schema_version": {"const": "0.2"},
     "provider": {"type": "string", "minLength": 2, "maxLength": 80},
     "service": {"type": "string", "minLength": 2, "maxLength": 120},
     "region_or_location": {"type": "string", "minLength": 1, "maxLength": 120},
@@ -41,13 +43,13 @@
     "expected_signer_address": {"$ref": "#/$defs/address"},
     "curve": {"const": "secp256k1"},
     "algorithm": {"type": "string", "minLength": 2, "maxLength": 120},
-    "request_mode": {"type": "string", "minLength": 2, "maxLength": 120},
+    "request_mode": {"type": "string", "minLength": 2, "maxLength": 160},
     "signature_encoding": {"type": "string", "enum": ["DER", "P1363", "OTHER_EXACTLY_DOCUMENTED"]},
     "fixture_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$"},
     "input_digest_sha256": {"$ref": "#/$defs/sha256"},
     "raw_signature_sha256": {"$ref": "#/$defs/sha256"},
     "normalized_signature": {
-      "type": "object",
+      "type": ["object", "null"],
       "additionalProperties": false,
       "required": ["r", "s", "v"],
       "properties": {
@@ -56,10 +58,11 @@
         "v": {"type": "integer", "enum": [27, 28]}
       }
     },
-    "recovered_address": {"$ref": "#/$defs/address"},
+    "recovered_address": {"oneOf": [{"$ref": "#/$defs/address"}, {"type": "null"}]},
     "exact_digest_recovery_pass": {"type": "boolean"},
     "wrong_digest_rejected": {"type": "boolean"},
     "wrong_signer_rejected": {"type": "boolean"},
+    "double_hash_signature_detected": {"type": "boolean"},
     "key_disable_revoke_tested": {"type": "boolean"},
     "latency_ms": {
       "type": "object",
@@ -78,6 +81,7 @@
     "terminal_decision": {
       "type": "string",
       "enum": [
+        "INCOMPLETE_EVIDENCE",
         "COMPATIBLE_CANDIDATE",
         "COMPATIBLE_BUT_LATENCY_NO_GO",
         "COMPATIBLE_BUT_SECURITY_NO_GO",
@@ -87,6 +91,7 @@
         "OPERATIONAL_NO_GO"
       ]
     },
+    "provider_network_call_authorized_after_evidence": {"const": false},
     "testnet_action_authorized": {"const": false},
     "live_action_authorized": {"const": false}
   },
