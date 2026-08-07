@@ -103,6 +103,7 @@
       },
       "research_ci": {
         "conclusion": "success",
+        "job_id": 92869634707,
         "run_id": 31179660399
       },
       "technical_route_result": "PUBLIC_PROBE_PASS"
