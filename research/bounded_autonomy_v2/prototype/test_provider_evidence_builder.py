@@ -21,17 +21,21 @@ def spki_for_key(private_key: int) -> bytes:
     return b"\x30" + bytes([len(body)]) + body
 
 
-def capture_for_digest(digest: bytes, *, latency_count=100, revoke=True):
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def capture_for_digest(digest: bytes, *, latency_count=100, revoke=True, public_format="SPKI_DER_BASE64"):
     key = fixture_key()
     signature = sign_digest(key, digest)
     der = encode_der_ecdsa_for_fixture(int(signature["r"], 16), int(signature["s"], 16))
-    return {
-        "schema_version": "0.2-local-ephemeral",
+    capture = {
+        "schema_version": "0.3-local-ephemeral",
         "provider": "MOCK PROVIDER",
         "service": "MOCK KMS",
         "region_or_location": "test-region",
         "key_resource_version": "projects/example/keyVersions/7",
-        "public_key_spki_base64": base64.b64encode(spki_for_key(key)).decode(),
+        "public_key_format": public_format,
         "curve": "secp256k1",
         "algorithm": "ECDSA_TEST",
         "request_mode": "fixture-prehashed-digest",
@@ -43,32 +47,43 @@ def capture_for_digest(digest: bytes, *, latency_count=100, revoke=True):
         "key_disable_revoke_tested": revoke,
         "software_versions": {"fixture": "1"},
     }
+    if public_format == "SPKI_DER_BASE64":
+        capture["public_key_spki_base64"] = base64.b64encode(spki_for_key(key)).decode()
+    else:
+        x, y = _mul(key)
+        capture["public_key_jwk_x"] = _b64url(x.to_bytes(32, "big"))
+        capture["public_key_jwk_y"] = _b64url(y.to_bytes(32, "big"))
+    return capture
 
 
 class TestProviderEvidenceBuilder(unittest.TestCase):
     def exact_fixture_digest(self):
         return bytes.fromhex("e0aabfac88a47d3e7028b6ba6a94b30c8afcfffac26cbce788cf362b1312eafa")
 
-    def test_complete_exact_digest_capture_becomes_candidate_only(self):
-        capture = capture_for_digest(self.exact_fixture_digest())
-        evidence = build_sanitized_evidence(capture)
+    def test_complete_exact_digest_spki_capture_becomes_candidate_only(self):
+        evidence = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest()))
         self.assertTrue(evidence["exact_digest_recovery_pass"])
         self.assertTrue(evidence["wrong_digest_rejected"])
         self.assertTrue(evidence["wrong_signer_rejected"])
         self.assertFalse(evidence["double_hash_signature_detected"])
         self.assertEqual(evidence["terminal_decision"], "COMPATIBLE_CANDIDATE")
+        self.assertEqual(evidence["schema_version"], "0.4")
         self.assertFalse(evidence["testnet_action_authorized"])
         self.assertFalse(evidence["live_action_authorized"])
 
+    def test_jwk_xy_capture_derives_same_signer(self):
+        spki = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest(), public_format="SPKI_DER_BASE64"))
+        jwk = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest(), public_format="JWK_XY_BASE64URL"))
+        self.assertEqual(spki["expected_signer_address"], jwk["expected_signer_address"])
+        self.assertEqual(spki["public_key_sha256"], jwk["public_key_sha256"])
+
     def test_incomplete_latency_or_revocation_never_promotes(self):
-        capture = capture_for_digest(self.exact_fixture_digest(), latency_count=5, revoke=False)
-        evidence = build_sanitized_evidence(capture)
+        evidence = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest(), latency_count=5, revoke=False))
         self.assertEqual(evidence["terminal_decision"], "INCOMPLETE_EVIDENCE")
 
     def test_double_hash_signature_is_detected_as_incompatible(self):
         digest = self.exact_fixture_digest()
-        capture = capture_for_digest(hashlib.sha256(digest).digest())
-        evidence = build_sanitized_evidence(capture)
+        evidence = build_sanitized_evidence(capture_for_digest(hashlib.sha256(digest).digest()))
         self.assertFalse(evidence["exact_digest_recovery_pass"])
         self.assertTrue(evidence["double_hash_signature_detected"])
         self.assertEqual(evidence["terminal_decision"], "DIGEST_TRANSFORMATION_INCOMPATIBLE")
@@ -87,8 +102,7 @@ class TestProviderEvidenceBuilder(unittest.TestCase):
             build_sanitized_evidence(capture)
 
     def test_latency_percentiles_are_deterministic_nearest_rank(self):
-        capture = capture_for_digest(self.exact_fixture_digest(), latency_count=100)
-        latency = build_sanitized_evidence(capture)["latency_ms"]
+        latency = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest(), latency_count=100))["latency_ms"]
         self.assertEqual(latency, {"sample_count": 100, "p50": 50.0, "p75": 75.0, "p90": 90.0, "p95": 95.0, "p99": 99.0})
 
 
