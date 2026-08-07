@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:owil:bounded-autonomy:risk-envelope:0.1",
+  "title": "Human-frozen bounded autonomy risk envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "envelope_id",
+    "environment",
+    "venue",
+    "account_address",
+    "policy_hash",
+    "effective_from_ms",
+    "expires_at_ms",
+    "allowed_instruments",
+    "allowed_actions",
+    "max_single_trade_notional_usd",
+    "max_gross_exposure_usd",
+    "max_net_exposure_usd",
+    "max_instrument_exposure_usd",
+    "max_open_positions",
+    "max_daily_realized_loss_usd",
+    "max_daily_total_loss_usd",
+    "max_strategy_drawdown_usd",
+    "max_slippage_bps",
+    "max_signal_age_ms",
+    "max_quote_age_ms",
+    "max_unreconciled_actions",
+    "min_cancel_action_reserve",
+    "ai_critic_mode",
+    "human_governor_signature_required_for_activation"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1-design"},
+    "envelope_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{12,128}$"},
+    "environment": {"type": "string", "enum": ["TESTNET", "ISOLATED_LIVE"]},
+    "venue": {"const": "HYPERLIQUID"},
+    "account_address": {"$ref": "#/$defs/address"},
+    "policy_hash": {"$ref": "#/$defs/sha256"},
+    "effective_from_ms": {"type": "integer", "minimum": 1},
+    "expires_at_ms": {"type": "integer", "minimum": 1},
+    "allowed_instruments": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["BTC", "ETH", "SOL"]}
+    },
+    "allowed_actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["PLACE_IOC_LIMIT", "CANCEL_BY_CLOID", "REDUCE_ONLY_IOC"]}
+    },
+    "max_single_trade_notional_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_gross_exposure_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_net_exposure_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_instrument_exposure_usd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "BTC": {"$ref": "#/$defs/nonnegative_decimal_string"},
+        "ETH": {"$ref": "#/$defs/nonnegative_decimal_string"},
+        "SOL": {"$ref": "#/$defs/nonnegative_decimal_string"}
+      }
+    },
+    "max_open_positions": {"type": "integer", "minimum": 0},
+    "max_daily_realized_loss_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_daily_total_loss_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_strategy_drawdown_usd": {"$ref": "#/$defs/nonnegative_decimal_string"},
+    "max_slippage_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "max_signal_age_ms": {"type": "integer", "minimum": 1},
+    "max_quote_age_ms": {"type": "integer", "minimum": 1},
+    "max_unreconciled_actions": {"const": 0},
+    "min_cancel_action_reserve": {"type": "integer", "minimum": 1},
+    "ai_critic_mode": {"type": "string", "enum": ["DISABLED", "VETO_ONLY_REQUIRED", "VETO_ONLY_BEST_EFFORT_RESEARCH"]},
+    "human_governor_signature_required_for_activation": {"const": true}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "address": {"type": "string", "pattern": "^0x[0-9a-f]{40}$"},
+    "nonnegative_decimal_string": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"}
+  }
+}
