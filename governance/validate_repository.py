@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+from regenerate_manifest import render_manifest
+
 ROOT = Path(__file__).resolve().parents[1]
 SHA_ROW = re.compile(r"^([0-9a-f]{64})  (.+)$")
 
@@ -17,8 +19,16 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> int:
     manifest = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
+    observed_manifest = manifest.read_text(encoding="utf-8")
+    expected_manifest = render_manifest(ROOT)
+    require(
+        observed_manifest == expected_manifest,
+        "repository manifest is incomplete, stale or non-canonical; run "
+        "python governance/regenerate_manifest.py --write",
+    )
+
     seen: set[str] = set()
-    for line in manifest.read_text().splitlines():
+    for line in observed_manifest.splitlines():
         if not line or line.startswith("#"):
             continue
         match = SHA_ROW.fullmatch(line)
@@ -31,11 +41,26 @@ def main() -> int:
         observed = hashlib.sha256(path.read_bytes()).hexdigest()
         require(observed == expected, f"manifest mismatch: {rel}")
 
-    contract = json.loads((ROOT / "research/wallet_copyability/DATA_CONTRACT.json").read_text())
-    require(contract["market_data_ingested"] is False, "market-data gate opened")
-    require(contract["empirical_result"] is None, "empirical result created")
-    require(contract["execution_boundary"]["read_only"] is True, "read-only gate disabled")
-    require(all(value is False for value in contract["authorizations"].values()), "authorization opened")
+    contract = json.loads(
+        (ROOT / "research/wallet_copyability/DATA_CONTRACT.json").read_text()
+    )
+    require(
+        contract["market_data_ingested"] is False,
+        "market-data gate opened",
+    )
+    require(
+        contract["empirical_result"] is None,
+        "empirical result created",
+    )
+    require(
+        contract["execution_boundary"]["read_only"] is True,
+        "read-only gate disabled",
+    )
+    require(
+        all(value is False for value in contract["authorizations"].values()),
+        "authorization opened",
+    )
+    print(f"REPOSITORY_MANIFEST_FILES:{len(seen)}")
     print("REPOSITORY_VALIDATION_PASS")
     return 0
 
