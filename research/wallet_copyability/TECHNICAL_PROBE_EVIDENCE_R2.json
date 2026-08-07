@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R2",
+  "contract_id": "HYPERLIQUID_PUBLIC_TECHNICAL_PROBE_CONTRACT_R2",
+  "status": "PENDING_PUBLIC_PROBE_R2",
+  "supersedes_probe_id": "HL-PUBLIC-PROBE-001R1",
+  "reviewed_commit": null,
+  "workflow_run_id": null,
+  "workflow_job_id": null,
+  "artifact_id": null,
+  "artifact_sha256": null,
+  "output_sha256": null,
+  "observations": [],
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "integration_authorized": false,
+  "paper_authorized": false,
+  "shadow_authorized": false,
+  "live_authorized": false,
+  "leverage_authorized": false,
+  "capital_allocation_authorized": false
+}
