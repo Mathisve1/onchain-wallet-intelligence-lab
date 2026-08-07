@@ -57,21 +57,25 @@ incremental net follower value relative to human approval, using the same
 signals, costs and wallet selection as the parent study.
 
 The 0.2-second arm is a diagnostic engineering lower bound, not a promise of
-achievable live latency.
+achievable live latency. The machine-readable experiment state is frozen in
+`research/bounded_autonomy/EXPERIMENT_CONTRACT.json`.
 
 ## Reading order
 
 1. `PROJECT_STATE.md`
-2. `research/wallet_copyability/PREREGISTRATION.md`
-3. `research/wallet_copyability/DATA_CONTRACT.json`
-4. `research/bounded_autonomy/README.md`
-5. `governance/adr/ADR-BOUND-AUTONOMY-001.md`
-6. `governance/BOUND_AUTONOMY_POLICY.json`
-7. `research/bounded_autonomy/PREREGISTRATION.md`
-8. `research/bounded_autonomy/THREAT_MODEL.md`
-9. `research/bounded_autonomy/EXECUTION_ARCHITECTURE.md`
-10. `research/bounded_autonomy/GO_NO_GO_GATES.md`
-11. `RISK_POLICY.md`
-12. `ROADMAP.md`
-13. `DECISION_LOG.md`
-14. `MIGRATION_PROVENANCE.md`
+2. `AI_HANDOVER.md`
+3. `governance/RESEARCH_REGISTRY.json`
+4. `research/wallet_copyability/PREREGISTRATION.md`
+5. `research/wallet_copyability/DATA_CONTRACT.json`
+6. `research/bounded_autonomy/README.md`
+7. `governance/adr/ADR-BOUND-AUTONOMY-001.md`
+8. `governance/BOUND_AUTONOMY_POLICY.json`
+9. `research/bounded_autonomy/EXPERIMENT_CONTRACT.json`
+10. `research/bounded_autonomy/PREREGISTRATION.md`
+11. `research/bounded_autonomy/THREAT_MODEL.md`
+12. `research/bounded_autonomy/EXECUTION_ARCHITECTURE.md`
+13. `research/bounded_autonomy/GO_NO_GO_GATES.md`
+14. `RISK_POLICY.md`
+15. `ROADMAP.md`
+16. `DECISION_LOG.md`
+17. `MIGRATION_PROVENANCE.md`
