@@ -1,6 +1,8 @@
 # Golden Hyperliquid serialization and signing contract
 
-Status: offline design/fixture contract only. No signing or venue request is authorized.
+Status: `G1_G4_LOCAL_FIXTURE_PARITY_NO_SIGNER_AUTHORIZATION`.
+
+No network request, venue action, testnet action or production signing capability is authorized by this document.
 
 ## Pinned primary reference
 
@@ -13,18 +15,30 @@ Pinned reviewed commit:
 version lineage: 0.24.0
 ```
 
-Key reference files:
+Primary files:
 
 ```text
 hyperliquid/utils/signing.py
 hyperliquid/exchange.py
+tests/signing_test.py
+pyproject.toml
 ```
 
-The source was reviewed from the official repository on 2026-08-07. This pin is a research fixture, not a statement that version 0.24.0 will remain the production version.
+The pin is an immutable research fixture. It is not a claim that version 0.24.0 will remain the correct production version.
 
-## Order wire contract observed in official SDK
+## Official dependency range observed at the pin
 
-For an order request the SDK converts to an order wire with these keys:
+```text
+eth-utils   >=2.1.0,<6.0.0
+eth-account >=0.10.0,<0.14.0
+msgpack      ^1.0.5
+```
+
+Local fixture validation used Python 3.13.5 and msgpack 1.1.2. Exact future production dependencies remain separately gated.
+
+## Order wire contract
+
+Pinned SDK `order_request_to_order_wire` builds the mapping in this insertion order:
 
 ```text
 a = asset integer
@@ -36,7 +50,7 @@ t = order-type wire
 c = optional raw cloid
 ```
 
-An IOC limit order therefore has the structural form:
+Example IOC wire:
 
 ```json
 {
@@ -50,17 +64,15 @@ An IOC limit order therefore has the structural form:
 }
 ```
 
-The order action wraps one or more wires under:
+The order action is constructed in this insertion order:
 
-```json
-{
-  "type": "order",
-  "orders": [],
-  "grouping": "na"
-}
+```text
+type
+orders
+grouping
 ```
 
-Cancel-by-cloid uses the official structure:
+Cancel-by-cloid uses:
 
 ```json
 {
@@ -71,41 +83,68 @@ Cancel-by-cloid uses the official structure:
 }
 ```
 
+### Critical ordering finding
+
+`msgpack.packb(action)` serializes the mapping in insertion order. Two Python dictionaries with identical key/value sets but different insertion order can therefore produce different msgpack bytes and different Hyperliquid action hashes.
+
+Consequences:
+
+- action construction order is part of the signed protocol contract;
+- the signer must never canonical-sort action keys;
+- an arbitrary JSON-to-dict round trip cannot be assumed signature-neutral;
+- the venue adapter must build each allowlisted action through a frozen typed compiler;
+- golden tests must compare bytes/hash, not only semantic mapping equality.
+
 ## Numeric wire rule
 
-The official `float_to_wire` currently:
+Pinned SDK `float_to_wire`:
 
-1. formats to eight decimal places;
-2. rejects values whose rounding error is at least `1e-12`;
-3. normalizes negative zero to zero;
-4. normalizes trailing zeroes through `Decimal` formatting.
+1. formats a float to eight decimal places;
+2. rejects when the formatted float differs by at least `1e-12`;
+3. contains an internal `rounded == "-0"` guard;
+4. normalizes the resulting Decimal/trailing zeroes.
 
-Our risk/intent layer stores canonical decimal strings to avoid binary-float arithmetic in risk decisions. A later adapter must prove that every accepted decimal input maps byte-for-byte to the same official wire string for the supported instrument precision. The adapter must reject rather than silently round an out-of-contract value.
+### Negative-zero finding
+
+The current pin does **not** actually normalize Python `-0.0` to `"0"`: eight-decimal formatting first produces `"-0.00000000"`, so the narrower `"-0"` comparison does not fire and final Decimal normalization yields `"-0"`.
+
+Our parity oracle reproduces that exact pinned behavior. The strategy/risk layer should preferably reject negative-zero numeric inputs before venue serialization rather than silently choosing a different representation.
+
+Our canonical risk arithmetic continues to use decimal strings and does not rely on binary floats.
 
 ## L1 action-hash contract
 
-The official SDK currently computes the L1 action hash conceptually as:
+Pinned SDK computes:
 
 ```text
 msgpack.packb(action)
-|| nonce encoded as unsigned 8-byte big-endian
+|| nonce as unsigned 8-byte big-endian
 || vault discriminator/address
 || optional expires-after discriminator + unsigned 8-byte big-endian expiry
-then Ethereum keccak
+then Ethereum Keccak-256
 ```
 
-Important: Python `hashlib.sha3_256` is **not** a substitute for Ethereum keccak. The pure standard-library prototype therefore does not pretend to implement this cryptographic step.
+Python `hashlib.sha3_256` is not Ethereum Keccak-256.
+
+The independent fixture oracle now contains a small test-only Keccak implementation and reproduces the official production phantom-agent connection ID:
+
+```text
+0fcbeda5ae3c4950a548021552a4fea2226858c4453571bf3f24ba017eac2908
+```
+
+for the frozen official production fixture.
 
 ## Phantom-agent EIP-712 contract
 
-For L1 actions, the official SDK converts the action hash into a phantom agent:
+Pinned L1 signing transforms the action hash into:
 
 ```text
-source = "a" on mainnet, "b" on testnet
+source = "a" on mainnet
+source = "b" on testnet
 connectionId = action hash
 ```
 
-The current EIP-712 domain in the official SDK is:
+Pinned EIP-712 domain:
 
 ```text
 name = Exchange
@@ -114,11 +153,63 @@ chainId = 1337
 verifyingContract = 0x0000000000000000000000000000000000000000
 ```
 
-The signer must produce a signature whose recovered address equals the registered API-wallet signer.
+The fixture oracle independently computes the EIP-712 digest, deterministic secp256k1 test signature, low-S form and public-key recovery.
+
+The recovered address for the official public test-key fixture matches:
+
+```text
+0x14791697260e4c9a71f18484c9f997b308e59325
+```
+
+The repository does not store or use a live API-wallet private key for these tests. The known public SDK test secret is constructed inside the fixture test solely to reproduce the official public vectors.
+
+## Exact official vectors now matched locally
+
+The independent implementation reproduces the pinned SDK values for:
+
+- production phantom-agent connection ID;
+- dummy L1 mainnet and testnet `r/s/v`;
+- order L1 mainnet and testnet `r/s/v`;
+- order-with-CLOID mainnet and testnet `r/s/v`;
+- vault-bound mainnet and testnet `r/s/v`;
+- `scheduleCancel` mainnet and testnet `r/s/v`;
+- `scheduleCancel(time=...)` mainnet and testnet `r/s/v`;
+- recovered fixture signer address.
+
+Local run:
+
+```text
+prototype/test_crypto_fixture_oracle.py
+14 tests
+PASS
+```
+
+This is engineering evidence only, not canonical repository CI.
+
+## Backend-neutral ECDSA recovery adapter
+
+A separate fixture adapter now demonstrates the conversion needed for signer backends that return `(r,s)` in strict DER form rather than Ethereum `r/s/v`:
+
+1. strict DER parse;
+2. scalar range validation;
+3. high-S -> low-S normalization;
+4. try recovery `v` values 27 and 28;
+5. accept only when exactly one candidate recovers the pre-registered signer address;
+6. reject wrong digest, wrong expected signer or malformed DER.
+
+Local adapter run:
+
+```text
+prototype/test_signature_backend_adapter.py
+6 tests
+PASS
+```
+
+This adapter does not prove that any specific AWS/GCP/Azure/Cobo backend uses this exact output format. Provider-specific adapters remain unapproved until tested against their exact official APIs and outputs.
 
 ## POST envelope
 
-The official exchange client posts L1 actions to `/exchange` in an envelope containing:
+Pinned official exchange client sends L1 actions to `/exchange` with:
 
 ```text
 action
@@ -128,44 +219,52 @@ vaultAddress
 expiresAfter
 ```
 
-Our future venue adapter must construct only the explicitly allowlisted action types. It must not expose the official SDK's broader action surface to the AI/runtime.
+Our future venue adapter may expose only the closed action surface registered elsewhere. The official SDK's broader exchange methods must not be reachable from the AI/runtime.
 
-## Golden-fixture progression
+## Gate status
 
-### G1 — structural wire parity
+### G1 — structural wire parity: LOCAL PASS
 
-No external cryptographic packages required. Verify order/cancel dictionary structure, exact keys, IOC TIF, reduce-only and cloid representation against frozen fixtures.
+Order/cancel structure, field order, IOC TIF, reduce-only and CLOID fixtures are frozen.
 
-### G2 — numeric-wire parity
+### G2 — numeric-wire parity: LOCAL PASS WITH FINDING
 
-Run the exact official `float_to_wire` implementation from the pinned SDK in a dependency-isolated test environment and compare a broad edge-case corpus with our decimal adapter. Any mismatch is a blocker.
+Pinned float behavior is reproduced, including the negative-zero compatibility finding. A broader instrument-precision corpus remains required before a production adapter.
 
-### G3 — msgpack/action-hash parity
+### G3 — msgpack/action-hash parity: LOCAL PASS
 
-Using pinned `msgpack` and Ethereum keccak dependencies, require byte-identical packed action bytes and identical action hash for frozen order/cancel fixtures.
+The independent action hash exactly matches the official production fixture and signature vectors. Mapping insertion order is now a frozen safety constraint.
 
-### G4 — EIP-712 digest/signature recovery parity
+### G4 — EIP-712/signature/recovery parity: LOCAL PASS
 
-Require identical phantom-agent structured payload and recover the disposable signer's exact address from both official-SDK and candidate-signer signatures.
+Official `r/s/v` vectors and signer recovery match using an implementation independent from `eth-account`.
 
-### G5 — testnet acceptance
+### G4B — candidate external signer backend parity: OPEN
 
-Only after a separate signed-testnet authorization, submit harmless bounded IOC/cancel fixtures and reconcile venue responses. Offline parity alone does not authorize submission.
+No cloud KMS, HSM or MPC backend has yet signed the exact frozen digest and recovered to the approved API-wallet address.
 
-## Mandatory negative fixtures
+### G5 — Hyperliquid testnet acceptance: NOT AUTHORIZED
+
+Offline parity does not authorize any signed venue request.
+
+## Mandatory negative fixtures for later adapters
 
 - >8-decimal size/price that would round;
 - negative zero;
 - incorrect asset ID;
-- `Gtc` or `Alo` substituted for registered `Ioc`;
+- `Gtc`/`Alo` substituted for registered `Ioc`;
 - reduce-only bit mutation;
-- cloid mutation;
+- CLOID mutation;
 - grouping mutation;
+- mapping field-order mutation;
 - nonce mutation;
 - vault-address mutation;
 - expiry mutation;
 - mainnet/testnet source mutation;
-- action dictionary with additional fields;
-- cancel target not owned by strategy.
+- extra action fields;
+- cancel target not owned by strategy;
+- wrong recovered signer;
+- high-S backend signature;
+- malformed DER or backend signature encoding.
 
-Every mutation must change the bound payload/hash or be rejected before signing.
+Every mutation must change the bound bytes/hash or be rejected before a real signer can release an action.
