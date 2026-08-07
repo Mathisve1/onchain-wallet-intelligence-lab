@@ -1,0 +1,65 @@
+{
+  "schema_version": "0.1-design",
+  "status": "DESIGN_ONLY_NO_SIGNING_OR_NETWORK",
+  "service": "PERMIT_SERVICE",
+  "purpose": "Convert one deterministically allowed typed intent into one exact, single-use, expiring permit while atomically reserving execution identity and durable audit state.",
+  "required_preconditions": [
+    "HUMAN_ACTIVATED_RISK_ENVELOPE",
+    "EXACT_ACCOUNT_MATCH",
+    "ENABLED_REGISTERED_SIGNER",
+    "EXACT_SIGNER_ENVIRONMENT_MATCH",
+    "POLICY_DECISION_ALLOW",
+    "CURRENT_POLICY_HASH_MATCH",
+    "NO_OPEN_UNRECONCILED_RISK_INCREASING_ACTION_FOR_NEW_ENTRY",
+    "ACTION_IN_CLOSED_ALLOWLIST"
+  ],
+  "atomic_bundle": [
+    "ALLOCATE_SIGNER_SCOPED_NONCE",
+    "BIND_OR_DERIVE_CLOID_OR_TARGET_CLOID",
+    "FREEZE_COMPILED_ACTION_HASH",
+    "FREEZE_INTENT_POLICY_DATA_RISK_AND_MODEL_IDENTITIES",
+    "INSERT_PERMIT_STATE_ISSUED",
+    "INSERT_ACTION_STATE_PERMIT_ISSUED",
+    "APPEND_HASH_CHAINED_AUDIT_EVENT"
+  ],
+  "permit_lifecycle": ["ISSUED", "CONSUMED", "EXPIRED", "REVOKED"],
+  "single_use": true,
+  "signing_rule": "A signer may consume ISSUED -> CONSUMED exactly once, inside a database transaction, only after rechecking signer status, system state, expiry, action hash and current policy hash.",
+  "nonce_rule": {
+    "scope": "ONE_SIGNER_ONE_NONCE_DOMAIN",
+    "writer_count": 1,
+    "allocation": "ATOMIC_MONOTONIC_MAX_NOW_OR_LAST_PLUS_ONE",
+    "reuse_allowed": false,
+    "rollback_reuse_allowed": false,
+    "crash_may_waste_nonce": true,
+    "crash_may_reuse_nonce": false
+  },
+  "audit_rule": {
+    "append_only": true,
+    "hash_chained": true,
+    "update_or_delete": "DATABASE_TRIGGER_DENY",
+    "hash_input": "PREVIOUS_EVENT_HASH || CANONICAL_EVENT_RECORD"
+  },
+  "durability_target": {
+    "prototype": "SQLITE_WAL_SYNCHRONOUS_FULL",
+    "production_backend": "UNSELECTED",
+    "journal_before_signature_release": true
+  },
+  "failure_behavior": {
+    "policy_block": "NO_PERMIT_AND_AUDIT_BLOCK",
+    "duplicate_permit": "DENY",
+    "duplicate_nonce": "DENY",
+    "disabled_signer": "DENY",
+    "policy_rotation_after_issue": "DENY_SIGNING",
+    "action_mutation_after_issue": "DENY_SIGNING",
+    "expired_permit": "MARK_EXPIRED_AND_DENY",
+    "concurrent_consume": "AT_MOST_ONE_SUCCESS",
+    "storage_transaction_failure": "NO_SIGNATURE"
+  },
+  "current_authorizations": {
+    "real_signer_authorized": false,
+    "network_authorized": false,
+    "testnet_action_authorized": false,
+    "live_action_authorized": false
+  }
+}
