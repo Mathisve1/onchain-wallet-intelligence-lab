@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "finding_id": "R1-CI-001-MISSING-COLLECTOR-MODULES",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "classification": "FAILED_PRE_NETWORK_PACKAGING",
+  "failed_head": "2689e1b7b3ef46909b298230ee53499b30d13772",
+  "pull_request": 5,
+  "research_ci": {
+    "workflow_run_id": 31177378135,
+    "workflow_job_id": 92862280886,
+    "conclusion": "failure",
+    "failure_stage": "UNIT_TEST_IMPORT_AND_DISCOVERY"
+  },
+  "public_probe_workflow": {
+    "workflow_run_id": 31177376738,
+    "workflow_job_id": 92862275918,
+    "conclusion": "failure",
+    "failure_stage": "STATIC_SAFETY_GATE",
+    "network_execution_started": false,
+    "public_routes_contacted": false
+  },
+  "failure_artifact": {
+    "artifact_id": 8993336751,
+    "artifact_name": "hyperliquid-public-probe-r1-31177376738-1",
+    "provider_digest": "sha256:53e8e890f0cd73491645bb113e412a0617ca90f02aeaa87bc6b8cb165bbed591",
+    "contains_public_probe_output": false,
+    "evidence_class": "NEGATIVE_ENGINEERING_EVIDENCE_ONLY"
+  },
+  "root_cause": {
+    "missing_paths": [
+      "research/wallet_copyability/probe_r1/probe.py",
+      "research/wallet_copyability/probe_r1/validate_evidence.py"
+    ]
+  },
+  "technical_route_result": null,
+  "archive_access_result": null,
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "integration_authorized": false,
+  "paper_authorized": false,
+  "shadow_authorized": false,
+  "live_authorized": false,
+  "leverage_authorized": false,
+  "capital_allocation_authorized": false,
+  "repair_rule": "CLEAN_IMPLEMENTATION_SUCCESSOR_AND_NEW_CANONICAL_MAIN_RUN_REQUIRED",
+  "old_runs_may_be_relabelled_as_public_probe_fail": false
+}

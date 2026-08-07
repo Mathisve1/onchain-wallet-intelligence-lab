@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "lineage_id": "HL-PUBLIC-PROBE-001R1-RUN-LINEAGE",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "canonical_result_status": "PENDING_CANONICAL_MAIN_RUN",
+  "runs": [
+    {
+      "lineage_order": 1,
+      "finding_id": "R1-CI-001-MISSING-COLLECTOR-MODULES",
+      "classification": "FAILED_PRE_NETWORK_PACKAGING",
+      "head_commit": "2689e1b7b3ef46909b298230ee53499b30d13772",
+      "network_executed": false,
+      "accepted_for_final_attestation": false,
+      "technical_route_result": null,
+      "market_result": null
+    },
+    {
+      "lineage_order": 2,
+      "finding_id": "R1-CI-002-PR-MERGE-REF-NOT-EXACT-HEAD",
+      "classification": "INTEGRITY_DEFECT_REQUIRES_CANONICAL_MAIN_RERUN",
+      "head_commit": "2689e1b7b3ef46909b298230ee53499b30d13772",
+      "network_executed": false,
+      "accepted_for_final_attestation": false,
+      "technical_route_result": null,
+      "market_result": null
+    },
+    {
+      "lineage_order": 3,
+      "classification": "SUPERSEDED_NONCANONICAL_TECHNICAL_RUNS_EXIST",
+      "network_executed": true,
+      "accepted_for_final_attestation": false,
+      "technical_route_result": "NONCANONICAL_DO_NOT_PROMOTE",
+      "market_result": null,
+      "reason": "Runs occurred before the implementation-only code was merged to canonical main and therefore cannot satisfy the new exact-main-SHA evidence contract."
+    }
+  ],
+  "accepted_final_candidate_count": 0,
+  "next_required_event": "MERGE_IMPLEMENTATION_THEN_DISPATCH_ON_EXACT_CANONICAL_MAIN_SHA",
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "authorizations": {
+    "integration_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false,
+    "live_authorized": false,
+    "leverage_authorized": false,
+    "capital_allocation_authorized": false
+  }
+}
