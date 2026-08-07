@@ -4,6 +4,12 @@
   "study_id": "WALLET-COPYABILITY-STUDY-001",
   "probe_id": "HL-PUBLIC-PROBE-001R1",
   "canonical_result_status": "PENDING_CANONICAL_MAIN_RUN",
+  "implementation": {
+    "status": "INSTALLED_ON_CANONICAL_MAIN",
+    "pull_request": 7,
+    "commit": "33683532ca3e6cf7512a728157791d3bfef1375f",
+    "contains_final_probe_result": false
+  },
   "runs": [
     {
       "lineage_order": 1,
@@ -32,11 +38,11 @@
       "accepted_for_final_attestation": false,
       "technical_route_result": "NONCANONICAL_DO_NOT_PROMOTE",
       "market_result": null,
-      "reason": "Runs occurred before the implementation-only code was merged to canonical main and therefore cannot satisfy the new exact-main-SHA evidence contract."
+      "reason": "Runs occurred before the implementation-only code was merged to canonical main and therefore cannot satisfy the exact-main-SHA evidence contract."
     }
   ],
   "accepted_final_candidate_count": 0,
-  "next_required_event": "MERGE_IMPLEMENTATION_THEN_DISPATCH_ON_EXACT_CANONICAL_MAIN_SHA",
+  "next_required_event": "DISPATCH_INSTALLED_WORKFLOW_FROM_MAIN_WITH_EXACT_CURRENT_MAIN_SHA",
   "market_data_ingested": false,
   "empirical_result": null,
   "authorizations": {
