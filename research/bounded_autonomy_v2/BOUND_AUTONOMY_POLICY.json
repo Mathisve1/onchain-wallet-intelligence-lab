@@ -1,0 +1,94 @@
+{
+  "schema_version": "0.1-design",
+  "track": "DEX-COPY-AUTONOMY-001",
+  "status": "DESIGN_STAGING_NO_EXECUTION_AUTHORIZATION",
+  "human_governor": {
+    "role": "GOVERNOR_CAPITAL_OWNER_AND_RECOVERY_AUTHORITY",
+    "exclusive_powers": [
+      "PROMOTE_RESEARCH_STAGE",
+      "SET_OR_RAISE_CAPITAL_LIMITS",
+      "SET_OR_RAISE_RISK_LIMITS",
+      "AUTHORIZE_OR_REVOKE_SIGNER",
+      "CHANGE_VENUE_INSTRUMENT_ACTION_OR_RECIPIENT_ALLOWLIST",
+      "AUTHORIZE_LEVERAGE_OR_MARGIN_CHANGE",
+      "PROMOTE_MODEL_VERSION",
+      "PROMOTE_POLICY_VERSION",
+      "ENABLE_LIVE_EXECUTION",
+      "ROTATE_OR_RECOVER_MASTER_AUTHORITY"
+    ],
+    "kill_switch_authority": true
+  },
+  "ai": {
+    "current_allowed": [
+      "ANALYZE_READ_ONLY_EVIDENCE",
+      "RANK_ELIGIBLE_SIGNALS_FOR_RESEARCH",
+      "PRODUCE_STRUCTURED_COUNTERARGUMENTS",
+      "DRAFT_TYPED_NON_EXECUTING_INTENTS"
+    ],
+    "prospective_only_after_separate_stage_authorization": [
+      "SELECT_FROM_DETERMINISTICALLY_ELIGIBLE_SIGNALS",
+      "ORIGINATE_TYPED_TRADE_INTENT",
+      "LOWER_CONFIDENCE_OR_VETO",
+      "PROPOSE_POSITION_SIZE_WITHIN_PRECOMPUTED_CAP",
+      "PROPOSE_OR_TRIGGER_POLICY_ALLOWED_REDUCE_ONLY_EXIT"
+    ],
+    "always_forbidden": [
+      "ACCESS_MASTER_PRIVATE_KEY",
+      "ACCESS_SEED_PHRASE",
+      "DIRECTLY_ACCESS_SIGNER_KEY_MATERIAL",
+      "DIRECTLY_CALL_RAW_EXCHANGE_ACTION_ENDPOINT",
+      "CREATE_ARBITRARY_ACTION_PAYLOAD",
+      "TRANSFER_FUNDS",
+      "WITHDRAW_FUNDS",
+      "APPROVE_REPLACE_OR_DEREGISTER_API_WALLET",
+      "CHANGE_LEVERAGE_OR_MARGIN_MODE",
+      "CHANGE_POLICY_OR_RISK_LIMIT",
+      "CHANGE_ALLOWLIST",
+      "PROMOTE_MODEL_POLICY_RESULT_OR_STAGE",
+      "OVERRIDE_BLOCK",
+      "REWRITE_AUDIT_EVIDENCE"
+    ]
+  },
+  "deterministic_authority": {
+    "components": [
+      "POINT_IN_TIME_ELIGIBILITY",
+      "FOLLOWER_EV_ARITHMETIC",
+      "POSITION_SIZING_CAP",
+      "PRICE_AND_SLIPPAGE_LIMITS",
+      "POLICY_EVALUATION",
+      "INTENT_COMPILATION",
+      "PERMIT_CONSTRUCTION",
+      "NONCE_ALLOCATION",
+      "CLOID_ALLOCATION",
+      "ORDER_FILL_POSITION_RECONCILIATION",
+      "KILL_SWITCH_STATE"
+    ],
+    "unknown_state_behavior": "BLOCK"
+  },
+  "fail_closed_states": [
+    "STALE_DATA",
+    "CONFLICTING_DATA",
+    "MISSING_POLICY_HASH",
+    "MISSING_MODEL_HASH",
+    "MISSING_RISK_SNAPSHOT",
+    "UNRECONCILED_PRIOR_ACTION",
+    "OUT_OF_DISTRIBUTION",
+    "PRICE_BAND_BREACH",
+    "SIZE_CAP_BREACH",
+    "RATE_LIMIT_UNCERTAINTY",
+    "NONCE_UNCERTAINTY",
+    "SIGNER_HEALTH_UNCERTAINTY",
+    "VENUE_SCHEMA_DRIFT",
+    "UNKNOWN_ACTION_TYPE"
+  ],
+  "current_authorizations": {
+    "integration_authorized": false,
+    "historical_replay_authorized": false,
+    "non_signing_shadow_authorized": false,
+    "signed_testnet_authorized": false,
+    "live_execution_authorized": false,
+    "capital_allocation_authorized": false,
+    "leverage_authorized": false,
+    "client_funds_authorized": false
+  }
+}
