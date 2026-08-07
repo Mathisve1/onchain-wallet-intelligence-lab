@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:owil:bounded-autonomy:trade-permit:0.1",
+  "title": "Single-use bounded trade permit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "permit_id",
+    "intent_sha256",
+    "compiled_action_sha256",
+    "strategy_id",
+    "strategy_version_hash",
+    "model_version_hash",
+    "policy_version_hash",
+    "data_snapshot_hash",
+    "risk_snapshot_hash",
+    "venue",
+    "network",
+    "account_address",
+    "signer_address",
+    "action",
+    "instrument",
+    "side",
+    "reduce_only",
+    "quantity",
+    "limit_price",
+    "max_slippage_bps",
+    "cloid",
+    "nonce",
+    "issued_at_ms",
+    "expires_at_ms",
+    "venue_expires_after_ms",
+    "single_use",
+    "reconciliation_precondition"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1-design"},
+    "permit_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
+    "intent_sha256": {"$ref": "#/$defs/sha256"},
+    "compiled_action_sha256": {"$ref": "#/$defs/sha256"},
+    "strategy_id": {"type": "string", "pattern": "^[A-Z0-9._-]{3,80}$"},
+    "strategy_version_hash": {"$ref": "#/$defs/sha256"},
+    "model_version_hash": {"$ref": "#/$defs/sha256"},
+    "policy_version_hash": {"$ref": "#/$defs/sha256"},
+    "data_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "risk_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "venue": {"const": "HYPERLIQUID"},
+    "network": {"type": "string", "enum": ["TESTNET", "MAINNET"]},
+    "account_address": {"$ref": "#/$defs/address"},
+    "signer_address": {"$ref": "#/$defs/address"},
+    "action": {"type": "string", "enum": ["PLACE_IOC_LIMIT", "REDUCE_ONLY_IOC", "CANCEL_BY_CLOID"]},
+    "instrument": {"type": "string", "enum": ["BTC", "ETH", "SOL"]},
+    "side": {"type": "string", "enum": ["BUY", "SELL"]},
+    "reduce_only": {"type": "boolean"},
+    "quantity": {"$ref": "#/$defs/positive_decimal_string"},
+    "limit_price": {"$ref": "#/$defs/positive_decimal_string"},
+    "max_slippage_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "cloid": {"type": "string", "pattern": "^0x[0-9a-f]{32}$"},
+    "nonce": {"type": "integer", "minimum": 1},
+    "issued_at_ms": {"type": "integer", "minimum": 1},
+    "expires_at_ms": {"type": "integer", "minimum": 1},
+    "venue_expires_after_ms": {"type": "integer", "minimum": 1},
+    "single_use": {"const": true},
+    "reconciliation_precondition": {"type": "string", "enum": ["NO_OPEN_UNRECONCILED_RISK_INCREASING_ACTION"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}},
+      "then": {"properties": {"reduce_only": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}},
+      "then": {"properties": {"reduce_only": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "address": {"type": "string", "pattern": "^0x[0-9a-f]{40}$"},
+    "positive_decimal_string": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"}
+  }
+}
