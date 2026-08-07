@@ -8,6 +8,67 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA_ROW = re.compile(r"^([0-9a-f]{64})  (.+)$")
+INDEX_ROW = re.compile(r"^manifest: ([A-Za-z0-9_./-]+\.sha256)$")
+
+EXPECTED_MANIFEST_FILES = (
+    "governance/manifests/00-core.sha256",
+    "governance/manifests/10-governance.sha256",
+    "governance/manifests/20-autonomy-a.sha256",
+    "governance/manifests/21-autonomy-b.sha256",
+    "governance/manifests/30-parent.sha256",
+    "governance/manifests/40-src-tests.sha256",
+)
+
+EXPECTED_MANIFEST_PATHS = {
+    ".github/workflows/ci.yml",
+    ".gitignore",
+    "AI_HANDOVER.md",
+    "DECISION_LOG.md",
+    "MIGRATION_PROVENANCE.md",
+    "PROJECT_STATE.md",
+    "README.md",
+    "RISK_POLICY.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "SYSTEM_ARCHITECTURE.md",
+    "governance/BOUND_AUTONOMY_POLICY.json",
+    "governance/RESEARCH_REGISTRY.json",
+    "governance/adr/ADR-BOUND-AUTONOMY-001.md",
+    "governance/validate_repository.py",
+    "pyproject.toml",
+    "research/bounded_autonomy/AUTHORIZATION_MATRIX.json",
+    "research/bounded_autonomy/EXECUTION_ARCHITECTURE.md",
+    "research/bounded_autonomy/EXPERIMENT_CONTRACT.json",
+    "research/bounded_autonomy/FOLLOWER_EV_SPEC.md",
+    "research/bounded_autonomy/GO_NO_GO_GATES.md",
+    "research/bounded_autonomy/LATENCY_EXPERIMENT.md",
+    "research/bounded_autonomy/OFFICIAL_SOURCE_REGISTER.json",
+    "research/bounded_autonomy/OPEN_QUESTIONS.md",
+    "research/bounded_autonomy/PREREGISTRATION.md",
+    "research/bounded_autonomy/README.md",
+    "research/bounded_autonomy/RISK_ENVELOPE.md",
+    "research/bounded_autonomy/THREAT_MODEL.md",
+    "research/bounded_autonomy/TRADE_INTENT_CONTRACT.json",
+    "research/bounded_autonomy/VENDOR_BAKEOFF.md",
+    "research/bounded_autonomy/WALLET_CLASSIFICATION.md",
+    "research/wallet_copyability/COPY_EXECUTION_MODEL.md",
+    "research/wallet_copyability/COST_CONTROL_AND_ARCHITECTURE.md",
+    "research/wallet_copyability/DATA_AVAILABILITY_MATRIX.md",
+    "research/wallet_copyability/DATA_CONTRACT.json",
+    "research/wallet_copyability/ENTITY_CLUSTERING_BOUNDARY.md",
+    "research/wallet_copyability/OFFICIAL_SOURCE_REGISTER.json",
+    "research/wallet_copyability/PREREGISTRATION.md",
+    "research/wallet_copyability/README.md",
+    "research/wallet_copyability/TECHNICAL_PROBE_EVIDENCE.json",
+    "research/wallet_copyability/scripts/probe_public_api.py",
+    "src/wallet_intelligence/__init__.py",
+    "src/wallet_intelligence/models.py",
+    "src/wallet_intelligence/point_in_time.py",
+    "tests/test_bounded_autonomy_governance.py",
+    "tests/test_contract.py",
+    "tests/test_point_in_time.py",
+    "tests/test_probe_static.py",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -21,38 +82,58 @@ def load_json(relative_path: str) -> dict:
 
 
 def validate_manifest() -> None:
-    manifest = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
-    seen: set[str] = set()
-    for line in manifest.read_text().splitlines():
-        if not line or line.startswith("#"):
-            continue
-        match = SHA_ROW.fullmatch(line)
-        require(match is not None, f"invalid manifest row: {line}")
-        expected, rel = match.groups()
-        require(rel not in seen, f"duplicate manifest path: {rel}")
-        seen.add(rel)
-        path = ROOT / rel
-        require(path.is_file(), f"missing manifest target: {rel}")
-        observed = hashlib.sha256(path.read_bytes()).hexdigest()
-        require(observed == expected, f"manifest mismatch: {rel}")
+    index = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
+    rows = [
+        line
+        for line in index.read_text().splitlines()
+        if line and not line.startswith("#")
+    ]
+    listed_manifests: list[str] = []
+    for line in rows:
+        match = INDEX_ROW.fullmatch(line)
+        require(match is not None, f"invalid manifest-index row: {line}")
+        listed_manifests.append(match.group(1))
 
-    required_new_paths = {
-        "AI_HANDOVER.md",
-        "governance/BOUND_AUTONOMY_POLICY.json",
-        "governance/RESEARCH_REGISTRY.json",
-        "governance/adr/ADR-BOUND-AUTONOMY-001.md",
-        "research/bounded_autonomy/EXPERIMENT_CONTRACT.json",
-        "research/bounded_autonomy/PREREGISTRATION.md",
-        "research/bounded_autonomy/THREAT_MODEL.md",
-        "research/bounded_autonomy/EXECUTION_ARCHITECTURE.md",
-        "research/bounded_autonomy/AUTHORIZATION_MATRIX.json",
-        "research/bounded_autonomy/TRADE_INTENT_CONTRACT.json",
-        "tests/test_bounded_autonomy_governance.py",
-    }
     require(
-        required_new_paths.issubset(seen),
-        "bounded-autonomy paths absent from manifest",
+        tuple(listed_manifests) == EXPECTED_MANIFEST_FILES,
+        "manifest-fragment set or order changed",
     )
+
+    seen: set[str] = set()
+    for manifest_rel in listed_manifests:
+        manifest_path = Path(manifest_rel)
+        require(
+            not manifest_path.is_absolute() and ".." not in manifest_path.parts,
+            f"unsafe manifest path: {manifest_rel}",
+        )
+        manifest = ROOT / manifest_path
+        require(manifest.is_file(), f"missing manifest fragment: {manifest_rel}")
+
+        for line in manifest.read_text().splitlines():
+            if not line or line.startswith("#"):
+                continue
+            match = SHA_ROW.fullmatch(line)
+            require(
+                match is not None,
+                f"invalid manifest row in {manifest_rel}: {line}",
+            )
+            expected, rel = match.groups()
+            rel_path = Path(rel)
+            require(
+                not rel_path.is_absolute() and ".." not in rel_path.parts,
+                f"unsafe manifest target: {rel}",
+            )
+            require(rel not in seen, f"duplicate manifest path: {rel}")
+            seen.add(rel)
+            path = ROOT / rel_path
+            require(path.is_file(), f"missing manifest target: {rel}")
+            observed = hashlib.sha256(path.read_bytes()).hexdigest()
+            require(observed == expected, f"manifest mismatch: {rel}")
+
+    missing = sorted(EXPECTED_MANIFEST_PATHS - seen)
+    extra = sorted(seen - EXPECTED_MANIFEST_PATHS)
+    require(not missing, f"manifest paths missing: {missing}")
+    require(not extra, f"unexpected manifest paths: {extra}")
 
 
 def validate_parent_contract() -> None:
