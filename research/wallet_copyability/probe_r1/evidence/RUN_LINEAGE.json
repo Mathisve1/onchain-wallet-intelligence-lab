@@ -3,7 +3,7 @@
   "lineage_id": "HL-PUBLIC-PROBE-001R1-RUN-LINEAGE",
   "study_id": "WALLET-COPYABILITY-STUDY-001",
   "probe_id": "HL-PUBLIC-PROBE-001R1",
-  "canonical_result_status": "PENDING_CANONICAL_MAIN_RUN",
+  "canonical_result_status": "ATTESTED_PUBLIC_PROBE_PASS",
   "implementation": {
     "status": "INSTALLED_ON_CANONICAL_MAIN",
     "pull_request": 7,
@@ -39,10 +39,32 @@
       "technical_route_result": "NONCANONICAL_DO_NOT_PROMOTE",
       "market_result": null,
       "reason": "Runs occurred before the implementation-only code was merged to canonical main and therefore cannot satisfy the exact-main-SHA evidence contract."
+    },
+    {
+      "lineage_order": 4,
+      "classification": "CANONICAL_MAIN_PUBLIC_PROBE_PASS",
+      "head_commit": "c11046bf288687c6945fe9b8f17141204d24aae6",
+      "network_executed": true,
+      "accepted_for_final_attestation": true,
+      "technical_route_result": "PUBLIC_PROBE_PASS",
+      "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+      "market_result": null,
+      "pass_count": 16,
+      "fail_count": 0,
+      "public_probe": {
+        "run_id": 31200124642,
+        "run_attempt": 1,
+        "job_id": 92937868268,
+        "artifact_id": 9002459643,
+        "artifact_name": "hyperliquid-public-probe-r1-31200124642-1",
+        "artifact_digest": "sha256:388ad766d0e71f315533362ed0605b6d6d6cf13895656e84b9aa0afc80cf8fe6",
+        "artifact_zip_sha256": "388ad766d0e71f315533362ed0605b6d6d6cf13895656e84b9aa0afc80cf8fe6",
+        "probe_output_sha256": "cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89"
+      }
     }
   ],
-  "accepted_final_candidate_count": 0,
-  "next_required_event": "DISPATCH_INSTALLED_WORKFLOW_FROM_MAIN_WITH_EXACT_CURRENT_MAIN_SHA",
+  "accepted_final_candidate_count": 1,
+  "next_required_event": "SEPARATE_HL_ARCHIVE_INVENTORY_001_PROPOSAL",
   "market_data_ingested": false,
   "empirical_result": null,
   "authorizations": {
