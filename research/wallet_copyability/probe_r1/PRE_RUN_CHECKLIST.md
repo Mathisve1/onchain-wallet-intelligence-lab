@@ -9,6 +9,20 @@
 - [x] unbounded `userFills` absent;
 - [x] identity claims forbidden.
 
+## Exact-head authorization
+
+Before the network run, verify all of the following against the current remote state:
+
+- [ ] Research CI is green on the exact source-head SHA;
+- [ ] PR remains draft, same-repository and based on `main`;
+- [ ] the repository owner is the actor who edits the PR body;
+- [ ] the PR body contains exactly `<!-- RUN_HL_PUBLIC_PROBE_R1:<head-sha> -->`;
+- [ ] the marker SHA is 40 lowercase hexadecimal characters and equals the current PR head;
+- [ ] checkout uses that exact source SHA rather than the synthetic PR merge ref;
+- [ ] `git rev-parse HEAD` equals the authorized SHA before any public probe request;
+- [ ] reviewed and checked-out commits are retained as separate evidence fields;
+- [ ] the marker is removed after the intended run to prevent an accidental duplicate execution.
+
 ## Capacity
 
 - [x] base declared `/info` weight `586`;
