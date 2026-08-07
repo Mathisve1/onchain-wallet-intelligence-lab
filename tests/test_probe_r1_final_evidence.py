@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import gzip
 import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -20,7 +23,8 @@ import validate_evidence
 class ProbeR1FinalEvidenceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.contract_path = PROBE_ROOT / "PROBE_CONTRACT.json"
-        self.output_path = RUN_ROOT / "hl-public-probe-r1.json"
+        self.encoded_output_path = RUN_ROOT / "hl-public-probe-r1.json.gz.b64"
+        self.encoding_path = RUN_ROOT / "EVIDENCE_ENCODING.json"
         self.context_path = RUN_ROOT / "probe-run-context.json"
         self.attestation_path = (
             EVIDENCE_ROOT / "HL-PUBLIC-PROBE-001R1-ATTESTATION.json"
@@ -34,8 +38,43 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
     def load(self, path: Path) -> dict:
         return validate_evidence.load_json(path)
 
+    def raw_output_bytes(self) -> bytes:
+        metadata = self.load(self.encoding_path)
+        encoded = self.encoded_output_path.read_bytes()
+        self.assertEqual(len(encoded), metadata["encoded_size_in_bytes"])
+        self.assertEqual(
+            hashlib.sha256(encoded).hexdigest(),
+            metadata["encoded_sha256"],
+        )
+        compressed = base64.b64decode(encoded.strip(), validate=True)
+        self.assertEqual(len(compressed), metadata["gzip_size_in_bytes"])
+        self.assertEqual(
+            hashlib.sha256(compressed).hexdigest(),
+            metadata["gzip_sha256"],
+        )
+        raw = gzip.decompress(compressed)
+        self.assertEqual(len(raw), metadata["raw_size_in_bytes"])
+        self.assertEqual(
+            hashlib.sha256(raw).hexdigest(),
+            metadata["raw_sha256"],
+        )
+        return raw
+
+    def raw_output(self) -> dict:
+        value = json.loads(
+            self.raw_output_bytes(),
+            object_pairs_hook=validate_evidence.strict_object,
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                validate_evidence.EvidenceError(
+                    f"non-finite retained evidence value: {token}"
+                )
+            ),
+        )
+        self.assertIsInstance(value, dict)
+        return value
+
     def test_exact_probe_output_remains_valid(self) -> None:
-        evidence = self.load(self.output_path)
+        evidence = self.raw_output()
         validate_evidence.validate_result(
             evidence,
             self.contract,
@@ -55,8 +94,8 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
 
     def test_strict_final_attestation_binds_exact_output(self) -> None:
         record = self.load(self.attestation_path)
-        evidence_bytes = self.output_path.read_bytes()
-        evidence = self.load(self.output_path)
+        evidence_bytes = self.raw_output_bytes()
+        evidence = self.raw_output()
         validate_attestation_strict.validate_field_set(record)
         validate_attestation.validate_final(
             record,
@@ -79,11 +118,11 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         self.assertFalse(record["independent_external_review"])
 
     def test_artifact_file_ledger_matches_retained_files(self) -> None:
-        mapping = {
-            "hl-public-probe-r1.json": self.output_path,
-            "probe-run-context.json": self.context_path,
-            "probe-validation.log": RUN_ROOT / "probe-validation.log",
-            "probe-validation.rc": RUN_ROOT / "probe-validation.rc",
+        mapping: dict[str, bytes] = {
+            "hl-public-probe-r1.json": self.raw_output_bytes(),
+            "probe-run-context.json": self.context_path.read_bytes(),
+            "probe-validation.log": (RUN_ROOT / "probe-validation.log").read_bytes(),
+            "probe-validation.rc": (RUN_ROOT / "probe-validation.rc").read_bytes(),
         }
         observed_names: set[str] = set()
         for line in (
@@ -96,7 +135,7 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             self.assertIn(name, mapping)
             self.assertNotIn(name, observed_names)
             observed_names.add(name)
-            actual = hashlib.sha256(mapping[name].read_bytes()).hexdigest()
+            actual = hashlib.sha256(mapping[name]).hexdigest()
             self.assertEqual(actual, expected, name)
         self.assertEqual(observed_names, set(mapping))
 
