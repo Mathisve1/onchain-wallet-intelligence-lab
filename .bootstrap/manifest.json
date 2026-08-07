@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "payload_tar_gz_sha256": "7a8b35c8149063d2298c132f53d1105cc4d2c03593fa5f461e0def52c496138e",
+  "payload_base64_sha256": "efe20af3649d3aa5f00bbe76dd4b7c40d429f6bbce0d92063f986aeb3bbd419c",
+  "part_count": 6,
+  "expected_final_tree_sha": "13dd97df4e4f4416ffc68c477dc36cfeaeea49a3",
+  "files": [
+    ".github/workflows/hyperliquid-public-probe.yml",
+    "DECISION_LOG.md",
+    "PROJECT_STATE.md",
+    "README.md",
+    "RISK_POLICY.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "governance/REPOSITORY_MANIFEST.sha256",
+    "governance/validate_probe_evidence.py",
+    "governance/validate_repository.py",
+    "research/wallet_copyability/COST_CONTROL_AND_ARCHITECTURE.md",
+    "research/wallet_copyability/DATA_AVAILABILITY_MATRIX.md",
+    "research/wallet_copyability/DATA_CONTRACT.json",
+    "research/wallet_copyability/OFFICIAL_SOURCE_REGISTER.json",
+    "research/wallet_copyability/PROBE_CONTRACT.json",
+    "research/wallet_copyability/PROBE_METHODOLOGY.md",
+    "research/wallet_copyability/README.md",
+    "research/wallet_copyability/TECHNICAL_PROBE_EVIDENCE.json",
+    "research/wallet_copyability/evidence/README.md",
+    "research/wallet_copyability/scripts/probe_public_api.py",
+    "tests/test_contract.py",
+    "tests/test_probe_evidence.py",
+    "tests/test_probe_static.py"
+  ]
+}
