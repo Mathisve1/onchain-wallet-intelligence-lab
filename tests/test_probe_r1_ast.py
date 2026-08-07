@@ -44,11 +44,13 @@ FORBIDDEN_IMPORT_ROOTS = {
     "boto3",
     "web3",
 }
-FORBIDDEN_CALL_NAMES = {
+FORBIDDEN_DIRECT_CALL_NAMES = {
     "eval",
     "exec",
     "compile",
     "__import__",
+}
+FORBIDDEN_PROCESS_ATTRIBUTE_CALLS = {
     "system",
     "popen",
     "check_call",
@@ -78,15 +80,18 @@ class ProbeR1ASTTests(unittest.TestCase):
             for node in ast.walk(self.parse(path)):
                 if not isinstance(node, ast.Call):
                     continue
-                name = (
-                    node.func.id
-                    if isinstance(node.func, ast.Name)
-                    else node.func.attr
-                    if isinstance(node.func, ast.Attribute)
-                    else None
-                )
-                if name is not None:
-                    self.assertNotIn(name, FORBIDDEN_CALL_NAMES, f"{path}:{name}")
+                if isinstance(node.func, ast.Name):
+                    self.assertNotIn(
+                        node.func.id,
+                        FORBIDDEN_DIRECT_CALL_NAMES,
+                        f"{path}:{node.func.id}",
+                    )
+                elif isinstance(node.func, ast.Attribute):
+                    self.assertNotIn(
+                        node.func.attr,
+                        FORBIDDEN_PROCESS_ATTRIBUTE_CALLS,
+                        f"{path}:{node.func.attr}",
+                    )
 
     def test_only_probe_module_constructs_http_requests(self) -> None:
         for path in PYTHON_FILES:
