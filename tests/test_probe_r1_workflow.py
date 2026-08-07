@@ -11,10 +11,20 @@ class ProbeR1WorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.text = WORKFLOW.read_text(encoding="utf-8")
 
-    def test_probe_is_manual_only(self) -> None:
-        self.assertIn("on:\n  workflow_dispatch:", self.text)
+    def test_probe_requires_explicit_owner_edited_marker(self) -> None:
+        self.assertIn("on:\n  pull_request:\n    types: [edited]", self.text)
+        for required in (
+            "github.actor == github.repository_owner",
+            "github.event.pull_request.draft == true",
+            "github.event.pull_request.base.ref == 'main'",
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            "contains(",
+            "RUN_HL_PUBLIC_PROBE_R1:{0}",
+        ):
+            self.assertIn(required, self.text)
         for forbidden_trigger in (
-            "pull_request:",
+            "workflow_dispatch:",
+            "pull_request_target:",
             "push:",
             "schedule:",
             "repository_dispatch:",
@@ -58,6 +68,10 @@ class ProbeR1WorkflowTests(unittest.TestCase):
         self.assertIn("python -m unittest discover -s tests -v", self.text)
         self.assertIn("python governance/validate_repository.py", self.text)
         self.assertIn("validate_attestation_strict.py", self.text)
+        self.assertIn(
+            "Verify exact reviewed commit and owner authorization before network access",
+            self.text,
+        )
 
     def test_artifact_and_terminal_enforcement_are_present(self) -> None:
         for token in (
@@ -67,6 +81,7 @@ class ProbeR1WorkflowTests(unittest.TestCase):
             "--require-non-fail",
             "workflow_run_id",
             "reviewed_commit",
+            "checked_out_commit",
             "total_declared_request_weight",
         ):
             self.assertIn(token, self.text)
