@@ -45,7 +45,7 @@ jobs:
           python-version: '3.12.13'
           check-latest: false
 
-      - name: Verify, extract and test SHA-bound payload
+      - name: Verify, stage and test exact SHA-bound research tree
         shell: bash
         run: |
           set -euo pipefail
@@ -77,9 +77,13 @@ jobs:
                   assert member.isfile()
               handle.extractall(root, filter='data')
           PY
-          # The payload manifest binds the canonical main-branch CI bytes, not this
-          # one-shot transport job. Restore them before running repository validation.
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap-probe-r1.yml
           git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          git add -A
+          actual_tree=$(git write-tree)
+          expected_tree=13dd97df4e4f4416ffc68c477dc36cfeaeea49a3
+          test "$actual_tree" = "$expected_tree"
           python -m unittest discover -s tests -v
           python governance/validate_probe_evidence.py
           python governance/validate_repository.py
@@ -94,10 +98,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap-probe-r1.yml
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git add -A
           actual_tree=$(git write-tree)
           expected_tree=13dd97df4e4f4416ffc68c477dc36cfeaeea49a3
           test "$actual_tree" = "$expected_tree"
