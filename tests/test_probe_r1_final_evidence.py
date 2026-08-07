@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -47,7 +46,10 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             evidence["archive_access_status"],
             "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
         )
-        self.assertEqual((evidence["pass_count"], evidence["fail_count"]), (16, 0))
+        self.assertEqual(
+            (evidence["pass_count"], evidence["fail_count"]),
+            (16, 0),
+        )
         self.assertFalse(evidence["market_data_ingested"])
         self.assertIsNone(evidence["empirical_result"])
 
@@ -63,11 +65,17 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             self.contract,
             self.contract_path,
         )
-        self.assertEqual(record["reviewed_commit"], "facd8b26778eb483a4917fc4418069c35b981e8b")
+        self.assertEqual(
+            record["reviewed_commit"],
+            "facd8b26778eb483a4917fc4418069c35b981e8b",
+        )
         self.assertEqual(record["workflow_run_id"], 31179660372)
         self.assertEqual(record["workflow_job_id"], 92869634761)
         self.assertEqual(record["artifact_id"], 8994227729)
-        self.assertEqual(record["review_status"], "CLEAN_CONTEXT_REVIEW_PASS")
+        self.assertEqual(
+            record["review_status"],
+            "CLEAN_CONTEXT_REVIEW_PASS",
+        )
         self.assertFalse(record["independent_external_review"])
 
     def test_artifact_file_ledger_matches_retained_files(self) -> None:
@@ -78,7 +86,9 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             "probe-validation.rc": RUN_ROOT / "probe-validation.rc",
         }
         observed_names: set[str] = set()
-        for line in (RUN_ROOT / "ARTIFACT_FILES.sha256").read_text().splitlines():
+        for line in (
+            RUN_ROOT / "ARTIFACT_FILES.sha256"
+        ).read_text().splitlines():
             if not line:
                 continue
             expected, original = line.split("  ", 1)
@@ -114,13 +124,19 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         self.assertFalse(verification["market_data_ingested"])
         self.assertIsNone(verification["empirical_result"])
         self.assertTrue(
-            all(value is False for value in verification["authorizations"].values())
+            all(
+                value is False
+                for value in verification["authorizations"].values()
+            )
         )
 
     def test_run_lineage_preserves_failures_and_one_final_candidate(self) -> None:
         lineage = self.load(self.lineage_path)
         runs = lineage["runs"]
-        self.assertEqual([row["lineage_order"] for row in runs], [1, 2, 3, 4])
+        self.assertEqual(
+            [row["lineage_order"] for row in runs],
+            [1, 2, 3, 4],
+        )
         self.assertFalse(runs[0]["network_executed"])
         self.assertFalse(runs[1]["network_executed"])
         self.assertEqual(
@@ -131,7 +147,9 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
             runs[1]["classification"],
             "FAILED_PRE_NETWORK_AST_TEST_FALSE_POSITIVE",
         )
-        accepted = [row for row in runs if row["accepted_for_final_attestation"]]
+        accepted = [
+            row for row in runs if row["accepted_for_final_attestation"]
+        ]
         self.assertEqual(len(accepted), 1)
         self.assertEqual(
             accepted[0]["head_commit"],
@@ -143,14 +161,17 @@ class ProbeR1FinalEvidenceTests(unittest.TestCase):
         )
         self.assertIsNone(lineage["empirical_result"])
         self.assertTrue(
-            all(value is False for value in lineage["authorizations"].values())
+            all(
+                value is False
+                for value in lineage["authorizations"].values()
+            )
         )
 
     def test_clean_context_review_keeps_market_claims_closed(self) -> None:
         review = (EVIDENCE_ROOT / "CLEAN_CONTEXT_REVIEW.md").read_text()
         for token in (
             "CLEAN_CONTEXT_REVIEW_PASS",
-            "not independent external",
+            "independent external scientific",
             "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
             "No archive object was listed or downloaded",
             "No alpha, profitability, paper, shadow, live, leverage",
