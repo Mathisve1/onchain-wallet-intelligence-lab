@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:signer-backend-capture-input:0.1",
+  "$id": "urn:owil:bounded-autonomy:signer-backend-capture-input:0.2",
   "title": "Ephemeral local signer backend capture input — do not commit instances",
   "type": "object",
   "additionalProperties": false,
@@ -14,6 +14,7 @@
     "curve",
     "algorithm",
     "request_mode",
+    "digest_mode",
     "signature_encoding",
     "fixture_id",
     "raw_signature_base64",
@@ -22,7 +23,7 @@
     "software_versions"
   ],
   "properties": {
-    "schema_version": {"const": "0.1-local-ephemeral"},
+    "schema_version": {"const": "0.2-local-ephemeral"},
     "provider": {"type": "string", "minLength": 2, "maxLength": 80},
     "service": {"type": "string", "minLength": 2, "maxLength": 120},
     "region_or_location": {"type": "string", "minLength": 1, "maxLength": 120},
@@ -31,6 +32,7 @@
     "curve": {"const": "secp256k1"},
     "algorithm": {"type": "string", "minLength": 2, "maxLength": 120},
     "request_mode": {"type": "string", "minLength": 2, "maxLength": 160},
+    "digest_mode": {"type": "string", "enum": ["EXACT_32_BYTE_PREHASHED", "PROVIDER_DIGEST_FIELD"]},
     "signature_encoding": {"type": "string", "enum": ["DER", "P1363"]},
     "fixture_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$"},
     "raw_signature_base64": {"type": "string", "minLength": 8, "maxLength": 4096},
