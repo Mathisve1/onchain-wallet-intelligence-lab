@@ -1,0 +1,41 @@
+# Final Pre-Run Checklist
+
+## Identity and scope
+
+- [x] unique frozen study/probe IDs;
+- [x] exactly 16 ordered requests;
+- [x] three HTTPS origins;
+- [x] one fixed UTC day for fills/funding/ledger;
+- [x] unbounded `userFills` absent;
+- [x] identity claims forbidden.
+
+## Capacity
+
+- [x] base declared `/info` weight `586`;
+- [x] maximum attempts `2`;
+- [x] worst declared weight `1,172`;
+- [x] captured planning budget `1,200`;
+- [x] contract ceiling `1,180`;
+- [x] maximum HTTP requests `36` versus registered worst case `32`.
+
+## Security and evidence
+
+- [x] workflow `contents: read` only and checkout credentials not persisted;
+- [x] no secret/auth/cookie/private-key/signing/order/withdrawal capability;
+- [x] same-origin redirects only;
+- [x] bounded bytes/time/retries/requests/weight;
+- [x] strict duplicate-key and nonfinite JSON handling;
+- [x] exact contract/collector/request/response/output/artifact hashes;
+- [x] exact observation order and response-class derivation;
+- [x] raw values discarded;
+- [x] pending evidence/attestation contain no invented identities.
+
+## Research boundary
+
+- [x] market data not analytically ingested;
+- [x] wallet P&L/copyability not calculated;
+- [x] entity clustering closed;
+- [x] empirical result null;
+- [x] every trading authorization false.
+
+The workflow must still prove actual route behavior. Archive completeness, pagination, schemas, requester-pays cost and gaps remain unresolved after any route-level PASS.
