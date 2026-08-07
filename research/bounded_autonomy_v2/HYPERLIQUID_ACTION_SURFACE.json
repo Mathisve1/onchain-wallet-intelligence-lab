@@ -1,0 +1,82 @@
+{
+  "schema_version": "0.1-design",
+  "venue": "HYPERLIQUID",
+  "status": "DESIGN_ONLY_ALL_ACTIONS_NON_EXECUTING",
+  "prospective_strategy_actions_after_separate_authorization": [
+    {
+      "intent": "PLACE_IOC_LIMIT",
+      "exchange_action": "order",
+      "requirements": [
+        "LIMIT_ORDER_ONLY",
+        "TIF_IOC",
+        "EXACT_INSTRUMENT_ALLOWLIST",
+        "EXPLICIT_QUANTITY_CAP",
+        "EXPLICIT_LIMIT_PRICE",
+        "EXPLICIT_CLOID",
+        "SHORT_EXPIRES_AFTER",
+        "POLICY_PERMIT_REQUIRED"
+      ]
+    },
+    {
+      "intent": "CANCEL_BY_CLOID",
+      "exchange_action": "cancelByCloid",
+      "requirements": [
+        "STRATEGY_OWNED_CLOID_ONLY",
+        "POLICY_PERMIT_REQUIRED"
+      ]
+    },
+    {
+      "intent": "REDUCE_ONLY_IOC",
+      "exchange_action": "order",
+      "requirements": [
+        "REDUCE_ONLY_TRUE",
+        "LIMIT_ORDER_ONLY",
+        "TIF_IOC",
+        "CANNOT_INCREASE_ABSOLUTE_POSITION",
+        "EXACT_CLOID",
+        "SHORT_EXPIRES_AFTER",
+        "POLICY_PERMIT_REQUIRED"
+      ]
+    }
+  ],
+  "emergency_service_only_candidates": [
+    {
+      "intent": "SCHEDULE_CANCEL_DEAD_MAN_SWITCH",
+      "exchange_action": "scheduleCancel",
+      "ai_callable": false,
+      "note": "May be considered only for deterministic infrastructure after testnet proof; official docs require scheduled time at least five seconds ahead and cap triggers per day."
+    }
+  ],
+  "forbidden_actions": [
+    "MARKET_OPEN_HELPER_WITH_UNBOUNDED_DEFAULT_SLIPPAGE",
+    "GTC_ORDER_IN_PRIMARY_COPY_ENTRY_PATH",
+    "ALO_ORDER_IN_PRIMARY_COPY_ENTRY_PATH",
+    "TWAP_ORDER",
+    "TWAP_CANCEL_AS_STRATEGY_SURFACE",
+    "USD_TRANSFER",
+    "SPOT_TRANSFER",
+    "SEND_ASSET",
+    "WITHDRAW_FROM_BRIDGE",
+    "USD_CLASS_TRANSFER",
+    "APPROVE_AGENT",
+    "DEREGISTER_AGENT",
+    "REPLACE_AGENT",
+    "UPDATE_LEVERAGE",
+    "UPDATE_MARGIN_MODE",
+    "VAULT_DEPOSIT",
+    "VAULT_WITHDRAW",
+    "APPROVE_BUILDER_FEE",
+    "RESERVE_ADDITIONAL_ACTIONS",
+    "USER_SET_ABSTRACTION",
+    "AGENT_SET_ABSTRACTION",
+    "MULTISIG_GOVERNANCE_ACTION",
+    "ARBITRARY_EXCHANGE_ACTION",
+    "ARBITRARY_SIGNED_PAYLOAD"
+  ],
+  "current_authorization": {
+    "any_exchange_action_authorized": false,
+    "any_signature_authorized": false,
+    "testnet_action_authorized": false,
+    "live_action_authorized": false
+  }
+}
