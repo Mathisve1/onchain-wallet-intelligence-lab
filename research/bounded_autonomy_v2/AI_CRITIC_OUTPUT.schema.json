@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:owil:bounded-autonomy:ai-critic-output:0.1",
+  "title": "Bounded autonomy AI critic output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_id",
+    "intent_candidate_hash",
+    "model_version_id",
+    "context_snapshot_hash",
+    "status",
+    "veto",
+    "confidence_bps",
+    "risk_codes",
+    "evidence_refs",
+    "missing_evidence_codes",
+    "generated_at_ms"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1-design"},
+    "assessment_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
+    "intent_candidate_hash": {"$ref": "#/$defs/sha256"},
+    "model_version_id": {"type": "string", "minLength": 3, "maxLength": 160},
+    "context_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "status": {"type": "string", "enum": ["PASS", "VETO"]},
+    "veto": {"type": "boolean"},
+    "confidence_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "risk_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 32,
+      "items": {"type": "string", "pattern": "^[A-Z0-9_]{2,80}$"}
+    },
+    "evidence_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 64,
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,180}$"}
+    },
+    "missing_evidence_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 32,
+      "items": {"type": "string", "pattern": "^[A-Z0-9_]{2,80}$"}
+    },
+    "generated_at_ms": {"type": "integer", "minimum": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "VETO"}}, "required": ["status"]},
+      "then": {"properties": {"veto": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "PASS"}}, "required": ["status"]},
+      "then": {"properties": {"veto": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
