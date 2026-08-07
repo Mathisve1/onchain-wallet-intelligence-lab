@@ -37,8 +37,11 @@ def validate_manifest() -> None:
         require(observed == expected, f"manifest mismatch: {rel}")
 
     required_new_paths = {
+        "AI_HANDOVER.md",
         "governance/BOUND_AUTONOMY_POLICY.json",
+        "governance/RESEARCH_REGISTRY.json",
         "governance/adr/ADR-BOUND-AUTONOMY-001.md",
+        "research/bounded_autonomy/EXPERIMENT_CONTRACT.json",
         "research/bounded_autonomy/PREREGISTRATION.md",
         "research/bounded_autonomy/THREAT_MODEL.md",
         "research/bounded_autonomy/EXECUTION_ARCHITECTURE.md",
@@ -46,25 +49,72 @@ def validate_manifest() -> None:
         "research/bounded_autonomy/TRADE_INTENT_CONTRACT.json",
         "tests/test_bounded_autonomy_governance.py",
     }
-    require(required_new_paths.issubset(seen), "bounded-autonomy paths absent from manifest")
+    require(
+        required_new_paths.issubset(seen),
+        "bounded-autonomy paths absent from manifest",
+    )
 
 
 def validate_parent_contract() -> None:
     contract = load_json("research/wallet_copyability/DATA_CONTRACT.json")
     require(contract["market_data_ingested"] is False, "market-data gate opened")
     require(contract["empirical_result"] is None, "empirical result created")
-    require(contract["execution_boundary"]["read_only"] is True, "read-only gate disabled")
+    require(
+        contract["execution_boundary"]["read_only"] is True,
+        "read-only gate disabled",
+    )
     require(
         all(value is False for value in contract["authorizations"].values()),
         "parent authorization opened",
     )
 
 
+def validate_research_registry() -> None:
+    registry = load_json("governance/RESEARCH_REGISTRY.json")
+    require(
+        registry["program_id"] == "ONCHAIN-WALLET-INTELLIGENCE",
+        "wrong research program",
+    )
+    require(
+        registry["current_active_gate"]["gate_id"] == "HL-PUBLIC-PROBE-001R1",
+        "active technical gate changed",
+    )
+    require(
+        all(value is False for value in registry["authorizations"].values()),
+        "registry authorization opened",
+    )
+    studies = {item["study_id"]: item for item in registry["studies"]}
+    require(
+        set(studies)
+        == {"WALLET-COPYABILITY-STUDY-001", "DEX-COPY-AUTONOMY-001"},
+        "research registry study set changed",
+    )
+    require(
+        studies["WALLET-COPYABILITY-STUDY-001"]["parent_study"] is None,
+        "parent study unexpectedly linked",
+    )
+    require(
+        studies["DEX-COPY-AUTONOMY-001"]["parent_study"]
+        == "WALLET-COPYABILITY-STUDY-001",
+        "autonomy study parent mismatch",
+    )
+    require(
+        studies["DEX-COPY-AUTONOMY-001"]["empirical_result"] is None,
+        "autonomy empirical result created",
+    )
+
+
 def validate_bounded_autonomy_policy() -> None:
     policy = load_json("governance/BOUND_AUTONOMY_POLICY.json")
     require(policy["policy_id"] == "BOUND-AUTONOMY-POLICY-001", "wrong policy id")
-    require(policy["research_track"] == "DEX-COPY-AUTONOMY-001", "wrong research track")
-    require(policy["current_maximum_stage"] == "RESEARCH", "execution stage opened")
+    require(
+        policy["research_track"] == "DEX-COPY-AUTONOMY-001",
+        "wrong research track",
+    )
+    require(
+        policy["current_maximum_stage"] == "RESEARCH",
+        "execution stage opened",
+    )
     require(
         policy["execution_controls"]["unknown_state_behavior"] == "BLOCK",
         "unknown state not blocked",
@@ -108,15 +158,84 @@ def validate_bounded_autonomy_policy() -> None:
     )
 
 
+def validate_experiment_contract() -> None:
+    contract = load_json("research/bounded_autonomy/EXPERIMENT_CONTRACT.json")
+    require(
+        contract["contract_id"] == "DEX_COPY_AUTONOMY_EXPERIMENT_CONTRACT_V1",
+        "wrong experiment contract",
+    )
+    require(
+        contract["study_id"] == "DEX-COPY-AUTONOMY-001",
+        "wrong experiment study",
+    )
+    require(
+        contract["parent_study"] == "WALLET-COPYABILITY-STUDY-001",
+        "wrong experiment parent",
+    )
+    require(contract["stage"] == "RESEARCH", "experiment stage opened")
+    require(
+        contract["data_boundary"]["empirical_result"] is None,
+        "autonomy result created",
+    )
+    require(
+        contract["data_boundary"]["market_data_ingested_under_this_contract"]
+        is False,
+        "autonomy market-data gate opened",
+    )
+    require(
+        all(value is False for value in contract["authorizations"].values()),
+        "autonomy experiment authorization opened",
+    )
+    require(
+        contract["latency_arms_milliseconds"]
+        == [
+            200,
+            1000,
+            3000,
+            5000,
+            10000,
+            15000,
+            30000,
+            60000,
+            120000,
+            300000,
+        ],
+        "latency grid changed",
+    )
+    require(
+        contract["ai_incremental_value_boundary"]["ai_arm_can_raise_risk_or_size"]
+        is False,
+        "AI can raise risk or size",
+    )
+    require(
+        contract["parent_immutability"]["parent_signal_set_can_be_rewritten"]
+        is False,
+        "parent signal set can be rewritten",
+    )
+    require(
+        contract["live_risk_parameters"]["state"] == "UNSET_LIVE_BLOCKER",
+        "experiment live limits unexpectedly set",
+    )
+
+
 def validate_authorization_matrix() -> None:
     matrix = load_json("research/bounded_autonomy/AUTHORIZATION_MATRIX.json")
-    require(matrix["current_maximum_stage"] == "RESEARCH", "matrix stage opened")
-    require(matrix["automatic_promotion"] is False, "automatic promotion enabled")
+    require(
+        matrix["current_maximum_stage"] == "RESEARCH",
+        "matrix stage opened",
+    )
+    require(
+        matrix["automatic_promotion"] is False,
+        "automatic promotion enabled",
+    )
     require(
         matrix["positive_result_can_change_authorization"] is False,
         "positive result can promote authorization",
     )
-    require(matrix["missing_state_behavior"] == "DENY", "missing state not denied")
+    require(
+        matrix["missing_state_behavior"] == "DENY",
+        "missing state not denied",
+    )
 
     states = matrix["states"]
     allowed_true = {
@@ -125,7 +244,10 @@ def validate_authorization_matrix() -> None:
     }
     for key, record in states.items():
         if key in allowed_true:
-            require(record["authorized"] is True, f"expected research scope closed: {key}")
+            require(
+                record["authorized"] is True,
+                f"expected research scope closed: {key}",
+            )
         else:
             require(record["authorized"] is False, f"execution scope opened: {key}")
 
@@ -136,7 +258,10 @@ def validate_trade_intent_contract() -> None:
         contract["status"] == "DESIGN_ONLY_NO_EXECUTION_AUTHORIZATION",
         "trade-intent contract represented as executable",
     )
-    require(contract["additional_fields_allowed"] is False, "open intent schema")
+    require(
+        contract["additional_fields_allowed"] is False,
+        "open intent schema",
+    )
     require(
         contract["allowed_values"]["order_type"] == ["IOC_LIMIT"],
         "unbounded order type allowed",
@@ -150,7 +275,10 @@ def validate_trade_intent_contract() -> None:
         "ARBITRARY_EXCHANGE_ACTION",
     }
     require(required.issubset(forbidden), "forbidden action set incomplete")
-    require(contract["permit_rules"]["single_use"] is True, "reusable permit allowed")
+    require(
+        contract["permit_rules"]["single_use"] is True,
+        "reusable permit allowed",
+    )
     require(
         contract["permit_rules"]["mutation_invalidates_permit"] is True,
         "permit mutation not invalidating",
@@ -180,18 +308,47 @@ def validate_sources_and_docs() -> None:
     )
 
     decisions = (ROOT / "DECISION_LOG.md").read_text()
-    for decision_id in ("DEC-010", "DEC-011", "DEC-012", "DEC-013", "DEC-014", "DEC-015"):
+    for decision_id in (
+        "DEC-010",
+        "DEC-011",
+        "DEC-012",
+        "DEC-013",
+        "DEC-014",
+        "DEC-015",
+    ):
         require(decision_id in decisions, f"missing decision: {decision_id}")
 
     adr = (ROOT / "governance/adr/ADR-BOUND-AUTONOMY-001.md").read_text()
-    require("Live execution authorization" in adr and "`false`" in adr, "ADR live boundary missing")
-    require("Silence, elapsed time" in adr, "ADR promotion semantics incomplete")
+    require(
+        "Live execution authorization" in adr and "`false`" in adr,
+        "ADR live boundary missing",
+    )
+    require(
+        "Silence, elapsed time" in adr,
+        "ADR promotion semantics incomplete",
+    )
+
+    handover = (ROOT / "AI_HANDOVER.md").read_text()
+    require(
+        "HL-PUBLIC-PROBE-001R1" in handover,
+        "handover lost active technical gate",
+    )
+    require(
+        "No profitability, copyable-alpha or execution claim exists" in handover,
+        "handover overstates empirical state",
+    )
+    require(
+        "no positive backtest represented as authorization" in handover,
+        "handover promotion prohibition missing",
+    )
 
 
 def main() -> int:
     validate_manifest()
     validate_parent_contract()
+    validate_research_registry()
     validate_bounded_autonomy_policy()
+    validate_experiment_contract()
     validate_authorization_matrix()
     validate_trade_intent_contract()
     validate_sources_and_docs()
