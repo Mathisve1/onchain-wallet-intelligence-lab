@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.1-design",
+  "schema_version": "0.2-design",
   "study_id": "DEX-COPY-AUTONOMY-001",
   "status": "DESIGN_PREREGISTRATION_NO_DATA_NO_EXECUTION",
   "parent_dependency": {
@@ -41,8 +41,11 @@
     "ai_can_raise_size": false,
     "ai_can_widen_slippage": false,
     "ai_can_extend_expiry": false,
-    "ai_primary_role": "VETO_OR_LOWER_CONFIDENCE",
-    "ai_required_timeout_behavior": "SKIP_AI_TIMEOUT"
+    "ai_primary_entry_role": "VETO_OR_LOWER_CONFIDENCE",
+    "ai_required_entry_timeout_behavior": "SKIP_AI_TIMEOUT",
+    "deterministic_safety_actions_bypass_ai_requirement": true,
+    "deterministic_safety_action_types": ["CANCEL_BY_CLOID", "REDUCE_ONLY_IOC"],
+    "deterministic_safety_may_open_new_risk": false
   },
   "accounting_rules": {
     "missed_signals_remain_in_denominator": true,
