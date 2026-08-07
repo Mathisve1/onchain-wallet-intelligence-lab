@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "retrieved_date": "2026-08-07",
+  "status": "PRICING_EVIDENCE_FOR_PROPOSAL_ONLY_NOT_AUTHORIZATION",
+  "sources": [
+    {
+      "provider": "AWS KMS",
+      "url": "https://aws.amazon.com/kms/pricing/",
+      "classification": "PRIMARY_OFFICIAL_PRICING",
+      "observed": {
+        "customer_managed_key_usd_per_month": "1.00",
+        "key_storage_prorated_hourly": true,
+        "ecc_256_signing_usd_per_10000_requests": "0.15",
+        "asymmetric_sign_verify_getpublickey_excluded_from_free_tier": true
+      }
+    },
+    {
+      "provider": "Google Cloud KMS",
+      "url": "https://cloud.google.com/kms/pricing",
+      "classification": "PRIMARY_OFFICIAL_PRICING",
+      "observed": {
+        "pricing_effective_from": "2025-03-17",
+        "software_asymmetric_ec_key_version_usd_per_hour": "0.000082192",
+        "software_cryptographic_operations_usd_per_10000": "0.03",
+        "hsm_asymmetric_rsa3072_rsa4096_or_ec_key_version_usd_per_hour_first_2000_per_month": "0.003424658",
+        "billing_account_required": true
+      }
+    },
+    {
+      "provider": "Azure Key Vault",
+      "url": "https://azure.microsoft.com/en-us/pricing/details/key-vault/",
+      "classification": "PRIMARY_OFFICIAL_PRICING",
+      "observed": {
+        "software_protected_advanced_ecc_transaction_pricing_exists": true,
+        "hsm_protected_advanced_ecc_key_and_transaction_pricing_exists": true,
+        "managed_hsm_pool_hourly_pricing_exists": true,
+        "numeric_values_reliably_extracted_in_this_retrieval": false
+      },
+      "required_before_authorization": "Freeze exact current numeric Azure Standard software-P256K pricing from Azure calculator/current SKU for the chosen subscription/currency."
+    }
+  ],
+  "notes": [
+    "Provider pricing can vary by billing currency, agreement, region/SKU and future date; exact bill remains authoritative.",
+    "The first G4B proposal uses software/service-backed key protection where available only to prove cryptographic compatibility and latency cheaply. HSM protection comparison is a separate later gate.",
+    "No cost evidence authorizes a provider request."
+  ],
+  "provider_spend_authorized": false,
+  "provider_network_call_authorized": false
+}
