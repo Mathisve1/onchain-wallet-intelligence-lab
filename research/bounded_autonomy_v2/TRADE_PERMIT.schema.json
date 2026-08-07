@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:trade-permit:0.2",
+  "$id": "urn:owil:bounded-autonomy:trade-permit:0.3",
   "title": "Single-use bounded trade permit",
   "type": "object",
   "additionalProperties": false,
@@ -11,7 +11,6 @@
     "compiled_action_sha256",
     "strategy_id",
     "strategy_version_hash",
-    "model_version_hash",
     "policy_version_hash",
     "data_snapshot_hash",
     "risk_snapshot_hash",
@@ -21,15 +20,15 @@
     "signer_address",
     "action",
     "instrument",
+    "decision_mode",
     "nonce",
     "issued_at_ms",
     "expires_at_ms",
-    "venue_expires_after_ms",
     "single_use",
     "reconciliation_precondition"
   ],
   "properties": {
-    "schema_version": {"const": "0.2-design"},
+    "schema_version": {"const": "0.3-design"},
     "permit_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
     "intent_sha256": {"$ref": "#/$defs/sha256"},
     "compiled_action_sha256": {"$ref": "#/$defs/sha256"},
@@ -45,6 +44,11 @@
     "signer_address": {"$ref": "#/$defs/address"},
     "action": {"type": "string", "enum": ["PLACE_IOC_LIMIT", "REDUCE_ONLY_IOC", "CANCEL_BY_CLOID"]},
     "instrument": {"type": "string", "enum": ["BTC", "ETH", "SOL"]},
+    "decision_mode": {
+      "type": "string",
+      "enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC", "DETERMINISTIC_SAFETY"]
+    },
+    "reason_code": {"type": "string", "pattern": "^[A-Z0-9_]{2,80}$"},
     "side": {"type": "string", "enum": ["BUY", "SELL"]},
     "reduce_only": {"type": "boolean"},
     "quantity": {"$ref": "#/$defs/positive_decimal_string"},
@@ -57,21 +61,24 @@
     "expires_at_ms": {"type": "integer", "minimum": 1},
     "venue_expires_after_ms": {"type": "integer", "minimum": 1},
     "single_use": {"const": true},
-    "reconciliation_precondition": {"type": "string", "enum": ["NO_OPEN_UNRECONCILED_RISK_INCREASING_ACTION"]}
+    "reconciliation_precondition": {"const": "NO_OPEN_UNRECONCILED_RISK_INCREASING_ACTION"}
   },
   "allOf": [
     {
       "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}, "required": ["action"]},
       "then": {
-        "required": ["side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid"],
-        "properties": {"reduce_only": {"const": false}},
-        "not": {"required": ["target_cloid"]}
+        "required": ["side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid", "venue_expires_after_ms"],
+        "properties": {
+          "reduce_only": {"const": false},
+          "decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC"]}
+        },
+        "not": {"anyOf": [{"required": ["target_cloid"]}, {"required": ["reason_code"]}]}
       }
     },
     {
       "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}, "required": ["action"]},
       "then": {
-        "required": ["side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid"],
+        "required": ["reason_code", "side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid", "venue_expires_after_ms"],
         "properties": {"reduce_only": {"const": true}},
         "not": {"required": ["target_cloid"]}
       }
@@ -79,7 +86,8 @@
     {
       "if": {"properties": {"action": {"const": "CANCEL_BY_CLOID"}}, "required": ["action"]},
       "then": {
-        "required": ["target_cloid"],
+        "required": ["reason_code", "target_cloid"],
+        "properties": {"decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_SAFETY"]}},
         "not": {
           "anyOf": [
             {"required": ["side"]},
@@ -87,10 +95,23 @@
             {"required": ["quantity"]},
             {"required": ["limit_price"]},
             {"required": ["max_slippage_bps"]},
-            {"required": ["cloid"]}
+            {"required": ["cloid"]},
+            {"required": ["venue_expires_after_ms"]},
+            {"required": ["model_version_hash"]}
           ]
         }
       }
+    },
+    {
+      "if": {"properties": {"decision_mode": {"const": "DETERMINISTIC_PLUS_AI_CRITIC"}}, "required": ["decision_mode"]},
+      "then": {"required": ["model_version_hash"]}
+    },
+    {
+      "if": {
+        "properties": {"decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_SAFETY"]}},
+        "required": ["decision_mode"]
+      },
+      "then": {"not": {"required": ["model_version_hash"]}}
     }
   ],
   "$defs": {
