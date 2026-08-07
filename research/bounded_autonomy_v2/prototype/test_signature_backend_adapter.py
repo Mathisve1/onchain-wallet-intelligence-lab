@@ -4,8 +4,11 @@ from crypto_fixture_oracle import N, action_hash, agent_digest, public_address, 
 from signature_backend_adapter import (
     SignatureAdapterError,
     adapt_der_signature,
+    adapt_p1363_signature,
     encode_der_ecdsa_for_fixture,
+    encode_p1363_ecdsa_for_fixture,
     parse_der_ecdsa,
+    parse_p1363_ecdsa,
 )
 
 
@@ -25,6 +28,11 @@ class TestSignatureBackendAdapter(unittest.TestCase):
         digest, signature, address = self.fixture()
         der = encode_der_ecdsa_for_fixture(int(signature["r"], 16), int(signature["s"], 16))
         self.assertEqual(adapt_der_signature(der, digest, address), signature)
+
+    def test_p1363_roundtrip_and_unique_address_recovery(self):
+        digest, signature, address = self.fixture()
+        raw = encode_p1363_ecdsa_for_fixture(int(signature["r"], 16), int(signature["s"], 16))
+        self.assertEqual(adapt_p1363_signature(raw, digest, address), signature)
 
     def test_high_s_is_normalized_and_recovers_same_signer(self):
         digest, signature, address = self.fixture()
@@ -55,6 +63,10 @@ class TestSignatureBackendAdapter(unittest.TestCase):
     def test_negative_der_integer_is_rejected(self):
         with self.assertRaises(SignatureAdapterError):
             parse_der_ecdsa(b"\x30\x06\x02\x01\x80\x02\x01\x01")
+
+    def test_p1363_wrong_length_is_rejected(self):
+        with self.assertRaises(SignatureAdapterError):
+            parse_p1363_ecdsa(b"\x01" * 63)
 
 
 if __name__ == "__main__":
