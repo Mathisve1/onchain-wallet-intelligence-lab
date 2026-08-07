@@ -11,17 +11,24 @@ class ProbeR1ExactHeadTests(unittest.TestCase):
     def setUp(self) -> None:
         self.text = WORKFLOW.read_text(encoding="utf-8")
 
-    def test_manual_dispatch_requires_explicit_reviewed_commit(self) -> None:
-        self.assertIn("on:\n  workflow_dispatch:\n    inputs:\n", self.text)
-        self.assertIn("reviewed_commit:", self.text)
+    def test_owner_edited_marker_selects_exact_pr_head(self) -> None:
+        self.assertIn("on:\n  pull_request:\n    types: [edited]", self.text)
         self.assertIn(
-            "EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}",
+            "EXACT_REVIEWED_COMMIT: ${{ github.event.pull_request.head.sha }}",
             self.text,
         )
-        self.assertNotIn("github.event.pull_request.head.sha", self.text)
+        self.assertIn("github.actor == github.repository_owner", self.text)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            self.text,
+        )
+        self.assertIn("github.event.pull_request.draft == true", self.text)
+        self.assertIn("github.event.pull_request.base.ref == 'main'", self.text)
+        self.assertIn("RUN_HL_PUBLIC_PROBE_R1:{0}", self.text)
+        self.assertNotIn("workflow_dispatch:", self.text)
         self.assertNotIn("REVIEWED_COMMIT: ${{ github.sha }}", self.text)
 
-    def test_checkout_uses_the_manual_commit_input(self) -> None:
+    def test_checkout_uses_exact_pull_request_head(self) -> None:
         self.assertIn("ref: ${{ env.EXACT_REVIEWED_COMMIT }}", self.text)
         self.assertIn("observed=\"$(git rev-parse HEAD)\"", self.text)
         self.assertIn(
@@ -31,6 +38,10 @@ class ProbeR1ExactHeadTests(unittest.TestCase):
         self.assertIn("^[0-9a-f]{40}$", self.text)
         self.assertIn(
             'git cat-file -e "${EXACT_REVIEWED_COMMIT}^{commit}"',
+            self.text,
+        )
+        self.assertIn(
+            'test "${RUN_AUTHORIZATION_MARKER}" = "<!-- RUN_HL_PUBLIC_PROBE_R1:${EXACT_REVIEWED_COMMIT} -->"',
             self.text,
         )
 
