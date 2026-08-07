@@ -5,8 +5,14 @@ on:
   pull_request:
     paths:
       - '.github/workflows/hyperliquid-public-probe-r1.yml'
-      - 'research/wallet_copyability/probe_r1/**'
-      - 'tests/test_probe_r1*.py'
+      - 'research/wallet_copyability/probe_r1/PROBE_CONTRACT.json'
+      - 'research/wallet_copyability/probe_r1/contract.py'
+      - 'research/wallet_copyability/probe_r1/http_client.py'
+      - 'research/wallet_copyability/probe_r1/probe.py'
+      - 'research/wallet_copyability/probe_r1/validate_evidence.py'
+      - 'tests/test_probe_r1.py'
+      - 'tests/test_probe_r1_ast.py'
+      - 'tests/test_probe_r1_workflow.py'
 
 permissions:
   contents: read
@@ -75,7 +81,8 @@ jobs:
         if: always()
         shell: bash
         env:
-          REVIEWED_COMMIT: ${{ github.sha }}
+          REVIEWED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHECKED_OUT_COMMIT: ${{ github.sha }}
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           WORKFLOW_JOB: ${{ github.job }}
@@ -100,9 +107,10 @@ jobs:
               except Exception:
                   output = None
           context = {
-              'schema_version': '1.0',
+              'schema_version': '1.1',
               'probe_id': 'HL-PUBLIC-PROBE-001R1',
               'reviewed_commit': os.environ['REVIEWED_COMMIT'],
+              'checked_out_commit': os.environ['CHECKED_OUT_COMMIT'],
               'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
               'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
               'workflow_job': os.environ['WORKFLOW_JOB'],
@@ -143,9 +151,10 @@ jobs:
           data = json.loads(path.read_text()) if path.is_file() and path.stat().st_size else {}
           print('# Hyperliquid Public Probe R1')
           for key in (
-              'reviewed_commit', 'workflow_run_id', 'terminal_status',
-              'archive_access_status', 'pass_count', 'fail_count',
-              'total_request_attempts', 'total_declared_request_weight',
+              'reviewed_commit', 'checked_out_commit', 'workflow_run_id',
+              'terminal_status', 'archive_access_status', 'pass_count',
+              'fail_count', 'total_request_attempts',
+              'total_declared_request_weight',
               'remaining_declared_weight_margin', 'output_sha256',
           ):
               print(f'- **{key}**: `{data.get(key)}`')
