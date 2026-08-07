@@ -1,0 +1,73 @@
+{
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "captured_at_utc": "2026-08-06T00:00:00Z",
+  "documentation_conflicts_to_probe": [
+    {
+      "analytical_release_allowed": false,
+      "conflict_id": "HL-DOC-LIMIT-001",
+      "status": "UNRESOLVED_REQUIRE_EMPIRICAL_PROBE_AND_VERSIONED_CAPTURE",
+      "topic": "time-range result limits and historical fill availability"
+    }
+  ],
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-001",
+      "title": "Historical data",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-002",
+      "title": "Info endpoint",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-003",
+      "title": "WebSocket subscriptions",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-004",
+      "title": "Rate limits and user limits",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-005",
+      "title": "Fees",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "HL-OFFICIAL-006",
+      "title": "Funding",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding"
+    },
+    {
+      "publisher": "hyperliquid-dex",
+      "source_class": "OFFICIAL_CODE_REPOSITORY",
+      "source_id": "HL-OFFICIAL-007",
+      "title": "Hyperliquid node",
+      "url": "https://github.com/hyperliquid-dex/node"
+    }
+  ],
+  "status": "OFFICIAL_SOURCE_REGISTER_PRE_DATA",
+  "study_id": "WALLET-COPYABILITY-STUDY-001"
+}
