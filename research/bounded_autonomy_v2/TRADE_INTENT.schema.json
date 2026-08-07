@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:trade-intent:0.1",
+  "$id": "urn:owil:bounded-autonomy:trade-intent:0.2",
   "title": "Bounded Autonomy Trade Intent",
   "type": "object",
   "additionalProperties": false,
@@ -12,12 +12,7 @@
     "source_signal_id",
     "decision_timestamp_ms",
     "instrument",
-    "side",
     "action",
-    "reduce_only",
-    "requested_quantity",
-    "limit_price",
-    "max_slippage_bps",
     "expires_at_ms",
     "model_version_hash",
     "policy_version_hash",
@@ -27,19 +22,20 @@
     "ai_assessment"
   ],
   "properties": {
-    "schema_version": {"const": "0.1-design"},
+    "schema_version": {"const": "0.2-design"},
     "intent_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
     "strategy_id": {"type": "string", "pattern": "^[A-Z0-9._-]{3,80}$"},
     "strategy_version_hash": {"$ref": "#/$defs/sha256"},
     "source_signal_id": {"type": "string", "minLength": 8, "maxLength": 160},
     "decision_timestamp_ms": {"type": "integer", "minimum": 1},
     "instrument": {"type": "string", "enum": ["BTC", "ETH", "SOL"]},
-    "side": {"type": "string", "enum": ["BUY", "SELL"]},
     "action": {"type": "string", "enum": ["PLACE_IOC_LIMIT", "REDUCE_ONLY_IOC", "CANCEL_BY_CLOID"]},
+    "side": {"type": "string", "enum": ["BUY", "SELL"]},
     "reduce_only": {"type": "boolean"},
     "requested_quantity": {"$ref": "#/$defs/positive_decimal_string"},
     "limit_price": {"$ref": "#/$defs/positive_decimal_string"},
     "max_slippage_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "target_strategy_order_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$"},
     "expires_at_ms": {"type": "integer", "minimum": 1},
     "model_version_hash": {"$ref": "#/$defs/sha256"},
     "policy_version_hash": {"$ref": "#/$defs/sha256"},
@@ -65,12 +61,35 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}},
-      "then": {"properties": {"reduce_only": {"const": true}}}
+      "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}, "required": ["action"]},
+      "then": {
+        "required": ["side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
+        "properties": {"reduce_only": {"const": false}},
+        "not": {"required": ["target_strategy_order_id"]}
+      }
     },
     {
-      "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}},
-      "then": {"properties": {"reduce_only": {"const": false}}}
+      "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}, "required": ["action"]},
+      "then": {
+        "required": ["side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
+        "properties": {"reduce_only": {"const": true}},
+        "not": {"required": ["target_strategy_order_id"]}
+      }
+    },
+    {
+      "if": {"properties": {"action": {"const": "CANCEL_BY_CLOID"}}, "required": ["action"]},
+      "then": {
+        "required": ["target_strategy_order_id"],
+        "not": {
+          "anyOf": [
+            {"required": ["side"]},
+            {"required": ["reduce_only"]},
+            {"required": ["requested_quantity"]},
+            {"required": ["limit_price"]},
+            {"required": ["max_slippage_bps"]}
+          ]
+        }
+      }
     }
   ],
   "$defs": {
