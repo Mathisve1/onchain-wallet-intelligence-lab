@@ -21,6 +21,7 @@ It uses only Python standard-library primitives to exercise the design invariant
 - explicit intent -> policy -> permit -> sign -> submit -> acknowledgement/fill reconciliation states;
 - partial fills remaining unresolved until terminal;
 - crash-after-sign uncertainty becoming `POSSIBLY_SUBMITTED`, never a blind retry;
+- blocked intents becoming terminal so a normal policy reject cannot deadlock future risk decisions;
 - duplicate permit/action IDs and impossible state transitions failing closed.
 
 There is intentionally no:
@@ -39,13 +40,13 @@ Local construction verification executed against the hardened control and reconc
 
 ```text
 python -m unittest discover -v
-39 tests
+40 tests
 PASS
 ```
 
 The matching trade-intent and trade-permit JSON Schemas were also checked locally as Draft 2020-12 schemas with valid entry/reduce/cancel fixtures. A cancel fixture containing invented economic fields was correctly rejected.
 
-The cross-document `validate_design.py` validator is included for later branch/CI execution. It checks action/mode parity, all-false authorizations, parent-lane immutability, AI authority restrictions, deterministic safety semantics and the absence of network/signing libraries from the pure prototype.
+The cross-document `validate_design.py` validator is included for later branch/CI execution. It checks action/mode parity, all-false authorizations, parent-lane immutability, AI authority restrictions, deterministic safety semantics, reconciliation-state parity and the absence of network/signing libraries from the pure prototype.
 
 These local runs are engineering feedback only, not canonical repository CI evidence. This branch deliberately does not touch the repository manifest or open a PR while the parallel data/evidence lane is active.
 
