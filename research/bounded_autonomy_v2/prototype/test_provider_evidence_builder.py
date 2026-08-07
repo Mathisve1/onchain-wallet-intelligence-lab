@@ -101,6 +101,33 @@ class TestProviderEvidenceBuilder(unittest.TestCase):
         with self.assertRaises(ProviderEvidenceError):
             build_sanitized_evidence(capture)
 
+    def test_extra_capture_field_is_rejected(self):
+        capture = capture_for_digest(self.exact_fixture_digest())
+        capture["unregistered_override"] = True
+        with self.assertRaises(ProviderEvidenceError):
+            build_sanitized_evidence(capture)
+
+    def test_aws_alias_is_rejected(self):
+        capture = capture_for_digest(self.exact_fixture_digest())
+        capture["provider"] = "AWS KMS"
+        capture["key_resource_version"] = "arn:aws:kms:eu-west-1:123456789012:alias/copybot"
+        with self.assertRaises(ProviderEvidenceError):
+            build_sanitized_evidence(capture)
+
+    def test_gcp_crypto_key_without_exact_version_is_rejected(self):
+        capture = capture_for_digest(self.exact_fixture_digest())
+        capture["provider"] = "Google Cloud KMS"
+        capture["key_resource_version"] = "projects/p/locations/l/keyRings/r/cryptoKeys/k"
+        with self.assertRaises(ProviderEvidenceError):
+            build_sanitized_evidence(capture)
+
+    def test_azure_key_without_exact_version_is_rejected(self):
+        capture = capture_for_digest(self.exact_fixture_digest(), public_format="JWK_XY_BASE64URL")
+        capture["provider"] = "Azure Key Vault"
+        capture["key_resource_version"] = "https://example.vault.azure.net/keys/copybot"
+        with self.assertRaises(ProviderEvidenceError):
+            build_sanitized_evidence(capture)
+
     def test_latency_percentiles_are_deterministic_nearest_rank(self):
         latency = build_sanitized_evidence(capture_for_digest(self.exact_fixture_digest(), latency_count=100))["latency_ms"]
         self.assertEqual(latency, {"sample_count": 100, "p50": 50.0, "p75": 75.0, "p90": 90.0, "p95": 95.0, "p99": 99.0})
