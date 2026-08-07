@@ -9,6 +9,7 @@ PROBE_ROOT = ROOT / "research/wallet_copyability/probe_r1"
 EVIDENCE_ROOT = PROBE_ROOT / "evidence"
 RUN_ROOT = EVIDENCE_ROOT / "run-31200124642"
 FINAL_ATTESTATION = EVIDENCE_ROOT / "HL-PUBLIC-PROBE-001R1-ATTESTATION.json"
+ARCHIVE_ROOT = ROOT / "research/archive_inventory"
 
 
 class ProbeR1ImplementationBoundaryTests(unittest.TestCase):
@@ -49,8 +50,17 @@ class ProbeR1ImplementationBoundaryTests(unittest.TestCase):
         self.assertIn("market_data_ingested = false", text)
         self.assertNotIn("market_data_ingested = true", text)
 
-    def test_no_archive_inventory_directory_exists(self) -> None:
-        self.assertFalse((ROOT / "research/archive_inventory").exists())
+    def test_archive_successor_is_preregistered_without_evidence_or_outputs(self) -> None:
+        self.assertTrue(ARCHIVE_ROOT.is_dir())
+        contract = self.load(ARCHIVE_ROOT / "INVENTORY_CONTRACT.json")
+        self.assertEqual(
+            contract["status"],
+            "PREREGISTERED_METADATA_ONLY_NO_EXECUTION",
+        )
+        self.assertFalse(any(contract["execution"].values()))
+        self.assertFalse(contract["proposed_canary"]["authorized"])
+        self.assertFalse((ARCHIVE_ROOT / "evidence").exists())
+        self.assertFalse((ARCHIVE_ROOT / "outputs").exists())
 
     def test_all_authorizations_remain_false(self) -> None:
         records = [
@@ -58,6 +68,7 @@ class ProbeR1ImplementationBoundaryTests(unittest.TestCase):
             self.load(PROBE_ROOT / "PENDING_EVIDENCE.json"),
             self.load(PROBE_ROOT / "ATTESTATION_TEMPLATE.json"),
             self.load(FINAL_ATTESTATION),
+            self.load(ARCHIVE_ROOT / "INVENTORY_CONTRACT.json"),
         ]
         for record in records:
             self.assertTrue(
