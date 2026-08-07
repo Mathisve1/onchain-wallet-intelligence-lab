@@ -11,6 +11,16 @@ class ProbeR1WorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.text = WORKFLOW.read_text(encoding="utf-8")
 
+    def test_probe_is_manual_only(self) -> None:
+        self.assertIn("on:\n  workflow_dispatch:", self.text)
+        for forbidden_trigger in (
+            "pull_request:",
+            "push:",
+            "schedule:",
+            "repository_dispatch:",
+        ):
+            self.assertNotIn(forbidden_trigger, self.text)
+
     def test_permission_and_checkout_are_read_only(self) -> None:
         self.assertIn("permissions:\n  contents: read", self.text)
         self.assertIn("persist-credentials: false", self.text)
