@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "HL-PUBLIC-PROBE-001R1-ATTESTATION",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "status": "IMMUTABLE_FAILED_R1_SUCCESSOR_REQUIRED",
+  "reviewed_commit": "6a204c928301613830dbdaa0678cca33917bb3bc",
+  "workflow": {
+    "run_id": 31167864088,
+    "job_id": 92832736953,
+    "artifact_id": 8989720791,
+    "artifact_sha256": "c7d2b60fbd2edf15a5edb4b687b17c45685ea0b129a97ed77eddd5e0d40096f9"
+  },
+  "derived_result": {
+    "terminal_status": "PUBLIC_PROBE_FAIL",
+    "observation_count": 18,
+    "pass_count": 11,
+    "degraded_count": 4,
+    "fail_count": 3,
+    "failed_probe_ids": [
+      "P003_MASTER_USER_ROLE",
+      "P004_MASTER_SUBACCOUNTS",
+      "P005_SUBACCOUNT_USER_ROLE"
+    ],
+    "degraded_probe_ids": [
+      "P014_VAULT_FILLS_BY_TIME_RECENT_24H",
+      "P016_NODE_FILL_ARCHIVE_LISTING",
+      "P017_MARKET_DATA_ARCHIVE_LISTING",
+      "P018_ASSET_CTX_ARCHIVE_LISTING"
+    ]
+  },
+  "findings": [
+    {
+      "finding_id": "R1-FIND-001-XML-EVIDENCE-ALLOWLIST",
+      "classification": "VALIDATOR_DEFECT",
+      "finding": "The probe emitted seven bounded XML structure fields that the R1 validator did not allow.",
+      "fields": [
+        "xml_child_tags",
+        "xml_contents_count",
+        "xml_error_code",
+        "xml_is_truncated",
+        "xml_key_count",
+        "xml_root",
+        "xml_sample_key_sha256"
+      ],
+      "r1_reinterpretation_allowed": false
+    },
+    {
+      "finding_id": "R1-FIND-002-OFFICIAL-EXAMPLE-RELATIONSHIP-DRIFT",
+      "classification": "EXTERNAL_DOCUMENTATION_DRIFT",
+      "finding": "The published master/subaccount example addresses no longer returned the documented relationship on the exact R1 run.",
+      "r1_reinterpretation_allowed": false,
+      "successor_treatment": "Retain as explicit drift observations; do not use them as required capability gates."
+    },
+    {
+      "finding_id": "R1-FIND-003-REQUESTER-PAYS-ANONYMOUS-DENIAL",
+      "classification": "ACCESS_CONTROL_EVIDENCE",
+      "finding": "The three anonymous S3 listing requests returned structured HTTP 403 AccessDenied XML.",
+      "r1_reinterpretation_allowed": false,
+      "successor_treatment": "Classify as degraded public archive availability and preserve the separate authenticated requester-pays gate."
+    },
+    {
+      "finding_id": "R1-FIND-004-VAULT-WINDOW-INCONCLUSIVE",
+      "classification": "BOUNDED_WINDOW_INCONCLUSIVE",
+      "finding": "The registered vault fill query returned a valid empty array for the frozen recent window.",
+      "r1_reinterpretation_allowed": false,
+      "successor_treatment": "Valid endpoint shape, but no historical completeness or active-trader claim."
+    }
+  ],
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "integration_authorized": false,
+  "paper_authorized": false,
+  "shadow_authorized": false,
+  "live_authorized": false,
+  "leverage_authorized": false,
+  "capital_allocation_authorized": false
+}
