@@ -1,0 +1,319 @@
+{
+  "schema_version": "1.1",
+  "contract_id": "HYPERLIQUID_PUBLIC_TECHNICAL_PROBE_CONTRACT_R2",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R2",
+  "status": "FROZEN_PRE_EXECUTION_READ_ONLY",
+  "terminal_statuses": [
+    "PUBLIC_PROBE_PASS",
+    "PUBLIC_PROBE_PARTIAL",
+    "PUBLIC_PROBE_FAIL"
+  ],
+  "allowed_origins": [
+    "https://api.hyperliquid.xyz",
+    "https://hl-mainnet-node-data.s3.amazonaws.com",
+    "https://hyperliquid-archive.s3.amazonaws.com"
+  ],
+  "network_policy": {
+    "info_endpoint": "https://api.hyperliquid.xyz/info",
+    "public_websocket": "https://api.hyperliquid.xyz/ws",
+    "timeout_seconds": 20,
+    "maximum_response_bytes": 5000000,
+    "maximum_retries": 1,
+    "retry_backoff_ms": 750,
+    "retryable_statuses": [429, 500, 502, 503, 504],
+    "inter_request_delay_ms": 150,
+    "selected_response_headers": [
+      "content-length",
+      "content-type",
+      "x-amz-request-id"
+    ],
+    "maximum_schema_depth": 5,
+    "maximum_schema_paths": 200,
+    "probe_run_declared_base_weight_ceiling": 100
+  },
+  "fixed_addresses": {
+    "master": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d",
+    "subaccount": "0x035605fc2f24d65300227189025e90a0d947f16c",
+    "vault": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303"
+  },
+  "fixed_time_windows": {
+    "relative_account_window_hours": 24,
+    "archive_probe_day_utc": {
+      "year": 2025,
+      "month": 1,
+      "day": 1
+    }
+  },
+  "retention_policy": {
+    "raw_response_bytes_retained": false,
+    "response_values_retained": false,
+    "response_hash_retained": true,
+    "structural_fingerprint_retained": true,
+    "aggregate_counts_retained": true,
+    "aggregate_timestamp_bounds_retained": true
+  },
+  "execution_boundary": {
+    "read_only": true,
+    "credentials_allowed": false,
+    "authorization_headers_allowed": false,
+    "environment_secrets_allowed": false,
+    "private_keys_allowed": false,
+    "signed_actions_allowed": false,
+    "exchange_action_endpoint_allowed": false,
+    "orders_allowed": false,
+    "withdrawals_allowed": false
+  },
+  "authorizations": {
+    "integration_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false,
+    "live_authorized": false,
+    "leverage_authorized": false,
+    "capital_allocation_authorized": false
+  },
+  "probes": [
+    {
+      "probe_id": "P001_META",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "meta"},
+      "assertion": {"kind": "json_type", "expected_type": "object"}
+    },
+    {
+      "probe_id": "P002_ALL_MIDS",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "allMids"},
+      "assertion": {"kind": "json_type", "expected_type": "object"}
+    },
+    {
+      "probe_id": "P003_MASTER_USER_ROLE",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "userRole", "user": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d"},
+      "assertion": {
+        "kind": "user_role",
+        "expected_role": "master",
+        "expected_address": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d"
+      }
+    },
+    {
+      "probe_id": "P004_MASTER_SUBACCOUNTS",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "subAccounts", "user": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d"},
+      "assertion": {
+        "kind": "subaccount_mapping",
+        "expected_master": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d",
+        "expected_subaccount": "0x035605fc2f24d65300227189025e90a0d947f16c"
+      }
+    },
+    {
+      "probe_id": "P005_SUBACCOUNT_USER_ROLE",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "userRole", "user": "0x035605fc2f24d65300227189025e90a0d947f16c"},
+      "assertion": {
+        "kind": "user_role",
+        "expected_role": "subAccount",
+        "expected_address": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d"
+      }
+    },
+    {
+      "probe_id": "P006_SUBACCOUNT_STATE",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "clearinghouseState", "user": "0x035605fc2f24d65300227189025e90a0d947f16c"},
+      "assertion": {"kind": "object"}
+    },
+    {
+      "probe_id": "P007_MASTER_FEES",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "userFees", "user": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d"},
+      "assertion": {"kind": "object"}
+    },
+    {
+      "probe_id": "P008_SUBACCOUNT_FILLS",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "userFills", "user": "0x035605fc2f24d65300227189025e90a0d947f16c", "aggregateByTime": true},
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {"kind": "array"}
+    },
+    {
+      "probe_id": "P009_SUBACCOUNT_FILLS_BY_TIME_RECENT_24H",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {
+        "type": "userFillsByTime",
+        "user": "0x035605fc2f24d65300227189025e90a0d947f16c",
+        "startTime": "ANCHOR_MINUS_24H_MS",
+        "endTime": "ANCHOR_END_MS",
+        "aggregateByTime": true
+      },
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {"kind": "array"}
+    },
+    {
+      "probe_id": "P010_SUBACCOUNT_FUNDING_RECENT_24H",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {
+        "type": "userFunding",
+        "user": "0x035605fc2f24d65300227189025e90a0d947f16c",
+        "startTime": "ANCHOR_MINUS_24H_MS",
+        "endTime": "ANCHOR_END_MS"
+      },
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {"kind": "array"}
+    },
+    {
+      "probe_id": "P011_SUBACCOUNT_NON_FUNDING_LEDGER_RECENT_24H",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {
+        "type": "userNonFundingLedgerUpdates",
+        "user": "0x035605fc2f24d65300227189025e90a0d947f16c",
+        "startTime": "ANCHOR_MINUS_24H_MS",
+        "endTime": "ANCHOR_END_MS"
+      },
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {"kind": "array"}
+    },
+    {
+      "probe_id": "P012_VAULT_DETAILS",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "vaultDetails", "vaultAddress": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303"},
+      "assertion": {"kind": "object"}
+    },
+    {
+      "probe_id": "P013_VAULT_STATE",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "clearinghouseState", "user": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303"},
+      "assertion": {"kind": "object"}
+    },
+    {
+      "probe_id": "P014_VAULT_FILLS_BY_TIME_RECENT_24H",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {
+        "type": "userFillsByTime",
+        "user": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303",
+        "startTime": "ANCHOR_MINUS_24H_MS",
+        "endTime": "ANCHOR_END_MS",
+        "aggregateByTime": true
+      },
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {
+        "kind": "vault_fills_recent",
+        "documented_recent_named_limit": 10000,
+        "probe_window_hours": 24
+      }
+    },
+    {
+      "probe_id": "P015_BTC_L2_BOOK",
+      "required": true,
+      "failure_impact": "FAIL",
+      "method": "POST",
+      "base_weight": 2,
+      "expected_parser": "json",
+      "expected_http_statuses": [200],
+      "payload": {"type": "l2Book", "coin": "BTC"},
+      "timestamp_fields": ["time", "timestamp"],
+      "assertion": {"kind": "l2_book"}
+    },
+    {
+      "probe_id": "P016_NODE_FILL_ARCHIVE_LISTING",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "GET",
+      "base_weight": 1,
+      "expected_parser": "xml",
+      "expected_http_statuses": [200, 403],
+      "url": "https://hl-mainnet-node-data.s3.amazonaws.com/?list-type=2&prefix=node_fills_by_block/&max-keys=5",
+      "assertion": {"kind": "xml_success"}
+    },
+    {
+      "probe_id": "P017_MARKET_DATA_ARCHIVE_LISTING",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "GET",
+      "base_weight": 1,
+      "expected_parser": "xml",
+      "expected_http_statuses": [200, 403],
+      "url": "https://hyperliquid-archive.s3.amazonaws.com/?list-type=2&prefix=market_data/&max-keys=5",
+      "assertion": {"kind": "xml_success"}
+    },
+    {
+      "probe_id": "P018_ASSET_CTX_ARCHIVE_LISTING",
+      "required": false,
+      "failure_impact": "DEGRADE",
+      "method": "GET",
+      "base_weight": 1,
+      "expected_parser": "xml",
+      "expected_http_statuses": [200, 403],
+      "url": "https://hyperliquid-archive.s3.amazonaws.com/?list-type=2&prefix=asset_ctxs/&max-keys=5",
+      "assertion": {"kind": "xml_success"}
+    }
+  ]
+}
