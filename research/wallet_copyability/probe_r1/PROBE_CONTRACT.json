@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "status": "FROZEN_READ_ONLY_PUBLIC_PROBE",
+  "purpose": "Verify public schema and archive availability before any analytical market-data release.",
+  "venue": "HYPERLIQUID_PUBLIC_MAINNET",
+  "allowed_origins": [
+    "https://api.hyperliquid.xyz",
+    "https://hl-mainnet-node-data.s3.amazonaws.com",
+    "https://hyperliquid-archive.s3.amazonaws.com"
+  ],
+  "documentation_fixtures": {
+    "master": "0x8c967e73e6b15087c42a10d344cff4c96d877f1d",
+    "subaccount": "0x035605fc2f24d65300227189025e90a0d947f16c",
+    "vault": "0xdfc24b077bc1425ad1dea75bcb6f8158e10df303",
+    "identity_claim_allowed": false
+  },
+  "fixed_window": {
+    "start_ms": 1735689600000,
+    "end_ms": 1735776000000,
+    "label": "2025-01-01T00:00:00Z/2025-01-02T00:00:00Z"
+  },
+  "limits": {
+    "timeout_seconds": 20,
+    "maximum_response_bytes": 5000000,
+    "maximum_total_requests": 24,
+    "maximum_attempts_per_probe": 2,
+    "maximum_declared_request_weight": 700,
+    "redirect_policy": "SAME_ORIGIN_ONLY",
+    "raw_response_values_persisted": false
+  },
+  "security_boundary": {
+    "read_only": true,
+    "credentials_allowed": false,
+    "authorization_header_allowed": false,
+    "cookies_allowed": false,
+    "private_keys_allowed": false,
+    "signed_actions_allowed": false,
+    "exchange_action_endpoint_allowed": false,
+    "orders_allowed": false,
+    "withdrawals_allowed": false,
+    "repository_write_permission_allowed": false
+  },
+  "terminal_rule": {
+    "core_probe_ids": [
+      "meta",
+      "all_mids",
+      "l2_book_btc",
+      "node_fill_archive_listing",
+      "market_data_archive_listing",
+      "asset_context_archive_listing"
+    ],
+    "pass": "Every registered observation is PASS and every security assertion is false.",
+    "partial": "Every core observation is PASS, security assertions are false, and one or more non-core observations fail or return an unsupported shape.",
+    "fail": "A core observation fails, evidence coverage is incomplete, the contract hash differs, or any forbidden capability is observed."
+  },
+  "probes": [
+    {"id":"meta","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"meta"},"expected":"json_object","core":true,"declared_weight":20},
+    {"id":"all_mids","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"allMids"},"expected":"json_object","core":true,"declared_weight":2},
+    {"id":"master_user_role","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userRole","user":"$master"},"expected":"json_object","core":false,"declared_weight":60},
+    {"id":"master_subaccounts","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"subAccounts","user":"$master"},"expected":"json_array_or_null","core":false,"declared_weight":20},
+    {"id":"subaccount_user_role","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userRole","user":"$subaccount"},"expected":"json_object","core":false,"declared_weight":60},
+    {"id":"subaccount_state","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"clearinghouseState","user":"$subaccount"},"expected":"json_object","core":false,"declared_weight":2},
+    {"id":"master_user_fees","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userFees","user":"$master"},"expected":"json_object","core":false,"declared_weight":20},
+    {"id":"vault_recent_fills","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userFills","user":"$vault","aggregateByTime":true},"expected":"json_array","core":false,"declared_weight":20},
+    {"id":"subaccount_fills_by_time","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userFillsByTime","user":"$subaccount","startTime":"$start_ms","endTime":"$end_ms","aggregateByTime":true},"expected":"json_array","core":false,"declared_weight":20},
+    {"id":"subaccount_funding","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userFunding","user":"$subaccount","startTime":"$start_ms","endTime":"$end_ms"},"expected":"json_array","core":false,"declared_weight":20},
+    {"id":"subaccount_non_funding_ledger","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userNonFundingLedgerUpdates","user":"$subaccount","startTime":"$start_ms","endTime":"$end_ms"},"expected":"json_array","core":false,"declared_weight":20},
+    {"id":"vault_user_role","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"userRole","user":"$vault"},"expected":"json_object","core":false,"declared_weight":60},
+    {"id":"vault_details","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"vaultDetails","vaultAddress":"$vault"},"expected":"json_object_or_null","core":false,"declared_weight":20},
+    {"id":"l2_book_btc","method":"POST","origin":"https://api.hyperliquid.xyz","path":"/info","payload":{"type":"l2Book","coin":"BTC"},"expected":"json_object","core":true,"declared_weight":2},
+    {"id":"node_fill_archive_listing","method":"GET","origin":"https://hl-mainnet-node-data.s3.amazonaws.com","path":"/","query":"list-type=2&prefix=node_fills_by_block/&max-keys=5","expected":"xml_or_error","core":true,"declared_weight":0},
+    {"id":"market_data_archive_listing","method":"GET","origin":"https://hyperliquid-archive.s3.amazonaws.com","path":"/","query":"list-type=2&prefix=market_data/&max-keys=5","expected":"xml_or_error","core":true,"declared_weight":0},
+    {"id":"asset_context_archive_listing","method":"GET","origin":"https://hyperliquid-archive.s3.amazonaws.com","path":"/","query":"list-type=2&prefix=asset_ctxs/&max-keys=5","expected":"xml_or_error","core":true,"declared_weight":0}
+  ],
+  "authorizations": {
+    "integration_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false,
+    "live_authorized": false,
+    "leverage_authorized": false,
+    "capital_allocation_authorized": false
+  },
+  "market_data_ingested": false,
+  "empirical_result": null
+}
