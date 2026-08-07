@@ -33,6 +33,8 @@ No profitability, copyable-alpha or execution claim exists.
 
 ## Current active technical gate
 
+Canonical gate ID: `HL-PUBLIC-PROBE-001R1`.
+
 The active technical work is still the final capacity-safe, credential-free and
 read-only Hyperliquid public probe in the separate probe PR. Complete and attest
 that gate before opening analytical market data or building a wallet ledger.
