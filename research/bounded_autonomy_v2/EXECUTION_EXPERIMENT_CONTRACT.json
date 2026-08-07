@@ -1,0 +1,70 @@
+{
+  "schema_version": "0.1-design",
+  "study_id": "DEX-COPY-AUTONOMY-001",
+  "status": "DESIGN_PREREGISTRATION_NO_DATA_NO_EXECUTION",
+  "parent_dependency": {
+    "study": "WALLET-COPYABILITY-STUDY-001",
+    "owned_by_parallel_data_lane": true,
+    "may_modify_parent_data_or_results": false,
+    "market_release_required_before_replay": true,
+    "signal_set_must_be_point_in_time": true,
+    "future_information_may_rewrite_historical_eligibility": false
+  },
+  "primary_estimand": "NET_FOLLOWER_EXPECTANCY",
+  "secondary_estimands": [
+    "FOLLOWER_CAPTURE_RATIO_VS_SOURCE",
+    "ENTRY_PRICE_DRIFT_BPS",
+    "FILL_RATIO",
+    "TAIL_LOSS",
+    "MAX_DRAWDOWN",
+    "CAPACITY_AT_RESEARCH_SIZE",
+    "MISSED_BLOCKED_EXPIRED_RATE",
+    "RECONCILIATION_ERROR_RATE"
+  ],
+  "latency_arms_ms": [200, 1000, 3000, 5000, 10000, 15000, 30000, 60000, 120000, 300000],
+  "comparison_modes": [
+    "SOURCE_WALLET_DIAGNOSTIC_ONLY",
+    "THEORETICAL_ZERO_LATENCY",
+    "DETERMINISTIC_AUTONOMY",
+    "DETERMINISTIC_PLUS_AI_CRITIC",
+    "HUMAN_ONE_CLICK",
+    "HUMAN_MANUAL",
+    "NO_TRADE",
+    "MATCHED_RANDOM_WALLET",
+    "MATCHED_EXPOSURE_RANDOM_ENTRY",
+    "MATCHED_TURNOVER_RANDOM_ENTRY",
+    "SIMPLE_PRICE_MOMENTUM"
+  ],
+  "ai_incremental_value_rule": {
+    "deterministic_autonomy_is_required_baseline": true,
+    "ai_can_expand_deterministic_eligible_set": false,
+    "ai_can_raise_size": false,
+    "ai_can_widen_slippage": false,
+    "ai_can_extend_expiry": false,
+    "ai_primary_role": "VETO_OR_LOWER_CONFIDENCE",
+    "ai_required_timeout_behavior": "SKIP_AI_TIMEOUT"
+  },
+  "accounting_rules": {
+    "missed_signals_remain_in_denominator": true,
+    "blocked_signals_remain_in_denominator": true,
+    "expired_signals_remain_in_denominator": true,
+    "failed_actions_remain_in_denominator": true,
+    "partial_fills_use_realized_fill_quantity": true,
+    "source_return_is_not_follower_return": true,
+    "fees_funding_spread_slippage_and_attributable_execution_costs_included": true
+  },
+  "required_terminal_decisions": [
+    "GO_TO_NON_SIGNING_SHADOW_DESIGN",
+    "REPAIR_AND_RERUN",
+    "NO_GO_BOUNDED_AUTONOMY",
+    "NO_GO_NO_COPYABLE_ALPHA"
+  ],
+  "current_authorizations": {
+    "historical_replay_authorized": false,
+    "non_signing_shadow_authorized": false,
+    "signed_testnet_authorized": false,
+    "isolated_live_authorized": false,
+    "scaled_live_authorized": false,
+    "capital_allocation_authorized": false
+  }
+}
