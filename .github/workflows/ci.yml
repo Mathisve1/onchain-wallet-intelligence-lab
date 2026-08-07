@@ -81,9 +81,9 @@ jobs:
           rm -f .github/workflows/bootstrap-probe-r1.yml
           git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
           git add -A
-          actual_tree=$(git write-tree)
-          expected_tree=13dd97df4e4f4416ffc68c477dc36cfeaeea49a3
-          test "$actual_tree" = "$expected_tree"
+          full_tree=$(git write-tree)
+          expected_full_tree=13dd97df4e4f4416ffc68c477dc36cfeaeea49a3
+          test "$full_tree" = "$expected_full_tree"
           python -m unittest discover -s tests -v
           python governance/validate_probe_evidence.py
           python governance/validate_repository.py
@@ -94,14 +94,16 @@ jobs:
             src/wallet_intelligence/*.py \
             tests/*.py
 
-      - name: Commit exact clean research tree
+      - name: Commit validated code tree; workflow follows through connector
         shell: bash
         run: |
           set -euo pipefail
+          rm -f .github/workflows/hyperliquid-public-probe.yml
+          git add -A
           actual_tree=$(git write-tree)
-          expected_tree=13dd97df4e4f4416ffc68c477dc36cfeaeea49a3
+          expected_tree=70d30222ea4d025590a9127cbe19595b1c4fa7ab
           test "$actual_tree" = "$expected_tree"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'research: harden Hyperliquid public probe R1'
+          git commit -m 'research: harden Hyperliquid public probe R1 code'
           git push origin HEAD:research/hyperliquid-public-probe-r1-20260807
