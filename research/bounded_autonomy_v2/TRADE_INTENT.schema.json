@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:trade-intent:0.2",
+  "$id": "urn:owil:bounded-autonomy:trade-intent:0.3",
   "title": "Bounded Autonomy Trade Intent",
   "type": "object",
   "additionalProperties": false,
@@ -9,24 +9,22 @@
     "intent_id",
     "strategy_id",
     "strategy_version_hash",
-    "source_signal_id",
     "decision_timestamp_ms",
     "instrument",
     "action",
     "expires_at_ms",
-    "model_version_hash",
     "policy_version_hash",
     "data_snapshot_hash",
     "risk_snapshot_hash",
-    "decision_mode",
-    "ai_assessment"
+    "decision_mode"
   ],
   "properties": {
-    "schema_version": {"const": "0.2-design"},
+    "schema_version": {"const": "0.3-design"},
     "intent_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
     "strategy_id": {"type": "string", "pattern": "^[A-Z0-9._-]{3,80}$"},
     "strategy_version_hash": {"$ref": "#/$defs/sha256"},
     "source_signal_id": {"type": "string", "minLength": 8, "maxLength": 160},
+    "reason_code": {"type": "string", "pattern": "^[A-Z0-9_]{2,80}$"},
     "decision_timestamp_ms": {"type": "integer", "minimum": 1},
     "instrument": {"type": "string", "enum": ["BTC", "ETH", "SOL"]},
     "action": {"type": "string", "enum": ["PLACE_IOC_LIMIT", "REDUCE_ONLY_IOC", "CANCEL_BY_CLOID"]},
@@ -41,13 +39,16 @@
     "policy_version_hash": {"$ref": "#/$defs/sha256"},
     "data_snapshot_hash": {"$ref": "#/$defs/sha256"},
     "risk_snapshot_hash": {"$ref": "#/$defs/sha256"},
-    "decision_mode": {"type": "string", "enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC"]},
+    "decision_mode": {
+      "type": "string",
+      "enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC", "DETERMINISTIC_SAFETY"]
+    },
     "ai_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "confidence_bps", "veto", "risk_codes"],
       "properties": {
-        "status": {"type": "string", "enum": ["NOT_USED", "PASS", "VETO", "TIMEOUT", "ERROR"]},
+        "status": {"type": "string", "enum": ["PASS", "VETO", "TIMEOUT", "ERROR"]},
         "confidence_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
         "veto": {"type": "boolean"},
         "risk_codes": {
@@ -63,15 +64,18 @@
     {
       "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}, "required": ["action"]},
       "then": {
-        "required": ["side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
-        "properties": {"reduce_only": {"const": false}},
-        "not": {"required": ["target_strategy_order_id"]}
+        "required": ["source_signal_id", "side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
+        "properties": {
+          "reduce_only": {"const": false},
+          "decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_PLUS_AI_CRITIC"]}
+        },
+        "not": {"anyOf": [{"required": ["target_strategy_order_id"]}, {"required": ["reason_code"]}]}
       }
     },
     {
       "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}, "required": ["action"]},
       "then": {
-        "required": ["side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
+        "required": ["reason_code", "side", "reduce_only", "requested_quantity", "limit_price", "max_slippage_bps"],
         "properties": {"reduce_only": {"const": true}},
         "not": {"required": ["target_strategy_order_id"]}
       }
@@ -79,16 +83,33 @@
     {
       "if": {"properties": {"action": {"const": "CANCEL_BY_CLOID"}}, "required": ["action"]},
       "then": {
-        "required": ["target_strategy_order_id"],
+        "required": ["reason_code", "target_strategy_order_id"],
+        "properties": {"decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_SAFETY"]}},
         "not": {
           "anyOf": [
+            {"required": ["source_signal_id"]},
             {"required": ["side"]},
             {"required": ["reduce_only"]},
             {"required": ["requested_quantity"]},
             {"required": ["limit_price"]},
-            {"required": ["max_slippage_bps"]}
+            {"required": ["max_slippage_bps"]},
+            {"required": ["model_version_hash"]},
+            {"required": ["ai_assessment"]}
           ]
         }
+      }
+    },
+    {
+      "if": {"properties": {"decision_mode": {"const": "DETERMINISTIC_PLUS_AI_CRITIC"}}, "required": ["decision_mode"]},
+      "then": {"required": ["model_version_hash", "ai_assessment"]}
+    },
+    {
+      "if": {
+        "properties": {"decision_mode": {"enum": ["DETERMINISTIC_ONLY", "DETERMINISTIC_SAFETY"]}},
+        "required": ["decision_mode"]
+      },
+      "then": {
+        "not": {"anyOf": [{"required": ["model_version_hash"]}, {"required": ["ai_assessment"]}]}
       }
     }
   ],
