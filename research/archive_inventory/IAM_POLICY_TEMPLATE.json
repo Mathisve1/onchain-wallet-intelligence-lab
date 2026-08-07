@@ -1,0 +1,54 @@
+{
+  "Statement": [
+    {
+      "Action": "s3:ListBucket",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "node_fills_by_block/*",
+            "node_fills/*",
+            "node_trades/*",
+            "explorer_blocks/*",
+            "replica_cmds/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:aws:s3:::hl-mainnet-node-data",
+      "Sid": "AllowNodeDataExactPrefixListing"
+    },
+    {
+      "Action": "s3:ListBucket",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "market_data/*",
+            "asset_ctxs/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:aws:s3:::hyperliquid-archive",
+      "Sid": "AllowArchiveExactPrefixListing"
+    },
+    {
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:GetObjectAttributes",
+        "s3:SelectObjectContent",
+        "s3:RestoreObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion"
+      ],
+      "Effect": "Deny",
+      "Resource": [
+        "arn:aws:s3:::hl-mainnet-node-data/*",
+        "arn:aws:s3:::hyperliquid-archive/*"
+      ],
+      "Sid": "ExplicitlyDenyObjectBodiesAndMutation"
+    }
+  ],
+  "Version": "2012-10-17"
+}

@@ -1,0 +1,17 @@
+{
+  "bucket_regions": {
+    "hl-mainnet-node-data": null,
+    "hyperliquid-archive": null
+  },
+  "captured_at_utc": null,
+  "fx_rate_usd_per_eur": null,
+  "fx_source": null,
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "list_rate_usd_per_1000": null,
+  "maximum_one_time_budget_eur": null,
+  "paid_request_authorized": false,
+  "pricing_source": "https://aws.amazon.com/s3/pricing/",
+  "schema_version": "1.0",
+  "status": "PENDING_PRE_EXECUTION_PRICING_REFRESH",
+  "transfer_rate_usd_per_gb": null
+}

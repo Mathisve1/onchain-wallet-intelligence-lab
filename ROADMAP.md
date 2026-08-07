@@ -9,12 +9,17 @@
 - [x] Define initial confirmed-link clustering only.
 - [x] Create permanent validation and negative tests.
 
-## Phase 1 — public technical evidence
+## Phase 1 — public technical evidence and archive feasibility
 
-- [ ] Run the read-only `/info` and official archive-availability probe.
-- [ ] Retain exact response shapes, hashes, workflow run and job IDs.
-- [ ] Resolve API-limit and historical-pagination documentation conflicts.
+- [x] Run the read-only `/info` and official archive-route probe.
+- [x] Retain exact response shapes, hashes, workflow run and job IDs.
+- [x] Attest the canonical exact-main run and independently verify its artifact.
+- [x] Preregister `HL-ARCHIVE-INVENTORY-001` as metadata/access/cost-only.
+- [ ] Bind current AWS pricing evidence and a minimally privileged listing-only identity.
+- [ ] Obtain separate human requester-pays budget approval.
+- [ ] Execute the bounded metadata canary and classify coverage/censoring.
 - [ ] Freeze archive object inventory, estimated requester cost and retention.
+- [ ] Resolve non-empty historical schema and pagination questions in a separate body-access/schema pilot if inventory passes.
 
 ## Phase 2 — deterministic wallet ledger
 

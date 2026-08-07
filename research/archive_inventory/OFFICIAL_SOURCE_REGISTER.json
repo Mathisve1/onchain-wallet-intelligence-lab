@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "claims_used": [
+        "requester pays transfer costs",
+        "hyperliquid-archive market_data contains L2 book snapshots",
+        "hyperliquid-archive asset_ctxs contains asset contexts",
+        "hl-mainnet-node-data node_fills_by_block contains block-batched fills",
+        "older fill/trade data is under node_fills and node_trades",
+        "explorer_blocks and replica_cmds contain historical node/L1 data",
+        "archives may be missing data and are not guaranteed timely"
+      ],
+      "id": "HL-HISTORICAL-DATA",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data"
+    },
+    {
+      "claims_used": [
+        "ListObjectsV2 supports Prefix, Delimiter, MaxKeys and ContinuationToken",
+        "MaxKeys returns no more than 1000 entries",
+        "Requester Pays acknowledgement uses x-amz-request-payer/requester"
+      ],
+      "id": "AWS-LISTOBJECTSV2",
+      "publisher": "Amazon Web Services",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html"
+    },
+    {
+      "claims_used": [
+        "Requester Pays requests require authentication",
+        "requester can be charged for requests and data transfer"
+      ],
+      "id": "AWS-REQUESTER-PAYS",
+      "publisher": "Amazon Web Services",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/RequesterPaysBuckets.html"
+    },
+    {
+      "claims_used": [
+        "S3 request and data-transfer pricing are separate cost components",
+        "LIST requests are billed at the S3 Standard PUT/COPY/POST request rate"
+      ],
+      "id": "AWS-S3-PRICING",
+      "publisher": "Amazon Web Services",
+      "url": "https://aws.amazon.com/s3/pricing/"
+    },
+    {
+      "claims_used": [
+        "s3:prefix can restrict ListBucket permissions to specific prefixes"
+      ],
+      "id": "AWS-PREFIX-POLICY",
+      "publisher": "Amazon Web Services",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/amazon-s3-policy-keys.html"
+    }
+  ],
+  "verified_date": "2026-08-07"
+}
