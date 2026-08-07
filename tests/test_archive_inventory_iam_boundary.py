@@ -8,13 +8,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArchiveIAMBoundaryTests(unittest.TestCase):
-    def test_policy_allows_only_listbucket_and_denies_object_body_actions(self) -> None:
+    def test_policy_binds_exact_prefix_sets_to_exact_buckets(self) -> None:
         policy = json.loads((ROOT / "research/archive_inventory/IAM_POLICY_TEMPLATE.json").read_text(encoding="utf-8"))
         statements = {row["Sid"]: row for row in policy["Statement"]}
-        allow = statements["AllowExactArchivePrefixListing"]
-        self.assertEqual(allow["Effect"], "Allow")
-        self.assertEqual(allow["Action"], "s3:ListBucket")
-        self.assertEqual(set(allow["Resource"]), {"arn:aws:s3:::hl-mainnet-node-data", "arn:aws:s3:::hyperliquid-archive"})
+
+        node = statements["AllowNodeDataExactPrefixListing"]
+        self.assertEqual(node["Effect"], "Allow")
+        self.assertEqual(node["Action"], "s3:ListBucket")
+        self.assertEqual(node["Resource"], "arn:aws:s3:::hl-mainnet-node-data")
+        self.assertEqual(
+            set(node["Condition"]["StringLike"]["s3:prefix"]),
+            {
+                "node_fills_by_block/*",
+                "node_fills/*",
+                "node_trades/*",
+                "explorer_blocks/*",
+                "replica_cmds/*",
+            },
+        )
+
+        archive = statements["AllowArchiveExactPrefixListing"]
+        self.assertEqual(archive["Effect"], "Allow")
+        self.assertEqual(archive["Action"], "s3:ListBucket")
+        self.assertEqual(archive["Resource"], "arn:aws:s3:::hyperliquid-archive")
+        self.assertEqual(
+            set(archive["Condition"]["StringLike"]["s3:prefix"]),
+            {"market_data/*", "asset_ctxs/*"},
+        )
+
         deny = statements["ExplicitlyDenyObjectBodiesAndMutation"]
         self.assertEqual(deny["Effect"], "Deny")
         denied = set(deny["Action"])
