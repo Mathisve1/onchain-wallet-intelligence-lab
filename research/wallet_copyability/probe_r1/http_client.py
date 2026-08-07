@@ -96,6 +96,19 @@ def should_retry(record: ResponseRecord) -> bool:
     )
 
 
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite(token: str) -> Any:
+    raise ValueError(f"non-finite JSON constant: {token}")
+
+
 def json_shape(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return {
@@ -195,8 +208,12 @@ def classify_body(
     ):
         return "FAIL", base
     try:
-        parsed = json.loads(record.body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        parsed = json.loads(
+            record.body,
+            object_pairs_hook=_strict_json_object,
+            parse_constant=_reject_nonfinite,
+        )
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         base["json_status"] = "INVALID_JSON"
         return "FAIL", base
     base["json_status"] = "VALID_JSON"
