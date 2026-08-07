@@ -39,7 +39,6 @@ def _read_integer(data: bytes, offset: int) -> tuple[int, int]:
 
 
 def parse_der_ecdsa(signature: bytes) -> tuple[int, int]:
-    """Strict test-stage DER parser for candidate backend signatures."""
     if not isinstance(signature, (bytes, bytearray)):
         raise SignatureAdapterError("der:type")
     data = bytes(signature)
@@ -57,6 +56,20 @@ def parse_der_ecdsa(signature: bytes) -> tuple[int, int]:
     return r, s
 
 
+def parse_p1363_ecdsa(signature: bytes) -> tuple[int, int]:
+    """Parse fixed-width secp256k1 r||s; provider use remains unapproved until exact output is observed."""
+    if not isinstance(signature, (bytes, bytearray)):
+        raise SignatureAdapterError("p1363:type")
+    data = bytes(signature)
+    if len(data) != 64:
+        raise SignatureAdapterError("p1363:length")
+    r = int.from_bytes(data[:32], "big")
+    s = int.from_bytes(data[32:], "big")
+    if not (1 <= r < N and 1 <= s < N):
+        raise SignatureAdapterError("p1363:scalar_range")
+    return r, s
+
+
 def _encode_der_integer(value: int) -> bytes:
     raw = value.to_bytes((value.bit_length() + 7) // 8 or 1, "big")
     if raw[0] & 0x80:
@@ -65,7 +78,6 @@ def _encode_der_integer(value: int) -> bytes:
 
 
 def encode_der_ecdsa_for_fixture(r: int, s: int) -> bytes:
-    """Fixture helper only; production backends provide their own signature bytes."""
     if not (1 <= r < N and 1 <= s < N):
         raise SignatureAdapterError("der:scalar_range")
     body = _encode_der_integer(r) + _encode_der_integer(s)
@@ -74,12 +86,20 @@ def encode_der_ecdsa_for_fixture(r: int, s: int) -> bytes:
     return b"\x30" + bytes([len(body)]) + body
 
 
-def adapt_der_signature(signature_der: bytes, digest: bytes, expected_signer_address: str) -> dict:
+def encode_p1363_ecdsa_for_fixture(r: int, s: int) -> bytes:
+    if not (1 <= r < N and 1 <= s < N):
+        raise SignatureAdapterError("p1363:scalar_range")
+    return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
+def adapt_rs_signature(r: int, s: int, digest: bytes, expected_signer_address: str) -> dict:
     """
-    Convert backend DER ECDSA into Hyperliquid-style recoverable r/s/v only when
-    the signature uniquely recovers the pre-registered API-wallet address.
+    Normalize and recover a candidate signature. The backend is never trusted to
+    supply Ethereum recovery id `v`; exactly one 27/28 candidate must recover the
+    pre-registered API-wallet address.
     """
-    r, s = parse_der_ecdsa(signature_der)
+    if not (1 <= r < N and 1 <= s < N):
+        raise SignatureAdapterError("signature:scalar_range")
     if s > N // 2:
         s = N - s
 
@@ -101,3 +121,13 @@ def adapt_der_signature(signature_der: bytes, digest: bytes, expected_signer_add
         "s": "0x" + format(s, "x"),
         "v": candidates[0],
     }
+
+
+def adapt_der_signature(signature_der: bytes, digest: bytes, expected_signer_address: str) -> dict:
+    r, s = parse_der_ecdsa(signature_der)
+    return adapt_rs_signature(r, s, digest, expected_signer_address)
+
+
+def adapt_p1363_signature(signature_p1363: bytes, digest: bytes, expected_signer_address: str) -> dict:
+    r, s = parse_p1363_ecdsa(signature_p1363)
+    return adapt_rs_signature(r, s, digest, expected_signer_address)
