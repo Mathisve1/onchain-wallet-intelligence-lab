@@ -47,6 +47,8 @@ class InventoryGuard:
             raise GuardViolation("negative response metric")
         if self.attempts_by_family.get(family, 0) < 1:
             raise GuardViolation("response recorded without prior request attempt")
+        if entry_count > self.contract["listing"]["max_keys_per_request"]:
+            raise GuardViolation("response entry count exceeds MaxKeys contract")
         limits = self.contract["proposed_canary"]
         new_entries = self.total_entries + entry_count
         new_bytes = self.total_response_bytes + response_bytes
