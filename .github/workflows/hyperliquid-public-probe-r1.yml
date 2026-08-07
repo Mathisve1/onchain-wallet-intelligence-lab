@@ -1,25 +1,33 @@
 name: Hyperliquid Public Probe R1
 
 on:
-  workflow_dispatch:
-    inputs:
-      reviewed_commit:
-        description: Exact reviewed 40-character lowercase commit SHA
-        required: true
-        type: string
+  pull_request:
+    types: [edited]
 
 permissions:
   contents: read
 
 concurrency:
-  group: hyperliquid-public-probe-r1-${{ inputs.reviewed_commit }}
+  group: hyperliquid-public-probe-r1-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 
 env:
-  EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+  EXACT_REVIEWED_COMMIT: ${{ github.event.pull_request.head.sha }}
+  RUN_AUTHORIZATION_MARKER: ${{ format('<!-- RUN_HL_PUBLIC_PROBE_R1:{0} -->', github.event.pull_request.head.sha) }}
 
 jobs:
   public-probe-r1:
+    if: >-
+      ${{
+        github.actor == github.repository_owner &&
+        github.event.pull_request.draft == true &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(
+          github.event.pull_request.body,
+          format('<!-- RUN_HL_PUBLIC_PROBE_R1:{0} -->', github.event.pull_request.head.sha)
+        )
+      }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -30,15 +38,19 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Verify exact reviewed commit before any public probe network access
+      - name: Verify exact reviewed commit and owner authorization before network access
         shell: bash
         run: |
           set -euo pipefail
+          test "${GITHUB_EVENT_NAME}" = "pull_request"
+          test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
           test "$(printf '%s' "${EXACT_REVIEWED_COMMIT}" | grep -Ec '^[0-9a-f]{40}$')" = "1"
+          test "${RUN_AUTHORIZATION_MARKER}" = "<!-- RUN_HL_PUBLIC_PROBE_R1:${EXACT_REVIEWED_COMMIT} -->"
           observed="$(git rev-parse HEAD)"
           test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
           git cat-file -e "${EXACT_REVIEWED_COMMIT}^{commit}"
           printf 'VERIFIED_EXACT_REVIEWED_COMMIT=%s\n' "${observed}"
+          printf 'VERIFIED_AUTHORIZATION_ACTOR=%s\n' "${GITHUB_ACTOR}"
 
       - name: Set up pinned Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
