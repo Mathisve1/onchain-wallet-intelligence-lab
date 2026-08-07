@@ -1,0 +1,70 @@
+{
+  "datasets": [
+    {
+      "body_format_status": "DOCUMENTED_NODE_OUTPUT_FAMILY",
+      "bucket": "hl-mainnet-node-data",
+      "family": "node_fills_by_block",
+      "prefix": "node_fills_by_block/",
+      "priority": "CORE",
+      "purpose": "modern block-batched fills"
+    },
+    {
+      "body_format_status": "DOCUMENTED_LEGACY_DIFFERENT_FORMAT",
+      "bucket": "hl-mainnet-node-data",
+      "family": "node_fills_legacy",
+      "prefix": "node_fills/",
+      "priority": "CORE",
+      "purpose": "legacy fills matching API-style format"
+    },
+    {
+      "body_format_status": "DOCUMENTED_LEGACY_DIFFERENT_FORMAT",
+      "bucket": "hl-mainnet-node-data",
+      "family": "node_trades_legacy",
+      "prefix": "node_trades/",
+      "priority": "SUPPORTING",
+      "purpose": "legacy trade cross-check and counterparty context"
+    },
+    {
+      "body_format_status": "INTERNAL_SCHEMA_NOT_INSPECTED",
+      "bucket": "hl-mainnet-node-data",
+      "family": "explorer_blocks",
+      "prefix": "explorer_blocks/",
+      "priority": "SUPPORTING",
+      "purpose": "historical block provenance"
+    },
+    {
+      "body_format_status": "INTERNAL_SCHEMA_NOT_INSPECTED",
+      "bucket": "hl-mainnet-node-data",
+      "family": "replica_cmds",
+      "prefix": "replica_cmds/",
+      "priority": "SUPPORTING",
+      "purpose": "historical L1 transaction and ledger-feasibility provenance"
+    },
+    {
+      "body_format_status": "DOCUMENTED_PATH_LAYOUT_LZ4",
+      "bucket": "hyperliquid-archive",
+      "family": "market_data",
+      "prefix": "market_data/",
+      "priority": "CORE",
+      "purpose": "historical L2 book snapshots for follower execution modeling"
+    },
+    {
+      "body_format_status": "DOCUMENTED_PATH_LAYOUT_CSV_LZ4",
+      "bucket": "hyperliquid-archive",
+      "family": "asset_ctxs",
+      "prefix": "asset_ctxs/",
+      "priority": "CORE",
+      "purpose": "historical asset-context snapshots"
+    }
+  ],
+  "empirical_result": null,
+  "excluded_until_separate_scope_decision": [
+    "candles",
+    "spot_asset_data",
+    "unregistered_node_output_prefixes",
+    "periodic_abci_states"
+  ],
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "market_data_ingested": false,
+  "schema_version": "1.0"
+}
