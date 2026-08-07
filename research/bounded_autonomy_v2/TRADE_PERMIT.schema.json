@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:owil:bounded-autonomy:trade-permit:0.1",
+  "$id": "urn:owil:bounded-autonomy:trade-permit:0.2",
   "title": "Single-use bounded trade permit",
   "type": "object",
   "additionalProperties": false,
@@ -21,12 +21,6 @@
     "signer_address",
     "action",
     "instrument",
-    "side",
-    "reduce_only",
-    "quantity",
-    "limit_price",
-    "max_slippage_bps",
-    "cloid",
     "nonce",
     "issued_at_ms",
     "expires_at_ms",
@@ -35,7 +29,7 @@
     "reconciliation_precondition"
   ],
   "properties": {
-    "schema_version": {"const": "0.1-design"},
+    "schema_version": {"const": "0.2-design"},
     "permit_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{16,128}$"},
     "intent_sha256": {"$ref": "#/$defs/sha256"},
     "compiled_action_sha256": {"$ref": "#/$defs/sha256"},
@@ -57,6 +51,7 @@
     "limit_price": {"$ref": "#/$defs/positive_decimal_string"},
     "max_slippage_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
     "cloid": {"type": "string", "pattern": "^0x[0-9a-f]{32}$"},
+    "target_cloid": {"type": "string", "pattern": "^0x[0-9a-f]{32}$"},
     "nonce": {"type": "integer", "minimum": 1},
     "issued_at_ms": {"type": "integer", "minimum": 1},
     "expires_at_ms": {"type": "integer", "minimum": 1},
@@ -66,12 +61,36 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}},
-      "then": {"properties": {"reduce_only": {"const": true}}}
+      "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}, "required": ["action"]},
+      "then": {
+        "required": ["side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid"],
+        "properties": {"reduce_only": {"const": false}},
+        "not": {"required": ["target_cloid"]}
+      }
     },
     {
-      "if": {"properties": {"action": {"const": "PLACE_IOC_LIMIT"}}},
-      "then": {"properties": {"reduce_only": {"const": false}}}
+      "if": {"properties": {"action": {"const": "REDUCE_ONLY_IOC"}}, "required": ["action"]},
+      "then": {
+        "required": ["side", "reduce_only", "quantity", "limit_price", "max_slippage_bps", "cloid"],
+        "properties": {"reduce_only": {"const": true}},
+        "not": {"required": ["target_cloid"]}
+      }
+    },
+    {
+      "if": {"properties": {"action": {"const": "CANCEL_BY_CLOID"}}, "required": ["action"]},
+      "then": {
+        "required": ["target_cloid"],
+        "not": {
+          "anyOf": [
+            {"required": ["side"]},
+            {"required": ["reduce_only"]},
+            {"required": ["quantity"]},
+            {"required": ["limit_price"]},
+            {"required": ["max_slippage_bps"]},
+            {"required": ["cloid"]}
+          ]
+        }
+      }
     }
   ],
   "$defs": {
