@@ -1,0 +1,21 @@
+{
+  "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+  "checked_out_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+  "collector_bundle_sha256": "b7dc72c46e408ac4f54ebe275dd492b8dcd7af26d4c654cd85cbe3a900e7c339",
+  "contract_sha256": "d89f0400756ab6a4a566404290e33cf68a1a75b8fcb26b9832bc0c8d3041546a",
+  "fail_count": 0,
+  "output_present": true,
+  "output_sha256": "c4cd5f6c087da712c4ce5c23351a672704ae402b9b05577830bed8872152c3ac",
+  "pass_count": 16,
+  "probe_id": "HL-PUBLIC-PROBE-001R1",
+  "remaining_declared_weight_margin": 614,
+  "reviewed_commit": "9f35a87a65b9b80db544d07ce4e68c33c8343e3b",
+  "schema_version": "1.1",
+  "terminal_status": "PUBLIC_PROBE_PASS",
+  "total_declared_request_weight": 586,
+  "total_request_attempts": 16,
+  "validation_return_code": 0,
+  "workflow_job": "public-probe-r1",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31193129277
+}
