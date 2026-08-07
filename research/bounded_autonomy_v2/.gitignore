@@ -1,0 +1,10 @@
+# Ephemeral signer-backend evidence inputs — never commit raw provider captures.
+*.provider-capture.json
+provider-capture-*.json
+*.raw-signature.bin
+*.provider-signature.bin
+*.public-key.der
+*.public-key.pem
+*.digest.bin
+*.provider-response.json
+*.provider-request.json
