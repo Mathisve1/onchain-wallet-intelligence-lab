@@ -6,17 +6,28 @@ on:
       - research/hyperliquid-public-probe-r1-20260807
     paths:
       - .bootstrap/TRIGGER
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    branches:
+      - main
+    paths:
+      - .bootstrap/**
+      - .github/workflows/bootstrap-probe-r1.yml
 
 permissions:
   contents: write
 
 concurrency:
-  group: bootstrap-probe-r1-${{ github.ref }}
+  group: bootstrap-probe-r1-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'bootstrap: apply probe R1 payload'
+    if: github.event_name == 'pull_request' || github.event.head_commit.message == 'bootstrap: apply probe R1 payload'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -39,6 +50,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import base64
           import hashlib
           import json
           import tarfile
@@ -49,8 +61,6 @@ jobs:
           assert len(parts) == manifest['part_count'], (len(parts), manifest['part_count'])
           encoded = b''.join(path.read_bytes() for path in parts)
           assert hashlib.sha256(encoded).hexdigest() == manifest['payload_base64_sha256']
-
-          import base64
           archive = base64.b64decode(encoded, validate=True)
           assert hashlib.sha256(archive).hexdigest() == manifest['payload_tar_gz_sha256']
           archive_path = Path('/tmp/probe-r1-payload.tar.gz')
