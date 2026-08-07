@@ -1,0 +1,201 @@
+name: Hyperliquid Public Probe R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_commit:
+        description: Exact 40-character commit SHA to execute
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hyperliquid-public-probe-r1-${{ inputs.reviewed_commit }}
+  cancel-in-progress: false
+
+env:
+  EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+
+jobs:
+  public-probe-r1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact reviewed commit without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_REVIEWED_COMMIT }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact reviewed commit identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXACT_REVIEWED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+          observed="$(git rev-parse HEAD)"
+          test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove static safety and repository gates before network access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python research/wallet_copyability/probe_r1/validate_evidence.py \
+            --contract research/wallet_copyability/probe_r1/PROBE_CONTRACT.json \
+            --evidence research/wallet_copyability/probe_r1/PENDING_EVIDENCE.json \
+            --allow-pending
+          python research/wallet_copyability/probe_r1/validate_attestation_strict.py \
+            --contract research/wallet_copyability/probe_r1/PROBE_CONTRACT.json \
+            --attestation research/wallet_copyability/probe_r1/ATTESTATION_TEMPLATE.json \
+            --allow-pending
+          python governance/validate_repository.py
+
+      - name: Execute bounded public read-only probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/wallet_copyability/probe_r1/probe.py \
+            --contract research/wallet_copyability/probe_r1/PROBE_CONTRACT.json \
+            --output "${RUNNER_TEMP}/hl-public-probe-r1.json"
+
+      - name: Independently validate output while preserving artifact capture
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          python research/wallet_copyability/probe_r1/validate_evidence.py \
+            --contract research/wallet_copyability/probe_r1/PROBE_CONTRACT.json \
+            --evidence "${RUNNER_TEMP}/hl-public-probe-r1.json" \
+            >"${RUNNER_TEMP}/probe-validation.log" 2>&1
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" >"${RUNNER_TEMP}/probe-validation.rc"
+          cat "${RUNNER_TEMP}/probe-validation.log"
+          exit 0
+
+      - name: Freeze exact run context and file hashes
+        if: always()
+        shell: bash
+        env:
+          REVIEWED_COMMIT: ${{ env.EXACT_REVIEWED_COMMIT }}
+          CHECKED_OUT_COMMIT: ${{ env.EXACT_REVIEWED_COMMIT }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_JOB: ${{ github.job }}
+        run: |
+          set -euo pipefail
+          observed="$(git rev-parse HEAD)"
+          test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
+          for file in hl-public-probe-r1.json probe-validation.log probe-validation.rc; do
+            test -f "${RUNNER_TEMP}/${file}" || : >"${RUNNER_TEMP}/${file}"
+          done
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          output_path = root / 'hl-public-probe-r1.json'
+          validation_text = (root / 'probe-validation.rc').read_text().strip()
+          output = None
+          if output_path.stat().st_size > 0:
+              try:
+                  output = json.loads(output_path.read_text())
+              except Exception:
+                  output = None
+          context = {
+              'schema_version': '1.2',
+              'probe_id': 'HL-PUBLIC-PROBE-001R1',
+              'reviewed_commit': os.environ['REVIEWED_COMMIT'],
+              'checked_out_commit': os.environ['CHECKED_OUT_COMMIT'],
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'workflow_job': os.environ['WORKFLOW_JOB'],
+              'output_present': output_path.stat().st_size > 0,
+              'output_sha256': hashlib.sha256(output_path.read_bytes()).hexdigest() if output_path.stat().st_size > 0 else None,
+              'validation_return_code': int(validation_text) if validation_text else None,
+              'terminal_status': output.get('terminal_status') if isinstance(output, dict) else None,
+              'archive_access_status': output.get('archive_access_status') if isinstance(output, dict) else None,
+              'pass_count': output.get('pass_count') if isinstance(output, dict) else None,
+              'fail_count': output.get('fail_count') if isinstance(output, dict) else None,
+              'total_request_attempts': output.get('total_request_attempts') if isinstance(output, dict) else None,
+              'total_declared_request_weight': output.get('total_declared_request_weight') if isinstance(output, dict) else None,
+              'remaining_declared_weight_margin': output.get('remaining_declared_weight_margin') if isinstance(output, dict) else None,
+              'contract_sha256': output.get('contract_sha256') if isinstance(output, dict) else None,
+              'collector_bundle_sha256': output.get('collector_bundle_sha256') if isinstance(output, dict) else None,
+          }
+          (root / 'probe-run-context.json').write_text(
+              json.dumps(context, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(context, sort_keys=True))
+          PY
+          sha256sum \
+            "${RUNNER_TEMP}/hl-public-probe-r1.json" \
+            "${RUNNER_TEMP}/probe-run-context.json" \
+            "${RUNNER_TEMP}/probe-validation.log" \
+            "${RUNNER_TEMP}/probe-validation.rc" \
+            >"${RUNNER_TEMP}/ARTIFACT_FILES.sha256"
+          cat "${RUNNER_TEMP}/ARTIFACT_FILES.sha256"
+
+      - name: Publish minimized job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >>"${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'probe-run-context.json'
+          data = json.loads(path.read_text()) if path.is_file() and path.stat().st_size else {}
+          print('# Hyperliquid Public Probe R1')
+          for key in (
+              'reviewed_commit', 'checked_out_commit', 'workflow_run_id',
+              'terminal_status', 'archive_access_status', 'pass_count',
+              'fail_count', 'total_request_attempts',
+              'total_declared_request_weight',
+              'remaining_declared_weight_margin', 'output_sha256',
+          ):
+              print(f'- **{key}**: `{data.get(key)}`')
+          print('\nRoute-level technical evidence only. No market result or trading authorization is created.')
+          PY
+
+      - name: Upload immutable evidence bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: hyperliquid-public-probe-r1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/hl-public-probe-r1.json
+            ${{ runner.temp }}/probe-run-context.json
+            ${{ runner.temp }}/probe-validation.log
+            ${{ runner.temp }}/probe-validation.rc
+            ${{ runner.temp }}/ARTIFACT_FILES.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Enforce valid non-failing core result
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat "${RUNNER_TEMP}/probe-validation.rc")" = '0'
+          python research/wallet_copyability/probe_r1/validate_evidence.py \
+            --contract research/wallet_copyability/probe_r1/PROBE_CONTRACT.json \
+            --evidence "${RUNNER_TEMP}/hl-public-probe-r1.json" \
+            --require-non-fail
