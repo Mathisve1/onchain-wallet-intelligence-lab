@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from typing import Any
+
+from contract import sha256
+
+
+class ProbeTransportError(RuntimeError):
+    pass
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        old = urllib.parse.urlsplit(req.full_url)
+        new = urllib.parse.urlsplit(urllib.parse.urljoin(req.full_url, newurl))
+        if (old.scheme, old.netloc) != (new.scheme, new.netloc):
+            raise urllib.error.HTTPError(req.full_url, code, "cross-origin redirect blocked", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, new.geturl())
+
+
+@dataclass(frozen=True)
+class ResponseRecord:
+    http_status: int | None
+    body: bytes
+    content_type: str | None
+    elapsed_ms: float
+    transport_error_class: str | None
+    transport_error_message: str | None
+
+
+def _read_bounded(response: Any, maximum_bytes: int) -> bytes:
+    body = response.read(maximum_bytes + 1)
+    if len(body) > maximum_bytes:
+        raise ProbeTransportError(f"response exceeds {maximum_bytes} bytes")
+    return body
+
+
+def request_once(request: urllib.request.Request, timeout: int, maximum_bytes: int) -> ResponseRecord:
+    opener = urllib.request.build_opener(SameOriginRedirectHandler())
+    started = time.monotonic()
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return ResponseRecord(
+                http_status=int(response.status),
+                body=_read_bounded(response, maximum_bytes),
+                content_type=response.headers.get("Content-Type"),
+                elapsed_ms=round((time.monotonic() - started) * 1000, 3),
+                transport_error_class=None,
+                transport_error_message=None,
+            )
+    except urllib.error.HTTPError as exc:
+        try:
+            body = _read_bounded(exc, maximum_bytes)
+        except Exception:
+            body = b""
+        return ResponseRecord(
+            http_status=int(exc.code),
+            body=body,
+            content_type=exc.headers.get("Content-Type") if exc.headers else None,
+            elapsed_ms=round((time.monotonic() - started) * 1000, 3),
+            transport_error_class=type(exc).__name__,
+            transport_error_message=str(exc.reason)[:300],
+        )
+    except Exception as exc:
+        return ResponseRecord(
+            http_status=None,
+            body=b"",
+            content_type=None,
+            elapsed_ms=round((time.monotonic() - started) * 1000, 3),
+            transport_error_class=type(exc).__name__,
+            transport_error_message=str(exc)[:300],
+        )
+
+
+def should_retry(record: ResponseRecord) -> bool:
+    return record.http_status is None or record.http_status == 429 or (record.http_status is not None and record.http_status >= 500)
+
+
+def json_shape(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return {
+            "top_level_type": "object",
+            "top_level_keys": sorted(str(key) for key in value),
+            "element_count": len(value),
+            "sample_item_types": [],
+        }
+    if isinstance(value, list):
+        item_types = sorted({type(item).__name__ for item in value[:100]})
+        first_keys: list[str] = []
+        if value and isinstance(value[0], dict):
+            first_keys = sorted(str(key) for key in value[0])
+        return {
+            "top_level_type": "array",
+            "top_level_keys": first_keys,
+            "element_count": len(value),
+            "sample_item_types": item_types,
+        }
+    if value is None:
+        return {"top_level_type": "null", "top_level_keys": [], "element_count": 0, "sample_item_types": []}
+    return {
+        "top_level_type": type(value).__name__,
+        "top_level_keys": [],
+        "element_count": 1,
+        "sample_item_types": [],
+    }
+
+
+def classify_body(expected: str, record: ResponseRecord) -> tuple[str, dict[str, Any]]:
+    base = {
+        "body_length": len(record.body),
+        "body_sha256": sha256(record.body),
+        "content_type": record.content_type,
+        "json_status": "NOT_APPLICABLE",
+        "top_level_type": "bytes",
+        "top_level_keys": [],
+        "element_count": None,
+        "sample_item_types": [],
+    }
+    if expected == "xml_or_error":
+        stripped = record.body.lstrip()
+        xml_like = stripped.startswith(b"<?xml") or stripped.startswith(b"<")
+        accepted_status = record.http_status in {200, 400, 403, 404}
+        base["top_level_type"] = "xml_or_error"
+        return ("PASS" if accepted_status and xml_like else "FAIL", base)
+    if not (record.http_status is not None and 200 <= record.http_status < 300):
+        return "FAIL", base
+    try:
+        parsed = json.loads(record.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        base["json_status"] = "INVALID_JSON"
+        return "FAIL", base
+    base["json_status"] = "VALID_JSON"
+    base.update(json_shape(parsed))
+    observed = base["top_level_type"]
+    accepted = {
+        "json_object": observed == "object",
+        "json_array": observed == "array",
+        "json_array_or_null": observed in {"array", "null"},
+        "json_object_or_null": observed in {"object", "null"},
+    }.get(expected, False)
+    return ("PASS" if accepted else "FAIL", base)
