@@ -76,7 +76,7 @@ def _b64url_coordinate(value: str, label: str) -> bytes:
         raise PublicKeyAdapterError(f"jwk:{label}:type")
     padded = value + "=" * ((4 - len(value) % 4) % 4)
     try:
-        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        raw = base64.b64decode(padded.encode("ascii"), altchars=b"-_", validate=True)
     except Exception as exc:
         raise PublicKeyAdapterError(f"jwk:{label}:base64url") from exc
     if len(raw) != 32:
