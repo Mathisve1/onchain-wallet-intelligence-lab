@@ -1,0 +1,97 @@
+{
+  "artifact": {
+    "artifact_id": 9002459643,
+    "artifact_name": "hyperliquid-public-probe-r1-31200124642-1",
+    "downloaded_zip_sha256": "388ad766d0e71f315533362ed0605b6d6d6cf13895656e84b9aa0afc80cf8fe6",
+    "provider_digest": "sha256:388ad766d0e71f315533362ed0605b6d6d6cf13895656e84b9aa0afc80cf8fe6",
+    "provider_digest_matches_download": true,
+    "size_in_bytes": 36348
+  },
+  "artifact_file_ledger_complete": true,
+  "artifact_files": {
+    "ARTIFACT_FILES.sha256": {
+      "sha256": "86d4c8b69bfeb2acbe131a55886ee5542a4c5a458d8d7f992e441a4a7e29f12e",
+      "size_in_bytes": 448
+    },
+    "hl-public-probe-r1.json": {
+      "sha256": "cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89",
+      "size_in_bytes": 34137
+    },
+    "probe-run-context.json": {
+      "sha256": "d5f9e02be449dbbaf6d39b40e743b48813151607c383a2be9c7004b1634778ae",
+      "size_in_bytes": 992
+    },
+    "probe-validation.log": {
+      "sha256": "9170376f6626bfa5aba7e5982f18756aa87d5b975b01a58a2a59ae10bc849f32",
+      "size_in_bytes": 77
+    },
+    "probe-validation.rc": {
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "size_in_bytes": 2
+    }
+  },
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "empirical_result": null,
+  "market_data_ingested": false,
+  "probe_output": {
+    "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+    "authorizations_all_false": true,
+    "empirical_result": null,
+    "fail_count": 0,
+    "market_data_ingested": false,
+    "observation_count": 16,
+    "pass_count": 16,
+    "remaining_declared_weight_margin": 614,
+    "security_assertions_all_false": true,
+    "sha256": "cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89",
+    "terminal_status": "PUBLIC_PROBE_PASS",
+    "total_declared_request_weight": 586,
+    "total_request_attempts": 16
+  },
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "reviewed_commit": "c11046bf288687c6945fe9b8f17141204d24aae6",
+  "run_context": {
+    "archive_access_status": "ROUTES_CONFIRMED_ACCESS_RESTRICTED",
+    "checked_out_commit": "c11046bf288687c6945fe9b8f17141204d24aae6",
+    "collector_bundle_sha256": "0c3f7245bb805365f6f7ba52949c00617b112acc62dbac70a23647a9b0cd8479",
+    "contract_sha256": "d89f0400756ab6a4a566404290e33cf68a1a75b8fcb26b9832bc0c8d3041546a",
+    "dispatch_ref": "refs/heads/main",
+    "dispatch_sha": "c11046bf288687c6945fe9b8f17141204d24aae6",
+    "fail_count": 0,
+    "output_present": true,
+    "output_sha256": "cce83a5eb5f960bc1274b949fdcd532b9168af7ff270b4d71ba6f521995bed89",
+    "pass_count": 16,
+    "probe_id": "HL-PUBLIC-PROBE-001R1",
+    "remaining_declared_weight_margin": 614,
+    "reviewed_commit": "c11046bf288687c6945fe9b8f17141204d24aae6",
+    "schema_version": "1.2",
+    "terminal_status": "PUBLIC_PROBE_PASS",
+    "total_declared_request_weight": 586,
+    "total_request_attempts": 16,
+    "validation_return_code": 0,
+    "workflow_job": "public-probe-r1",
+    "workflow_run_attempt": 1,
+    "workflow_run_id": 31200124642
+  },
+  "schema_version": "1.0",
+  "validation": {
+    "all_checks_pass": true,
+    "artifact_zip_hash_match": true,
+    "independent_external_review": false,
+    "internal_ledger_matches": true,
+    "run_context_identity_match": true,
+    "validation_return_code": 0
+  },
+  "verification_id": "HL-PUBLIC-PROBE-001R1-INDEPENDENT-VERIFY-31200124642",
+  "workflow_conclusion": "success",
+  "workflow_job_id": 92937868268,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31200124642
+}
