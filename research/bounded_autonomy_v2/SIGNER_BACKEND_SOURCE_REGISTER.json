@@ -1,0 +1,79 @@
+{
+  "schema_version": "0.1",
+  "retrieved_date": "2026-08-07",
+  "status": "CAPABILITY_HYPOTHESES_ONLY_NO_BACKEND_AUTHORIZATION",
+  "rule": "Provider documentation establishes candidate capabilities only. Hyperliquid compatibility requires exact digest/signature/recovery tests against the frozen fixture contract.",
+  "candidates": [
+    {
+      "id": "AWS-KMS-SECP256K1",
+      "provider": "AWS KMS",
+      "official_sources": [
+        "https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html",
+        "https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html",
+        "https://docs.aws.amazon.com/cli/latest/reference/kms/sign.html"
+      ],
+      "documented_capabilities": {
+        "curve": "ECC_SECG_P256K1",
+        "signing_algorithm": "ECDSA_SHA_256",
+        "digest_input_mode": "MessageType=DIGEST skips the KMS hashing step",
+        "ecdsa_signature_encoding": "DER",
+        "public_key_retrieval": true
+      },
+      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
+      "candidate_adapter": "DER_ECDSA_TO_LOW_S_RECOVERED_V",
+      "authorization": false
+    },
+    {
+      "id": "GCP-KMS-SECP256K1",
+      "provider": "Google Cloud KMS",
+      "official_sources": [
+        "https://cloud.google.com/kms/docs/algorithms",
+        "https://cloud.google.com/kms/docs/create-validate-signatures"
+      ],
+      "documented_capabilities": {
+        "curve_algorithm": "EC_SIGN_SECP256K1_SHA256",
+        "ecdsa_signature_encoding": "DER",
+        "secp256k1_low_s_normalization": true,
+        "asymmetric_signing": true
+      },
+      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
+      "candidate_adapter": "DER_ECDSA_TO_LOW_S_RECOVERED_V",
+      "authorization": false
+    },
+    {
+      "id": "AZURE-KV-P256K",
+      "provider": "Azure Key Vault / Managed HSM",
+      "official_sources": [
+        "https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys-details",
+        "https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/about-keys-details",
+        "https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-2025-07-01"
+      ],
+      "documented_capabilities": {
+        "curve": "P-256K / secp256k1",
+        "signing_algorithm": "ES256K",
+        "operation": "sign supplied digest",
+        "rest_result_container": "base64url value",
+        "exact_ec_signature_byte_encoding_from_registered_sources": "UNRESOLVED"
+      },
+      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
+      "candidate_adapter": "DETECT_AND_FREEZE_EXACT_OUTPUT_FORMAT_THEN_RECOVER_SIGNER",
+      "authorization": false
+    }
+  ],
+  "mandatory_backend_proof": [
+    "CREATE_DISPOSABLE_NON_PRODUCTION_SECP256K1_KEY",
+    "RETRIEVE_AND_FREEZE_PUBLIC_KEY_OR_EXPECTED_ADDRESS",
+    "SIGN_EXACT_FROZEN_32_BYTE_HYPERLIQUID_EIP712_DIGEST",
+    "CAPTURE_RAW_PROVIDER_SIGNATURE_BYTES",
+    "PARSE_PROVIDER_OUTPUT_WITH_EXACT_VERSIONED_ADAPTER",
+    "NORMALIZE_LOW_S_IF_REQUIRED",
+    "RECOVER_EXACT_PRE_REGISTERED_SIGNER_ADDRESS",
+    "VERIFY_WRONG_DIGEST_AND_WRONG_SIGNER_FAIL_CLOSED",
+    "MEASURE_P50_P75_P90_P95_P99_SIGN_LATENCY",
+    "TEST_KEY_DISABLE_REVOKE_AND_OUTAGE_BEHAVIOR",
+    "RECORD_PROVIDER_REGION_KEY_VERSION_API_VERSION_AND_POLICY"
+  ],
+  "selection_status": "UNSCORED",
+  "testnet_authorized": false,
+  "live_authorized": false
+}
