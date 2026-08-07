@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 MUTABLE_KEY_MARKERS = {"latest", "current", "primary"}
 AWS_KEY_ID_RE = re.compile(r"^[0-9a-fA-F-]{32,64}$")
 MIN_LATENCY_SAMPLES_FOR_COMPATIBLE_CANDIDATE = 100
+COMMON_CAPTURE_KEYS = {
+    "schema_version", "provider", "service", "region_or_location", "key_resource_version",
+    "public_key_format", "curve", "algorithm", "request_mode", "digest_mode",
+    "signature_encoding", "fixture_id", "raw_signature_base64", "latency_samples_ms",
+    "key_disable_revoke_tested", "software_versions",
+}
 
 
 class ProviderEvidenceError(ValueError):
@@ -58,6 +64,32 @@ def _mutate_digest(digest: bytes) -> bytes:
     return bytes([digest[0] ^ 1]) + digest[1:]
 
 
+def _validate_capture_shape(capture: dict[str, Any]) -> None:
+    if not isinstance(capture, dict):
+        raise ProviderEvidenceError("capture:not_object")
+    if capture.get("schema_version") != "0.3-local-ephemeral":
+        raise ProviderEvidenceError("capture:schema")
+    format_name = capture.get("public_key_format")
+    if format_name == "SPKI_DER_BASE64":
+        expected = COMMON_CAPTURE_KEYS | {"public_key_spki_base64"}
+    elif format_name == "JWK_XY_BASE64URL":
+        expected = COMMON_CAPTURE_KEYS | {"public_key_jwk_x", "public_key_jwk_y"}
+    else:
+        raise ProviderEvidenceError("capture:public_key_format")
+    if set(capture) != expected:
+        missing = sorted(expected - set(capture))
+        extra = sorted(set(capture) - expected)
+        raise ProviderEvidenceError(f"capture:field_set:missing={missing}:extra={extra}")
+    if capture.get("curve") != "secp256k1":
+        raise ProviderEvidenceError("capture:curve")
+    if capture.get("signature_encoding") not in {"DER", "P1363"}:
+        raise ProviderEvidenceError("capture:signature_encoding")
+    if capture.get("digest_mode") not in {"EXACT_32_BYTE_PREHASHED", "PROVIDER_DIGEST_FIELD"}:
+        raise ProviderEvidenceError("capture:digest_mode")
+    if not isinstance(capture.get("software_versions"), dict):
+        raise ProviderEvidenceError("capture:software_versions")
+
+
 def _validate_immutable_key_resource(provider: str, resource: str) -> None:
     low = resource.lower().strip()
     if len(resource) < 8 or low in MUTABLE_KEY_MARKERS:
@@ -86,23 +118,15 @@ def _validate_immutable_key_resource(provider: str, resource: str) -> None:
 
 
 def _normalize_public_key(capture: dict[str, Any]) -> tuple[bytes, str]:
-    format_name = capture.get("public_key_format")
-    if format_name == "SPKI_DER_BASE64":
-        spki = _b64(capture.get("public_key_spki_base64", ""), "capture:public_key_spki")
-        return parse_secp256k1_spki(spki)
-    if format_name == "JWK_XY_BASE64URL":
-        return parse_secp256k1_jwk_xy(
-            str(capture.get("public_key_jwk_x", "")),
-            str(capture.get("public_key_jwk_y", "")),
-        )
-    raise ProviderEvidenceError("capture:public_key_format")
+    if capture["public_key_format"] == "SPKI_DER_BASE64":
+        return parse_secp256k1_spki(_b64(capture["public_key_spki_base64"], "capture:public_key_spki"))
+    return parse_secp256k1_jwk_xy(capture["public_key_jwk_x"], capture["public_key_jwk_y"])
 
 
 def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None = None) -> dict[str, Any]:
-    if capture.get("schema_version") != "0.3-local-ephemeral":
-        raise ProviderEvidenceError("capture:schema")
-    provider = str(capture.get("provider", ""))
-    resource = str(capture.get("key_resource_version", ""))
+    _validate_capture_shape(capture)
+    provider = str(capture["provider"])
+    resource = str(capture["key_resource_version"])
     _validate_immutable_key_resource(provider, resource)
 
     fixtures_path = fixtures_path or (ROOT / "PROVIDER_PARITY_FIXTURES.json")
@@ -113,15 +137,13 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
 
     normalized_point, derived_address = _normalize_public_key(capture)
     raw_signature = _b64(capture["raw_signature_base64"], "capture:signature")
-
-    digest_mode = str(capture["digest_mode"])
     config = BackendConfig(
         provider=provider,
         key_version=resource,
         algorithm=str(capture["algorithm"]),
         encoding=str(capture["signature_encoding"]),
         expected_signer_address=derived_address,
-        digest_mode=digest_mode,
+        digest_mode=str(capture["digest_mode"]),
     )
 
     normalized = None
@@ -163,7 +185,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         except Exception:
             wrong_signer_rejected = True
 
-    samples = [float(value) for value in capture.get("latency_samples_ms", [])]
+    samples = [float(value) for value in capture["latency_samples_ms"]]
     latency = {
         "sample_count": len(samples),
         "p50": _percentile(samples, 0.50),
@@ -173,7 +195,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         "p99": _percentile(samples, 0.99),
     }
 
-    revoke_tested = capture.get("key_disable_revoke_tested") is True
+    revoke_tested = capture["key_disable_revoke_tested"] is True
     if double_hash_detected:
         decision = "DIGEST_TRANSFORMATION_INCOMPATIBLE"
     elif encoding_unresolved:
@@ -199,7 +221,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         "curve": "secp256k1",
         "algorithm": str(capture["algorithm"]),
         "request_mode": str(capture["request_mode"]),
-        "digest_mode": digest_mode,
+        "digest_mode": str(capture["digest_mode"]),
         "signature_encoding": str(capture["signature_encoding"]),
         "fixture_id": str(capture["fixture_id"]),
         "input_digest_sha256": _sha(digest),
@@ -212,7 +234,7 @@ def build_sanitized_evidence(capture: dict[str, Any], fixtures_path: Path | None
         "double_hash_signature_detected": double_hash_detected,
         "key_disable_revoke_tested": revoke_tested,
         "latency_ms": latency,
-        "software_versions": dict(capture.get("software_versions", {})),
+        "software_versions": dict(capture["software_versions"]),
         "terminal_decision": decision,
         "provider_network_call_authorized_after_evidence": False,
         "testnet_action_authorized": False,
