@@ -1,0 +1,94 @@
+{
+  "schema_version": "0.1-design",
+  "status": "LOCAL_FIXTURE_PARITY_NO_SIGNER_AUTHORIZATION",
+  "scope": "G2_G4_OFFLINE_CRYPTOGRAPHIC_PARITY",
+  "official_reference": {
+    "repository": "hyperliquid-dex/hyperliquid-python-sdk",
+    "commit": "2fdb18f9517675ea03695a0962bd19eece9c83f0",
+    "version_lineage": "0.24.0",
+    "signing_source": "hyperliquid/utils/signing.py",
+    "exchange_source": "hyperliquid/exchange.py",
+    "vector_source": "tests/signing_test.py",
+    "official_dependency_ranges": {
+      "eth-utils": ">=2.1.0,<6.0.0",
+      "eth-account": ">=0.10.0,<0.14.0",
+      "msgpack": "^1.0.5"
+    }
+  },
+  "local_fixture_environment": {
+    "python": "3.13.5",
+    "msgpack": "1.1.2",
+    "network_used": false,
+    "real_secret_used": false,
+    "real_signer_backend_used": false,
+    "venue_request_used": false
+  },
+  "independently_reimplemented_fixture_primitives": [
+    "KECCAK_256_NOT_SHA3_256",
+    "OFFICIAL_FLOAT_TO_WIRE_BEHAVIOR",
+    "MSGPACK_ACTION_PACKING",
+    "L1_ACTION_HASH",
+    "PHANTOM_AGENT_EIP712_DIGEST",
+    "SECP256K1_RFC6979_TEST_SIGNATURE",
+    "LOW_S_NORMALIZATION",
+    "RECOVERABLE_V_27_28",
+    "SECP256K1_ADDRESS_RECOVERY"
+  ],
+  "official_vectors_matched": [
+    "PRODUCTION_PHANTOM_AGENT_CONNECTION_ID",
+    "DUMMY_L1_MAINNET_SIGNATURE",
+    "DUMMY_L1_TESTNET_SIGNATURE",
+    "ORDER_L1_MAINNET_SIGNATURE",
+    "ORDER_L1_TESTNET_SIGNATURE",
+    "CLOID_ORDER_MAINNET_SIGNATURE",
+    "CLOID_ORDER_TESTNET_SIGNATURE",
+    "VAULT_MAINNET_SIGNATURE",
+    "VAULT_TESTNET_SIGNATURE",
+    "SCHEDULE_CANCEL_MAINNET_SIGNATURE",
+    "SCHEDULE_CANCEL_TESTNET_SIGNATURE",
+    "SCHEDULE_CANCEL_WITH_TIME_MAINNET_SIGNATURE",
+    "SCHEDULE_CANCEL_WITH_TIME_TESTNET_SIGNATURE"
+  ],
+  "critical_findings": [
+    {
+      "id": "CRYPTO-FINDING-001",
+      "finding": "MSGPACK_DICTIONARY_INSERTION_ORDER_IS_SIGNATURE_RELEVANT",
+      "consequence": "The venue adapter must build dictionaries in the exact pinned official wire order; semantically identical reordered mappings may produce a different action hash."
+    },
+    {
+      "id": "CRYPTO-FINDING-002",
+      "finding": "PINNED_SDK_NEGATIVE_ZERO_FLOAT_TO_WIRE_RETURNS_MINUS_ZERO",
+      "consequence": "Do not normalize this silently in a parity adapter. Prefer rejecting negative-zero strategy inputs before wire construction and retain an explicit compatibility fixture."
+    },
+    {
+      "id": "CRYPTO-FINDING-003",
+      "finding": "PYTHON_SHA3_256_IS_NOT_ETHEREUM_KECCAK_256",
+      "consequence": "Any signer/backend parity implementation must use Ethereum Keccak exactly."
+    },
+    {
+      "id": "CRYPTO-FINDING-004",
+      "finding": "MAINNET_TESTNET_SOURCE_BYTE_CHANGES_EIP712_DIGEST",
+      "consequence": "Network identity must remain permit-bound and cannot be inferred or mutated by the signer."
+    }
+  ],
+  "field_order_contract": {
+    "order_wire": ["a", "b", "p", "s", "r", "t", "c"],
+    "order_action": ["type", "orders", "grouping"],
+    "cancel_by_cloid_action": ["type", "cancels"]
+  },
+  "local_test_result": {
+    "test_file": "prototype/test_crypto_fixture_oracle.py",
+    "test_count": 14,
+    "result": "PASS",
+    "canonical_ci_evidence": false
+  },
+  "promotion_constraints": {
+    "fixture_code_may_be_used_as_production_signer": false,
+    "private_key_may_be_added_to_runtime": false,
+    "testnet_action_authorized": false,
+    "mainnet_action_authorized": false,
+    "cloud_kms_backend_authorized": false,
+    "mpc_backend_authorized": false,
+    "next_gate": "CANDIDATE_SIGNER_BACKEND_DIGEST_AND_RECOVERY_PARITY"
+  }
+}
