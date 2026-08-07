@@ -1,0 +1,154 @@
+{
+  "schema_version": "0.1",
+  "retrieved_date": "2026-08-07",
+  "rule": "Official documentation defines capability hypotheses and constraints only. Vendor documentation is not independent security, latency or profitability evidence.",
+  "sources": [
+    {
+      "id": "HL-EXCHANGE-ENDPOINT",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "exchange actions are submitted to /exchange",
+        "orders support IOC/GTC/ALO time-in-force",
+        "client order IDs are supported",
+        "expiresAfter is supported for eligible actions",
+        "scheduleCancel exists as a dead-man-switch style cancel mechanism",
+        "exchange surface also contains non-order governance/fund actions that must be excluded from a generic agent interface"
+      ]
+    },
+    {
+      "id": "HL-NONCES-API-WALLETS",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "API wallets are also called agent wallets",
+        "API wallets sign for master/subaccounts",
+        "nonce state is signer-scoped",
+        "separate API wallets are recommended per trading process/subaccount",
+        "an atomic nonce counter is recommended",
+        "nonce timing window and pruning/reuse risks exist"
+      ]
+    },
+    {
+      "id": "HL-RATE-LIMITS",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "REST has an aggregated per-IP weight budget",
+        "exchange and info endpoints have documented weight behavior",
+        "address-based action limits are separate from info limits",
+        "cancellations receive additional address-based allowance",
+        "WebSocket connection/subscription/message limits exist"
+      ]
+    },
+    {
+      "id": "HL-WEBSOCKET",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "WebSocket is available for realtime streams",
+        "automated clients must handle disconnect/reconnect",
+        "missed state can require snapshot/info recovery"
+      ]
+    },
+    {
+      "id": "HL-WS-SUBSCRIPTIONS",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "orderUpdates, userEvents, userFills, userFundings and ledger-update subscriptions exist",
+        "streaming user endpoints can begin with snapshot messages"
+      ]
+    },
+    {
+      "id": "HL-WS-POST",
+      "publisher": "Hyperliquid",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/post-requests",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION",
+      "claims_used": [
+        "WebSocket can post info and signed action payloads",
+        "unique request IDs are recommended for tracking outstanding requests"
+      ]
+    },
+    {
+      "id": "HL-PYTHON-SDK",
+      "publisher": "hyperliquid-dex",
+      "url": "https://github.com/hyperliquid-dex/hyperliquid-python-sdk",
+      "classification": "PRIMARY_OFFICIAL_CODE",
+      "claims_used": [
+        "official SDK exposes order/cancel and many additional signing actions",
+        "market-order helper code has a default slippage setting and therefore must not be treated as our risk policy",
+        "official code provides serialization/signing behavior for later golden-fixture comparison"
+      ]
+    },
+    {
+      "id": "METAMASK-AGENT-WALLET",
+      "publisher": "MetaMask",
+      "url": "https://metamask.io/agent-wallet",
+      "classification": "VENDOR_OFFICIAL_CAPABILITY_CLAIMS",
+      "claims_used": [
+        "Guard Mode advertises protocol allowlists and spend limits",
+        "transactions may undergo simulation/security/MEV controls",
+        "out-of-policy cases may escalate to human approval"
+      ]
+    },
+    {
+      "id": "COBO-PACT-POLICY",
+      "publisher": "Cobo",
+      "url": "https://www.cobo.com/products/agentic-wallet/manual/security/pact-mechanism",
+      "classification": "VENDOR_OFFICIAL_CAPABILITY_CLAIMS",
+      "claims_used": [
+        "owner-approved pacts define scoped delegation",
+        "pact-scoped access ends when the pact leaves active state",
+        "policy constraints are evaluated per operation"
+      ]
+    },
+    {
+      "id": "COBO-POLICY-ENGINE",
+      "publisher": "Cobo",
+      "url": "https://www.cobo.com/products/agentic-wallet/manual/security/policy-engine",
+      "classification": "VENDOR_OFFICIAL_CAPABILITY_CLAIMS",
+      "claims_used": [
+        "policy engine describes permission, rule and counter checks",
+        "outcomes include allow, require approval and deny"
+      ]
+    },
+    {
+      "id": "ALMANAK-SDK",
+      "publisher": "Almanak",
+      "url": "https://sdk.docs.almanak.co/",
+      "classification": "VENDOR_OFFICIAL_ARCHITECTURE_CLAIMS",
+      "claims_used": [
+        "intent-based architecture",
+        "gateway-only architecture with secrets outside strategy containers",
+        "policy-enforced agentic tools",
+        "documented HyperEVM support is not evidence of HyperCore perpetual execution support"
+      ]
+    },
+    {
+      "id": "SAFE-AI-SPENDING-LIMIT",
+      "publisher": "Safe",
+      "url": "https://docs.safe.global/home/ai-agent-quickstarts/agent-with-spending-limit",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION_FUTURE_EVM_REFERENCE",
+      "claims_used": [
+        "Safe documents AI-agent spending limits through an allowance module",
+        "relevant as a future EVM architecture reference, not as initial HyperCore execution"
+      ]
+    },
+    {
+      "id": "SAFE-MODULE-GUARD",
+      "publisher": "Safe",
+      "url": "https://docs.safe.global/reference-smart-account/guards/setModuleGuard",
+      "classification": "PRIMARY_OFFICIAL_DOCUMENTATION_FUTURE_EVM_REFERENCE",
+      "claims_used": [
+        "module guards can check module transactions",
+        "a broken guard can cause denial of service and requires audit/recovery design"
+      ]
+    }
+  ]
+}
