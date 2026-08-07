@@ -1,8 +1,8 @@
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "retrieved_date": "2026-08-07",
-  "status": "CAPABILITY_HYPOTHESES_ONLY_NO_BACKEND_AUTHORIZATION",
-  "rule": "Provider documentation establishes candidate capabilities only. Hyperliquid compatibility requires exact digest/signature/recovery tests against the frozen fixture contract.",
+  "status": "DOCUMENTED_PREHASHED_PATHS_HANDS_ON_PARITY_NOT_RUN",
+  "rule": "Provider documentation establishes candidate capabilities only. Even an explicitly documented prehashed/Keccak-compatible signing path is not accepted for Hyperliquid until the exact frozen digest, raw provider signature, low-S normalization, recovered address, revocation behavior and latency are tested hands-on.",
   "candidates": [
     {
       "id": "AWS-KMS-SECP256K1",
@@ -10,16 +10,19 @@
       "official_sources": [
         "https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html",
         "https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html",
-        "https://docs.aws.amazon.com/cli/latest/reference/kms/sign.html"
+        "https://docs.aws.amazon.com/cli/latest/reference/kms/sign.html",
+        "https://docs.aws.amazon.com/kms/latest/APIReference/API_GetPublicKey.html"
       ],
       "documented_capabilities": {
         "curve": "ECC_SECG_P256K1",
         "signing_algorithm": "ECDSA_SHA_256",
-        "digest_input_mode": "MessageType=DIGEST skips the KMS hashing step",
-        "ecdsa_signature_encoding": "DER",
+        "digest_input_mode": "MessageType=DIGEST; AWS states KMS skips the signing algorithm hashing step for a supplied digest",
+        "digest_length_constraint": "must match the digest length associated with the selected signing algorithm",
+        "ecdsa_signature_encoding": "DER / ANSI X9.62-RFC3279",
         "public_key_retrieval": true
       },
-      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
+      "paper_compatibility_assessment": "EXACT_32_BYTE_PREHASHED_PATH_DOCUMENTED",
+      "hyperliquid_exact_digest_parity": "PENDING_DISPOSABLE_HANDS_ON_TEST",
       "candidate_adapter": "DER_ECDSA_TO_LOW_S_RECOVERED_V",
       "authorization": false
     },
@@ -28,15 +31,18 @@
       "provider": "Google Cloud KMS",
       "official_sources": [
         "https://cloud.google.com/kms/docs/algorithms",
-        "https://cloud.google.com/kms/docs/create-validate-signatures"
+        "https://cloud.google.com/kms/docs/create-validate-signatures",
+        "https://cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys.cryptoKeyVersions/asymmetricSign"
       ],
       "documented_capabilities": {
         "curve_algorithm": "EC_SIGN_SECP256K1_SHA256",
         "ecdsa_signature_encoding": "DER",
         "secp256k1_low_s_normalization": true,
-        "asymmetric_signing": true
+        "digest_input": "AsymmetricSign digest field",
+        "non_sha_digest_support": "Google explicitly states ECDSA can sign another digest such as Keccak when it has the same length as the selected SHA digest algorithm"
       },
-      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
+      "paper_compatibility_assessment": "KECCAK256_PREHASHED_PATH_EXPLICITLY_DOCUMENTED_FOR_ECDSA",
+      "hyperliquid_exact_digest_parity": "PENDING_DISPOSABLE_HANDS_ON_TEST",
       "candidate_adapter": "DER_ECDSA_TO_LOW_S_RECOVERED_V",
       "authorization": false
     },
@@ -46,34 +52,41 @@
       "official_sources": [
         "https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys-details",
         "https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/about-keys-details",
-        "https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-2025-07-01"
+        "https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-2025-07-01",
+        "https://learn.microsoft.com/en-us/cli/azure/keyvault/key"
       ],
       "documented_capabilities": {
         "curve": "P-256K / secp256k1",
         "signing_algorithm": "ES256K",
-        "operation": "sign supplied digest",
+        "operation": "Microsoft describes Sign/Verify as sign-hash/verify-hash and states the service does not hash content as part of signature creation",
+        "request_input": "digest/value supplied by caller",
         "rest_result_container": "base64url value",
         "exact_ec_signature_byte_encoding_from_registered_sources": "UNRESOLVED"
       },
-      "hyperliquid_keccak_digest_compatibility": "UNPROVEN_HANDS_ON",
-      "candidate_adapter": "DETECT_AND_FREEZE_EXACT_OUTPUT_FORMAT_THEN_RECOVER_SIGNER",
+      "paper_compatibility_assessment": "PREHASHED_PATH_DOCUMENTED_ENCODING_STILL_UNRESOLVED",
+      "hyperliquid_exact_digest_parity": "PENDING_DISPOSABLE_HANDS_ON_TEST",
+      "candidate_adapter": "CAPTURE_EXACT_OUTPUT_FORMAT_THEN_LOW_S_RECOVERED_V",
       "authorization": false
     }
   ],
   "mandatory_backend_proof": [
     "CREATE_DISPOSABLE_NON_PRODUCTION_SECP256K1_KEY",
     "RETRIEVE_AND_FREEZE_PUBLIC_KEY_OR_EXPECTED_ADDRESS",
+    "PIN_IMMUTABLE_KEY_VERSION_NOT_ALIAS_OR_LATEST",
     "SIGN_EXACT_FROZEN_32_BYTE_HYPERLIQUID_EIP712_DIGEST",
     "CAPTURE_RAW_PROVIDER_SIGNATURE_BYTES",
     "PARSE_PROVIDER_OUTPUT_WITH_EXACT_VERSIONED_ADAPTER",
     "NORMALIZE_LOW_S_IF_REQUIRED",
     "RECOVER_EXACT_PRE_REGISTERED_SIGNER_ADDRESS",
-    "VERIFY_WRONG_DIGEST_AND_WRONG_SIGNER_FAIL_CLOSED",
+    "VERIFY_DOUBLE_HASH_OR_WRONG_DIGEST_DOES_NOT_PASS",
+    "VERIFY_WRONG_SIGNER_DOES_NOT_PASS",
     "MEASURE_P50_P75_P90_P95_P99_SIGN_LATENCY",
-    "TEST_KEY_DISABLE_REVOKE_AND_OUTAGE_BEHAVIOR",
-    "RECORD_PROVIDER_REGION_KEY_VERSION_API_VERSION_AND_POLICY"
+    "TEST_KEY_DISABLE_REVOKE_AND_PROVIDER_OUTAGE_BEHAVIOR",
+    "RECORD_PROVIDER_REGION_KEY_VERSION_API_VERSION_AND_RUNTIME_IDENTITY",
+    "DESTROY_OR_SCHEDULE_DESTRUCTION_OF_DISPOSABLE_TEST_KEY_AFTER_EVIDENCE_FREEZE"
   ],
   "selection_status": "UNSCORED",
+  "provider_network_call_authorized": false,
   "testnet_authorized": false,
   "live_authorized": false
 }
