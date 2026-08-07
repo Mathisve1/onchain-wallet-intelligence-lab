@@ -1,0 +1,121 @@
+{
+  "ai_boundary": {
+    "canonical_cluster_merge_by_llm": false,
+    "canonical_ledger_calculation_by_ai": false,
+    "canonical_pnl_calculation_by_ai": false,
+    "summary_and_counterargument_support_only": true
+  },
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  },
+  "contract_id": "HYPERLIQUID_WALLET_COPYABILITY_DATA_CONTRACT_V1",
+  "data_release_gate": {
+    "archive_inventory_complete": false,
+    "gap_report_complete": false,
+    "market_release_authorized": false,
+    "point_in_time_fee_model_frozen": false,
+    "raw_retention_hash_bound": false,
+    "schema_history_frozen": false
+  },
+  "empirical_result": null,
+  "execution_boundary": {
+    "exchange_credentials_allowed": false,
+    "live_orders_allowed": false,
+    "order_endpoint_allowed": false,
+    "order_submission_allowed": false,
+    "paper_orders_allowed": false,
+    "read_only": true,
+    "signed_actions_allowed": false,
+    "wallet_private_keys_allowed": false
+  },
+  "identity_boundary": {
+    "confirmed_links": [
+      "OFFICIAL_MASTER_SUBACCOUNT",
+      "OFFICIAL_ADDRESS_ROLE",
+      "OFFICIAL_VAULT_RELATIONSHIP"
+    ],
+    "inferred_links_are_probabilistic": true,
+    "real_world_identity_claim_allowed": false,
+    "service_node_exclusion_required": true,
+    "weak_transitive_merge_allowed": false
+  },
+  "initial_instruments": [
+    "BTC",
+    "ETH",
+    "SOL"
+  ],
+  "initial_products": [
+    "PERPETUALS"
+  ],
+  "market_data_ingested": false,
+  "point_in_time": {
+    "feature_cutoff_rule": "first_seen_at <= selection_timestamp",
+    "future_cluster_links_allowed": false,
+    "future_wallet_performance_allowed": false,
+    "oracle_analysis_must_be_separate": true,
+    "required_score_fields": [
+      "score_as_of",
+      "data_cutoff",
+      "feature_version",
+      "selection_rule_version",
+      "eligible_from",
+      "eligible_until"
+    ]
+  },
+  "registered_market_experiment": false,
+  "required_event_timestamps": [
+    "event_time",
+    "block_time",
+    "first_seen_at",
+    "processed_at"
+  ],
+  "required_fill_fields": [
+    "wallet_address",
+    "instrument",
+    "side",
+    "fill_price",
+    "fill_size",
+    "fee",
+    "closed_pnl",
+    "order_id",
+    "trade_id",
+    "event_time",
+    "block_number",
+    "block_time",
+    "first_seen_at",
+    "source_object_sha256",
+    "parser_version"
+  ],
+  "required_ledger_classes": [
+    "FILL",
+    "FUNDING",
+    "DEPOSIT",
+    "WITHDRAWAL",
+    "INTERNAL_TRANSFER",
+    "SUBACCOUNT_TRANSFER",
+    "LIQUIDATION",
+    "VAULT_EVENT"
+  ],
+  "required_market_fields": [
+    "best_bid",
+    "best_ask",
+    "bid_depth",
+    "ask_depth",
+    "mark_price",
+    "oracle_price",
+    "funding_rate",
+    "event_time",
+    "first_seen_at",
+    "source_object_sha256"
+  ],
+  "schema_version": "1.0",
+  "source_006_opened": false,
+  "status": "PRE_DATA_INTAKE_FROZEN_NO_MARKET_RELEASE",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "venue": "HYPERLIQUID_PUBLIC_MAINNET"
+}
