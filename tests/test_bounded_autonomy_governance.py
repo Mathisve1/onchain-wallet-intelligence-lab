@@ -70,6 +70,50 @@ class BoundedAutonomyGovernanceTests(unittest.TestCase):
             }:
                 self.assertFalse(record["authorized"], key)
 
+    def test_research_registry_is_parent_linked_and_closed(self) -> None:
+        registry = self.load("governance/RESEARCH_REGISTRY.json")
+        self.assertEqual(registry["program_id"], "ONCHAIN-WALLET-INTELLIGENCE")
+        self.assertEqual(registry["current_active_gate"]["gate_id"], "HL-PUBLIC-PROBE-001R1")
+        self.assertTrue(
+            all(value is False for value in registry["authorizations"].values())
+        )
+        studies = {item["study_id"]: item for item in registry["studies"]}
+        self.assertEqual(set(studies), {"WALLET-COPYABILITY-STUDY-001", "DEX-COPY-AUTONOMY-001"})
+        self.assertIsNone(studies["WALLET-COPYABILITY-STUDY-001"]["parent_study"])
+        self.assertEqual(
+            studies["DEX-COPY-AUTONOMY-001"]["parent_study"],
+            "WALLET-COPYABILITY-STUDY-001",
+        )
+        self.assertIsNone(studies["DEX-COPY-AUTONOMY-001"]["empirical_result"])
+
+    def test_experiment_contract_is_preregistered_and_non_executing(self) -> None:
+        contract = self.load(
+            "research/bounded_autonomy/EXPERIMENT_CONTRACT.json"
+        )
+        self.assertEqual(contract["study_id"], "DEX-COPY-AUTONOMY-001")
+        self.assertEqual(contract["parent_study"], "WALLET-COPYABILITY-STUDY-001")
+        self.assertEqual(contract["stage"], "RESEARCH")
+        self.assertIsNone(contract["data_boundary"]["empirical_result"])
+        self.assertFalse(
+            contract["data_boundary"]["market_data_ingested_under_this_contract"]
+        )
+        self.assertTrue(
+            all(value is False for value in contract["authorizations"].values())
+        )
+        self.assertEqual(
+            contract["latency_arms_milliseconds"],
+            [200, 1000, 3000, 5000, 10000, 15000, 30000, 60000, 120000, 300000],
+        )
+        self.assertFalse(
+            contract["ai_incremental_value_boundary"]["ai_arm_can_raise_risk_or_size"]
+        )
+        self.assertFalse(
+            contract["parent_immutability"]["parent_signal_set_can_be_rewritten"]
+        )
+        self.assertEqual(
+            contract["live_risk_parameters"]["state"], "UNSET_LIVE_BLOCKER"
+        )
+
     def test_trade_intent_contract_is_closed(self) -> None:
         contract = self.load(
             "research/bounded_autonomy/TRADE_INTENT_CONTRACT.json"
@@ -119,6 +163,14 @@ class BoundedAutonomyGovernanceTests(unittest.TestCase):
         self.assertTrue(
             all(value is False for value in parent["authorizations"].values())
         )
+
+    def test_handover_preserves_active_gate_and_prohibitions(self) -> None:
+        handover = (ROOT / "AI_HANDOVER.md").read_text()
+        self.assertIn("HL-PUBLIC-PROBE-001R1", handover)
+        self.assertIn("No profitability, copyable-alpha or execution claim exists", handover)
+        self.assertIn("no direct commit to `main`", handover)
+        self.assertIn("no positive backtest represented as authorization", handover)
+        self.assertIn("UNSET_LIVE_BLOCKER", handover)
 
 
 if __name__ == "__main__":
