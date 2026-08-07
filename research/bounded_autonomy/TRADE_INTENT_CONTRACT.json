@@ -1,0 +1,77 @@
+{
+  "additional_fields_allowed": false,
+  "allowed_values": {
+    "action_type": [
+      "PLACE_ORDER",
+      "CANCEL_ORDER",
+      "CANCEL_ALL_STRATEGY_ORDERS",
+      "REDUCE_POSITION",
+      "CLOSE_POSITION"
+    ],
+    "instrument": [
+      "BTC",
+      "ETH",
+      "SOL"
+    ],
+    "order_type": [
+      "IOC_LIMIT"
+    ],
+    "side": [
+      "BUY",
+      "SELL"
+    ],
+    "time_in_force": [
+      "IOC"
+    ],
+    "venue": [
+      "HYPERLIQUID"
+    ]
+  },
+  "always_forbidden_action_types": [
+    "TRANSFER",
+    "WITHDRAW",
+    "APPROVE_AGENT",
+    "REPLACE_AGENT",
+    "DEREGISTER_AGENT",
+    "UPDATE_LEVERAGE",
+    "UPDATE_MARGIN_MODE",
+    "VAULT_DEPOSIT",
+    "VAULT_WITHDRAW",
+    "APPROVE_BUILDER_FEE",
+    "ARBITRARY_EXCHANGE_ACTION"
+  ],
+  "contract_id": "BOUNDED_TRADE_INTENT_CONTRACT_V1",
+  "permit_rules": {
+    "exact_field_hash_binding": true,
+    "mutation_invalidates_permit": true,
+    "reconciliation_required_before_next_exposure_increase": true,
+    "short_lived": true,
+    "single_use": true
+  },
+  "required_fields": [
+    "intent_id",
+    "created_at",
+    "expires_at",
+    "strategy_id",
+    "strategy_version_sha256",
+    "model_version_sha256",
+    "policy_version_sha256",
+    "data_snapshot_sha256",
+    "risk_snapshot_sha256",
+    "source_event_ids",
+    "account_scope",
+    "venue",
+    "instrument",
+    "side",
+    "action_type",
+    "reduce_only",
+    "order_type",
+    "maximum_quantity",
+    "limit_price",
+    "maximum_slippage_bps",
+    "time_in_force",
+    "client_order_id"
+  ],
+  "schema_version": "1.0",
+  "status": "DESIGN_ONLY_NO_EXECUTION_AUTHORIZATION"
+}

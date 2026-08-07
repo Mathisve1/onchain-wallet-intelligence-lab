@@ -1,0 +1,129 @@
+{
+  "ai_boundary": {
+    "always_forbidden": [
+      "ACCESS_MASTER_PRIVATE_KEY",
+      "ACCESS_SEED_PHRASE",
+      "DIRECTLY_CALL_ACTION_ENDPOINT",
+      "SIGN_ARBITRARY_PAYLOAD",
+      "TRANSFER_FUNDS",
+      "WITHDRAW_FUNDS",
+      "APPROVE_REPLACE_OR_DEREGISTER_AGENT_WALLET",
+      "CHANGE_LEVERAGE_OR_MARGIN_MODE",
+      "CHANGE_POLICY_OR_RISK_LIMIT",
+      "CHANGE_ALLOWLIST",
+      "PROMOTE_MODEL_POLICY_STRATEGY_OR_RESULT",
+      "OVERRIDE_BLOCK",
+      "REWRITE_AUDIT_EVIDENCE"
+    ],
+    "current_allowed": [
+      "SUMMARIZE_EVIDENCE",
+      "PRODUCE_COUNTERARGUMENTS",
+      "PROPOSE_ANOMALY_HYPOTHESES",
+      "DRAFT_NON_EXECUTING_TYPED_INTENTS_FOR_RESEARCH"
+    ],
+    "prospective_only_after_stage_authorization": [
+      "SELECT_ELIGIBLE_SIGNAL",
+      "ORIGINATE_TYPED_TRADE_INTENT",
+      "PROPOSE_POSITION_SIZE_WITHIN_LIMITS",
+      "PROPOSE_OR_TRIGGER_POLICY_ALLOWED_EXIT"
+    ]
+  },
+  "canonical_deterministic_components": [
+    "RAW_EVENT_IDENTITY",
+    "WALLET_LEDGER",
+    "POSITION_AND_CASH_RECONCILIATION",
+    "SOURCE_PNL",
+    "FOLLOWER_PNL",
+    "FOLLOWER_EV",
+    "CAPACITY_AND_SLIPPAGE",
+    "POSITION_SIZING",
+    "POLICY_EVALUATION",
+    "ACTION_CONSTRUCTION",
+    "NONCE_ALLOCATION",
+    "ORDER_AND_FILL_RECONCILIATION",
+    "KILL_SWITCH_STATE"
+  ],
+  "current_authorizations": {
+    "bounded_autonomous_live_execution_authorized": false,
+    "capital_allocation_authorized": false,
+    "client_funds_authorized": false,
+    "governance_research_authorized": true,
+    "historical_market_release_authorized": false,
+    "historical_replay_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "non_signing_shadow_authorized": false,
+    "paper_order_submission_authorized": false,
+    "signed_testnet_actions_authorized": false
+  },
+  "current_maximum_stage": "RESEARCH",
+  "effective_date": "2026-08-07",
+  "execution_controls": {
+    "arbitrary_action_payload_allowed": false,
+    "arbitrary_recipient_allowed": false,
+    "exact_data_cutoff_required": true,
+    "exact_model_hash_required": true,
+    "exact_policy_hash_required": true,
+    "exact_risk_snapshot_hash_required": true,
+    "explicit_size_price_expiry_required": true,
+    "isolated_account_or_subaccount_required": true,
+    "llm_direct_action_endpoint_access": false,
+    "llm_direct_key_access": false,
+    "master_key_online_in_execution_path": false,
+    "one_time_short_lived_permit_required": true,
+    "reconciliation_before_next_action_required": true,
+    "separate_emergency_guardian_required": true,
+    "unknown_state_behavior": "BLOCK"
+  },
+  "human_governance": {
+    "exclusive_powers": [
+      "PROMOTE_STAGE",
+      "ADD_OR_REMOVE_CAPITAL",
+      "PROMOTE_MODEL_VERSION",
+      "PROMOTE_POLICY_VERSION",
+      "CHANGE_RISK_LIMITS",
+      "CHANGE_VENUE_INSTRUMENT_ACTION_OR_RECIPIENT_ALLOWLIST",
+      "AUTHORIZE_LEVERAGE",
+      "AUTHORIZE_SIGNING",
+      "INSTALL_OR_REPLACE_SIGNER_OR_ADAPTER",
+      "RECOVER_OR_ROTATE_MASTER_AUTHORITY",
+      "REVOKE_AGENT_AUTHORITY"
+    ],
+    "kill_switch_authority": true,
+    "role": "GOVERNOR_CAPITAL_OWNER_AND_RECOVERY_AUTHORITY"
+  },
+  "initial_research_scope": {
+    "evm_amm_or_memecoin_execution_in_scope": false,
+    "evm_successor_requires_separate_preregistration": true,
+    "instruments": [
+      "BTC",
+      "ETH",
+      "SOL"
+    ],
+    "products": [
+      "PERPETUALS"
+    ],
+    "venue": "HYPERLIQUID_PUBLIC_MAINNET"
+  },
+  "live_risk_parameters": {
+    "automatic_derivation_allowed": false,
+    "default_values_allowed": false,
+    "human_freeze_required": true,
+    "state": "UNSET_LIVE_BLOCKER"
+  },
+  "parent_program": "ONCHAIN-WALLET-INTELLIGENCE",
+  "parent_study": "WALLET-COPYABILITY-STUDY-001",
+  "policy_id": "BOUND-AUTONOMY-POLICY-001",
+  "research_track": "DEX-COPY-AUTONOMY-001",
+  "schema_version": "1.0",
+  "stage_order": [
+    "RESEARCH",
+    "HISTORICAL_REPLAY",
+    "NON_SIGNING_SHADOW",
+    "FORK_OR_TESTNET_SIGNED",
+    "ISOLATED_LIVE_PILOT",
+    "SCALED_LIVE"
+  ],
+  "status": "RESEARCH_DIRECTION_APPROVED_EXECUTION_NOT_AUTHORIZED"
+}

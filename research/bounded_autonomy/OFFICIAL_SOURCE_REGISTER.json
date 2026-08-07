@@ -1,0 +1,103 @@
+{
+  "captured_at_utc": "2026-08-07T00:00:00Z",
+  "register_id": "BOUND-AUTONOMY-OFFICIAL-SOURCES-001",
+  "research_track": "DEX-COPY-AUTONOMY-001",
+  "rules": {
+    "official_sources_required_for_capability_claims": true,
+    "unsupported_capability_behavior": "BLOCK_OR_REQUIRE_VERIFICATION",
+    "vendor_claim_is_independent_audit": false,
+    "vendor_claim_is_profitability_evidence": false
+  },
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-001",
+      "title": "Nonces and API wallets",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets",
+      "use": "API/agent-wallet signer role, nonce handling, pruning and separate-wallet guidance"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-002",
+      "title": "Exchange endpoint",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint",
+      "use": "action surface, subaccount/vault signing and agent approval"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-003",
+      "title": "WebSocket",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket",
+      "use": "realtime stream and reconnect requirements"
+    },
+    {
+      "publisher": "Hyperliquid",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-004",
+      "title": "Foundation non-validating node",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/nodes/foundation-non-validating-node",
+      "use": "best-effort availability and sole-source warning"
+    },
+    {
+      "publisher": "hyperliquid-dex",
+      "source_class": "OFFICIAL_CODE_REPOSITORY",
+      "source_id": "BA-OFFICIAL-005",
+      "title": "Hyperliquid Python SDK",
+      "url": "https://github.com/hyperliquid-dex/hyperliquid-python-sdk",
+      "use": "official client and API-wallet configuration reference"
+    },
+    {
+      "publisher": "MetaMask",
+      "source_class": "OFFICIAL_PRODUCT_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-006",
+      "title": "Introducing MetaMask Agent Wallet",
+      "url": "https://metamask.io/news/introducing-metamask-agent-wallet",
+      "use": "Early Access, Hyperliquid support, Guard Mode policy and 2FA claims"
+    },
+    {
+      "publisher": "Cobo",
+      "source_class": "OFFICIAL_PRODUCT_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-007",
+      "title": "Cobo Agentic Wallet",
+      "url": "https://www.cobo.com/agentic-wallet",
+      "use": "Pact, spending controls, MPC and emergency-freeze claims"
+    },
+    {
+      "publisher": "Safe",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-008",
+      "title": "Module Guard",
+      "url": "https://docs.safe.global/reference-smart-account/guards/setModuleGuard",
+      "use": "module-transaction enforcement and denial-of-service recovery warning"
+    },
+    {
+      "publisher": "Almanak",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-009",
+      "title": "Almanak SDK index",
+      "url": "https://sdk.docs.almanak.co/",
+      "use": "gateway-only architecture, intent framework, supported-chain boundary and policy reference"
+    },
+    {
+      "publisher": "Coinbase",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-010",
+      "title": "Agentic Wallet CLI",
+      "url": "https://docs.cdp.coinbase.com/agentic-wallet/cli/welcome",
+      "use": "agent spending limits, Base swaps and supported networks"
+    },
+    {
+      "publisher": "Coinbase",
+      "source_class": "OFFICIAL_DOCUMENTATION",
+      "source_id": "BA-OFFICIAL-011",
+      "title": "Spend Permissions",
+      "url": "https://docs.cdp.coinbase.com/wallets/using-wallets/spend-permissions",
+      "use": "future EVM smart-account agent spending limits"
+    }
+  ],
+  "status": "CAPABILITY_CLAIMS_ONLY_NO_VENDOR_SECURITY_OR_PROFITABILITY_PROOF"
+}

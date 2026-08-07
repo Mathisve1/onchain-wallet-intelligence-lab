@@ -1,0 +1,59 @@
+{
+  "as_of": "2026-08-07",
+  "automatic_promotion": false,
+  "current_maximum_stage": "RESEARCH",
+  "matrix_id": "BOUND-AUTONOMY-AUTHORIZATION-MATRIX-001",
+  "missing_state_behavior": "DENY",
+  "positive_result_can_change_authorization": false,
+  "research_track": "DEX-COPY-AUTONOMY-001",
+  "schema_version": "1.0",
+  "states": {
+    "analytical_market_data_release": {
+      "authorized": false
+    },
+    "bounded_autonomous_live_execution": {
+      "authorized": false
+    },
+    "capital_allocation": {
+      "authorized": false
+    },
+    "client_funds": {
+      "authorized": false
+    },
+    "governance_and_architecture_research": {
+      "authorized": true,
+      "scope": [
+        "DOCUMENTATION",
+        "PREREGISTRATION",
+        "OFFICIAL_SOURCE_RESEARCH",
+        "NON_EXECUTING_TESTS",
+        "VENDOR_CAPABILITY_COMPARISON"
+      ]
+    },
+    "historical_market_replay": {
+      "authorized": false
+    },
+    "integration_with_signer_or_action_endpoint": {
+      "authorized": false
+    },
+    "leverage": {
+      "authorized": false
+    },
+    "live_orders": {
+      "authorized": false
+    },
+    "non_signing_shadow": {
+      "authorized": false
+    },
+    "paper_order_submission": {
+      "authorized": false
+    },
+    "public_read_only_probe": {
+      "authorized": true,
+      "scope": "ONLY_UNDER_SEPARATELY_REGISTERED_PROBE_CONTRACT"
+    },
+    "signed_testnet_actions": {
+      "authorized": false
+    }
+  }
+}

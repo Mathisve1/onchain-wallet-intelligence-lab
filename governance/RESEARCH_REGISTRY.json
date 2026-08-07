@@ -1,0 +1,46 @@
+{
+  "authorizations": {
+    "capital_allocation_authorized": false,
+    "historical_market_release_authorized": false,
+    "historical_replay_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "non_signing_shadow_authorized": false,
+    "paper_order_submission_authorized": false,
+    "signed_testnet_actions_authorized": false
+  },
+  "current_active_gate": {
+    "gate_id": "HL-PUBLIC-PROBE-001R1",
+    "scope": "CREDENTIAL_FREE_READ_ONLY_PUBLIC_TECHNICAL_EVIDENCE",
+    "stage": "PUBLIC_TECHNICAL_EVIDENCE"
+  },
+  "program_id": "ONCHAIN-WALLET-INTELLIGENCE",
+  "registry_id": "ONCHAIN-WALLET-RESEARCH-REGISTRY-001",
+  "schema_version": "1.0",
+  "studies": [
+    {
+      "contract": "research/wallet_copyability/DATA_CONTRACT.json",
+      "empirical_result": null,
+      "parent_study": null,
+      "preregistration": "research/wallet_copyability/PREREGISTRATION.md",
+      "role": "PARENT_EMPIRICAL_COPYABILITY_STUDY",
+      "stage": "PRE_DATA",
+      "status": "PREREGISTERED_NO_MARKET_RELEASE",
+      "study_id": "WALLET-COPYABILITY-STUDY-001",
+      "venue": "HYPERLIQUID_PUBLIC_MAINNET"
+    },
+    {
+      "contract": "research/bounded_autonomy/EXPERIMENT_CONTRACT.json",
+      "empirical_result": null,
+      "parent_study": "WALLET-COPYABILITY-STUDY-001",
+      "preregistration": "research/bounded_autonomy/PREREGISTRATION.md",
+      "role": "ADDITIVE_EXECUTION_AND_GOVERNANCE_STUDY",
+      "stage": "RESEARCH",
+      "status": "PREREGISTERED_GOVERNANCE_ONLY_NO_EXECUTION",
+      "study_id": "DEX-COPY-AUTONOMY-001",
+      "venue": "HYPERLIQUID_PUBLIC_MAINNET"
+    }
+  ],
+  "updated_at_utc": "2026-08-07T00:00:00Z"
+}
