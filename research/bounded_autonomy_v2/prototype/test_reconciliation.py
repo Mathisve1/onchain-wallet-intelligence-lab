@@ -29,6 +29,9 @@ class Tests(unittest.TestCase):
         j,r=self.order(); r.transition('POLICY_ALLOWED'); r.transition('PERMIT_ISSUED'); r.transition('PERMIT_CONSUMED'); r.transition('SIGNED'); j.mark_crash_after_sign_before_ack('a1'); j.begin_reconciliation('a1'); self.assertEqual(r.state,'RECONCILING')
         r.transition('RECONCILED_NO_ACTION'); self.assertTrue(j.can_issue_new_risk())
 
+    def test_blocked_intent_releases_risk_gate(self):
+        j,r=self.order(); r.transition('BLOCKED'); self.assertTrue(r.terminal); self.assertTrue(j.can_issue_new_risk())
+
     def test_invalid_jump_blocked(self):
         _,r=self.order()
         with self.assertRaises(ReconciliationError): r.transition('SUBMITTED')
