@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "canary_id": "HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001",
+  "workflow_run_id": 31280640653,
+  "workflow_job_id": 93161240213,
+  "workflow_run_attempt": 1,
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "5cf612b2125877a097b9697c074ac82d66cb1635",
+  "checked_out_commit": "5cf612b2125877a097b9697c074ac82d66cb1635",
+  "execution_release_id": "RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_002",
+  "artifact": {
+    "artifact_id": 9028305474,
+    "name": "hyperliquid-archive-nodedata-r2-successor-31280640653-1",
+    "provider_digest": "sha256:491e651ab5b434c2c7489a4ec194a10f42cce50e80d801a3bb816c3e6b5144c8",
+    "downloaded_zip_sha256": "491e651ab5b434c2c7489a4ec194a10f42cce50e80d801a3bb816c3e6b5144c8",
+    "size_in_bytes": 39364,
+    "expired_at_verification": false
+  },
+  "retained_file_hashes": {
+    "r2-metadata-context.json": "ca346a1a1fab3e72323e081435f6755713934602968a6994c303fbb0fbf77d77",
+    "r2-metadata-result.json": "ac85b1269f6c9e64dca1047246e682a8c0e47f3e4c4739a0fe72d8de9a662367",
+    "r2-metadata.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "validation": {
+    "provider_digest_matches_downloaded_zip": true,
+    "artifact_size_matches_provider": true,
+    "internal_hash_ledger_matches": true,
+    "run_context_identity_matches": true,
+    "release_identity_matches": true,
+    "aws_oidc_step_success": true,
+    "collector_step_success": true,
+    "final_result_gate_success": true,
+    "all_checks_pass": true
+  },
+  "observed_terminal_status": "R2_NODEDATA_METADATA_CANARY_PASS",
+  "observed_technical_result": "FIVE_PREFIX_METADATA_LISTABLE",
+  "collector_return_code": 0,
+  "final_workflow_conclusion": "success",
+  "verification_reason": "The provider artifact digest in the GitHub Actions upload log and artifact metadata exactly matches the independently hashed user-downloaded ZIP. The internal hash ledger matches the retained context, raw result and return-code bytes; GitHub reports OIDC, collector and final exact-result gates successful."
+}
