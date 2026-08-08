@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory/region_probe_r1"
 CONTRACT = BASE / "REGION_PROBE_IMPLEMENTATION_CONTRACT.json"
+RELEASE = BASE / "REGION_PROBE_EXECUTION_RELEASE.json"
 
 
 class ArchiveRegionProbeR1ImplementationTests(unittest.TestCase):
@@ -44,31 +45,27 @@ class ArchiveRegionProbeR1ImplementationTests(unittest.TestCase):
     def test_candidate_keeps_all_data_and_market_capabilities_closed(self) -> None:
         c = self.load()
         for key in (
-            "list_objects_v2_authorized",
-            "get_object_authorized",
-            "head_object_authorized",
-            "get_object_attributes_authorized",
-            "range_get_authorized",
-            "object_body_download_authorized",
-            "pagination_authorized",
-            "decompression_authorized",
-            "market_data_ingestion_authorized",
-            "larger_300_request_inventory_authorized",
-            "execution_authorized",
-            "fresh_paid_attempt_authorized",
-            "s3_request_executed",
+            "list_objects_v2_authorized", "get_object_authorized", "head_object_authorized",
+            "get_object_attributes_authorized", "range_get_authorized", "object_body_download_authorized",
+            "pagination_authorized", "decompression_authorized", "market_data_ingestion_authorized",
+            "larger_300_request_inventory_authorized", "execution_authorized",
+            "fresh_paid_attempt_authorized", "s3_request_executed",
         ):
             self.assertFalse(c[key], key)
         self.assertIsNone(c["exact_bucket_region"])
         self.assertIsNone(c["empirical_result"])
         self.assertTrue(all(value is False for value in c["trading_authorizations"].values()))
 
-    def test_candidate_requires_separate_release_and_has_no_release_file(self) -> None:
+    def test_candidate_requires_and_is_separate_from_release(self) -> None:
         c = self.load()
         self.assertTrue(c["separate_execution_release_required"])
         self.assertFalse(c["implementation_self_releases_execution"])
         self.assertEqual(c["execution_release_path"], "research/archive_inventory/region_probe_r1/REGION_PROBE_EXECUTION_RELEASE.json")
-        self.assertFalse((BASE / "REGION_PROBE_EXECUTION_RELEASE.json").exists())
+        self.assertTrue(RELEASE.is_file())
+        r = json.loads(RELEASE.read_text(encoding="utf-8"))
+        self.assertEqual(r["release_id"], "RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001")
+        self.assertEqual(r["implementation_commit"], "91687b4c803e331d4b2ef8493df731c99e25a0e5")
+        self.assertFalse(r["s3_request_executed"])
         self.assertFalse((BASE / "evidence").exists())
         self.assertFalse((BASE / "outputs").exists())
 
