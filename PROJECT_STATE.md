@@ -19,7 +19,7 @@ Verified: 2026-08-08 against canonical `main` commit `3522edb19541c727670daed2a0
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
 | archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
-| archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_S3_EXECUTION` |
+| archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
 | archive preregistration commit | `0e8a678644c29548a38ebfa1c0af91d4a9a92c09` |
 | AWS account ID | `630956766927` |
 | GitHub OIDC provider | `USER_CONFIRMED_CREATED_NOT_API_VERIFIED` |
