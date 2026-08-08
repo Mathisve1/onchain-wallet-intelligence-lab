@@ -24,7 +24,7 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
 
     def test_permissions_and_actions_are_exactly_pinned(self) -> None:
         text = self.text()
-        self.assertRegex(text, r"permissions:\n  contents: read\n  id-token: write")
+        self.assertRegex(text, r"permissions:\n  actions: read\n  contents: read\n  id-token: write")
         self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", text)
         self.assertIn("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065", text)
         self.assertIn("aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c", text)
@@ -70,6 +70,28 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
         self.assertIn("assert result['pagination_followed'] is False", text)
         self.assertIn("assert result['http_redirects_followed'] is False", text)
 
+    def test_post_merge_release_file_is_mandatory_before_oidc(self) -> None:
+        text = self.text()
+        self.assertIn("EXECUTION_RELEASE_PATH: research/archive_inventory/r0/R0_EXECUTION_RELEASE.json", text)
+        self.assertIn("post-merge R0 execution release is absent", text)
+        self.assertIn("RELEASE_HL_ARCHIVE_METADATA_CANARY_R0_001", text)
+        self.assertIn("RELEASED_FOR_EXACTLY_ONE_CANONICAL_R0_RUN", text)
+        self.assertIn("release['implementation_commit']", text)
+        self.assertIn("release['single_workflow_dispatch_authorized'] is True", text)
+        self.assertFalse((ROOT / "research/archive_inventory/r0/R0_EXECUTION_RELEASE.json").exists())
+
+    def test_execution_release_is_single_use_and_reruns_fail_pre_oidc(self) -> None:
+        text = self.text()
+        self.assertIn("CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}", text)
+        self.assertIn('test "${CURRENT_RUN_ATTEMPT}" = \'1\'', text)
+        self.assertIn("api.github.com", text)
+        self.assertIn("hyperliquid-archive-metadata-canary-r0.yml/runs", text)
+        self.assertIn("event=workflow_dispatch&branch=main&per_page=100", text)
+        self.assertIn("len(runs) < 100", text)
+        self.assertIn("len(eligible) == 1", text)
+        self.assertIn("a previous R0 dispatch already consumed this release", text)
+        self.assertIn("Authorization': f\"Bearer {os.environ['GH_TOKEN']}\"", text)
+
     def test_only_collector_can_issue_s3_requests(self) -> None:
         text = self.text()
         self.assertNotIn("aws s3api", text)
@@ -90,6 +112,7 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
         ):
             self.assertIn(name, text)
         self.assertIn("if-no-files-found: error", text)
+        self.assertIn("R0_PRE_OIDC_GATE_FAILED", text)
         self.assertIn("assert result['terminal_status'] == 'R0_METADATA_CANARY_PASS'", text)
         self.assertIn("assert result['request_attempt_count'] == 7", text)
         self.assertIn("assert result['s3_http_request_count'] == 7", text)
