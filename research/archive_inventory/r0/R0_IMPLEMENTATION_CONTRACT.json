@@ -36,11 +36,10 @@
   ],
   "session_policy_maximum_permissions": "EXACT_PREFIX_S3_LISTBUCKET_ONLY",
   "implementation_network_execution_authorized_on_noncanonical_branch": false,
-  "manual_execution_authorized_after_canonical_merge": false,
+  "implementation_self_releases_execution": false,
   "post_merge_execution_release_required": true,
   "execution_authorized_only_by_separate_release": true,
   "execution_release_path": "research/archive_inventory/r0/R0_EXECUTION_RELEASE.json",
-  "execution_release_present_on_canonical_main": false,
   "forbidden_operations": [
     "GetObject",
     "HeadObject",
