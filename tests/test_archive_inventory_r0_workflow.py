@@ -54,11 +54,8 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
         self.assertNotIn('"Action":"s3:GetObject"', text)
         self.assertNotIn('"Action":"s3:PutObject"', text)
 
-    def test_retry_pagination_and_runtime_caps_are_hard_bound(self) -> None:
+    def test_http_request_retry_pagination_and_runtime_caps_are_hard_bound(self) -> None:
         text = self.text()
-        self.assertIn("AWS_MAX_ATTEMPTS: '1'", text)
-        self.assertIn("AWS_RETRY_MODE: standard", text)
-        self.assertIn("retry-max-attempts: 1", text)
         self.assertIn("maximum_list_requests': 7", text)
         self.assertIn("maximum_keys_per_request': 25", text)
         self.assertIn("maximum_total_entries': 175", text)
@@ -66,12 +63,17 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
         self.assertIn("maximum_runtime_seconds': 180", text)
         self.assertIn("maximum_retries_per_request': 0", text)
         self.assertIn("pagination_authorized': False", text)
+        self.assertIn("http_redirect_following_authorized': False", text)
+        self.assertIn("DIRECT_SIGV4_HTTPS_NO_REDIRECT_FOLLOW", text)
+        self.assertIn("assert result['s3_http_request_count'] == 7", text)
         self.assertIn("assert result['retries_used'] == 0", text)
         self.assertIn("assert result['pagination_followed'] is False", text)
+        self.assertIn("assert result['http_redirects_followed'] is False", text)
 
-    def test_only_collector_can_issue_s3_command(self) -> None:
+    def test_only_collector_can_issue_s3_requests(self) -> None:
         text = self.text()
         self.assertNotIn("aws s3api", text)
+        self.assertNotIn("aws s3 ", text)
         self.assertIn("python research/archive_inventory/r0/collector.py", text)
         self.assertNotIn("secrets.AWS_ACCESS_KEY_ID", text)
         self.assertNotIn("secrets.AWS_SECRET_ACCESS_KEY", text)
@@ -90,9 +92,18 @@ class ArchiveR0WorkflowTests(unittest.TestCase):
         self.assertIn("if-no-files-found: error", text)
         self.assertIn("assert result['terminal_status'] == 'R0_METADATA_CANARY_PASS'", text)
         self.assertIn("assert result['request_attempt_count'] == 7", text)
-        self.assertIn("assert result['successful_request_count'] == 7", text)
+        self.assertIn("assert result['s3_http_request_count'] == 7", text)
         self.assertIn("assert result['object_body_requested'] is False", text)
         self.assertIn("assert result['market_data_ingested'] is False", text)
+
+    def test_configure_action_is_only_for_short_lived_oidc_credentials(self) -> None:
+        text = self.text()
+        self.assertIn("role-duration-seconds: 900", text)
+        self.assertIn("retry-max-attempts: 1", text)
+        self.assertIn("action-timeout-s: 60", text)
+        self.assertIn("unset-current-credentials: true", text)
+        self.assertNotIn("AWS_MAX_ATTEMPTS", text)
+        self.assertNotIn("AWS_RETRY_MODE", text)
 
 
 if __name__ == "__main__":
