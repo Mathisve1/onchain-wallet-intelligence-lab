@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "implementation_id": "HL-ARCHIVE-METADATA-CANARY-R0-IMPL-001",
   "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
   "inventory_id": "HL-ARCHIVE-INVENTORY-001",
@@ -14,6 +14,7 @@
   "request_payer": "requester",
   "dataset_family_count": 7,
   "maximum_list_requests": 7,
+  "s3_http_request_cap": 7,
   "maximum_keys_per_request": 25,
   "maximum_total_entries": 175,
   "maximum_total_response_bytes": 8388608,
@@ -21,7 +22,10 @@
   "maximum_retries_per_request": 0,
   "pagination_authorized": false,
   "continuation_token_follow_authorized": false,
-  "aws_cli_max_attempts": 1,
+  "http_redirect_following_authorized": false,
+  "s3_transport": "DIRECT_SIGV4_HTTPS_NO_REDIRECT_FOLLOW",
+  "initial_signing_region": "us-east-1",
+  "wrong_region_behavior": "RETAIN_COARSE_ERROR_AND_DO_NOT_RETRY",
   "workflow_dispatch_only": true,
   "exact_canonical_main_sha_required": true,
   "workflow_permissions": [
@@ -44,7 +48,8 @@
     "decompression",
     "object_body_download",
     "pagination",
-    "retry"
+    "retry",
+    "HTTP_redirect_follow"
   ],
   "allowed_retained_metadata_fields": [
     "dataset_family_id",
