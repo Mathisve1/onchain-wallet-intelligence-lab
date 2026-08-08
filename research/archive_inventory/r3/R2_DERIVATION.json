@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001-R2-DERIVATION",
+  "source_attestation_commit": "1790d6e3e2453cd96504b0f6624ca37c3847324a",
+  "source_run_id": 31280640653,
+  "source_job_id": 93161240213,
+  "source_artifact_id": 9028305474,
+  "source_artifact_sha256": "491e651ab5b434c2c7489a4ec194a10f42cce50e80d801a3bb816c3e6b5144c8",
+  "source_result": "FIVE_PREFIX_METADATA_LISTABLE",
+  "observed_first_page": [
+    {
+      "family": "node_fills_by_block",
+      "prefix": "node_fills_by_block/",
+      "key_count": 25,
+      "is_truncated": true,
+      "first_key": "node_fills_by_block/hourly/20250727/10.lz4",
+      "last_key": "node_fills_by_block/hourly/20250728/16.lz4",
+      "response_bytes": 8718
+    },
+    {
+      "family": "node_fills",
+      "prefix": "node_fills/",
+      "key_count": 25,
+      "is_truncated": true,
+      "first_key": "node_fills/hourly/20250525/14.lz4",
+      "last_key": "node_fills/hourly/20250526/21.lz4",
+      "response_bytes": 8468
+    },
+    {
+      "family": "node_trades",
+      "prefix": "node_trades/",
+      "key_count": 25,
+      "is_truncated": true,
+      "first_key": "node_trades/hourly/20250322/10.lz4",
+      "last_key": "node_trades/hourly/20250323/18.lz4",
+      "response_bytes": 8428
+    }
+  ],
+  "scope_reduction": {
+    "parent_proposed_inventory_max_requests": 300,
+    "r3_max_requests": 48,
+    "maximum_request_reduction_fraction": 0.84,
+    "parent_proposed_inventory_max_entries": 250000,
+    "r3_max_entries": 48000,
+    "parent_proposed_inventory_response_cap_bytes": 268435456,
+    "r3_response_cap_bytes": 33554432,
+    "parent_proposed_inventory_runtime_seconds": 900,
+    "r3_runtime_seconds": 300,
+    "parent_proposed_inventory_max_retries_per_request": 1,
+    "r3_max_retries_per_request": 0
+  },
+  "capacity_rationale_not_empirical_claim": {
+    "maximum_pages_per_family": 16,
+    "maximum_keys_per_page": 1000,
+    "maximum_keys_per_family": 16000,
+    "hours_representable_at_exactly_one_key_per_hour": 16000,
+    "days_representable_at_exactly_one_key_per_hour": 666.6666666667,
+    "reference_cutoff_utc": "2026-08-09T00:00:00Z",
+    "hours_from_r2_first_key_to_reference_cutoff": {
+      "node_fills_by_block": 9062,
+      "node_fills": 10570,
+      "node_trades": 12110
+    },
+    "interpretation": "The 16,000-key per-family cap is deliberately larger than the elapsed-hour count from each R2 first returned hourly key to the reference cutoff. This is only capacity sizing; it does not prove the first key is the archive start, one key exists per hour, or the family will complete under the cap. Any additional key types, duplicate hours, older hidden partitions, or continued truncation cause CENSORED_BY_LIMIT or UNRESOLVED_LAYOUT rather than a coverage claim."
+  },
+  "why_explorer_and_replica_are_deferred": {
+    "explorer_blocks": "R2 exposed lexicographically ordered block-path metadata rather than a simple hourly keyspace. Full enumeration could dominate request volume and is supporting rather than core to the first wallet-fill coverage gate.",
+    "replica_cmds": "R2 exposed very large block-range objects under a checkpoint/timestamp hierarchy. It is supporting provenance and should receive a separate structural inventory after the core fill/trade coverage is established."
+  },
+  "why_hyperliquid_archive_families_are_deferred": "market_data and asset_ctxs remain core for later follower execution modeling, but R3 is intentionally limited to the three node-data hourly families required to establish whether wallet fill/trade history can be covered before any object-body pilot."
+}
