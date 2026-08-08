@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, canonical R2 approval merge `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`, and canonical R2 implementation merge `142ce50be20507761c4cce37b325ac69d57f8b25`.
+Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, canonical R2 approval merge `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`, canonical R2 implementation merge `142ce50be20507761c4cce37b325ac69d57f8b25`, and canonical first R2 release merge `0dd6f32ab3a202b0c58f37821d1038ac917d84ce` plus operator-supplied first-dispatch step evidence proving fail-closed pre-OIDC / zero-S3 execution.
 
 ## Current status
 
@@ -37,7 +37,8 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | R2 preregistration commit | `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` |
 | R2 approval canonical commit | `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e` |
 | R2 implementation canonical commit | `142ce50be20507761c4cce37b325ac69d57f8b25` |
-| R2 status | `SINGLE_USE_RELEASE_CANDIDATE_NO_EXECUTION_YET` |
+| R2 first release canonical commit | `0dd6f32ab3a202b0c58f37821d1038ac917d84ce` |
+| R2 status | `RELEASE_001_CONSUMED_PRE_OIDC_ZERO_S3_SUCCESSOR_002_UNDER_REVIEW` |
 | R2 parent Region attestation | `9378f625648592bd4a5890f47a98b36028cbd433` |
 | R2 target / signing Region | `hl-mainnet-node-data` / `ap-northeast-1` |
 | R2 regional endpoint | `hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com` |
@@ -51,12 +52,17 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | R2 maximum one-time / monthly budget | `EUR 0.10` / `EUR 0` |
 | R2 canonical implementation | `INSTALLED_RELEASE_GATED` |
 | R2 collector | `INSTALLED_DIRECT_SIGV4_REGIONAL_LIST_ONLY` |
-| R2 workflow | `INSTALLED_MANUAL_ONLY_EXACT_MAIN_SHA` |
+| R2 workflow candidate | `MANUAL_ONLY_GITHUB_NATIVE_MAIN_SHA_SUCCESSOR_GATE` |
 | R2 temporary S3 session boundary | `LISTBUCKET_EXACT_FIVE_PREFIXES_MAX25_ONLY` |
-| R2 execution release candidate | `PRESENT_BOUND_TO_IMPLEMENTATION_142ce50b` |
-| R2 execution ready | `true after this release is canonical; false while PR is unmerged` |
-| R2 scoped paid request / Requester Pays / LIST | `released only by canonical single-use release` |
-| R2 S3 requests / metadata entries observed | `0` / `0` |
+| R2 release 001 | `CONSUMED_BY_FIRST_DISPATCH_PRE_OIDC_NO_S3_EXECUTION` |
+| R2 release 001 AWS OIDC / collector | `false` / `false` |
+| R2 release 001 S3 requests / metadata entries | `0` / `0` |
+| R2 release 001 rerun | `false` |
+| R2 successor release 002 | `CANDIDATE_UNDER_REVIEW_NOT_CANONICAL` |
+| R2 successor manual SHA input | `removed`; identity derives from `github.event_name`, `github.ref`, `github.sha` and checked-out HEAD |
+| R2 execution ready | `false` while successor PR is unmerged |
+| R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` |
+| R2 aggregate S3 requests / metadata entries observed | `0` / `0` |
 | larger 300-request inventory | `false` |
 | object-body access | `false` |
 | market-data ingestion | `false` |
@@ -75,9 +81,11 @@ R2 is the bounded successor to that consumed Region probe. Its immutable preregi
 
 The separately reviewed R2 implementation is canonical as `142ce50be20507761c4cce37b325ac69d57f8b25` (PR #35). Its exact-head evidence was `1a6c93d519625e1cdb378071c268298accc035b9`, Research CI run `31276731274`, job `93151401982`, with `170/170` tests passing. The collector uses direct standard-library SigV4 HTTPS, signs in `ap-northeast-1`, targets only `hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com`, increments the request counter before transport, retains only approved metadata, requires `x-amz-request-charged: requester` on successful Requester Pays responses, never retains a continuation-token value and never follows pagination or redirects.
 
-This release branch adds the separate immutable `RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` runtime record and binds the manual workflow to canonical implementation `142ce50be20507761c4cce37b325ac69d57f8b25`. The release permits exactly one future canonical `workflow_dispatch`, run attempt 1, under the existing human-approved EUR 0.10 envelope. Before AWS OIDC the workflow must verify exact-main identity, immutable approval and implementation bindings, the release record, and GitHub Actions history proving no earlier R2 dispatch has consumed the release window. The release snapshot itself records zero S3 requests, zero metadata entries and no empirical result.
+The first R2 execution release `RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` was canonically merged as `0dd6f32ab3a202b0c58f37821d1038ac917d84ce`. Its first dispatch failed at `Verify canonical main dispatch and exact reviewed identity`. Operator-supplied GitHub Actions step evidence shows the AWS OIDC role-assumption step and the collector step were both skipped. Therefore the first release is conservatively consumed while the observed R2 network usage remains exactly zero S3 requests, zero `ListObjectsV2` requests, zero Requester Pays S3 requests and zero metadata entries. The legacy release record remains immutable; consumption is recorded separately in `R2_EXECUTION_RELEASE_001_CONSUMPTION.json`. No rerun of release 001 is authorized.
 
-No R2 AWS/S3 request occurs in this release PR or its CI. The larger 300-request inventory, object bodies, decompression, market-data ingestion, wallet analysis and all trading/capital stages remain separately unauthorized.
+The current branch contains successor release candidate `RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_002`. It preserves the exact already-approved data/budget envelope and changes only the pre-OIDC identity/release layer. The redundant manual `reviewed_commit` input is removed. A future successor dispatch, if and only if this candidate becomes canonical, must be `workflow_dispatch` on `refs/heads/main`; checkout is bound directly to GitHub's own `github.sha`, and checked-out HEAD must equal that SHA. Distinct fail-closed error codes are emitted before AWS OIDC for event, ref, SHA-format or checkout-identity mismatch. The successor single-use window starts after the predecessor failure, so the consumed predecessor dispatch cannot be mistaken for the successor dispatch.
+
+No AWS/S3 request occurs in this repair/release PR or its CI. Until the successor is canonically merged after exact-head CI and clean-context review, R2 execution, paid request, Requester Pays and LIST authorizations remain false. The larger 300-request inventory, object bodies, decompression, market-data ingestion, wallet analysis and all trading/capital stages remain separately unauthorized.
 
 ## Hard boundary
 
@@ -147,12 +155,21 @@ r2_implementation_commit = 142ce50be20507761c4cce37b325ac69d57f8b25
 r2_expected_implementation_commit = 142ce50be20507761c4cce37b325ac69d57f8b25
 r2_execution_release_present = true
 r2_execution_release_id = RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001
-r2_execution_release_consumed = false
-r2_execution_ready = true
-r2_execution_authorized = true
-r2_paid_request_authorized = true
-r2_requester_pays_authorized = true
-r2_list_objects_v2_authorized = true
+r2_execution_release_consumed = true
+r2_execution_release_consumption_status = CONSUMED_BY_FIRST_DISPATCH_PRE_OIDC_NO_S3_EXECUTION
+r2_execution_release_001_s3_requests_executed = 0
+r2_execution_release_001_metadata_entries_observed = 0
+r2_execution_release_001_rerun_authorized = false
+r2_successor_release_candidate_present = true
+r2_successor_release_id = RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_002
+r2_successor_release_canonical = false
+r2_successor_manual_reviewed_commit_input_required = false
+r2_successor_identity_source = GITHUB_EVENT_REF_SHA_AND_CHECKED_OUT_HEAD
+r2_execution_ready = false
+r2_execution_authorized = false
+r2_paid_request_authorized = false
+r2_requester_pays_authorized = false
+r2_list_objects_v2_authorized = false
 r2_get_object_authorized = false
 r2_head_object_authorized = false
 r2_get_object_attributes_authorized = false
@@ -189,14 +206,12 @@ leverage_authorized = false
 capital_allocation_authorized = false
 ```
 
-The `r2_*_authorized=true` values above are strictly release-scoped and become effective only when this release PR is canonical on `main`; they do not open the broader global archive flags, which remain false.
-
 ## Exact next gate
 
-1. Require exact-head Research CI, byte-exact repository-manifest validation, release-aware R2 validation and clean-context review on this release candidate.
-2. Merge only if the release remains bound to canonical implementation `142ce50be20507761c4cce37b325ac69d57f8b25`, canonical approval `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`, the exact five-prefix/25-key envelope and all broader prohibitions.
-3. After merge, verify the actual release squash SHA from remote `main`.
-4. Then perform exactly one manual canonical R2 dispatch using the exact current `main` SHA as `reviewed_commit`. Run attempt must be `1`; the first dispatch consumes the release regardless of PASS/FAIL.
-5. Immediately retain the resulting minimized artifact and independently attest request count, success/failure classes, metadata-entry count, response bytes, runtime, requester-charged evidence and exact run/job/artifact identities.
-6. Do not rerun R2. Any second dispatch requires a fresh reviewed release.
+1. Require exact-head Research CI, byte-exact repository-manifest validation, legacy R2 implementation validation, successor-release validation and clean-context review on PR #37.
+2. Merge only if release 001 remains immutable/consumed, its separate consumption attestation remains zero-S3, successor release 002 remains bound to canonical implementation `142ce50be20507761c4cce37b325ac69d57f8b25` and approval `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`, and every approved cap/prohibition is unchanged.
+3. After merge, verify the actual successor release squash SHA from remote `main`; do not predeclare it.
+4. Only then may exactly one new manual `workflow_dispatch` on `main` be considered released. No SHA input should be supplied: GitHub `github.sha` is the canonical dispatch identity and checkout target. Run attempt must be `1`; the first successor dispatch consumes release 002 regardless of PASS/FAIL.
+5. Immediately retain and independently attest the resulting minimized artifact, including exact run/job/artifact identities, request counts, status classes, metadata-entry count, response bytes, runtime and Requester Pays evidence.
+6. Do not rerun release 001 or release 002. Any later dispatch requires a fresh reviewed successor release.
 7. Even a successful R2 result does not authorize the 300-request inventory, object-body access, decompression, market-data ingestion, wallet analysis or any trading/capital stage.
