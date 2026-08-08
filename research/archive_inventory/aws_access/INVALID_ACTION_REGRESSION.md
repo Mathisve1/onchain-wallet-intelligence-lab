@@ -1,0 +1,1 @@
+Regression requirement: no IAM policy in this repository may contain `s3:SelectObjectContent`. Amazon S3 authorizes the `SelectObjectContent` API via `s3:GetObject`; the role's existing explicit `s3:GetObject` deny is the relevant object-read boundary.
