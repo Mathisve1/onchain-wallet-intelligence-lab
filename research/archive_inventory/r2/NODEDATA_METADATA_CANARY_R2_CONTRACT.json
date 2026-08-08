@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "canary_id": "HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001",
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "status": "PREREGISTERED_CORRECT_REGION_METADATA_CANARY_NOT_AUTHORIZED",
+  "purpose": "Verify first-page metadata listing for the five hl-mainnet-node-data prefix families that failed R0 after independently resolving the bucket signing Region.",
+  "parent_region_probe_attestation_commit": "9378f625648592bd4a5890f47a98b36028cbd433",
+  "parent_region_probe_run_id": 31273770895,
+  "parent_region_probe_artifact_id": 9026393705,
+  "observed_bucket_region": "ap-northeast-1",
+  "target_bucket": "hl-mainnet-node-data",
+  "signing_region": "ap-northeast-1",
+  "operation": "ListObjectsV2",
+  "request_payer": "requester",
+  "dataset_family_count": 5,
+  "dataset_families": [
+    {
+      "dataset_family_id": "node_fills_by_block",
+      "prefix": "node_fills_by_block/"
+    },
+    {
+      "dataset_family_id": "node_fills",
+      "prefix": "node_fills/"
+    },
+    {
+      "dataset_family_id": "node_trades",
+      "prefix": "node_trades/"
+    },
+    {
+      "dataset_family_id": "explorer_blocks",
+      "prefix": "explorer_blocks/"
+    },
+    {
+      "dataset_family_id": "replica_cmds",
+      "prefix": "replica_cmds/"
+    }
+  ],
+  "exactly_one_request_per_family": true,
+  "pagination_authorized": false,
+  "continuation_token_follow_authorized": false,
+  "http_redirect_following_authorized": false,
+  "maximum_keys_per_request": 25,
+  "maximum_total_list_requests": 5,
+  "maximum_total_entries": 125,
+  "maximum_total_response_bytes": 8388608,
+  "maximum_runtime_seconds": 120,
+  "maximum_retries_per_request": 0,
+  "allowed_retained_fields": [
+    "dataset_family_id",
+    "bucket",
+    "prefix",
+    "signing_region",
+    "request_index",
+    "http_or_sdk_status_class",
+    "request_charged",
+    "key",
+    "size_bytes",
+    "last_modified",
+    "etag",
+    "storage_class",
+    "key_count",
+    "is_truncated",
+    "next_continuation_token_present",
+    "response_bytes",
+    "observed_at_utc"
+  ],
+  "forbidden_operations": [
+    "GetObject",
+    "HeadObject",
+    "GetObjectAttributes",
+    "RangeGet",
+    "ListObjectVersions",
+    "ListAllMyBuckets",
+    "PutObject",
+    "DeleteObject",
+    "RestoreObject",
+    "decompression",
+    "object_body_download"
+  ],
+  "cost_gate": {
+    "human_approval_required": true,
+    "approval_id_required": "APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001",
+    "proposed_maximum_one_time_budget_eur": 0.1,
+    "maximum_one_time_budget_eur": null,
+    "maximum_monthly_budget_eur": 0,
+    "pricing_statement": "EUR 0.10 is a conservative governance ceiling, not a predicted charge.",
+    "official_request_pricing_source": "https://aws.amazon.com/s3/pricing/",
+    "official_requester_pays_source": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/RequesterPaysBuckets.html",
+    "paid_request_authorized": false,
+    "requester_pays_authorized": false
+  },
+  "implementation_authorized": false,
+  "workflow_installation_authorized": false,
+  "execution_authorized": false,
+  "fresh_paid_attempt_authorized": false,
+  "list_objects_v2_authorized": false,
+  "requester_pays_authorized": false,
+  "get_object_authorized": false,
+  "head_object_authorized": false,
+  "get_object_attributes_authorized": false,
+  "range_get_authorized": false,
+  "object_body_download_authorized": false,
+  "decompression_authorized": false,
+  "market_data_ingestion_authorized": false,
+  "larger_300_request_inventory_authorized": false,
+  "s3_requests_executed": 0,
+  "metadata_entries_observed": 0,
+  "empirical_result": null,
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
