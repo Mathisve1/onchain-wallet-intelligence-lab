@@ -10,7 +10,8 @@ Verified: 2026-08-08 against canonical R0 release commit `bc8a47a1cdeb1163657ea2
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
-| experiment status | `R0_METADATA_CANARY_ATTESTED_PARTIAL_FAILURE` |
+| experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
+| R0 experiment status | `R0_METADATA_CANARY_ATTESTED_PARTIAL_FAILURE` |
 | public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
 | canonical public-probe workflow run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
