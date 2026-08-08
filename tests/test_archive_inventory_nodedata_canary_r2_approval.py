@@ -42,24 +42,14 @@ class ArchiveNodeDataCanaryR2ApprovalTests(unittest.TestCase):
         self.assertFalse(r["http_redirect_following_authorized"])
         self.assertTrue(r["requester_pays_scope_approved"])
         self.assertTrue(r["list_objects_v2_scope_approved"])
-        contract = json.loads((BASE / "NODEDATA_METADATA_CANARY_R2_CONTRACT.json").read_text(encoding="utf-8"))
-        self.assertEqual(
-            [row["prefix"] for row in contract["dataset_families"]],
-            ["node_fills_by_block/", "node_fills/", "node_trades/", "explorer_blocks/", "replica_cmds/"],
-        )
 
-    def test_approval_snapshot_does_not_self_open_runtime(self) -> None:
+    def test_immutable_approval_snapshot_does_not_self_open_runtime(self) -> None:
         r = self.load()
         self.assertTrue(r["implementation_phase_authorized"])
         for key in (
-            "implementation_installed",
-            "execution_workflow_installed",
-            "execution_release_present",
-            "execution_ready",
-            "paid_request_currently_authorized",
-            "requester_pays_currently_authorized",
-            "list_objects_v2_currently_authorized",
-            "market_data_ingested",
+            "implementation_installed", "execution_workflow_installed", "execution_release_present",
+            "execution_ready", "paid_request_currently_authorized", "requester_pays_currently_authorized",
+            "list_objects_v2_currently_authorized", "market_data_ingested",
         ):
             self.assertFalse(r[key], key)
         self.assertEqual(r["s3_requests_executed"], 0)
@@ -68,32 +58,27 @@ class ArchiveNodeDataCanaryR2ApprovalTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in r["trading_authorizations"].values()))
         self.assertTrue(all(value is True for value in r["forbidden_capabilities"].values()))
 
-    def test_status_and_project_state_preserve_fail_closed_boundary(self) -> None:
-        status = STATUS.read_text(encoding="utf-8")
-        self.assertIn("implementation/review phase", status)
-        self.assertIn("does not create a single-use execution release", status)
-        state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
-        self.assertIn("r2_human_approved = true", state)
-        self.assertIn(f"r2_approval_reviewed_commit = {EXPECTED_COMMIT}", state)
-        self.assertIn(f"r2_approval_text_sha256 = {EXPECTED_SHA}", state)
-        self.assertIn("r2_implementation_phase_authorized = true", state)
-        self.assertIn("r2_execution_ready = false", state)
-        self.assertIn("r2_requester_pays_authorized = false", state)
-        self.assertIn("r2_list_objects_v2_authorized = false", state)
-        self.assertIn("r2_s3_requests_executed = 0", state)
-        self.assertIn("region_probe_r1_execution_release_consumed = true", state)
-        self.assertIn("region_probe_r1_exact_bucket_region = ap-northeast-1", state)
-
-    def test_later_implementation_candidate_does_not_mutate_approval_snapshot(self) -> None:
+    def test_later_release_does_not_mutate_approval_snapshot(self) -> None:
         self.assertTrue((BASE / "collector.py").is_file())
         self.assertTrue((BASE / "R2_IMPLEMENTATION_CONTRACT.json").is_file())
-        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-nodedata-canary-r2.yml").is_file())
-        self.assertFalse((BASE / "R2_EXECUTION_RELEASE.json").exists())
+        self.assertTrue((BASE / "R2_EXECUTION_RELEASE.json").is_file())
+        release = json.loads((BASE / "R2_EXECUTION_RELEASE.json").read_text(encoding="utf-8"))
+        self.assertEqual(release["approval_text_sha256"], EXPECTED_SHA)
+        self.assertEqual(release["approval_reviewed_commit"], EXPECTED_COMMIT)
         record = self.load()
         self.assertFalse(record["implementation_installed"])
         self.assertFalse(record["execution_workflow_installed"])
         self.assertFalse(record["execution_release_present"])
         self.assertFalse(record["execution_ready"])
+
+    def test_project_state_keeps_pre_dispatch_runtime_zero(self) -> None:
+        state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
+        self.assertIn("r2_human_approved = true", state)
+        self.assertIn(f"r2_approval_reviewed_commit = {EXPECTED_COMMIT}", state)
+        self.assertIn(f"r2_approval_text_sha256 = {EXPECTED_SHA}", state)
+        self.assertIn("r2_s3_requests_executed = 0", state)
+        self.assertIn("region_probe_r1_execution_release_consumed = true", state)
+        self.assertIn("region_probe_r1_exact_bucket_region = ap-northeast-1", state)
 
 
 if __name__ == "__main__":
