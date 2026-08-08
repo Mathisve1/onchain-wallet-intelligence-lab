@@ -1,17 +1,65 @@
 {
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
+  "schema_version": "1.1",
+  "status": "PENDING_PRE_EXECUTION_PRICING_REFRESH",
+  "pricing_freeze_status": "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL",
+  "captured_at_utc": "2026-08-08T09:30:00Z",
+  "official_sources": {
+    "s3_pricing": "https://aws.amazon.com/s3/pricing/",
+    "requester_pays": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/RequesterPaysBuckets.html",
+    "list_objects_v2": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html"
+  },
+  "official_claims": {
+    "list_requests_priced_as_s3_standard_put_copy_post": true,
+    "reference_s3_standard_tier1_list_rate_usd_per_1000": 0.005,
+    "requester_pays_charges_requester_for_request_and_eligible_data_transfer": true,
+    "list_objects_v2_max_keys_service_ceiling": 1000,
+    "request_payer_requester_required_for_charge_acceptance": true,
+    "first_100_gb_monthly_data_transfer_out_free_aggregate_except_china_govcloud": true,
+    "free_transfer_allowance_relied_on_for_budget": false,
+    "reference_data_transfer_out_usd_per_gb": 0.09,
+    "reference_transfer_rate_context": "AWS S3 pricing example for Europe (Ireland); target bucket Regions remain unresolved without an S3 operation"
+  },
   "bucket_regions": {
     "hl-mainnet-node-data": null,
     "hyperliquid-archive": null
   },
-  "captured_at_utc": null,
+  "applicable_region_rate_status": "UNRESOLVED_PRE_S3",
+  "budget_method": "CONSERVATIVE_STRESS_CEILINGS_INSTEAD_OF_ASSUMING_BUCKET_REGION_OR_FREE_TRANSFER",
+  "stress_price_ceilings": {
+    "list_rate_usd_per_1000": 0.05,
+    "transfer_rate_usd_per_gb": 0.5
+  },
+  "r0_hard_usage_caps": {
+    "max_total_list_requests": 7,
+    "max_keys_per_request": 25,
+    "max_total_entries": 175,
+    "max_total_response_bytes": 8388608,
+    "max_runtime_seconds": 180,
+    "max_retries_per_request": 0,
+    "pagination_allowed": false
+  },
+  "modeled_costs_usd": {
+    "official_reference_request_cost_if_rate_0_005": 0.000035,
+    "stress_request_cost": 0.00035,
+    "stress_transfer_cost_at_full_byte_cap": 0.004194304,
+    "stress_total_cost_at_all_caps": 0.004544304
+  },
   "fx_rate_usd_per_eur": null,
   "fx_source": null,
-  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
-  "list_rate_usd_per_1000": null,
+  "fx_required_for_model": false,
+  "proposed_maximum_one_time_budget_eur": 1.0,
   "maximum_one_time_budget_eur": null,
+  "maximum_monthly_budget_eur": 0,
   "paid_request_authorized": false,
-  "pricing_source": "https://aws.amazon.com/s3/pricing/",
-  "schema_version": "1.0",
-  "status": "PENDING_PRE_EXECUTION_PRICING_REFRESH",
-  "transfer_rate_usd_per_gb": null
+  "requester_pays_authorized": false,
+  "list_objects_authorized": false,
+  "notes": [
+    "The EUR 1.00 figure is a proposed human authorization ceiling, not current authorization.",
+    "Exact bucket-region pricing remains unresolved; the conservative R0 freeze is intentionally separate from applicable-region pricing status.",
+    "The stress request rate is 10x the referenced USD 0.005/1000 rate and the stress transfer rate is deliberately much higher than the USD 0.09/GB reference example.",
+    "Taxes, FX, credits, discounts and the perpetual 100 GB transfer allowance are not needed to make the R0 usage envelope conservative.",
+    "Software request/entry/byte/runtime caps are the primary stop controls; AWS billing alerts are not treated as a real-time hard stop."
+  ]
 }

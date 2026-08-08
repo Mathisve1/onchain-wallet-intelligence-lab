@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical `main` commit `f34786eafd3689b575bdd3d2ada932b8ce204a61`, canonical public-probe evidence, and independently verified AWS OIDC identity run `31250176507`.
+Verified: 2026-08-08 against canonical `main` commit `549e70dedc0eefb9336a9fcd86fc94142904ed3a`, canonical public-probe evidence, and attested AWS OIDC identity run `31250176507`.
 
 ## Current status
 
@@ -34,6 +34,12 @@ Verified: 2026-08-08 against canonical `main` commit `f34786eafd3689b575bdd3d2ad
 | AWS identity bound | `true` |
 | persistent S3 inline policy | `USER_CONFIRMED_NOT_API_VERIFIED` |
 | OIDC identity check authorized | `true` |
+| exact bucket Regions | `UNRESOLVED_PRE_S3` |
+| conservative pricing freeze | `FROZEN_CONSERVATIVE_R0_PRE_APPROVAL` |
+| R0 canary | `HL-ARCHIVE-METADATA-CANARY-R0-001` |
+| R0 status | `PREREGISTERED_MICRO_CANARY_NOT_AUTHORIZED` |
+| proposed one-time budget | `EUR 1.00` |
+| authorized one-time budget | `null` |
 | requester-pays authorized | `false` |
 | ListObjectsV2 authorized | `false` |
 | GetObject authorized | `false` |
@@ -50,11 +56,33 @@ Verified: 2026-08-08 against canonical `main` commit `f34786eafd3689b575bdd3d2ad
 
 The canonical public probe remains immutable and attested. `HL-ARCHIVE-INVENTORY-001` remains metadata/access/cost-only research. No historical archive object has been listed or downloaded.
 
-The AWS OIDC identity gate is now independently attested. Canonical run `31250176507` was dispatched from `refs/heads/main` against exact commit `f34786eafd3689b575bdd3d2ada932b8ce204a61`. The checked-out commit, dispatch SHA and reviewed commit matched. AWS returned account `630956766927` and the exact expected assumed-role ARN.
+The AWS OIDC identity gate is independently attested. Canonical run `31250176507` was dispatched from `refs/heads/main` against exact commit `f34786eafd3689b575bdd3d2ada932b8ce204a61`. The checked-out commit, dispatch SHA and reviewed commit matched. AWS returned account `630956766927` and the exact expected assumed-role ARN.
 
 The identity-check session carried an inline `Deny s3:*` policy and made exactly one explicit AWS identity call, `aws sts get-caller-identity`. No S3 request and no Requester Pays request occurred. The downloaded artifact ZIP SHA-256 independently matched GitHub's provider digest `3ebb71763783135c2c21bb7c0f8a801e0d873208e5a8b9afff473b208a2dc607`.
 
 This evidence proves GitHub-to-AWS federation and the role identity. It does not independently verify the persistent inline S3 permission policy; that remains user-confirmed until a later separately approved metadata canary exercises only the frozen listing boundary.
+
+## R0 pricing freeze
+
+Current official AWS documentation states that S3 LIST requests are billed at the S3 Standard PUT/COPY/POST request rate; an official AWS current cost reference uses USD 0.005 per 1,000 PUT/COPY/POST/LIST requests. Requester Pays charges the authenticated requester for successful eligible request and data-transfer costs. `ListObjectsV2` supports `RequestPayer=requester` and returns at most 1,000 keys.
+
+The Hyperliquid bucket Regions remain deliberately unknown because discovering them via S3 would cross the current no-S3 gate. Therefore `HL-ARCHIVE-METADATA-CANARY-R0-001` uses deliberately conservative stress prices instead of assuming a favorable Region or free transfer:
+
+```text
+stress_list_rate_usd_per_1000 = 0.05
+stress_transfer_rate_usd_per_gb = 0.50
+maximum_list_requests = 7
+maximum_keys_per_request = 25
+maximum_total_entries = 175
+maximum_total_response_bytes = 8388608
+maximum_runtime_seconds = 180
+maximum_retries_per_request = 0
+pagination_authorized = false
+modeled_stress_total_usd = 0.004544304
+proposed_maximum_one_time_budget_eur = 1.00
+```
+
+The EUR 1.00 value is a proposal only. No FX assumption, free-transfer allowance, credit or discount is required for the stress model.
 
 ## Hard boundary
 
@@ -76,10 +104,10 @@ empirical_result = null
 
 ## Exact next gate
 
-1. Freeze the exact applicable AWS S3 Requester Pays/LIST pricing evidence for the target buckets and expected request pattern.
-2. Produce a bounded one-time metadata-canary cost model under the existing preregistered request/page/entry/byte/runtime caps.
-3. Obtain separate explicit human approval for a one-time euro budget and Requester Pays usage.
-4. Only after that approval may a network-capable `ListObjectsV2` canary be implemented/enabled.
+1. Review and merge the conservative R0 pricing/budget design.
+2. Obtain separate explicit human approval binding the exact resulting canonical `main` SHA and a EUR 1.00 one-time ceiling.
+3. Only after that approval may a network-capable R0 implementation be created. R0 may make exactly seven first-page `ListObjectsV2` calls with `RequestPayer=requester`, no pagination and no retries.
+4. Attest the R0 result and only then decide whether a larger paginated archive inventory deserves a separate budget and release.
 5. Object-body access, market-data ingestion, wallet P&L, clustering and all trading stages remain downstream and separately gated.
 
 No S3 call, Requester Pays request, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
