@@ -7,6 +7,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ACCESS = ROOT / "research/archive_inventory/aws_access"
 ARCHIVE = ROOT / "research/archive_inventory"
+IMMUTABLE_SUBJECT = (
+    "repo:Mathisve1@163474992/"
+    "onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main"
+)
 
 
 class ArchiveAwsOidcAccessTests(unittest.TestCase):
@@ -24,10 +28,12 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertEqual(binding["github_repository_id"], "1326362646")
         self.assertEqual(binding["github_repository_owner_id"], "163474992")
         self.assertEqual(binding["github_ref"], "refs/heads/main")
+        self.assertEqual(binding["github_subject"], IMMUTABLE_SUBJECT)
         self.assertEqual(
-            binding["github_subject"],
-            "repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main",
+            binding["github_subject_format"],
+            "IMMUTABLE_DEFAULT_EXPECTED_FOR_REPOSITORY_CREATED_AFTER_2026-07-15",
         )
+        self.assertFalse(binding["github_subject_independently_observed"])
         self.assertEqual(binding["planned_workflow_session_duration_seconds"], 900)
         self.assertEqual(binding["role_max_session_duration_seconds"], 3600)
         self.assertFalse(binding["network_identity_check_authorized"])
@@ -40,7 +46,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertIsNone(binding["empirical_result"])
         self.assertTrue(all(value is False for value in binding["authorizations"].values()))
 
-    def test_trust_policy_is_exact_main_only(self) -> None:
+    def test_trust_policy_is_exact_immutable_main_only(self) -> None:
         policy = self.load(ACCESS / "OIDC_TRUST_POLICY.json")
         self.assertEqual(policy["Version"], "2012-10-17")
         self.assertEqual(len(policy["Statement"]), 1)
@@ -55,14 +61,19 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             statement["Condition"]["StringEquals"],
             {
                 "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                "token.actions.githubusercontent.com:sub": "repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main",
+                "token.actions.githubusercontent.com:sub": IMMUTABLE_SUBJECT,
                 "token.actions.githubusercontent.com:repository_id": "1326362646",
                 "token.actions.githubusercontent.com:repository_owner_id": "163474992",
+                "token.actions.githubusercontent.com:ref": "refs/heads/main",
             },
         )
         serialized = json.dumps(policy, sort_keys=True)
         self.assertNotIn('"Principal": "*"', serialized)
         self.assertNotIn('refs/heads/*', serialized)
+        self.assertNotIn(
+            "repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main",
+            serialized,
+        )
 
     def test_listing_policy_is_prefix_and_maxkeys_fail_closed(self) -> None:
         policy = self.load(ARCHIVE / "IAM_POLICY_TEMPLATE.json")
