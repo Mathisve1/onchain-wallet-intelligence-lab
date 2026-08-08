@@ -105,7 +105,6 @@
         "s3:GetObject",
         "s3:GetObjectVersion",
         "s3:GetObjectAttributes",
-        "s3:SelectObjectContent",
         "s3:RestoreObject",
         "s3:PutObject",
         "s3:DeleteObject",
