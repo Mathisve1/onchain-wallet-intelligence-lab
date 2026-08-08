@@ -17,7 +17,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
     def load(self, path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def test_identity_binding_is_exact_and_nonexecuting(self) -> None:
+    def test_identity_binding_is_exact_and_sts_only(self) -> None:
         binding = self.load(ACCESS / "AWS_IDENTITY_BINDING.json")
         self.assertEqual(binding["aws_account_id"], "630956766927")
         self.assertEqual(
@@ -34,9 +34,12 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             "IMMUTABLE_DEFAULT_EXPECTED_FOR_REPOSITORY_CREATED_AFTER_2026-07-15",
         )
         self.assertFalse(binding["github_subject_independently_observed"])
+        self.assertEqual(binding["role_status"], "USER_CONFIRMED_CREATED_NOT_API_VERIFIED")
+        self.assertEqual(binding["inline_policy_name"], "HLArchiveMetadataCanaryListOnly")
         self.assertEqual(binding["planned_workflow_session_duration_seconds"], 900)
         self.assertEqual(binding["role_max_session_duration_seconds"], 3600)
-        self.assertFalse(binding["network_identity_check_authorized"])
+        self.assertTrue(binding["network_identity_check_authorized"])
+        self.assertEqual(binding["network_identity_check_id"], "HL-AWS-OIDC-IDENTITY-001")
         self.assertFalse(binding["requester_pays_authorized"])
         self.assertFalse(binding["list_objects_authorized"])
         self.assertFalse(binding["paid_request_authorized"])
@@ -130,16 +133,18 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             self.assertIn(action, denied_actions)
         self.assertNotIn("s3:SelectObjectContent", allowed_actions | denied_actions)
 
-    def test_no_oidc_or_aws_network_workflow_exists_in_design_phase(self) -> None:
+    def test_only_identity_workflow_may_request_oidc_in_this_phase(self) -> None:
         workflows = ROOT / ".github/workflows"
-        combined = "\n".join(
+        identity = workflows / "hyperliquid-aws-oidc-identity-check.yml"
+        self.assertTrue(identity.is_file())
+        self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
+        other = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(workflows.glob("*.yml"))
+            if path != identity
         )
-        self.assertNotIn("id-token: write", combined)
-        self.assertNotIn("aws-actions/configure-aws-credentials", combined)
-        self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
-        self.assertFalse((workflows / "hyperliquid-aws-oidc-identity-check.yml").exists())
+        self.assertNotIn("id-token: write", other)
+        self.assertNotIn("aws-actions/configure-aws-credentials", other)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,278 @@
+name: Hyperliquid AWS OIDC Identity Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_commit:
+        description: Exact current canonical main commit SHA to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-aws-oidc-identity-${{ inputs.reviewed_commit }}
+  cancel-in-progress: false
+
+env:
+  EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  EXPECTED_ROLE_NAME: onchain-wallet-intelligence-hl-archive-metadata-canary
+  EXPECTED_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+  EXPECTED_ASSUMED_ROLE_ARN: arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-metadata-canary/HLArchiveOidcIdentityCheck
+
+jobs:
+  sts-identity-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact reviewed commit without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_REVIEWED_COMMIT }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical main dispatch and exact reviewed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXACT_REVIEWED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+          test "${DISPATCH_REF}" = "refs/heads/main"
+          test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"
+          observed="$(git rev-parse HEAD)"
+          test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove repository and STS-only gates before OIDC network access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+
+      - name: Freeze pending run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          context = {
+              'schema_version': '1.0',
+              'check_id': 'HL-AWS-OIDC-IDENTITY-001',
+              'terminal_status': 'PENDING_AWS_OIDC',
+              'dispatch_ref': os.environ['DISPATCH_REF'],
+              'dispatch_sha': os.environ['DISPATCH_SHA'],
+              'reviewed_commit': os.environ['EXACT_REVIEWED_COMMIT'],
+              'checked_out_commit': os.popen('git rev-parse HEAD').read().strip(),
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+              'observed_account_id': None,
+              'expected_assumed_role_arn': os.environ['EXPECTED_ASSUMED_ROLE_ARN'],
+              'observed_assumed_role_arn': None,
+              'configure_aws_outcome': None,
+              'explicit_sts_call_count': 0,
+              's3_session_policy': 'EXPLICIT_DENY_ALL_S3',
+              's3_called': False,
+              'requester_pays_used': False,
+              'market_data_ingested': False,
+              'empirical_result': None,
+          }
+          path = Path(os.environ['RUNNER_TEMP']) / 'sts-identity-context.json'
+          path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Assume exact AWS role through GitHub OIDC with S3 denied for this session
+        id: configure
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+          aws-region: us-east-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveOidcIdentityCheck
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 3
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"DenyAllS3ForIdentityCheck","Effect":"Deny","Action":"s3:*","Resource":"*"}]}
+
+      - name: Execute exactly one explicit STS GetCallerIdentity call
+        if: steps.configure.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${RUNNER_TEMP}/sts-identity-raw.json"
+          rc_file="${RUNNER_TEMP}/sts-identity.rc"
+          set +e
+          aws sts get-caller-identity --output json >"${raw}"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" >"${rc_file}"
+          if [ "${rc}" -ne 0 ]; then
+            rm -f "${raw}"
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          raw_path = root / 'sts-identity-raw.json'
+          value = json.loads(raw_path.read_text(encoding='utf-8'))
+          account = value.get('Account')
+          arn = value.get('Arn')
+          expected_account = os.environ['EXPECTED_AWS_ACCOUNT_ID']
+          expected_arn = os.environ['EXPECTED_ASSUMED_ROLE_ARN']
+          valid = account == expected_account and arn == expected_arn
+          result = {
+              'schema_version': '1.0',
+              'check_id': 'HL-AWS-OIDC-IDENTITY-001',
+              'terminal_status': 'STS_IDENTITY_MATCH' if valid else 'STS_IDENTITY_MISMATCH',
+              'expected_account_id': expected_account,
+              'observed_account_id': account,
+              'expected_assumed_role_arn': expected_arn,
+              'observed_assumed_role_arn': arn,
+              'explicit_sts_call_count': 1,
+              's3_session_policy': 'EXPLICIT_DENY_ALL_S3',
+              's3_called': False,
+              'requester_pays_used': False,
+              'market_data_ingested': False,
+              'empirical_result': None,
+          }
+          (root / 'sts-identity-result.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          raw_path.unlink(missing_ok=True)
+          print(json.dumps(result, sort_keys=True))
+          PY
+
+      - name: Record failed OIDC configuration as bounded evidence
+        if: steps.configure.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'NOT_RUN' >"${RUNNER_TEMP}/sts-identity.rc"
+
+      - name: Finalize minimized identity context
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          context_path = root / 'sts-identity-context.json'
+          context = json.loads(context_path.read_text(encoding='utf-8'))
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          result_path = root / 'sts-identity-result.json'
+          if result_path.is_file():
+              result = json.loads(result_path.read_text(encoding='utf-8'))
+              for key in (
+                  'terminal_status', 'observed_account_id', 'observed_assumed_role_arn',
+                  'explicit_sts_call_count', 's3_session_policy', 's3_called',
+                  'requester_pays_used', 'market_data_ingested', 'empirical_result',
+              ):
+                  context[key] = result.get(key)
+          elif context.get('configure_aws_outcome') != 'success':
+              context['terminal_status'] = 'OIDC_ROLE_ASSUMPTION_FAILED'
+          else:
+              context['terminal_status'] = 'STS_IDENTITY_CALL_FAILED'
+          context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(context, sort_keys=True))
+          PY
+          sha256sum "${RUNNER_TEMP}/sts-identity-context.json" >"${RUNNER_TEMP}/STS_IDENTITY_FILES.sha256"
+          if [ -f "${RUNNER_TEMP}/sts-identity-result.json" ]; then
+            sha256sum "${RUNNER_TEMP}/sts-identity-result.json" >>"${RUNNER_TEMP}/STS_IDENTITY_FILES.sha256"
+          fi
+          cat "${RUNNER_TEMP}/STS_IDENTITY_FILES.sha256"
+
+      - name: Publish minimized job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >>"${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'sts-identity-context.json'
+          data = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
+          print('# Hyperliquid AWS OIDC Identity Check')
+          for key in (
+              'dispatch_ref', 'dispatch_sha', 'reviewed_commit', 'checked_out_commit',
+              'workflow_run_id', 'terminal_status', 'configure_aws_outcome',
+              'expected_account_id', 'observed_account_id',
+              'expected_assumed_role_arn', 'observed_assumed_role_arn',
+              'explicit_sts_call_count', 's3_session_policy', 's3_called',
+              'requester_pays_used',
+          ):
+              print(f'- **{key}**: `{data.get(key)}`')
+          print('\nIdentity-only evidence. The assumed session explicitly denies all S3 actions.')
+          PY
+
+      - name: Upload minimized STS identity evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: hyperliquid-aws-oidc-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/sts-identity-context.json
+            ${{ runner.temp }}/sts-identity-result.json
+            ${{ runner.temp }}/sts-identity.rc
+            ${{ runner.temp }}/STS_IDENTITY_FILES.sha256
+          if-no-files-found: warn
+          retention-days: 90
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Enforce exact successful identity result
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          test "${CONFIGURE_OUTCOME}" = 'success'
+          test "$(cat "${RUNNER_TEMP}/sts-identity.rc")" = '0'
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'sts-identity-result.json'
+          value = json.loads(path.read_text(encoding='utf-8'))
+          assert value['terminal_status'] == 'STS_IDENTITY_MATCH'
+          assert value['observed_account_id'] == os.environ['EXPECTED_AWS_ACCOUNT_ID']
+          assert value['observed_assumed_role_arn'] == os.environ['EXPECTED_ASSUMED_ROLE_ARN']
+          assert value['explicit_sts_call_count'] == 1
+          assert value['s3_called'] is False
+          assert value['requester_pays_used'] is False
+          assert value['market_data_ingested'] is False
+          assert value['empirical_result'] is None
+          PY

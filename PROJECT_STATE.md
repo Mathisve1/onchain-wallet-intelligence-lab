@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a678644c29548a38ebfa1c0af91d4a9a92c09` plus user-confirmed AWS account/OIDC-provider setup. AWS role existence and the emitted GitHub OIDC subject are not independently verified.
+Verified: 2026-08-08 against canonical `main` commit `3522edb19541c727670daed2a0bc7e5f4f9d0417`, canonical public-probe evidence, and the user's confirmation that the exact AWS role, reviewed trust policy and inline policy `HLArchiveMetadataCanaryListOnly` were created. AWS role/OIDC federation is not independently verified until `HL-AWS-OIDC-IDENTITY-001` passes.
 
 ## Current status
 
@@ -24,11 +24,14 @@ Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a67864
 | AWS account ID | `630956766927` |
 | GitHub OIDC provider | `USER_CONFIRMED_CREATED_NOT_API_VERIFIED` |
 | expected GitHub OIDC subject | `repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main` |
-| OIDC subject independently observed | `false` |
+| OIDC subject/federation independently proven | `false` |
 | expected AWS role | `onchain-wallet-intelligence-hl-archive-metadata-canary` |
 | expected role ARN | `arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary` |
+| role + reviewed trust + inline policy | `USER_CONFIRMED_NOT_API_VERIFIED` |
+| STS identity check | `HL-AWS-OIDC-IDENTITY-001` |
+| STS identity check status | `PREREGISTERED_MANUAL_RUN_ALLOWED_NO_RESULT` |
 | AWS identity bound | `false` |
-| OIDC identity check authorized | `false` |
+| OIDC identity check authorized | `true` |
 | requester-pays authorized | `false` |
 | ListObjectsV2 authorized | `false` |
 | GetObject authorized | `false` |
@@ -43,13 +46,13 @@ Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a67864
 
 ## Canonical technical evidence
 
-The canonical public probe remains immutable and attested. `HL-ARCHIVE-INVENTORY-001` is canonically preregistered as metadata/access/cost-only research. No historical archive object has been listed or downloaded.
+The canonical public probe remains immutable and attested. `HL-ARCHIVE-INVENTORY-001` remains metadata/access/cost-only research. No historical archive object has been listed or downloaded.
 
-## Proposed AWS OIDC access boundary
+## AWS OIDC boundary
 
-The user confirmed that AWS account `630956766927` is active, root MFA/payment prerequisites are satisfied, and the GitHub OIDC provider has been created. This repository cannot independently query those AWS control-plane facts, so they remain human-attested until a separately reviewed identity-only verification is executed.
+The user confirmed that AWS account `630956766927` is active and that the exact role `onchain-wallet-intelligence-hl-archive-metadata-canary` now exists with the reviewed trust relationship and inline policy `HLArchiveMetadataCanaryListOnly`. These AWS control-plane facts remain human-attested until the repository's STS-only identity gate succeeds.
 
-GitHub's current OIDC documentation states that repositories created after 2026-07-15 use immutable default subjects containing owner and repository IDs. Because this repository was created in August 2026, the proposed role is restricted to the expected immutable identity:
+The trust boundary remains restricted to:
 
 ```text
 provider = token.actions.githubusercontent.com
@@ -61,15 +64,14 @@ ref = refs/heads/main
 subject = repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main
 ```
 
-The exact token subject is still deliberately marked unobserved. A later STS-only verification must prove it rather than assuming federation succeeds.
+The persistent role policy permits only the preregistered `s3:ListBucket` scope and explicitly denies object reads/mutations. However, `HL-AWS-OIDC-IDENTITY-001` goes further: its 900-second assumed-role session carries an inline `Deny s3:*` policy, so the identity-verification session cannot use S3 at all.
 
-The proposed permission policy permits only `s3:ListBucket` for the seven preregistered prefixes, requires `s3:max-keys <= 1000`, and explicitly denies prefix escape, version listing, account-wide bucket enumeration, object-body reads and mutation.
-
-## Hard boundary
+## STS-only verification boundary
 
 ```text
-aws_identity_bound = false
-network_identity_check_authorized = false
+network_identity_check_authorized = true
+explicit_allowed_aws_cli_call = aws sts get-caller-identity
+s3_denied_for_identity_check_session = true
 requester_pays_authorized = false
 list_objects_authorized = false
 paid_request_authorized = false
@@ -86,12 +88,12 @@ empirical_result = null
 
 ## Exact next gate
 
-1. Review and merge the account-specific OIDC trust/permission boundary using the immutable GitHub subject format.
-2. Human creates exactly one role named `onchain-wallet-intelligence-hl-archive-metadata-canary` using the reviewed policies; no AWS access keys or GitHub AWS secrets.
-3. Separately preregister and run an STS-only OIDC identity verification against the exact canonical main commit. It must not touch S3 and must observe the actual federated identity.
-4. Only after identity verification: refresh/freeze exact applicable S3 pricing and obtain explicit one-time human Requester Pays budget approval.
-5. Only after that: implement/enable the bounded metadata `ListObjectsV2` adapter and canary.
+1. Review and merge the manual-only `HL-AWS-OIDC-IDENTITY-001` workflow implementation.
+2. Manually dispatch it from exact canonical `main` with the exact current `main` SHA.
+3. Require `STS_IDENTITY_MATCH` for AWS account `630956766927` and the exact assumed-role ARN; retain only minimized identity evidence.
+4. Only after successful attestation: refresh/freeze exact applicable S3 pricing and obtain a separate explicit one-time human Requester Pays budget approval.
+5. Only after that may a bounded metadata `ListObjectsV2` canary be implemented/enabled.
 
-No paid S3 call, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
+No S3 call, Requester Pays request, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
 
 Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.
