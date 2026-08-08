@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "source_artifact_id": 9022511541,
+  "source_artifact_name": "hyperliquid-archive-metadata-r0-31260043109-1",
+  "source_artifact_provider_digest": "sha256:40b26e33833b54a872a75be066a87b7e57a0e2f3930adada76ca3829a1142c8e",
+  "encoded_file": "r0-metadata-result.json.gz.b64",
+  "raw_file_name": "r0-metadata-result.json",
+  "raw_size_in_bytes": 16940,
+  "raw_sha256": "36dcae87be0ce9f8d107cf4519d9e15ad7987b82309b66691ab5c5bf97ef7a4e",
+  "gzip_size_in_bytes": 2641,
+  "gzip_sha256": "e3665f74df89236ce2ed0ec773bfe956b422fd98d3fe67d7a3cea8ac07ea7854",
+  "encoded_size_in_bytes": 3524,
+  "encoded_sha256": "1c3e16d6b5e62ecbbfb0629d9a66b7c0436ab160184bfb8fb66cd3f8498450eb",
+  "gzip_mtime": 0
+}
