@@ -124,11 +124,11 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             "s3:GetObject",
             "s3:GetObjectVersion",
             "s3:GetObjectAttributes",
-            "s3:SelectObjectContent",
             "s3:PutObject",
             "s3:DeleteObject",
         ):
             self.assertIn(action, denied_actions)
+        self.assertNotIn("s3:SelectObjectContent", allowed_actions | denied_actions)
 
     def test_no_oidc_or_aws_network_workflow_exists_in_design_phase(self) -> None:
         workflows = ROOT / ".github/workflows"
