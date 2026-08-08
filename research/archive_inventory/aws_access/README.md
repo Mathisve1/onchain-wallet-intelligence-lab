@@ -12,14 +12,16 @@ It does not prove that the AWS role exists and it does not authorize any AWS net
 - repository owner ID: `163474992`
 - only ref: `refs/heads/main`
 - OIDC audience: `sts.amazonaws.com`
-- exact subject: `repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main`
+- expected immutable subject: `repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main`
 - expected role: `onchain-wallet-intelligence-hl-archive-metadata-canary`
+
+GitHub documents that repositories created after 2026-07-15 use immutable default OIDC subjects containing both owner and repository IDs. This repository was created in August 2026, so the access design uses that format rather than the legacy name-only subject. The exact emitted subject remains unobserved until the separately reviewed STS-only identity verification runs; no assumption of successful role federation is made here.
 
 The OIDC provider is user-confirmed as created in AWS but is not independently queryable from this repository or ChatGPT session.
 
 ## Security properties
 
-The trust policy permits only `sts:AssumeRoleWithWebIdentity` from the exact GitHub OIDC provider and exact canonical-main identity.
+The trust policy permits only `sts:AssumeRoleWithWebIdentity` from the exact GitHub OIDC provider and exact canonical-main identity. It independently binds audience, immutable subject, repository ID, repository-owner ID and ref.
 
 The S3 permission policy permits only `s3:ListBucket` for the seven preregistered Hyperliquid prefixes, requires `s3:max-keys <= 1000`, explicitly denies prefix escape, version listing, account-wide bucket enumeration, object-body reads and mutations.
 
