@@ -119,6 +119,17 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         ):
             self.assertIn(action, denied_actions)
 
+    def test_no_oidc_or_aws_network_workflow_exists_in_design_phase(self) -> None:
+        workflows = ROOT / ".github/workflows"
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(workflows.glob("*.yml"))
+        )
+        self.assertNotIn("id-token: write", combined)
+        self.assertNotIn("aws-actions/configure-aws-credentials", combined)
+        self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
+        self.assertFalse((workflows / "hyperliquid-aws-oidc-identity-check.yml").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
