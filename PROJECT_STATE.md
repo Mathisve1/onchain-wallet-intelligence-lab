@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, and Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`.
+Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, and fresh R2 human approval `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001`.
 
 ## Current status
 
@@ -34,16 +34,23 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | Region probe response body read | `false` |
 | Region probe LIST/object data requested | `false` |
 | R2 canary | `HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001` |
-| R2 status | `PREREGISTERED_CORRECT_REGION_METADATA_CANARY_NOT_AUTHORIZED` |
+| R2 preregistration commit | `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` |
+| R2 status | `HUMAN_APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION` |
 | R2 parent Region attestation | `9378f625648592bd4a5890f47a98b36028cbd433` |
 | R2 target / signing Region | `hl-mainnet-node-data` / `ap-northeast-1` |
 | R2 frozen prefixes | `5` previously failing node-data families |
 | R2 request envelope | `5 x ListObjectsV2`, max `25` keys each / `125` entries total |
+| R2 response/runtime cap | `8 MiB` / `120 sec` |
 | R2 retries / pagination / redirects | `0` / `false` / `false` |
-| R2 proposed one-time ceiling | `EUR 0.10` — proposal only, not authorization |
-| R2 human approval | `REQUIRED_NOT_GRANTED` |
-| R2 implementation / workflow | `false` / `false` |
-| R2 execution / paid request / LIST | `false` / `false` / `false` |
+| R2 approval ID | `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` |
+| R2 approval timestamp | `2026-08-08T19:48:00Z` |
+| R2 approval text SHA-256 | `728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6` |
+| R2 maximum one-time / monthly budget | `EUR 0.10` / `EUR 0` |
+| R2 implementation phase | `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY` |
+| R2 implementation / workflow installed | `false` / `false` |
+| R2 execution release / execution ready | `false` / `false` |
+| R2 operational paid request / Requester Pays / LIST | `false` / `false` / `false` |
+| R2 S3 requests / metadata entries observed | `0` / `0` |
 | fresh LIST attempt authorized | `false` |
 | larger 300-request inventory | `false` |
 | object-body access | `false` |
@@ -59,7 +66,9 @@ AWS returned HTTP `400` together with `x-amz-bucket-region: ap-northeast-1`. Und
 
 The artifact `9026393705` is independently verified. GitHub's provider digest and the independently downloaded ZIP SHA-256 both equal `5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405`, and the internal hash ledger matches the retained context, result and return-code files.
 
-R2 is a separate static preregistration only. It binds the corrected signing Region `ap-northeast-1` and narrows the next possible experiment to exactly the five node-data prefixes that failed R0. The R2 preregistration contains no executable collector, no workflow, no fresh AWS request and no granted spend. The proposed EUR 0.10 ceiling is a governance limit for a future human decision, not an execution authorization or predicted AWS charge.
+R2 remains a separate successor to that consumed Region probe. Its immutable preregistration binds signing Region `ap-northeast-1` and exactly the five node-data prefixes that failed R0. The fresh user approval `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` is hash-bound to canonical preregistration commit `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` and approves the frozen scope/budget envelope: five first-page `ListObjectsV2` requests maximum, 25 keys each, 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination or redirect following, and EUR 0.10 one-time / EUR 0 monthly ceilings.
+
+That human approval opens only the implementation/review phase. It does not itself install executable code or a workflow, create a single-use execution release, or authorize a runtime paid request. Operational Requester Pays and LIST flags remain false until a separately reviewed implementation is canonically merged and a separately reviewed single-use release is present.
 
 This remains infrastructure/access research only. It is not market data, wallet intelligence, P&L or alpha evidence.
 
@@ -101,21 +110,47 @@ region_probe_r1_artifact_id = 9026393705
 region_probe_r1_exact_bucket_region = ap-northeast-1
 r2_canary_preregistered = true
 r2_canary_id = HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001
+r2_preregistration_commit = 39b40cccc7e9a3fdbc439d06fb188e946d9da2aa
 r2_parent_region_attestation_commit = 9378f625648592bd4a5890f47a98b36028cbd433
 r2_target_bucket = hl-mainnet-node-data
 r2_signing_region = ap-northeast-1
 r2_maximum_total_list_requests = 5
 r2_maximum_keys_per_request = 25
 r2_maximum_total_entries = 125
-r2_proposed_maximum_one_time_budget_eur = 0.10
-r2_human_approved = false
-r2_implementation_authorized = false
+r2_maximum_total_response_bytes = 8388608
+r2_maximum_runtime_seconds = 120
+r2_maximum_retries_per_request = 0
+r2_pagination_authorized = false
+r2_http_redirect_following_authorized = false
+r2_human_approved = true
+r2_approval_id = APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001
+r2_approval_reviewed_commit = 39b40cccc7e9a3fdbc439d06fb188e946d9da2aa
+r2_approval_recorded_at_utc = 2026-08-08T19:48:00Z
+r2_approval_text_sha256 = 728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6
+r2_maximum_one_time_budget_eur = 0.10
+r2_maximum_monthly_budget_eur = 0
+r2_implementation_phase_authorized = true
+r2_implementation_installed = false
 r2_workflow_installation_authorized = false
+r2_workflow_installed = false
+r2_execution_release_present = false
+r2_execution_ready = false
 r2_execution_authorized = false
 r2_paid_request_authorized = false
 r2_requester_pays_authorized = false
 r2_list_objects_v2_authorized = false
+r2_get_object_authorized = false
+r2_head_object_authorized = false
+r2_get_object_attributes_authorized = false
+r2_range_get_authorized = false
+r2_list_object_versions_authorized = false
+r2_list_all_my_buckets_authorized = false
+r2_object_body_download_authorized = false
+r2_decompression_authorized = false
+r2_market_data_ingestion_authorized = false
+r2_larger_300_request_inventory_authorized = false
 r2_s3_requests_executed = 0
+r2_metadata_entries_observed = 0
 fresh_paid_attempt_authorized = false
 fresh_list_attempt_authorized = false
 requester_pays_authorized = false
@@ -142,7 +177,10 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Review and canonically merge the static R2 preregistration only if exact-head CI, manifest validation and clean-context review remain green.
-2. After merge, require a fresh explicit human approval bound to that exact R2 preregistration commit before implementation begins.
-3. Approval may cover at most five first-page LIST requests signed in `ap-northeast-1`; implementation and a single-use execution release remain separate reviewed gates.
-4. A successful R2 result still does not authorize the 300-request inventory, object-body access, market-data ingestion, wallet analysis or any trading/capital stage.
+1. Canonically record the R2 human approval only if exact-head CI, byte-exact manifest validation and clean-context review are green.
+2. After that approval merge, build the minimal corrected-region R2 implementation and manual-only workflow on a separate branch bound to the canonical approval.
+3. The implementation must enforce exactly five first-page `ListObjectsV2` requests, one per frozen prefix, signed in `ap-northeast-1`, with Requester Pays acknowledgement, max 25 keys/request, 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination and no redirect following.
+4. Implementation CI/review must remain non-executing. No AWS/S3 request may occur from PR or push CI, and the workflow must fail closed before OIDC while the canonical implementation/release bindings are absent.
+5. After the implementation is canonically merged, create a separate exact-implementation-bound single-use execution release. Only that later release may open the already-human-approved Requester Pays/LIST scope for one canonical manual dispatch.
+6. The first later dispatch consumes the release regardless of PASS/FAIL. No rerun or second dispatch is implied by this approval.
+7. A successful R2 result still does not authorize the 300-request inventory, object-body access, market-data ingestion, wallet analysis or any trading/capital stage.
