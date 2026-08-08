@@ -84,7 +84,7 @@ class ArchiveNodeDataCanaryR2Tests(unittest.TestCase):
         self.assertIn("object_body_download_authorized=false", text)
         self.assertIn("larger_300_request_inventory_authorized=false", text)
 
-    def test_preregistration_snapshot_remains_non_executing(self) -> None:
+    def test_preregistration_snapshot_remains_non_self_authorizing(self) -> None:
         c = self.load()
         self.assertFalse(c["implementation_authorized"])
         self.assertFalse(c["workflow_installation_authorized"])
@@ -92,7 +92,9 @@ class ArchiveNodeDataCanaryR2Tests(unittest.TestCase):
         self.assertFalse(c["fresh_paid_attempt_authorized"])
         self.assertFalse(c["list_objects_v2_authorized"])
         self.assertFalse(c["requester_pays_authorized"])
-        self.assertFalse((BASE / "R2_EXECUTION_RELEASE.json").exists())
+        self.assertTrue((BASE / "R2_EXECUTION_RELEASE.json").is_file())
+        release = json.loads((BASE / "R2_EXECUTION_RELEASE.json").read_text(encoding="utf-8"))
+        self.assertEqual(release["preregistration_commit"], "39b40cccc7e9a3fdbc439d06fb188e946d9da2aa")
         self.assertFalse((BASE / "evidence").exists())
         self.assertFalse((BASE / "outputs").exists())
 
