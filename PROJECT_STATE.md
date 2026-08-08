@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical `main` commit `549e70dedc0eefb9336a9fcd86fc94142904ed3a`, canonical public-probe evidence, and attested AWS OIDC identity run `31250176507`.
+Verified: 2026-08-08 against canonical `main` commit `9af4b21863e47fb3bb2997ce77b9940eecf4597f`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, and explicit human approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`.
 
 ## Current status
 
@@ -24,26 +24,27 @@ Verified: 2026-08-08 against canonical `main` commit `549e70dedc0eefb9336a9fcd86
 | AWS account ID | `630956766927` |
 | GitHub OIDC provider/federation | `PROVEN_BY_CANONICAL_STS_RUN` |
 | expected GitHub OIDC subject | `repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main` |
-| OIDC token subject directly observed | `false` |
 | expected AWS role | `onchain-wallet-intelligence-hl-archive-metadata-canary` |
-| expected role ARN | `arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary` |
-| STS identity check | `HL-AWS-OIDC-IDENTITY-001` |
-| canonical STS run / job | `31250176507` / `93085194965` |
-| canonical STS artifact | `9019744292` |
 | STS identity check status | `ATTESTED_STS_IDENTITY_MATCH` |
+| canonical STS run / job / artifact | `31250176507` / `93085194965` / `9019744292` |
 | AWS identity bound | `true` |
 | persistent S3 inline policy | `USER_CONFIRMED_NOT_API_VERIFIED` |
-| OIDC identity check authorized | `true` |
 | exact bucket Regions | `UNRESOLVED_PRE_S3` |
 | conservative pricing freeze | `FROZEN_CONSERVATIVE_R0_PRE_APPROVAL` |
 | R0 canary | `HL-ARCHIVE-METADATA-CANARY-R0-001` |
-| R0 status | `PREREGISTERED_MICRO_CANARY_NOT_AUTHORIZED` |
-| proposed one-time budget | `EUR 1.00` |
-| authorized one-time budget | `null` |
-| requester-pays authorized | `false` |
-| ListObjectsV2 authorized | `false` |
+| R0 human approval | `APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION` |
+| R0 approval reviewed commit | `9af4b21863e47fb3bb2997ce77b9940eecf4597f` |
+| R0 approval text SHA-256 | `d70008eac7521b324f61161bcc0075e28cc3a116dd30f0c52b48d8cf5eb6ed46` |
+| human-approved one-time ceiling | `EUR 1.00` |
+| monthly ceiling | `EUR 0` |
+| R0 implementation installed | `false` |
+| R0 execution workflow installed | `false` |
+| R0 execution ready | `false` |
+| operational requester-pays authorized | `false` |
+| operational ListObjectsV2 authorized | `false` |
 | GetObject authorized | `false` |
 | object-body download authorized | `false` |
+| S3 requests executed | `0` |
 | empirical result | `null` |
 | integration authorized | `false` |
 | paper authorized | `false` |
@@ -54,62 +55,46 @@ Verified: 2026-08-08 against canonical `main` commit `549e70dedc0eefb9336a9fcd86
 
 ## Canonical technical evidence
 
-The canonical public probe remains immutable and attested. `HL-ARCHIVE-INVENTORY-001` remains metadata/access/cost-only research. No historical archive object has been listed or downloaded.
+The canonical public probe and AWS OIDC identity evidence remain immutable and attested. No historical archive object has been listed or downloaded. The STS identity check proves GitHub-to-AWS federation and role identity but not the persistent S3 inline policy document.
 
-The AWS OIDC identity gate is independently attested. Canonical run `31250176507` was dispatched from `refs/heads/main` against exact commit `f34786eafd3689b575bdd3d2ada932b8ce204a61`. The checked-out commit, dispatch SHA and reviewed commit matched. AWS returned account `630956766927` and the exact expected assumed-role ARN.
+The conservative R0 pricing model remains frozen with a modeled stress cost of `USD 0.004544304` at every R0 technical cap. The user has now explicitly approved a maximum one-time human ceiling of `EUR 1.00` for exactly seven first-page metadata LIST calls. The exact approval text is retained under `research/archive_inventory/approvals/` and hash-bound.
 
-The identity-check session carried an inline `Deny s3:*` policy and made exactly one explicit AWS identity call, `aws sts get-caller-identity`. No S3 request and no Requester Pays request occurred. The downloaded artifact ZIP SHA-256 independently matched GitHub's provider digest `3ebb71763783135c2c21bb7c0f8a801e0d873208e5a8b9afff473b208a2dc607`.
-
-This evidence proves GitHub-to-AWS federation and the role identity. It does not independently verify the persistent inline S3 permission policy; that remains user-confirmed until a later separately approved metadata canary exercises only the frozen listing boundary.
-
-## R0 pricing freeze
-
-Current official AWS documentation states that S3 LIST requests are billed at the S3 Standard PUT/COPY/POST request rate; an official AWS current cost reference uses USD 0.005 per 1,000 PUT/COPY/POST/LIST requests. Requester Pays charges the authenticated requester for successful eligible request and data-transfer costs. `ListObjectsV2` supports `RequestPayer=requester` and returns at most 1,000 keys.
-
-The Hyperliquid bucket Regions remain deliberately unknown because discovering them via S3 would cross the current no-S3 gate. Therefore `HL-ARCHIVE-METADATA-CANARY-R0-001` uses deliberately conservative stress prices instead of assuming a favorable Region or free transfer:
-
-```text
-stress_list_rate_usd_per_1000 = 0.05
-stress_transfer_rate_usd_per_gb = 0.50
-maximum_list_requests = 7
-maximum_keys_per_request = 25
-maximum_total_entries = 175
-maximum_total_response_bytes = 8388608
-maximum_runtime_seconds = 180
-maximum_retries_per_request = 0
-pagination_authorized = false
-modeled_stress_total_usd = 0.004544304
-proposed_maximum_one_time_budget_eur = 1.00
-```
-
-The EUR 1.00 value is a proposal only. No FX assumption, free-transfer allowance, credit or discount is required for the stress model.
+Human budget/scope approval is deliberately distinct from operational release. This approval authorizes the project to implement and review the bounded R0 workflow. It does not by itself make an S3 request executable.
 
 ## Hard boundary
 
 ```text
-aws_identity_bound = true
+human_r0_scope_budget_approved = true
+human_maximum_one_time_budget_eur = 1.00
+maximum_one_time_budget_eur = null
+maximum_monthly_budget_eur = 0
+r0_implementation_installed = false
+r0_execution_workflow_installed = false
+r0_execution_ready = false
+operational_requester_pays_authorized = false
+operational_list_objects_authorized = false
 requester_pays_authorized = false
 list_objects_authorized = false
 paid_request_authorized = false
 get_object_authorized = false
 head_object_authorized = false
+get_object_attributes_authorized = false
 range_get_authorized = false
+list_object_versions_authorized = false
+list_all_my_buckets_authorized = false
 object_body_download_authorized = false
 decompression_authorized = false
-maximum_one_time_budget_eur = null
-maximum_monthly_budget_eur = 0
 market_data_ingested = false
 empirical_result = null
 ```
 
 ## Exact next gate
 
-1. Review and merge the conservative R0 pricing/budget design.
-2. Obtain separate explicit human approval binding the exact resulting canonical `main` SHA and a EUR 1.00 one-time ceiling.
-3. Only after that approval may a network-capable R0 implementation be created. R0 may make exactly seven first-page `ListObjectsV2` calls with `RequestPayer=requester`, no pagination and no retries.
-4. Attest the R0 result and only then decide whether a larger paginated archive inventory deserves a separate budget and release.
-5. Object-body access, market-data ingestion, wallet P&L, clustering and all trading stages remain downstream and separately gated.
-
-No S3 call, Requester Pays request, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
+1. Merge the immutable approval record after CI and clean-context review.
+2. From the resulting canonical `main`, implement a manual exact-main-SHA R0 workflow and deterministic collector that can issue only the seven approved first-page `ListObjectsV2` requests with `RequestPayer=requester`.
+3. Add hard software counters for 7 requests, 25 keys/request, 175 entries, 8 MiB total response bytes, 180 seconds, zero retries and no continuation-token following.
+4. Prove statically and by tests that no object-body, pagination, bucket-enumeration, mutation, market-data ingestion or trading capability exists.
+5. Merge the implementation only after exact-head CI and clean-context review.
+6. Only then may one manual canonical R0 workflow run be dispatched. The larger 300-request inventory remains separately unauthorized.
 
 Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.
