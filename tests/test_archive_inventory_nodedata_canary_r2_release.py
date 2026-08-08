@@ -77,6 +77,21 @@ class ArchiveNodeDataCanaryR2ReleaseTests(unittest.TestCase):
         self.assertIsNone(r["empirical_result"])
         self.assertTrue(all(value is False for value in r["trading_authorizations"].values()))
 
+    def test_project_state_binds_canonical_implementation_and_pre_dispatch_release(self) -> None:
+        state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
+        self.assertIn("r2_implementation_canonical = true", state)
+        self.assertIn("r2_implementation_commit = 142ce50be20507761c4cce37b325ac69d57f8b25", state)
+        self.assertIn("r2_expected_implementation_commit = 142ce50be20507761c4cce37b325ac69d57f8b25", state)
+        self.assertIn("r2_execution_release_present = true", state)
+        self.assertIn("r2_execution_release_id = RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001", state)
+        self.assertIn("r2_execution_release_consumed = false", state)
+        self.assertIn("r2_execution_ready = true", state)
+        self.assertIn("r2_s3_requests_executed = 0", state)
+        self.assertIn("r2_metadata_entries_observed = 0", state)
+        self.assertIn("larger_300_request_inventory_authorized = false", state)
+        self.assertIn("object_body_download_authorized = false", state)
+        self.assertIn("market_data_ingested = false", state)
+
     def test_release_aware_validator_passes(self) -> None:
         self.assertEqual(validator.main(), 0)
 
