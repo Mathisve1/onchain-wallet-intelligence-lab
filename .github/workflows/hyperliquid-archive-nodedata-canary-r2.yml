@@ -2,11 +2,6 @@ name: Hyperliquid Archive NodeData Canary R2
 
 on:
   workflow_dispatch:
-    inputs:
-      reviewed_commit:
-        description: Exact current canonical main commit SHA to execute
-        required: true
-        type: string
 
 permissions:
   actions: read
@@ -18,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+  EVENT_NAME: ${{ github.event_name }}
   DISPATCH_REF: ${{ github.ref }}
   DISPATCH_SHA: ${{ github.sha }}
   EXPECTED_AWS_ACCOUNT_ID: '630956766927'
@@ -29,6 +24,8 @@ env:
   APPROVAL_TEXT_SHA256: 728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6
   EXPECTED_IMPLEMENTATION_COMMIT: 142ce50be20507761c4cce37b325ac69d57f8b25
   EXECUTION_RELEASE_PATH: research/archive_inventory/r2/R2_EXECUTION_RELEASE.json
+  SUCCESSOR_EXECUTION_RELEASE_PATH: research/archive_inventory/r2/R2_EXECUTION_RELEASE_002.json
+  PREDECESSOR_CONSUMPTION_PATH: research/archive_inventory/r2/R2_EXECUTION_RELEASE_001_CONSUMPTION.json
   AWS_EC2_METADATA_DISABLED: 'true'
   AWS_PAGER: ''
 
@@ -37,21 +34,39 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check out exact reviewed commit without persisted credentials
+      - name: Check out canonical dispatch SHA without persisted credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ env.EXACT_REVIEWED_COMMIT }}
+          ref: ${{ env.DISPATCH_SHA }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Verify canonical main dispatch and exact reviewed identity
+      - name: Verify canonical manual main dispatch and checked-out identity
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${EXACT_REVIEWED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
-          test "${DISPATCH_REF}" = "refs/heads/main"
-          test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"
-          test "$(git rev-parse HEAD)" = "${EXACT_REVIEWED_COMMIT}"
+          observed_head="$(git rev-parse HEAD)"
+          printf 'EVENT_NAME=%s\n' "${EVENT_NAME}"
+          printf 'DISPATCH_REF=%s\n' "${DISPATCH_REF}"
+          printf 'DISPATCH_SHA=%s\n' "${DISPATCH_SHA}"
+          printf 'CHECKED_OUT_HEAD=%s\n' "${observed_head}"
+
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" ]]; then
+            echo "::error title=R2 identity gate 41::Expected workflow_dispatch, observed ${EVENT_NAME}"
+            exit 41
+          fi
+          if [[ "${DISPATCH_REF}" != "refs/heads/main" ]]; then
+            echo "::error title=R2 identity gate 42::Expected refs/heads/main, observed ${DISPATCH_REF}"
+            exit 42
+          fi
+          if [[ ! "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=R2 identity gate 43::github.sha is not exactly 40 lowercase hexadecimal characters"
+            exit 43
+          fi
+          if [[ "${observed_head}" != "${DISPATCH_SHA}" ]]; then
+            echo "::error title=R2 identity gate 44::Checked-out HEAD ${observed_head} differs from github.sha ${DISPATCH_SHA}"
+            exit 44
+          fi
 
       - name: Set up pinned Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -67,6 +82,7 @@ jobs:
           python -m unittest discover -s tests -v
           python governance/validate_repository.py
           python governance/validate_r2_implementation.py
+          python governance/validate_r2_successor_release.py
           python - <<'PY'
           import hashlib
           import json
@@ -79,6 +95,9 @@ jobs:
           approval_text = base / 'approvals/APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001.txt'
           approval = json.loads((base / 'approvals/APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001.json').read_text(encoding='utf-8'))
           impl = json.loads((base / 'R2_IMPLEMENTATION_CONTRACT.json').read_text(encoding='utf-8'))
+          predecessor = json.loads((root / os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          consumption = json.loads((root / os.environ['PREDECESSOR_CONSUMPTION_PATH']).read_text(encoding='utf-8'))
+          release = json.loads((root / os.environ['SUCCESSOR_EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
 
           assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
           assert approval['approval_id'] == os.environ['APPROVAL_ID']
@@ -110,19 +129,39 @@ jobs:
           assert impl['execution_authorized'] is False
 
           expected = os.environ['EXPECTED_IMPLEMENTATION_COMMIT']
-          assert expected != 'PENDING_CANONICAL_IMPLEMENTATION_MERGE', 'implementation review cannot self-release execution'
           assert re.fullmatch(r'[0-9a-f]{40}', expected)
+          assert expected == '142ce50be20507761c4cce37b325ac69d57f8b25'
 
-          release_path = root / os.environ['EXECUTION_RELEASE_PATH']
-          assert release_path.is_file(), 'post-merge R2 execution release is absent'
-          release = json.loads(release_path.read_text(encoding='utf-8'))
-          assert release['release_id'] == 'RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001'
-          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R2_RUN'
-          assert release['canary_id'] == 'HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001'
+          assert predecessor['release_id'] == 'RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_001'
+          assert predecessor['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R2_RUN'
+          assert predecessor['s3_requests_executed'] == 0
+          assert predecessor['metadata_entries_observed'] == 0
+          assert predecessor['empirical_result'] is None
+
+          assert consumption['predecessor_release_id'] == predecessor['release_id']
+          assert consumption['predecessor_release_merge_commit'] == '0dd6f32ab3a202b0c58f37821d1038ac917d84ce'
+          assert consumption['status'] == 'CONSUMED_BY_FIRST_DISPATCH_PRE_OIDC_NO_S3_EXECUTION'
+          assert consumption['aws_oidc_role_assumption_step_executed'] is False
+          assert consumption['collector_step_executed'] is False
+          assert consumption['s3_http_requests_executed'] == 0
+          assert consumption['list_objects_v2_requests_executed'] == 0
+          assert consumption['metadata_entries_observed'] == 0
+          assert consumption['rerun_authorized'] is False
+          assert consumption['successor_release_required_for_any_new_dispatch'] is True
+
+          assert release['release_id'] == 'RELEASE_HL_ARCHIVE_NODEDATA_CANARY_R2_002'
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R2_SUCCESSOR_RUN_AFTER_MERGE'
+          assert release['predecessor_release_id'] == predecessor['release_id']
+          assert release['predecessor_release_consumed'] is True
+          assert release['predecessor_s3_requests_executed'] == 0
           assert release['implementation_commit'] == expected
           assert release['preregistration_commit'] == os.environ['PREREGISTRATION_COMMIT']
           assert release['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
           assert release['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['canonical_dispatch_sha_source'] == 'github.sha'
+          assert release['manual_reviewed_commit_input_required'] is False
           assert release['target_bucket'] == 'hl-mainnet-node-data'
           assert release['signing_region'] == 'ap-northeast-1'
           assert release['maximum_one_time_budget_eur'] == 0.10
@@ -141,16 +180,11 @@ jobs:
           assert release['single_workflow_dispatch_authorized'] is True
           assert release['rerun_authorized'] is False
           for key in (
-              'get_object_authorized',
-              'head_object_authorized',
-              'get_object_attributes_authorized',
-              'range_get_authorized',
-              'list_object_versions_authorized',
-              'list_all_my_buckets_authorized',
-              'object_body_download_authorized',
-              'decompression_authorized',
-              'market_data_ingestion_authorized',
-              'larger_300_request_inventory_authorized',
+              'get_object_authorized', 'head_object_authorized',
+              'get_object_attributes_authorized', 'range_get_authorized',
+              'list_object_versions_authorized', 'list_all_my_buckets_authorized',
+              'object_body_download_authorized', 'decompression_authorized',
+              'market_data_ingestion_authorized', 'larger_300_request_inventory_authorized',
           ):
               assert release[key] is False
           assert release['s3_requests_executed'] == 0
@@ -159,7 +193,7 @@ jobs:
           assert all(value is False for value in release['trading_authorizations'].values())
           PY
 
-      - name: Enforce single-use release before AWS OIDC
+      - name: Enforce successor single-use release before AWS OIDC
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -168,7 +202,10 @@ jobs:
           CURRENT_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          test "${CURRENT_RUN_ATTEMPT}" = '1'
+          if [[ "${CURRENT_RUN_ATTEMPT}" != '1' ]]; then
+            echo "::error title=R2 successor single-use gate::Run attempt must be 1; re-runs are forbidden"
+            exit 51
+          fi
           python - <<'PY'
           import json
           import os
@@ -176,7 +213,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          release = json.loads(Path(os.environ['SUCCESSOR_EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
           start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
           repo = os.environ['CURRENT_REPOSITORY']
           current_run_id = int(os.environ['CURRENT_RUN_ID'])
@@ -191,7 +228,7 @@ jobs:
                   'Accept': 'application/vnd.github+json',
                   'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
                   'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'hl-nodedata-canary-r2-single-use-check',
+                  'User-Agent': 'hl-nodedata-canary-r2-successor-single-use-check',
               },
               method='GET',
           )
@@ -202,13 +239,13 @@ jobs:
               row for row in runs
               if datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(timezone.utc) >= start
           ]
-          assert len(eligible) == 1, 'R2 execution release is not single-use within the release window'
-          assert int(eligible[0]['id']) == current_run_id, 'a previous R2 dispatch already consumed this release'
+          assert len(eligible) == 1, 'R2 successor release is not single-use within its successor window'
+          assert int(eligible[0]['id']) == current_run_id, 'a previous dispatch already consumed R2 successor release 002'
           assert eligible[0]['event'] == 'workflow_dispatch'
           assert eligible[0]['head_branch'] == 'main'
           PY
 
-      - name: Freeze pending R2 run context before AWS authentication
+      - name: Freeze pending R2 successor run context before AWS authentication
         shell: bash
         env:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
@@ -221,20 +258,22 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          release = json.loads(Path(os.environ['SUCCESSOR_EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
           context = {
-              'schema_version': '1.0',
+              'schema_version': '1.1',
               'canary_id': 'HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001',
               'terminal_status': 'PENDING_AWS_OIDC',
+              'event_name': os.environ['EVENT_NAME'],
               'dispatch_ref': os.environ['DISPATCH_REF'],
               'dispatch_sha': os.environ['DISPATCH_SHA'],
-              'reviewed_commit': os.environ['EXACT_REVIEWED_COMMIT'],
+              'reviewed_commit': os.environ['DISPATCH_SHA'],
               'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
               'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
               'approval_id': os.environ['APPROVAL_ID'],
               'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
               'execution_release_id': release['release_id'],
+              'predecessor_release_id': release['predecessor_release_id'],
               'implementation_commit': release['implementation_commit'],
               'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
               'expected_role_arn': os.environ['EXPECTED_ROLE_ARN'],
@@ -269,7 +308,7 @@ jobs:
           role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
           aws-region: ap-northeast-1
           role-duration-seconds: 900
-          role-session-name: HLArchiveNodeDataR2
+          role-session-name: HLArchiveNodeDataR2Successor
           allowed-account-ids: '630956766927'
           unset-current-credentials: true
           retry-max-attempts: 1
@@ -317,12 +356,13 @@ jobs:
               context = json.loads(context_path.read_text(encoding='utf-8'))
           else:
               context = {
-                  'schema_version': '1.0',
+                  'schema_version': '1.1',
                   'canary_id': 'HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001',
                   'terminal_status': 'R2_PRE_OIDC_GATE_FAILED',
+                  'event_name': os.environ.get('EVENT_NAME'),
                   'dispatch_ref': os.environ.get('DISPATCH_REF'),
                   'dispatch_sha': os.environ.get('DISPATCH_SHA'),
-                  'reviewed_commit': os.environ.get('EXACT_REVIEWED_COMMIT'),
+                  'reviewed_commit': os.environ.get('DISPATCH_SHA'),
                   'checked_out_commit': None,
                   'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
                   'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
@@ -389,11 +429,11 @@ jobs:
           cd "${RUNNER_TEMP}"
           sha256sum r2-metadata-context.json r2-metadata-result.json r2-metadata.rc >R2_METADATA_FILES.sha256
 
-      - name: Upload minimized R2 evidence
+      - name: Upload minimized R2 successor evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: hyperliquid-archive-nodedata-r2-${{ github.run_id }}-${{ github.run_attempt }}
+          name: hyperliquid-archive-nodedata-r2-successor-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/r2-metadata-context.json
             ${{ runner.temp }}/r2-metadata-result.json
