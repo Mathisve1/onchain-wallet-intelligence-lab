@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "attestation_id": "HL-ARCHIVE-METADATA-CANARY-R0-001-ATTESTATION",
+  "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
+  "status": "ATTESTED_CONSUMED_PARTIAL_FAILURE_REGION_UNRESOLVED",
+  "canonical_release_commit": "bc8a47a1cdeb1163657ea243d6694286d6612bed",
+  "implementation_commit": "cd5c46b25502b671693dd5ebb091e7273399bccf",
+  "workflow_run_id": 31260043109,
+  "workflow_job_id": 93109335453,
+  "workflow_run_attempt": 1,
+  "artifact_id": 9022511541,
+  "artifact_sha256": "40b26e33833b54a872a75be066a87b7e57a0e2f3930adada76ca3829a1142c8e",
+  "terminal_status": "R0_METADATA_CANARY_FAIL",
+  "aws_oidc_outcome": "success",
+  "request_attempt_count": 7,
+  "s3_http_request_count": 7,
+  "successful_request_count": 2,
+  "failed_request_count": 5,
+  "total_entries": 50,
+  "total_response_bytes": 14229,
+  "runtime_seconds": 2.439212,
+  "retries_used": 0,
+  "pagination_followed": false,
+  "http_redirects_followed": false,
+  "requester_pays_requested": true,
+  "object_body_requested": false,
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "successful_families": [
+    {
+      "dataset_family_id": "market_data",
+      "bucket": "hyperliquid-archive",
+      "prefix": "market_data/",
+      "key_count": 25,
+      "is_truncated": true,
+      "next_continuation_token_present": true,
+      "request_charged": "requester"
+    },
+    {
+      "dataset_family_id": "asset_ctxs",
+      "bucket": "hyperliquid-archive",
+      "prefix": "asset_ctxs/",
+      "key_count": 25,
+      "is_truncated": true,
+      "next_continuation_token_present": true,
+      "request_charged": "requester"
+    }
+  ],
+  "failed_families": [
+    "node_fills_by_block",
+    "node_fills_legacy",
+    "node_trades_legacy",
+    "explorer_blocks",
+    "replica_cmds"
+  ],
+  "failed_bucket": "hl-mainnet-node-data",
+  "common_failure_class": "S3_AuthorizationHeaderMalformed",
+  "root_cause_assessment": {
+    "classification": "STRONGLY_CONSISTENT_WITH_SIGNING_REGION_MISMATCH",
+    "exact_bucket_region": null,
+    "confidence": "HIGH_BUT_NOT_PROVEN",
+    "reason": "All five requests to hl-mainnet-node-data failed with the same AuthorizationHeaderMalformed class while the same OIDC role, SigV4 implementation and us-east-1 signing succeeded for both hyperliquid-archive prefixes. R0 deliberately did not retain bucket-region headers or raw error bodies, so the expected Region cannot be attested from this run."
+  },
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "fresh_paid_attempt_authorized": false,
+  "larger_300_request_inventory_authorized": false,
+  "get_object_authorized": false,
+  "object_body_download_authorized": false,
+  "market_data_ingestion_authorized": false,
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "next_gate": "PREREGISTER_EXACT_BUCKET_REGION_DISCOVERY_BEFORE_ANY_FRESH_PAID_ATTEMPT"
+}
