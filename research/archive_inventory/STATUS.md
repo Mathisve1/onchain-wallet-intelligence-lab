@@ -29,6 +29,9 @@
 - retries: `0`
 - pagination: `false`
 - HTTP redirects followed: `false`
+- post-merge execution release required: `true`
+- execution release present: `false`
+- execution release single-use: `true`
 - review-branch network execution authorized: `false`
 - operational requester-pays authorized: `false`
 - operational list-objects authorized: `false`
@@ -42,6 +45,6 @@
 
 ## Next gate
 
-The implementation candidate must pass exact-head CI, R0-specific governance validation and clean-context review. Only after canonical merge may one manual exact-main-SHA R0 run be dispatched under the already-approved EUR 1.00 envelope.
+The implementation candidate must pass exact-head CI, R0-specific governance validation and clean-context review. After implementation merge, a separate `R0_EXECUTION_RELEASE.json` PR must bind the exact implementation commit and approved limits. Only after that release merges may exactly one manual canonical R0 dispatch proceed. Re-run attempts or a second dispatch fail before OIDC.
 
 The larger 300-request inventory envelope remains separately unauthorized even if R0 succeeds.
