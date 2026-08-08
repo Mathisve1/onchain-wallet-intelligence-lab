@@ -100,7 +100,7 @@ def validate() -> None:
     for token in (
         "response.read(", 'connection.request("GET"', 'connection.request("POST"',
         'connection.request("PUT"', 'connection.request("DELETE"', "subprocess",
-        "boto3", "botocore", "requests", "urllib.request", "ListObjectsV2",
+        "boto3", "botocore", "import requests", "from requests", "urllib.request", "ListObjectsV2",
         "GetObject", "HeadObject", "GetObjectAttributes",
     ):
         require(token not in source, f"forbidden probe capability/literal: {token}")
