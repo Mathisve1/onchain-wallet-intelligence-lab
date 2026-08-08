@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, and canonical Region-probe implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`.
+Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, and successful single-use Region-probe run `31273770895`.
 
 ## Current status
 
@@ -22,31 +22,17 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | R0 success / failure | `2` / `5` |
 | R0 release | `CONSUMED` |
 | `hyperliquid-archive` | `US_EAST_1_SUCCEEDED_FOR_R0` |
-| `hl-mainnet-node-data` exact Region | `UNRESOLVED` |
 | Region probe | `HL-ARCHIVE-REGION-PROBE-R1-001` |
-| Region probe purpose | `RESOLVE_HL_MAINNET_NODE_DATA_BUCKET_REGION_ONLY` |
-| Region probe preregistration | `910997423f5e008f3c7bca65fd739d6aa14d25a7` |
-| Region probe approval merge | `b86156d71ef438441e6d3903a8bbc2da564a2046` |
-| Region probe approval SHA-256 | `56c8d01396b12d0dd783dbc1646ebbca947e51a024bb5c8f091cd0b7a889c541` |
-| Region probe approval timestamp | `2026-08-08T14:52:00Z` |
-| Region probe implementation | `CANONICAL` |
-| Region probe implementation PR | `29` |
-| Region probe implementation merge | `91687b4c803e331d4b2ef8493df731c99e25a0e5` |
-| Region probe implementation exact-head CI | `4354f9a4e80c77b7250f95f79cab3f107ee8b54a` |
-| Region probe implementation CI run / job | `31271673630` / `93138596154` |
-| Region probe implementation tests | `143/143 PASS` |
-| Region probe execution release | `RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001` |
-| Region probe release state | `SINGLE_USE_RELEASE_CANDIDATE_READY_FOR_CANONICAL_MERGE` |
-| Region probe target | `hl-mainnet-node-data` |
-| Region probe operation | `HeadBucket` / `HEAD /` |
-| Region probe request cap | `1` |
-| Region probe budget ceiling | `EUR 0.10` one-time / `EUR 0` monthly |
-| Region probe runtime / retries / redirects | `30 sec` / `0` / `false` |
-| Region probe request/response body | `false` / `false` |
-| Region probe session S3 boundary | `EXPLICIT_DENY_ALL_S3` |
-| persistent IAM expansion required | `false` |
-| Region probe request executed | `false` |
-| Region probe exact bucket Region | `null` |
+| Region probe release | `CONSUMED_BY_RUN_31273770895` |
+| Region probe run / job / artifact | `31273770895` / `93143945097` / `9026393705` |
+| Region probe artifact SHA-256 | `5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405` |
+| Region probe terminal result | `REGION_PROBE_R1_PASS` |
+| Region probe HTTP result | `400` / `4xx` |
+| `hl-mainnet-node-data` exact Region | `ap-northeast-1` |
+| Region probe requests / retries / redirects | `1` / `0` / `false` |
+| Region probe runtime | `0.688386 sec` |
+| Region probe response body read | `false` |
+| Region probe LIST/object data requested | `false` |
 | fresh LIST attempt authorized | `false` |
 | larger 300-request inventory | `false` |
 | object-body access | `false` |
@@ -54,15 +40,15 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | empirical result | `null` |
 | integration / paper / shadow / live / leverage / capital | all `false` |
 
-## Evidence and boundary
+## Evidence and interpretation
 
-The public probe remains canonically attested and the archive successor remains pre-market-data. `market_data_ingested = false` and no alpha, P&L, wallet ranking, clustering or trading result exists.
+The single-use Region probe executed against exact canonical release commit `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`. All exact-main, release and single-use checks passed before AWS OIDC. AWS role assumption succeeded. The probe issued exactly one authenticated direct SigV4 `HEAD /` to `hl-mainnet-node-data.s3.amazonaws.com`, requested Requester Pays acknowledgement, used zero retries, followed zero redirects and did not read a response body.
 
-R0 is immutable evidence. Its single-use release was consumed by run `31260043109`; it cannot be rerun under the old approval. Two `hyperliquid-archive` prefixes succeeded and all five `hl-mainnet-node-data` prefixes returned `S3_AuthorizationHeaderMalformed`, strongly consistent with a signing-Region mismatch but not proof of the exact Region.
+AWS returned HTTP `400` together with `x-amz-bucket-region: ap-northeast-1`. Under the preregistered Region-probe contract this is a technical PASS because the purpose was solely to observe the authoritative bucket Region; a 2xx response was not required. The result therefore resolves the prior R0 `S3_AuthorizationHeaderMalformed` failures as consistent with signing `hl-mainnet-node-data` in `us-east-1` instead of its observed Region `ap-northeast-1`.
 
-Region probe R1 is a separate successor. The immutable preregistration and approval snapshots remain non-self-authorizing. PR #29 separately reviewed and canonically installed a one-request direct SigV4 `HEAD /` implementation. The separate release candidate binds that implementation and the existing approval. Its workflow is manual-only, exact-main-SHA bound, single-use before OIDC, and the temporary AWS session carries an explicit `Deny s3:*` with no S3 Allow. The direct HTTPS HEAD may still return `x-amz-bucket-region`; no response body is read.
+The artifact `9026393705` is independently verified. GitHub's provider digest and the independently downloaded ZIP SHA-256 both equal `5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405`, and the internal hash ledger matches the retained context, result and return-code files.
 
-A successful Region observation authorizes nothing downstream by itself. In particular, no fresh `ListObjectsV2` request is authorized by this release.
+This is infrastructure/access evidence only. It is not market data, wallet intelligence, P&L or alpha evidence. The Region-probe release is consumed and may not be rerun. A correctly-regioned LIST request requires a fresh, separately reviewed and explicitly approved gate.
 
 ## Hard boundary
 
@@ -90,11 +76,16 @@ region_probe_r1_executable_candidate_present = true
 region_probe_r1_implementation_canonical = true
 region_probe_r1_implementation_commit = 91687b4c803e331d4b2ef8493df731c99e25a0e5
 region_probe_r1_execution_release_present = true
-region_probe_r1_execution_ready = true
-region_probe_r1_head_bucket_authorized = true
-region_probe_r1_requester_pays_acknowledgement_authorized = true
-region_probe_r1_request_executed = false
-region_probe_r1_exact_bucket_region = null
+region_probe_r1_execution_release_consumed = true
+region_probe_r1_execution_ready = false
+region_probe_r1_head_bucket_authorized = false
+region_probe_r1_requester_pays_acknowledgement_authorized = false
+region_probe_r1_request_executed = true
+region_probe_r1_s3_http_requests_executed = 1
+region_probe_r1_run_id = 31273770895
+region_probe_r1_job_id = 93143945097
+region_probe_r1_artifact_id = 9026393705
+region_probe_r1_exact_bucket_region = ap-northeast-1
 fresh_paid_attempt_authorized = false
 fresh_list_attempt_authorized = false
 requester_pays_authorized = false
@@ -121,10 +112,7 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Validate this single-use Region-probe release with exact-head CI, byte-exact manifest validation and clean-context review.
-2. Merge only if the release remains bound to implementation `91687b4c803e331d4b2ef8493df731c99e25a0e5`, one HEAD request, EUR 0.10, zero retries/redirects/body and deny-all-S3 session policy.
-3. Verify the actual release merge SHA on canonical `main`.
-4. Manually dispatch `Hyperliquid Archive Region Probe R1` exactly once against that exact release merge SHA.
-5. The first dispatch consumes the release regardless of PASS/FAIL; do not rerun it.
-6. Attest the resulting Region header before considering any fresh LIST canary.
-7. The 300-request inventory, object-body access, market-data ingestion, wallet analysis and all trading/capital stages remain separately gated.
+1. Canonically attest run `31273770895` and the observed Region `ap-northeast-1`.
+2. Keep `RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001` consumed; never rerun it.
+3. Preregister a fresh corrected-region metadata LIST canary separately. It must bind signing Region `ap-northeast-1`, a new request/cost envelope and a new explicit human approval before any S3 LIST request.
+4. The 300-request inventory, object-body access, market-data ingestion, wallet analysis and all trading/capital stages remain separately gated.
