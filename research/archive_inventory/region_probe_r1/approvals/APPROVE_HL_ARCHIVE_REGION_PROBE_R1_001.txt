@@ -1,0 +1,17 @@
+APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001
+reviewed_commit=910997423f5e008f3c7bca65fd739d6aa14d25a7
+maximum_one_time_budget_eur=0.10
+maximum_monthly_budget_eur=0
+maximum_head_bucket_requests=1
+maximum_runtime_seconds=30
+maximum_retries=0
+http_redirect_following_authorized=false
+target_bucket=hl-mainnet-node-data
+head_bucket_authorized=true
+requester_pays_acknowledgement_authorized=true
+list_objects_v2_authorized=false
+get_object_authorized=false
+head_object_authorized=false
+object_body_download_authorized=false
+market_data_ingestion_authorized=false
+larger_300_request_inventory_authorized=false
