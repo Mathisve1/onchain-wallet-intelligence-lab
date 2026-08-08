@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "check_id": "HL-AWS-OIDC-IDENTITY-001",
+  "status": "PENDING_MANUAL_CANONICAL_MAIN_RUN",
+  "dispatch_ref": null,
+  "dispatch_sha": null,
+  "reviewed_commit": null,
+  "checked_out_commit": null,
+  "workflow_run_id": null,
+  "workflow_run_attempt": null,
+  "expected_account_id": "630956766927",
+  "observed_account_id": null,
+  "expected_assumed_role_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-metadata-canary/HLArchiveOidcIdentityCheck",
+  "observed_assumed_role_arn": null,
+  "s3_called": false,
+  "requester_pays_used": false,
+  "market_data_ingested": false,
+  "empirical_result": null
+}
