@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import http.client
 import json
 import os
 import re
-import subprocess
+import ssl
 import sys
 import time
+import urllib.parse
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[3]
 ARCHIVE = ROOT / "research/archive_inventory"
@@ -28,7 +33,9 @@ MAX_KEYS = 25
 MAX_ENTRIES = 175
 MAX_RESPONSE_BYTES = 8_388_608
 MAX_RUNTIME_SECONDS = 180
-AWS_MAX_ATTEMPTS = "1"
+SIGNING_REGION = "us-east-1"
+SERVICE = "s3"
+EMPTY_PAYLOAD_SHA256 = hashlib.sha256(b"").hexdigest()
 
 EXPECTED_DATASETS = (
     ("node_fills_by_block", "hl-mainnet-node-data", "node_fills_by_block/"),
@@ -40,14 +47,16 @@ EXPECTED_DATASETS = (
     ("asset_ctxs", "hyperliquid-archive", "asset_ctxs/"),
 )
 
-KNOWN_AWS_ERROR_CODES = {
+KNOWN_S3_ERROR_CODES = {
     "AccessDenied",
     "AllAccessDisabled",
     "AuthorizationHeaderMalformed",
     "ExpiredToken",
     "InvalidAccessKeyId",
+    "InvalidRequest",
     "NoSuchBucket",
     "PermanentRedirect",
+    "Redirect",
     "RequestTimeout",
     "SignatureDoesNotMatch",
     "SlowDown",
@@ -55,6 +64,10 @@ KNOWN_AWS_ERROR_CODES = {
 
 
 class R0ContractError(RuntimeError):
+    pass
+
+
+class R0TransportError(RuntimeError):
     pass
 
 
@@ -71,6 +84,10 @@ def sha256_bytes(value: bytes) -> str:
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def signing_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def validate_static_inputs() -> list[dict]:
@@ -138,7 +155,13 @@ def validate_static_inputs() -> list[dict]:
         raise R0ContractError("implementation request cap drift")
     if implementation.get("maximum_keys_per_request") != MAX_KEYS:
         raise R0ContractError("implementation max keys drift")
-    if implementation.get("aws_cli_max_attempts") != 1:
+    if implementation.get("s3_http_request_cap") != MAX_REQUESTS:
+        raise R0ContractError("implementation HTTP request cap drift")
+    if implementation.get("s3_transport") != "DIRECT_SIGV4_HTTPS_NO_REDIRECT_FOLLOW":
+        raise R0ContractError("implementation transport drift")
+    if implementation.get("http_redirect_following_authorized") is not False:
+        raise R0ContractError("implementation redirect following opened")
+    if implementation.get("maximum_retries_per_request") != 0:
         raise R0ContractError("implementation retry setting drift")
     if implementation.get("pagination_authorized") is not False:
         raise R0ContractError("implementation pagination opened")
@@ -156,108 +179,225 @@ def validate_static_inputs() -> list[dict]:
     return rows
 
 
-def build_command(bucket: str, prefix: str) -> list[str]:
+def _aws_quote(value: str) -> str:
+    return urllib.parse.quote(value, safe="-_.~")
+
+
+def canonical_query(prefix: str) -> str:
+    params = (("list-type", "2"), ("max-keys", str(MAX_KEYS)), ("prefix", prefix))
+    return "&".join(f"{_aws_quote(key)}={_aws_quote(value)}" for key, value in sorted(params))
+
+
+def _sign(key: bytes, message: str) -> bytes:
+    return hmac.new(key, message.encode("utf-8"), hashlib.sha256).digest()
+
+
+def build_signed_request(bucket: str, prefix: str, request_time: datetime, env: dict[str, str] | None = None) -> tuple[str, str, dict[str, str]]:
     allowed = {(bucket_name, prefix_name) for _, bucket_name, prefix_name in EXPECTED_DATASETS}
     if (bucket, prefix) not in allowed:
         raise R0ContractError("unregistered bucket/prefix")
-    return [
-        "aws",
-        "s3api",
-        "list-objects-v2",
-        "--bucket",
-        bucket,
-        "--prefix",
-        prefix,
-        "--max-keys",
-        str(MAX_KEYS),
-        "--request-payer",
-        "requester",
-        "--no-paginate",
-        "--output",
-        "json",
-        "--no-cli-pager",
-        "--cli-connect-timeout",
-        "5",
-        "--cli-read-timeout",
-        "15",
-    ]
+    source = os.environ if env is None else env
+    access_key = source.get("AWS_ACCESS_KEY_ID")
+    secret_key = source.get("AWS_SECRET_ACCESS_KEY")
+    session_token = source.get("AWS_SESSION_TOKEN")
+    if not access_key or not secret_key or not session_token:
+        raise R0ContractError("temporary AWS credentials missing")
+    if request_time.tzinfo is None:
+        raise R0ContractError("signing time must be timezone-aware")
+    stamp = request_time.astimezone(timezone.utc)
+    amz_date = stamp.strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = stamp.strftime("%Y%m%d")
+    host = f"{bucket}.s3.amazonaws.com"
+    query = canonical_query(prefix)
+    target = f"/?{query}"
+    canonical_headers = (
+        f"host:{host}\n"
+        f"x-amz-content-sha256:{EMPTY_PAYLOAD_SHA256}\n"
+        f"x-amz-date:{amz_date}\n"
+        "x-amz-request-payer:requester\n"
+        f"x-amz-security-token:{session_token}\n"
+    )
+    signed_headers = "host;x-amz-content-sha256;x-amz-date;x-amz-request-payer;x-amz-security-token"
+    canonical_request = "\n".join(
+        ["GET", "/", query, canonical_headers, signed_headers, EMPTY_PAYLOAD_SHA256]
+    )
+    scope = f"{date_stamp}/{SIGNING_REGION}/{SERVICE}/aws4_request"
+    string_to_sign = "\n".join(
+        [
+            "AWS4-HMAC-SHA256",
+            amz_date,
+            scope,
+            hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+        ]
+    )
+    k_date = _sign(("AWS4" + secret_key).encode("utf-8"), date_stamp)
+    k_region = _sign(k_date, SIGNING_REGION)
+    k_service = _sign(k_region, SERVICE)
+    k_signing = _sign(k_service, "aws4_request")
+    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+    authorization = (
+        f"AWS4-HMAC-SHA256 Credential={access_key}/{scope},"
+        f"SignedHeaders={signed_headers},Signature={signature}"
+    )
+    headers = {
+        "Host": host,
+        "Authorization": authorization,
+        "x-amz-content-sha256": EMPTY_PAYLOAD_SHA256,
+        "x-amz-date": amz_date,
+        "x-amz-request-payer": "requester",
+        "x-amz-security-token": session_token,
+    }
+    return host, target, headers
 
 
-def classify_cli_error(stderr: bytes, returncode: int) -> str:
-    text = stderr.decode("utf-8", errors="replace")
-    match = re.search(r"\(([^)]+)\) when calling the ListObjectsV2 operation", text)
-    if match and match.group(1) in KNOWN_AWS_ERROR_CODES:
-        return f"AWS_{match.group(1)}"
-    return f"AWS_CLI_EXIT_{returncode}"
+def perform_single_list_request(
+    bucket: str,
+    prefix: str,
+    timeout_seconds: float,
+    maximum_body_bytes: int,
+    request_time: datetime | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    if maximum_body_bytes < 0:
+        raise R0ContractError("negative response-byte allowance")
+    host, target, headers = build_signed_request(bucket, prefix, request_time or signing_now())
+    connection = http.client.HTTPSConnection(host, timeout=timeout_seconds, context=ssl.create_default_context())
+    try:
+        connection.request("GET", target, body=None, headers=headers)
+        response = connection.getresponse()
+        normalized_headers = {key.lower(): value for key, value in response.getheaders()}
+        body = response.read(maximum_body_bytes + 1)
+        return response.status, normalized_headers, body
+    except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
+        raise R0TransportError(type(exc).__name__) from exc
+    finally:
+        connection.close()
 
 
-def normalize_success(payload: dict, family: str, bucket: str, prefix: str, request_index: int, response_bytes: int, observed_at: str) -> tuple[dict, int]:
-    if payload.get("Name") != bucket:
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _children(element: ET.Element, name: str) -> list[ET.Element]:
+    return [child for child in list(element) if _local_name(child.tag) == name]
+
+
+def _child_text(element: ET.Element, name: str, required: bool = True) -> str | None:
+    matches = _children(element, name)
+    if len(matches) > 1:
+        raise R0ContractError(f"duplicate XML field: {name}")
+    if not matches:
+        if required:
+            raise R0ContractError(f"missing XML field: {name}")
+        return None
+    return matches[0].text or ""
+
+
+def parse_success_xml(body: bytes, family: str, bucket: str, prefix: str, request_index: int, headers: dict[str, str], observed_at: str) -> tuple[dict, int]:
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as exc:
+        raise R0ContractError("invalid success XML") from exc
+    if _local_name(root.tag) != "ListBucketResult":
+        raise R0ContractError("unexpected success XML root")
+    if _child_text(root, "Name") != bucket:
         raise R0ContractError("response bucket mismatch")
-    if payload.get("Prefix") != prefix:
+    if _child_text(root, "Prefix") != prefix:
         raise R0ContractError("response prefix mismatch")
-    if payload.get("MaxKeys") != MAX_KEYS:
+    try:
+        max_keys = int(_child_text(root, "MaxKeys") or "")
+        key_count = int(_child_text(root, "KeyCount") or "")
+    except ValueError as exc:
+        raise R0ContractError("invalid numeric response field") from exc
+    if max_keys != MAX_KEYS:
         raise R0ContractError("response MaxKeys mismatch")
-    key_count = payload.get("KeyCount")
-    if not isinstance(key_count, int) or isinstance(key_count, bool) or not 0 <= key_count <= MAX_KEYS:
+    if not 0 <= key_count <= MAX_KEYS:
         raise R0ContractError("response KeyCount invalid")
-    is_truncated = payload.get("IsTruncated")
-    if not isinstance(is_truncated, bool):
+    truncated_text = (_child_text(root, "IsTruncated") or "").lower()
+    if truncated_text not in {"true", "false"}:
         raise R0ContractError("response IsTruncated invalid")
-    contents = payload.get("Contents", [])
-    if not isinstance(contents, list) or len(contents) > MAX_KEYS:
-        raise R0ContractError("response Contents invalid")
-    if key_count != len(contents):
+    contents = _children(root, "Contents")
+    if len(contents) != key_count or len(contents) > MAX_KEYS:
         raise R0ContractError("KeyCount/Contents mismatch")
+    if headers.get("x-amz-request-charged") != "requester":
+        raise R0ContractError("successful Requester Pays response missing request-charged header")
 
     entries: list[dict] = []
     for item in contents:
-        if not isinstance(item, dict):
-            raise R0ContractError("object metadata row invalid")
-        key = item.get("Key")
-        size = item.get("Size")
-        last_modified = item.get("LastModified")
-        etag = item.get("ETag")
-        storage_class = item.get("StorageClass")
+        key = _child_text(item, "Key")
         if not isinstance(key, str) or not key.startswith(prefix):
             raise R0ContractError("object key escaped prefix")
-        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        try:
+            size = int(_child_text(item, "Size") or "")
+        except ValueError as exc:
+            raise R0ContractError("object size invalid") from exc
+        if size < 0:
             raise R0ContractError("object size invalid")
-        if last_modified is not None and not isinstance(last_modified, str):
-            raise R0ContractError("last modified invalid")
-        if etag is not None and not isinstance(etag, str):
-            raise R0ContractError("etag invalid")
-        if storage_class is not None and not isinstance(storage_class, str):
-            raise R0ContractError("storage class invalid")
         entries.append(
             {
                 "key": key,
                 "size_bytes": size,
-                "last_modified": last_modified,
-                "etag": etag,
-                "storage_class": storage_class,
+                "last_modified": _child_text(item, "LastModified", required=False),
+                "etag": _child_text(item, "ETag", required=False),
+                "storage_class": _child_text(item, "StorageClass", required=False),
             }
         )
     entries.sort(key=lambda row: row["key"])
-    token = payload.get("NextContinuationToken")
+    token = _child_text(root, "NextContinuationToken", required=False)
     observation = {
         "dataset_family_id": family,
         "bucket": bucket,
         "prefix": prefix,
         "request_index": request_index,
         "http_or_sdk_status_class": "SUCCESS",
-        "request_charged": payload.get("RequestCharged"),
+        "request_charged": "requester",
         "key_count": key_count,
-        "is_truncated": is_truncated,
-        "next_continuation_token_present": isinstance(token, str) and bool(token),
-        "response_bytes": response_bytes,
+        "is_truncated": truncated_text == "true",
+        "next_continuation_token_present": bool(token),
+        "response_bytes": len(body),
         "observed_at_utc": observed_at,
         "entries": entries,
     }
     return observation, len(entries)
 
 
-def execute_canary(output_path: Path, runner=subprocess.run, monotonic=time.monotonic, now=utc_now) -> dict:
+def classify_error(status: int, body: bytes) -> str:
+    code: str | None = None
+    try:
+        root = ET.fromstring(body)
+        if _local_name(root.tag) == "Error":
+            code = _child_text(root, "Code", required=False)
+    except (ET.ParseError, R0ContractError):
+        code = None
+    if code in KNOWN_S3_ERROR_CODES:
+        return f"S3_{code}"
+    if 300 <= status < 400:
+        return f"HTTP_{status}_REDIRECT_NOT_FOLLOWED"
+    return f"HTTP_{status}"
+
+
+def failure_observation(family: str, bucket: str, prefix: str, request_index: int, status_class: str, response_bytes: int, observed_at: str) -> dict:
+    return {
+        "dataset_family_id": family,
+        "bucket": bucket,
+        "prefix": prefix,
+        "request_index": request_index,
+        "http_or_sdk_status_class": status_class,
+        "request_charged": None,
+        "key_count": 0,
+        "is_truncated": False,
+        "next_continuation_token_present": False,
+        "response_bytes": response_bytes,
+        "observed_at_utc": observed_at,
+        "entries": [],
+    }
+
+
+def execute_canary(
+    output_path: Path,
+    transport: Callable[[str, str, float, int], tuple[int, dict[str, str], bytes]] = perform_single_list_request,
+    monotonic: Callable[[], float] = time.monotonic,
+    now: Callable[[], str] = utc_now,
+) -> dict:
     datasets = validate_static_inputs()
     started = monotonic()
     observations: list[dict] = []
@@ -265,90 +405,61 @@ def execute_canary(output_path: Path, runner=subprocess.run, monotonic=time.mono
     successful_request_count = 0
     total_entries = 0
     total_response_bytes = 0
-
-    env = os.environ.copy()
-    env["AWS_MAX_ATTEMPTS"] = AWS_MAX_ATTEMPTS
-    env["AWS_RETRY_MODE"] = "standard"
-    env["AWS_PAGER"] = ""
-    env["AWS_EC2_METADATA_DISABLED"] = "true"
-
     hard_failure = False
+
     for row in datasets:
         elapsed = monotonic() - started
-        if elapsed >= MAX_RUNTIME_SECONDS:
+        if elapsed >= MAX_RUNTIME_SECONDS or request_attempt_count >= MAX_REQUESTS:
             hard_failure = True
             break
-        if request_attempt_count >= MAX_REQUESTS:
-            hard_failure = True
-            break
-
         family = row["family"]
         bucket = row["bucket"]
         prefix = row["prefix"]
         request_attempt_count += 1
-        command = build_command(bucket, prefix)
-        remaining = MAX_RUNTIME_SECONDS - elapsed
-        timeout_seconds = max(1.0, min(20.0, remaining))
+        remaining_runtime = MAX_RUNTIME_SECONDS - elapsed
+        timeout_seconds = max(1.0, min(20.0, remaining_runtime))
+        remaining_bytes = MAX_RESPONSE_BYTES - total_response_bytes
+        observed_at = now()
 
         try:
-            completed = runner(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-                timeout=timeout_seconds,
-                env=env,
-            )
-            stdout = completed.stdout if isinstance(completed.stdout, bytes) else bytes(completed.stdout or b"")
-            stderr = completed.stderr if isinstance(completed.stderr, bytes) else bytes(completed.stderr or b"")
-            response_bytes = len(stdout)
+            status, headers, body = transport(bucket, prefix, timeout_seconds, remaining_bytes)
+            response_bytes = len(body)
             total_response_bytes += response_bytes
-            observed_at = now()
-
-            if total_response_bytes > MAX_RESPONSE_BYTES:
+            if response_bytes > remaining_bytes or total_response_bytes > MAX_RESPONSE_BYTES:
                 observations.append(
-                    {
-                        "dataset_family_id": family,
-                        "bucket": bucket,
-                        "prefix": prefix,
-                        "request_index": request_attempt_count,
-                        "http_or_sdk_status_class": "RESPONSE_BYTE_CAP_EXCEEDED",
-                        "request_charged": None,
-                        "key_count": 0,
-                        "is_truncated": False,
-                        "next_continuation_token_present": False,
-                        "response_bytes": response_bytes,
-                        "observed_at_utc": observed_at,
-                        "entries": [],
-                    }
+                    failure_observation(
+                        family,
+                        bucket,
+                        prefix,
+                        request_attempt_count,
+                        "RESPONSE_BYTE_CAP_EXCEEDED",
+                        response_bytes,
+                        observed_at,
+                    )
                 )
                 hard_failure = True
                 break
-
-            if completed.returncode != 0:
+            if status != 200:
                 observations.append(
-                    {
-                        "dataset_family_id": family,
-                        "bucket": bucket,
-                        "prefix": prefix,
-                        "request_index": request_attempt_count,
-                        "http_or_sdk_status_class": classify_cli_error(stderr, completed.returncode),
-                        "request_charged": None,
-                        "key_count": 0,
-                        "is_truncated": False,
-                        "next_continuation_token_present": False,
-                        "response_bytes": response_bytes,
-                        "observed_at_utc": observed_at,
-                        "entries": [],
-                    }
+                    failure_observation(
+                        family,
+                        bucket,
+                        prefix,
+                        request_attempt_count,
+                        classify_error(status, body),
+                        response_bytes,
+                        observed_at,
+                    )
                 )
                 continue
-
-            payload = json.loads(stdout.decode("utf-8"))
-            if not isinstance(payload, dict):
-                raise R0ContractError("AWS CLI output root invalid")
-            observation, entry_count = normalize_success(
-                payload, family, bucket, prefix, request_attempt_count, response_bytes, observed_at
+            observation, entry_count = parse_success_xml(
+                body,
+                family,
+                bucket,
+                prefix,
+                request_attempt_count,
+                {key.lower(): value for key, value in headers.items()},
+                observed_at,
             )
             total_entries += entry_count
             if total_entries > MAX_ENTRIES:
@@ -358,61 +469,29 @@ def execute_canary(output_path: Path, runner=subprocess.run, monotonic=time.mono
                 break
             observations.append(observation)
             successful_request_count += 1
-        except subprocess.TimeoutExpired as exc:
-            partial_stdout = exc.stdout if isinstance(exc.stdout, bytes) else b""
-            response_bytes = len(partial_stdout)
-            total_response_bytes += response_bytes
+        except R0TransportError as exc:
             observations.append(
-                {
-                    "dataset_family_id": family,
-                    "bucket": bucket,
-                    "prefix": prefix,
-                    "request_index": request_attempt_count,
-                    "http_or_sdk_status_class": "AWS_CLI_TIMEOUT",
-                    "request_charged": None,
-                    "key_count": 0,
-                    "is_truncated": False,
-                    "next_continuation_token_present": False,
-                    "response_bytes": response_bytes,
-                    "observed_at_utc": now(),
-                    "entries": [],
-                }
+                failure_observation(
+                    family,
+                    bucket,
+                    prefix,
+                    request_attempt_count,
+                    f"HTTPS_TRANSPORT_{str(exc)}",
+                    0,
+                    observed_at,
+                )
             )
-        except FileNotFoundError:
+        except R0ContractError:
             observations.append(
-                {
-                    "dataset_family_id": family,
-                    "bucket": bucket,
-                    "prefix": prefix,
-                    "request_index": request_attempt_count,
-                    "http_or_sdk_status_class": "AWS_CLI_NOT_FOUND",
-                    "request_charged": None,
-                    "key_count": 0,
-                    "is_truncated": False,
-                    "next_continuation_token_present": False,
-                    "response_bytes": 0,
-                    "observed_at_utc": now(),
-                    "entries": [],
-                }
-            )
-            hard_failure = True
-            break
-        except (json.JSONDecodeError, UnicodeDecodeError, R0ContractError):
-            observations.append(
-                {
-                    "dataset_family_id": family,
-                    "bucket": bucket,
-                    "prefix": prefix,
-                    "request_index": request_attempt_count,
-                    "http_or_sdk_status_class": "INVALID_SUCCESS_RESPONSE",
-                    "request_charged": None,
-                    "key_count": 0,
-                    "is_truncated": False,
-                    "next_continuation_token_present": False,
-                    "response_bytes": response_bytes if "response_bytes" in locals() else 0,
-                    "observed_at_utc": now(),
-                    "entries": [],
-                }
+                failure_observation(
+                    family,
+                    bucket,
+                    prefix,
+                    request_attempt_count,
+                    "INVALID_SUCCESS_RESPONSE",
+                    0,
+                    observed_at,
+                )
             )
             hard_failure = True
             break
@@ -435,6 +514,7 @@ def execute_canary(output_path: Path, runner=subprocess.run, monotonic=time.mono
         "canary_id": CANARY_ID,
         "terminal_status": "R0_METADATA_CANARY_PASS" if passed else "R0_METADATA_CANARY_FAIL",
         "request_attempt_count": request_attempt_count,
+        "s3_http_request_count": request_attempt_count,
         "successful_request_count": successful_request_count,
         "failed_request_count": failed_request_count,
         "total_entries": total_entries,
@@ -445,9 +525,10 @@ def execute_canary(output_path: Path, runner=subprocess.run, monotonic=time.mono
         "maximum_total_entries": MAX_ENTRIES,
         "maximum_total_response_bytes": MAX_RESPONSE_BYTES,
         "maximum_runtime_seconds": MAX_RUNTIME_SECONDS,
-        "aws_max_attempts": int(AWS_MAX_ATTEMPTS),
         "retries_used": 0,
         "pagination_followed": False,
+        "http_redirects_followed": False,
+        "signing_region_initial": SIGNING_REGION,
         "requester_pays_requested": True,
         "continuation_token_values_retained": False,
         "object_body_requested": False,
@@ -466,6 +547,7 @@ def write_pre_network_failure(output_path: Path) -> None:
         "canary_id": CANARY_ID,
         "terminal_status": "R0_PRE_NETWORK_CONTRACT_FAIL",
         "request_attempt_count": 0,
+        "s3_http_request_count": 0,
         "successful_request_count": 0,
         "failed_request_count": 0,
         "total_entries": 0,
@@ -476,9 +558,10 @@ def write_pre_network_failure(output_path: Path) -> None:
         "maximum_total_entries": MAX_ENTRIES,
         "maximum_total_response_bytes": MAX_RESPONSE_BYTES,
         "maximum_runtime_seconds": MAX_RUNTIME_SECONDS,
-        "aws_max_attempts": int(AWS_MAX_ATTEMPTS),
         "retries_used": 0,
         "pagination_followed": False,
+        "http_redirects_followed": False,
+        "signing_region_initial": SIGNING_REGION,
         "requester_pays_requested": False,
         "continuation_token_values_retained": False,
         "object_body_requested": False,
