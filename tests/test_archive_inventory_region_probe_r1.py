@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "research/archive_inventory/region_probe_r1"
 CONTRACT = PROBE / "REGION_PROBE_CONTRACT.json"
 APPROVAL = PROBE / "HUMAN_APPROVAL_TEMPLATE.md"
+RELEASE = PROBE / "REGION_PROBE_EXECUTION_RELEASE.json"
 
 
 class ArchiveRegionProbeR1Tests(unittest.TestCase):
@@ -39,17 +40,10 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
     def test_no_list_object_or_market_capability_is_opened(self) -> None:
         c = self.load()
         for key in (
-            "request_body_authorized",
-            "response_body_authorized",
-            "list_objects_v2_authorized",
-            "get_object_authorized",
-            "head_object_authorized",
-            "get_object_attributes_authorized",
-            "range_get_authorized",
-            "object_body_download_authorized",
-            "pagination_authorized",
-            "decompression_authorized",
-            "market_data_ingestion_authorized",
+            "request_body_authorized", "response_body_authorized", "list_objects_v2_authorized",
+            "get_object_authorized", "head_object_authorized", "get_object_attributes_authorized",
+            "range_get_authorized", "object_body_download_authorized", "pagination_authorized",
+            "decompression_authorized", "market_data_ingestion_authorized",
             "larger_300_request_inventory_authorized",
         ):
             self.assertFalse(c[key], key)
@@ -82,16 +76,17 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
         self.assertIn("list_objects_v2_authorized=false", text)
         self.assertIn("object_body_download_authorized=false", text)
 
-    def test_preregistration_snapshot_remains_non_self_authorizing_after_separate_implementation(self) -> None:
+    def test_preregistration_snapshot_remains_non_self_authorizing_after_separate_release(self) -> None:
         c = self.load()
         self.assertFalse(c["implementation_authorized"])
         self.assertFalse(c["workflow_installation_authorized"])
         self.assertFalse(c["execution_authorized"])
         self.assertFalse(c["fresh_paid_attempt_authorized"])
-        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-region-probe-r1.yml").is_file())
-        self.assertTrue((PROBE / "probe.py").is_file())
-        self.assertTrue((PROBE / "REGION_PROBE_IMPLEMENTATION_CONTRACT.json").is_file())
-        self.assertFalse((PROBE / "REGION_PROBE_EXECUTION_RELEASE.json").exists())
+        self.assertTrue(RELEASE.is_file())
+        release = json.loads(RELEASE.read_text(encoding="utf-8"))
+        self.assertEqual(release["implementation_commit"], "91687b4c803e331d4b2ef8493df731c99e25a0e5")
+        self.assertFalse(release["s3_request_executed"])
+        self.assertIsNone(release["exact_bucket_region"])
         self.assertFalse((PROBE / "evidence").exists())
         self.assertFalse((PROBE / "outputs").exists())
 
