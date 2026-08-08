@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical Region-probe R1 approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, canonical preregistration merge `910997423f5e008f3c7bca65fd739d6aa14d25a7`, canonical R0 attestation merge `105673b91d233ffcfd19a7bf3d881dbee6d85c6a`, canonical R0 release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`, canonical R0 run `31260043109`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, consumed R0 approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`, and fresh Region-probe approval `APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001`.
+Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, and canonical Region-probe implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`.
 
 ## Current status
 
@@ -11,130 +11,65 @@ Verified: 2026-08-08 against canonical Region-probe R1 approval merge `b86156d71
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
-| R0 experiment status | `R0_METADATA_CANARY_ATTESTED_PARTIAL_FAILURE` |
-| public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
-| canonical public-probe workflow run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
-| archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
-| archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
+| public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
 | archive inventory parent status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
-| archive preregistration commit | `0e8a678644c29548a38ebfa1c0af91d4a9a92c09` |
-| AWS account ID | `630956766927` |
-| GitHub OIDC federation | `PROVEN_BY_CANONICAL_STS_RUN` |
-| expected GitHub OIDC subject | `repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main` |
-| expected AWS role | `onchain-wallet-intelligence-hl-archive-metadata-canary` |
-| STS identity check status | `ATTESTED_STS_IDENTITY_MATCH` |
-| canonical STS run / job / artifact | `31250176507` / `93085194965` / `9019744292` |
-| AWS identity bound | `true` |
-| persistent S3 inline policy | `USER_CONFIRMED_NOT_API_VERIFIED` |
-| `hyperliquid-archive` signing compatibility | `US_EAST_1_SUCCEEDED_FOR_R0` |
-| `hl-mainnet-node-data` exact Region | `UNRESOLVED` |
-| R0 canary | `HL-ARCHIVE-METADATA-CANARY-R0-001` |
-| R0 human approval | `APPROVED_SCOPE_AND_BUDGET_CONSUMED` |
-| R0 approval canonical record commit | `62e0750382216afb5875ad52cb7443d43265e862` |
-| R0 approval reviewed commit | `9af4b21863e47fb3bb2997ce77b9940eecf4597f` |
-| R0 approval timestamp | `2026-08-08T10:10:00Z` |
-| R0 approval text SHA-256 | `d70008eac7521b324f61161bcc0075e28cc3a116dd30f0c52b48d8cf5eb6ed46` |
-| human-approved R0 one-time ceiling | `EUR 1.00` |
-| monthly ceiling | `EUR 0` |
-| R0 implementation | `INSTALLED_ON_CANONICAL_MAIN` |
-| R0 implementation commit | `cd5c46b25502b671693dd5ebb091e7273399bccf` |
-| R0 implementation exact-head CI | `41dcd5c2788af60ce9337b0c7eff4395264c4682` |
-| R0 implementation CI run / job | `31257261899` / `93102453441` |
-| R0 release canonical commit | `bc8a47a1cdeb1163657ea243d6694286d6612bed` |
-| R0 release ID | `RELEASE_HL_ARCHIVE_METADATA_CANARY_R0_001` |
-| R0 release status | `CONSUMED_BY_RUN_31260043109` |
+| AWS identity | `ATTESTED_STS_IDENTITY_MATCH` |
+| STS run / job / artifact | `31250176507` / `93085194965` / `9019744292` |
+| R0 result | `ATTESTED_CONSUMED_PARTIAL_FAILURE_REGION_UNRESOLVED` |
 | R0 run / job / artifact | `31260043109` / `93109335453` / `9022511541` |
-| R0 artifact SHA-256 | `40b26e33833b54a872a75be066a87b7e57a0e2f3930adada76ca3829a1142c8e` |
-| R0 terminal result | `ATTESTED_CONSUMED_PARTIAL_FAILURE_REGION_UNRESOLVED` |
-| R0 attestation canonical commit | `105673b91d233ffcfd19a7bf3d881dbee6d85c6a` |
-| R0 S3 HTTP requests executed | `7` |
-| R0 successful / failed requests | `2` / `5` |
-| R0 retained metadata entries | `50` |
-| R0 total S3 response bytes | `14229` |
-| R0 runtime seconds | `2.439212` |
-| R0 retries / pagination / redirects | `0` / `false` / `false` |
-| `hyperliquid-archive/market_data/` | `SUCCESS_25_ENTRIES_TRUNCATED_REQUESTER_PAYS` |
-| `hyperliquid-archive/asset_ctxs/` | `SUCCESS_25_ENTRIES_TRUNCATED_REQUESTER_PAYS` |
-| `hl-mainnet-node-data` five families | `S3_AUTHORIZATION_HEADER_MALFORMED` |
-| R0 root-cause assessment | `STRONGLY_CONSISTENT_WITH_SIGNING_REGION_MISMATCH_NOT_YET_PROVEN` |
-| R0 execution ready | `false` |
-| R0 scoped Requester Pays currently authorized | `false` |
-| R0 scoped ListObjectsV2 currently authorized | `false` |
+| R0 S3 requests | `7` |
+| R0 success / failure | `2` / `5` |
+| R0 release | `CONSUMED` |
+| `hyperliquid-archive` | `US_EAST_1_SUCCEEDED_FOR_R0` |
+| `hl-mainnet-node-data` exact Region | `UNRESOLVED` |
 | Region probe | `HL-ARCHIVE-REGION-PROBE-R1-001` |
-| Region probe preregistration commit | `910997423f5e008f3c7bca65fd739d6aa14d25a7` |
-| Region probe approval canonical commit | `b86156d71ef438441e6d3903a8bbc2da564a2046` |
-| Region probe status | `IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION` |
 | Region probe purpose | `RESOLVE_HL_MAINNET_NODE_DATA_BUCKET_REGION_ONLY` |
-| Region probe target bucket | `hl-mainnet-node-data` |
-| Region probe operation | `HeadBucket` / `HEAD /` |
-| Region probe S3 HTTP request cap | `1` |
-| Region probe runtime / retries / redirects | `30 sec` / `0` / `false` |
-| Region probe human approval | `APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION` |
-| Region probe approval reviewed commit | `910997423f5e008f3c7bca65fd739d6aa14d25a7` |
+| Region probe preregistration | `910997423f5e008f3c7bca65fd739d6aa14d25a7` |
+| Region probe approval merge | `b86156d71ef438441e6d3903a8bbc2da564a2046` |
+| Region probe approval SHA-256 | `56c8d01396b12d0dd783dbc1646ebbca947e51a024bb5c8f091cd0b7a889c541` |
 | Region probe approval timestamp | `2026-08-08T14:52:00Z` |
-| Region probe approval text SHA-256 | `56c8d01396b12d0dd783dbc1646ebbca947e51a024bb5c8f091cd0b7a889c541` |
-| Region probe maximum one-time budget | `EUR 0.10` |
-| Region probe maximum monthly budget | `EUR 0` |
-| Region probe implementation phase | `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY` |
-| Region probe implementation candidate | `PRESENT_REQUIRES_EXACT_HEAD_CI_AND_REVIEW` |
-| Region probe workflow candidate | `PRESENT_BUT_RELEASE_GATED_BEFORE_OIDC` |
-| Region probe executable candidate | `PRESENT_DIRECT_SIGV4_HEAD_ONLY` |
+| Region probe implementation | `CANONICAL` |
+| Region probe implementation PR | `29` |
+| Region probe implementation merge | `91687b4c803e331d4b2ef8493df731c99e25a0e5` |
+| Region probe implementation exact-head CI | `4354f9a4e80c77b7250f95f79cab3f107ee8b54a` |
+| Region probe implementation CI run / job | `31271673630` / `93138596154` |
+| Region probe implementation tests | `143/143 PASS` |
+| Region probe execution release | `RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001` |
+| Region probe release state | `SINGLE_USE_RELEASE_CANDIDATE_READY_FOR_CANONICAL_MERGE` |
+| Region probe target | `hl-mainnet-node-data` |
+| Region probe operation | `HeadBucket` / `HEAD /` |
+| Region probe request cap | `1` |
+| Region probe budget ceiling | `EUR 0.10` one-time / `EUR 0` monthly |
+| Region probe runtime / retries / redirects | `30 sec` / `0` / `false` |
+| Region probe request/response body | `false` / `false` |
 | Region probe session S3 boundary | `EXPLICIT_DENY_ALL_S3` |
-| Region probe canonical implementation | `false` |
-| Region probe canonical implementation commit | `null` |
-| Region probe execution release | `false` |
-| Region probe execution authorized | `false` |
+| persistent IAM expansion required | `false` |
 | Region probe request executed | `false` |
 | Region probe exact bucket Region | `null` |
-| fresh paid attempt authorized | `false` |
-| broader archive Requester Pays/LIST | `NOT_AUTHORIZED` |
-| larger 300-request inventory authorized | `false` |
-| GetObject authorized | `false` |
-| object-body download authorized | `false` |
-| market data ingested | `false` |
+| fresh LIST attempt authorized | `false` |
+| larger 300-request inventory | `false` |
+| object-body access | `false` |
+| market-data ingestion | `false` |
 | empirical result | `null` |
-| integration authorized | `false` |
-| paper authorized | `false` |
-| shadow authorized | `false` |
-| live authorized | `false` |
-| leverage authorized | `false` |
-| capital allocation authorized | `false` |
+| integration / paper / shadow / live / leverage / capital | all `false` |
 
-## Canonical R0 evidence
+## Evidence and boundary
 
-The single-use R0 dispatch ran against exact canonical release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`. All pre-OIDC approval, exact-main-SHA and single-use gates passed. AWS OIDC role assumption succeeded. The collector then completed exactly seven S3 HTTP requests under the frozen envelope. It used zero retries, followed zero pagination tokens, followed zero HTTP redirects, requested no object body and ingested no market data.
+The public probe remains canonically attested and the archive successor remains pre-market-data. `market_data_ingested = false` and no alpha, P&L, wallet ranking, clustering or trading result exists.
 
-The retained artifact is independently verified: GitHub artifact `9022511541` reported provider digest `sha256:40b26e33833b54a872a75be066a87b7e57a0e2f3930adada76ca3829a1142c8e`, which matched the independently downloaded ZIP SHA-256. Its internal hash ledger also matched the retained context, result and return-code files.
+R0 is immutable evidence. Its single-use release was consumed by run `31260043109`; it cannot be rerun under the old approval. Two `hyperliquid-archive` prefixes succeeded and all five `hl-mainnet-node-data` prefixes returned `S3_AuthorizationHeaderMalformed`, strongly consistent with a signing-Region mismatch but not proof of the exact Region.
 
-Two requests succeeded on `hyperliquid-archive`: `market_data/` and `asset_ctxs/`. Each returned 25 first-page metadata entries, was truncated, reported a continuation token, and confirmed `request_charged=requester`. The continuation tokens were not retained or followed.
+Region probe R1 is a separate successor. The immutable preregistration and approval snapshots remain non-self-authorizing. PR #29 separately reviewed and canonically installed a one-request direct SigV4 `HEAD /` implementation. The separate release candidate binds that implementation and the existing approval. Its workflow is manual-only, exact-main-SHA bound, single-use before OIDC, and the temporary AWS session carries an explicit `Deny s3:*` with no S3 Allow. The direct HTTPS HEAD may still return `x-amz-bucket-region`; no response body is read.
 
-All five `hl-mainnet-node-data` requests failed with the same coarse class `S3_AuthorizationHeaderMalformed`. Because the same OIDC role, SigV4 code and `us-east-1` signing succeeded for both `hyperliquid-archive` prefixes, this is strongly consistent with a signing-Region mismatch for `hl-mainnet-node-data`. The exact Region is not attested because R0 deliberately discarded raw error bodies and bucket-Region headers.
-
-This is an informative technical partial failure, not a market/alpha result. The first dispatch consumed `RELEASE_HL_ARCHIVE_METADATA_CANARY_R0_001` regardless of PASS/FAIL. A rerun or second paid attempt is not authorized.
-
-## Region probe R1 approval and implementation candidate
-
-The immutable preregistration remains non-self-authorizing. The separate human approval is hash-bound to preregistration commit `910997423f5e008f3c7bca65fd739d6aa14d25a7` and the canonical approval record is `b86156d71ef438441e6d3903a8bbc2da564a2046`.
-
-The current review branch contains a direct standard-library SigV4 `HEAD /` implementation and a manual-only workflow. The probe may construct exactly one S3 HTTP HEAD request to `hl-mainnet-node-data.s3.amazonaws.com`, with `x-amz-request-payer: requester`, no retry, no redirect follow and no response-body read. Its temporary OIDC session is further restricted by an explicit session-level `Deny s3:*`; no persistent IAM permission expansion is required for the candidate.
-
-This candidate is not yet a canonical implementation result. The workflow deliberately contains `PENDING_CANONICAL_IMPLEMENTATION_MERGE` and requires a separate `REGION_PROBE_EXECUTION_RELEASE.json` before AWS OIDC. That release file is absent. Therefore implementation review cannot itself issue the approved network request.
+A successful Region observation authorizes nothing downstream by itself. In particular, no fresh `ListObjectsV2` request is authorized by this release.
 
 ## Hard boundary
 
 ```text
 human_r0_scope_budget_approved = true
-human_maximum_one_time_budget_eur = 1.00
-maximum_monthly_budget_eur = 0
-r0_implementation_canonical = true
-r0_implementation_commit = cd5c46b25502b671693dd5ebb091e7273399bccf
-r0_execution_release_present = true
 r0_execution_release_consumed = true
 r0_execution_ready = false
-r0_run_id = 31260043109
-r0_job_id = 93109335453
-r0_artifact_id = 9022511541
 r0_s3_requests_executed = 7
 r0_successful_requests = 2
 r0_failed_requests = 5
@@ -152,13 +87,16 @@ region_probe_r1_implementation_phase_authorized = true
 region_probe_r1_implementation_candidate_present = true
 region_probe_r1_workflow_candidate_present = true
 region_probe_r1_executable_candidate_present = true
-region_probe_r1_implementation_canonical = false
-region_probe_r1_implementation_commit = null
-region_probe_r1_execution_release_present = false
-region_probe_r1_execution_authorized = false
+region_probe_r1_implementation_canonical = true
+region_probe_r1_implementation_commit = 91687b4c803e331d4b2ef8493df731c99e25a0e5
+region_probe_r1_execution_release_present = true
+region_probe_r1_execution_ready = true
+region_probe_r1_head_bucket_authorized = true
+region_probe_r1_requester_pays_acknowledgement_authorized = true
 region_probe_r1_request_executed = false
 region_probe_r1_exact_bucket_region = null
 fresh_paid_attempt_authorized = false
+fresh_list_attempt_authorized = false
 requester_pays_authorized = false
 list_objects_authorized = false
 paid_request_authorized = false
@@ -183,13 +121,10 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Run exact-head CI, byte-exact manifest validation, the Region-probe implementation validator and clean-context review on this candidate.
-2. Merge only if direct-HEAD-only behavior, deny-all-S3 session policy, release-before-OIDC gating and all existing R0/public-probe invariants remain green.
-3. Verify the actual implementation squash-merge SHA from remote `main`; do not invent it in advance.
-4. Build a separate single-use `REGION_PROBE_EXECUTION_RELEASE.json` bound to that exact implementation merge and the approved scope/budget.
-5. Keep the implementation workflow unusable until the release PR replaces `PENDING_CANONICAL_IMPLEMENTATION_MERGE` with that exact merge SHA and installs the reviewed release.
-6. Only after that release merges may exactly one manual Region-probe dispatch occur. The first dispatch consumes the release regardless of PASS/FAIL.
-7. Even a successful bucket Region result does not authorize a LIST request; a fresh bounded LIST canary remains a separate human/repository gate.
-8. The 300-request inventory, object-body access, market-data ingestion, wallet P&L, clustering and every trading/capital stage remain separately gated.
-
-Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.
+1. Validate this single-use Region-probe release with exact-head CI, byte-exact manifest validation and clean-context review.
+2. Merge only if the release remains bound to implementation `91687b4c803e331d4b2ef8493df731c99e25a0e5`, one HEAD request, EUR 0.10, zero retries/redirects/body and deny-all-S3 session policy.
+3. Verify the actual release merge SHA on canonical `main`.
+4. Manually dispatch `Hyperliquid Archive Region Probe R1` exactly once against that exact release merge SHA.
+5. The first dispatch consumes the release regardless of PASS/FAIL; do not rerun it.
+6. Attest the resulting Region header before considering any fresh LIST canary.
+7. The 300-request inventory, object-body access, market-data ingestion, wallet analysis and all trading/capital stages remain separately gated.

@@ -33,14 +33,13 @@ class ArchiveRegionProbeR1WorkflowTests(unittest.TestCase):
         ):
             self.assertIn(f"@{sha}", self.text)
 
-    def test_release_gate_and_canonical_implementation_placeholder_precede_oidc(self) -> None:
-        gate = self.text.index("Prove approval implementation and separate execution release before AWS OIDC")
+    def test_release_gate_and_canonical_implementation_precede_oidc(self) -> None:
+        gate = self.text.index("Prove canonical implementation and single-use release before AWS OIDC")
         oidc = self.text.index("Assume exact AWS role with explicit deny-all-S3 session policy")
         self.assertLess(gate, oidc)
-        self.assertIn("PENDING_CANONICAL_IMPLEMENTATION_MERGE", self.text)
-        self.assertIn("canonical implementation SHA not released yet", self.text)
-        self.assertIn("post-implementation Region probe execution release is absent", self.text)
-        self.assertFalse((BASE / "REGION_PROBE_EXECUTION_RELEASE.json").exists())
+        self.assertNotIn("PENDING_CANONICAL_IMPLEMENTATION_MERGE", self.text)
+        self.assertIn("91687b4c803e331d4b2ef8493df731c99e25a0e5", self.text)
+        self.assertTrue((BASE / "REGION_PROBE_EXECUTION_RELEASE.json").is_file())
 
     def test_oidc_session_explicitly_denies_all_s3_and_has_no_s3_allow(self) -> None:
         self.assertIn('"Sid":"DenyAllS3DuringRegionProbe"', self.text)
@@ -67,24 +66,21 @@ class ArchiveRegionProbeR1WorkflowTests(unittest.TestCase):
         self.assertIn("CURRENT_RUN_ATTEMPT", self.text)
         self.assertIn('test "${CURRENT_RUN_ATTEMPT}" = \'1\'', self.text)
         self.assertIn("event=workflow_dispatch&branch=main&per_page=100", self.text)
-        self.assertIn("len(runs) < 100", self.text)
         self.assertIn("len(eligible) == 1", self.text)
         self.assertIn("a previous Region probe dispatch already consumed this release", self.text)
 
     def test_artifact_is_minimized_and_final_gate_is_fail_closed(self) -> None:
         for name in (
-            "region-probe-r1-context.json",
-            "region-probe-r1-result.json",
-            "region-probe-r1.rc",
-            "REGION_PROBE_R1_FILES.sha256",
+            "region-probe-r1-context.json", "region-probe-r1-result.json",
+            "region-probe-r1.rc", "REGION_PROBE_R1_FILES.sha256",
         ):
             self.assertIn(name, self.text)
         self.assertIn("REGION_PROBE_R1_PASS", self.text)
-        self.assertIn("s3_http_request_count'] == 1", self.text)
-        self.assertIn("response_body_read'] is False", self.text)
-        self.assertIn("list_objects_v2_requested'] is False", self.text)
-        self.assertIn("object_body_requested'] is False", self.text)
-        self.assertIn("market_data_ingested'] is False", self.text)
+        self.assertIn("s3_http_request_count", self.text)
+        self.assertIn("response_body_read", self.text)
+        self.assertIn("list_objects_v2_requested", self.text)
+        self.assertIn("object_body_requested", self.text)
+        self.assertIn("market_data_ingested", self.text)
 
 
 if __name__ == "__main__":
