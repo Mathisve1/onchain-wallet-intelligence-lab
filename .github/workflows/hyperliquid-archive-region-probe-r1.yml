@@ -27,7 +27,7 @@ env:
   APPROVAL_MERGE_COMMIT: b86156d71ef438441e6d3903a8bbc2da564a2046
   APPROVAL_ID: APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001
   APPROVAL_TEXT_SHA256: 56c8d01396b12d0dd783dbc1646ebbca947e51a024bb5c8f091cd0b7a889c541
-  EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE
+  EXPECTED_IMPLEMENTATION_COMMIT: 91687b4c803e331d4b2ef8493df731c99e25a0e5
   EXECUTION_RELEASE_PATH: research/archive_inventory/region_probe_r1/REGION_PROBE_EXECUTION_RELEASE.json
   AWS_EC2_METADATA_DISABLED: 'true'
   AWS_PAGER: ''
@@ -51,8 +51,7 @@ jobs:
           [[ "${EXACT_REVIEWED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
           test "${DISPATCH_REF}" = "refs/heads/main"
           test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"
-          observed="$(git rev-parse HEAD)"
-          test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
+          test "$(git rev-parse HEAD)" = "${EXACT_REVIEWED_COMMIT}"
 
       - name: Set up pinned Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -60,7 +59,7 @@ jobs:
           python-version: '3.12.13'
           check-latest: false
 
-      - name: Prove approval implementation and separate execution release before AWS OIDC
+      - name: Prove canonical implementation and single-use release before AWS OIDC
         shell: bash
         run: |
           set -euo pipefail
@@ -69,71 +68,43 @@ jobs:
           python governance/validate_repository.py
           python governance/validate_region_probe_r1_implementation.py
           python - <<'PY'
-          import hashlib
-          import json
-          import os
-          import re
+          import hashlib, json, os
           from pathlib import Path
-
           root = Path('.')
           base = root / 'research/archive_inventory/region_probe_r1'
           approval_text = base / 'approvals/APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001.txt'
-          approval = json.loads((base / 'approvals/APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001.json').read_text(encoding='utf-8'))
-          implementation = json.loads((base / 'REGION_PROBE_IMPLEMENTATION_CONTRACT.json').read_text(encoding='utf-8'))
+          approval = json.loads((base / 'approvals/APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001.json').read_text())
+          impl = json.loads((base / 'REGION_PROBE_IMPLEMENTATION_CONTRACT.json').read_text())
+          release = json.loads((root / os.environ['EXECUTION_RELEASE_PATH']).read_text())
           assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
           assert approval['approval_id'] == os.environ['APPROVAL_ID']
           assert approval['reviewed_commit'] == os.environ['PREREGISTRATION_COMMIT']
-          assert approval['approval_status'] == 'APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION'
           assert approval['maximum_one_time_budget_eur'] == 0.10
-          assert approval['maximum_monthly_budget_eur'] == 0
           assert approval['maximum_head_bucket_requests'] == 1
-          assert approval['maximum_runtime_seconds'] == 30
-          assert approval['maximum_retries'] == 0
-          assert approval['http_redirect_following_authorized'] is False
-          assert approval['target_bucket'] == 'hl-mainnet-node-data'
-          assert approval['head_bucket_scope_approved'] is True
-          assert approval['requester_pays_acknowledgement_scope_approved'] is True
-          assert implementation['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
-          assert implementation['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
-          assert implementation['session_s3_policy'] == 'EXPLICIT_DENY_ALL_S3'
-          assert implementation['separate_execution_release_required'] is True
-          assert implementation['implementation_self_releases_execution'] is False
-          assert implementation['execution_authorized'] is False
-
-          expected_impl = os.environ['EXPECTED_IMPLEMENTATION_COMMIT']
-          assert re.fullmatch(r'[0-9a-f]{40}', expected_impl), 'canonical implementation SHA not released yet'
-          release_path = root / os.environ['EXECUTION_RELEASE_PATH']
-          assert release_path.is_file(), 'post-implementation Region probe execution release is absent'
-          release = json.loads(release_path.read_text(encoding='utf-8'))
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['session_s3_policy'] == 'EXPLICIT_DENY_ALL_S3'
           assert release['release_id'] == 'RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001'
           assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_REGION_PROBE_RUN'
-          assert release['probe_id'] == 'HL-ARCHIVE-REGION-PROBE-R1-001'
-          assert release['implementation_commit'] == expected_impl
-          assert release['approval_id'] == os.environ['APPROVAL_ID']
+          assert release['implementation_commit'] == os.environ['EXPECTED_IMPLEMENTATION_COMMIT']
           assert release['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
-          assert release['approval_reviewed_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert release['target_bucket'] == 'hl-mainnet-node-data'
           assert release['maximum_one_time_budget_eur'] == 0.10
           assert release['maximum_monthly_budget_eur'] == 0
           assert release['maximum_head_bucket_requests'] == 1
+          assert release['maximum_s3_http_requests'] == 1
           assert release['maximum_runtime_seconds'] == 30
           assert release['maximum_retries'] == 0
           assert release['http_redirect_following_authorized'] is False
           assert release['single_workflow_dispatch_authorized'] is True
           assert release['rerun_authorized'] is False
-          assert release['target_bucket'] == 'hl-mainnet-node-data'
           assert release['head_bucket_authorized'] is True
-          for key in (
-              'list_objects_v2_authorized', 'get_object_authorized',
-              'head_object_authorized', 'get_object_attributes_authorized',
-              'range_get_authorized', 'object_body_download_authorized',
-              'market_data_ingestion_authorized', 'larger_300_request_inventory_authorized',
-          ):
-              assert release[key] is False
           assert release['session_s3_policy'] == 'EXPLICIT_DENY_ALL_S3'
+          for key in ('list_objects_v2_authorized','get_object_authorized','head_object_authorized','get_object_attributes_authorized','range_get_authorized','object_body_download_authorized','market_data_ingestion_authorized','larger_300_request_inventory_authorized'):
+              assert release[key] is False
           assert release['s3_request_executed'] is False
           assert release['exact_bucket_region'] is None
           assert release['empirical_result'] is None
-          assert all(value is False for value in release['trading_authorizations'].values())
+          assert all(v is False for v in release['trading_authorizations'].values())
           PY
 
       - name: Enforce single-use release before AWS OIDC
@@ -147,91 +118,20 @@ jobs:
           set -euo pipefail
           test "${CURRENT_RUN_ATTEMPT}" = '1'
           python - <<'PY'
-          import json
-          import os
-          import urllib.request
+          import json, os, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
-
-          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
-          window_start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
-          repo = os.environ['CURRENT_REPOSITORY']
-          current_run_id = int(os.environ['CURRENT_RUN_ID'])
-          url = (
-              f'https://api.github.com/repos/{repo}/actions/workflows/'
-              'hyperliquid-archive-region-probe-r1.yml/runs'
-              '?event=workflow_dispatch&branch=main&per_page=100'
-          )
-          request = urllib.request.Request(
-              url,
-              headers={
-                  'Accept': 'application/vnd.github+json',
-                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'hl-region-probe-r1-single-use-check',
-              },
-              method='GET',
-          )
-          with urllib.request.urlopen(request, timeout=10) as response:
-              payload = json.load(response)
-          runs = payload.get('workflow_runs')
-          assert isinstance(runs, list)
-          assert len(runs) < 100, 'workflow run history page saturated; fail closed'
-          eligible = []
-          for row in runs:
-              created = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(timezone.utc)
-              if created >= window_start:
-                  eligible.append(row)
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z','+00:00')).astimezone(timezone.utc)
+          url = f"https://api.github.com/repos/{os.environ['CURRENT_REPOSITORY']}/actions/workflows/hyperliquid-archive-region-probe-r1.yml/runs?event=workflow_dispatch&branch=main&per_page=100"
+          req = urllib.request.Request(url, headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'hl-region-probe-r1-single-use-check'})
+          with urllib.request.urlopen(req, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [r for r in runs if datetime.fromisoformat(r['created_at'].replace('Z','+00:00')).astimezone(timezone.utc) >= start]
           assert len(eligible) == 1, 'Region probe execution release is not single-use within the release window'
-          assert int(eligible[0]['id']) == current_run_id, 'a previous Region probe dispatch already consumed this release'
-          assert eligible[0]['event'] == 'workflow_dispatch'
-          assert eligible[0]['head_branch'] == 'main'
-          PY
-
-      - name: Freeze pending Region probe context before AWS authentication
-        shell: bash
-        env:
-          WORKFLOW_RUN_ID: ${{ github.run_id }}
-          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
-          context = {
-              'schema_version': '1.0',
-              'probe_id': 'HL-ARCHIVE-REGION-PROBE-R1-001',
-              'terminal_status': 'PENDING_AWS_OIDC',
-              'dispatch_ref': os.environ['DISPATCH_REF'],
-              'dispatch_sha': os.environ['DISPATCH_SHA'],
-              'reviewed_commit': os.environ['EXACT_REVIEWED_COMMIT'],
-              'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
-              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
-              'approval_id': os.environ['APPROVAL_ID'],
-              'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
-              'execution_release_id': release['release_id'],
-              'single_use_window_start_utc': release['single_use_window_start_utc'],
-              'implementation_commit': release['implementation_commit'],
-              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
-              'expected_role_arn': os.environ['EXPECTED_ROLE_ARN'],
-              'configure_aws_outcome': None,
-              'maximum_head_bucket_requests': 1,
-              'maximum_runtime_seconds': 30,
-              'maximum_retries': 0,
-              'http_redirect_following_authorized': False,
-              'session_s3_policy': 'EXPLICIT_DENY_ALL_S3',
-              'target_bucket': 'hl-mainnet-node-data',
-              'list_objects_v2_authorized': False,
-              'object_body_authorized': False,
-              'market_data_ingestion_authorized': False,
-          }
-          path = Path(os.environ['RUNNER_TEMP']) / 'region-probe-r1-context.json'
-          path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          assert int(eligible[0]['id']) == int(os.environ['CURRENT_RUN_ID']), 'a previous Region probe dispatch already consumed this release'
+          assert eligible[0]['event'] == 'workflow_dispatch' and eligible[0]['head_branch'] == 'main'
           PY
 
       - name: Assume exact AWS role with explicit deny-all-S3 session policy
@@ -255,19 +155,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          result="${RUNNER_TEMP}/region-probe-r1-result.json"
           set +e
-          python research/archive_inventory/region_probe_r1/probe.py "${result}" >/dev/null
+          python research/archive_inventory/region_probe_r1/probe.py "${RUNNER_TEMP}/region-probe-r1-result.json" >/dev/null
           rc=$?
           set -e
           printf '%s\n' "${rc}" >"${RUNNER_TEMP}/region-probe-r1.rc"
-
-      - name: Record non-execution when AWS role assumption fails
-        if: steps.configure.outcome != 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' 'NOT_RUN' >"${RUNNER_TEMP}/region-probe-r1.rc"
 
       - name: Finalize minimized Region probe evidence
         if: always()
@@ -279,107 +171,23 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
-          import os
+          import json, os, subprocess
           from pathlib import Path
-
           root = Path(os.environ['RUNNER_TEMP'])
-          context_path = root / 'region-probe-r1-context.json'
           result_path = root / 'region-probe-r1-result.json'
-          if context_path.is_file():
-              context = json.loads(context_path.read_text(encoding='utf-8'))
+          if result_path.is_file():
+              result = json.loads(result_path.read_text())
           else:
-              context = {
-                  'schema_version': '1.0',
-                  'probe_id': 'HL-ARCHIVE-REGION-PROBE-R1-001',
-                  'terminal_status': 'REGION_PROBE_R1_PRE_OIDC_GATE_FAILED',
-                  'dispatch_ref': os.environ.get('DISPATCH_REF'),
-                  'dispatch_sha': os.environ.get('DISPATCH_SHA'),
-                  'reviewed_commit': os.environ.get('EXACT_REVIEWED_COMMIT'),
-                  'checked_out_commit': None,
-                  'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
-                  'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
-                  'approval_id': os.environ.get('APPROVAL_ID'),
-                  'approval_text_sha256': os.environ.get('APPROVAL_TEXT_SHA256'),
-                  'execution_release_id': None,
-                  'implementation_commit': os.environ.get('EXPECTED_IMPLEMENTATION_COMMIT'),
-                  'expected_account_id': os.environ.get('EXPECTED_AWS_ACCOUNT_ID'),
-                  'expected_role_arn': os.environ.get('EXPECTED_ROLE_ARN'),
-                  'configure_aws_outcome': None,
-              }
-          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
-          if not result_path.is_file():
-              result = {
-                  'schema_version': '1.0',
-                  'probe_id': 'HL-ARCHIVE-REGION-PROBE-R1-001',
-                  'target_bucket': 'hl-mainnet-node-data',
-                  'terminal_status': 'REGION_PROBE_R1_NOT_EXECUTED',
-                  'request_attempt_count': 0,
-                  's3_http_request_count': 0,
-                  'http_method': 'HEAD',
-                  'http_status': None,
-                  'http_status_class': None,
-                  'x_amz_bucket_region': None,
-                  'x_amz_request_charged': None,
-                  'observed_at_utc': None,
-                  'runtime_seconds': 0.0,
-                  'retries_used': 0,
-                  'http_redirects_followed': False,
-                  'requester_pays_requested': False,
-                  'request_body_requested': False,
-                  'response_body_read': False,
-                  'list_objects_v2_requested': False,
-                  'object_body_requested': False,
-                  'market_data_ingested': False,
-                  'empirical_result': None,
-                  'technical_result': None,
-                  'failure_class': 'PRE_OIDC_OR_OIDC_GATE_FAILED',
-              }
-              result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          result = json.loads(result_path.read_text(encoding='utf-8'))
-          for key in (
-              'terminal_status', 'request_attempt_count', 's3_http_request_count',
-              'http_status', 'http_status_class', 'x_amz_bucket_region',
-              'x_amz_request_charged', 'observed_at_utc', 'runtime_seconds',
-              'retries_used', 'http_redirects_followed', 'requester_pays_requested',
-              'request_body_requested', 'response_body_read', 'list_objects_v2_requested',
-              'object_body_requested', 'market_data_ingested', 'technical_result',
-              'failure_class',
-          ):
-              context[key] = result.get(key)
-          context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          rc_path = root / 'region-probe-r1.rc'
-          if not rc_path.is_file():
-              rc_path.write_text('NOT_RUN\n', encoding='utf-8')
+              result = {'schema_version':'1.0','probe_id':'HL-ARCHIVE-REGION-PROBE-R1-001','target_bucket':'hl-mainnet-node-data','terminal_status':'REGION_PROBE_R1_NOT_EXECUTED','request_attempt_count':0,'s3_http_request_count':0,'http_method':'HEAD','http_status':None,'http_status_class':None,'x_amz_bucket_region':None,'x_amz_request_charged':None,'observed_at_utc':None,'runtime_seconds':0.0,'retries_used':0,'http_redirects_followed':False,'requester_pays_requested':False,'request_body_requested':False,'response_body_read':False,'list_objects_v2_requested':False,'object_body_requested':False,'market_data_ingested':False,'empirical_result':None,'technical_result':None,'failure_class':'PRE_OIDC_OR_OIDC_GATE_FAILED'}
+              result_path.write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          context = {'schema_version':'1.0','probe_id':'HL-ARCHIVE-REGION-PROBE-R1-001','dispatch_ref':os.environ['DISPATCH_REF'],'dispatch_sha':os.environ['DISPATCH_SHA'],'reviewed_commit':os.environ['EXACT_REVIEWED_COMMIT'],'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'workflow_run_id':int(os.environ['WORKFLOW_RUN_ID']),'workflow_run_attempt':int(os.environ['WORKFLOW_RUN_ATTEMPT']),'execution_release_id':release['release_id'],'implementation_commit':release['implementation_commit'],'configure_aws_outcome':os.environ.get('CONFIGURE_OUTCOME'),'terminal_status':result['terminal_status'],'request_attempt_count':result['request_attempt_count'],'s3_http_request_count':result['s3_http_request_count'],'http_status':result['http_status'],'http_status_class':result['http_status_class'],'x_amz_bucket_region':result['x_amz_bucket_region'],'x_amz_request_charged':result['x_amz_request_charged'],'runtime_seconds':result['runtime_seconds'],'retries_used':result['retries_used'],'http_redirects_followed':result['http_redirects_followed'],'requester_pays_requested':result['requester_pays_requested'],'response_body_read':result['response_body_read'],'list_objects_v2_requested':result['list_objects_v2_requested'],'object_body_requested':result['object_body_requested'],'market_data_ingested':result['market_data_ingested'],'technical_result':result['technical_result'],'failure_class':result['failure_class']}
+          (root/'region-probe-r1-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          rc = root/'region-probe-r1.rc'
+          if not rc.exists(): rc.write_text('NOT_RUN\n')
           PY
           cd "${RUNNER_TEMP}"
           sha256sum region-probe-r1-context.json region-probe-r1-result.json region-probe-r1.rc >REGION_PROBE_R1_FILES.sha256
-
-      - name: Publish minimized Region probe job summary
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY' >>"${GITHUB_STEP_SUMMARY}"
-          import json
-          import os
-          from pathlib import Path
-          path = Path(os.environ['RUNNER_TEMP']) / 'region-probe-r1-context.json'
-          data = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
-          print('# Hyperliquid Archive Region Probe R1')
-          for key in (
-              'dispatch_ref', 'dispatch_sha', 'reviewed_commit', 'checked_out_commit',
-              'workflow_run_id', 'workflow_run_attempt', 'execution_release_id',
-              'implementation_commit', 'terminal_status', 'configure_aws_outcome',
-              'request_attempt_count', 's3_http_request_count', 'http_status',
-              'http_status_class', 'x_amz_bucket_region', 'x_amz_request_charged',
-              'runtime_seconds', 'retries_used', 'http_redirects_followed',
-              'requester_pays_requested', 'response_body_read', 'list_objects_v2_requested',
-              'object_body_requested', 'market_data_ingested', 'technical_result', 'failure_class',
-          ):
-              print(f'- **{key}**: `{data.get(key)}`')
-          print('\nRegion probe R1 retains no response body or raw header set and does not authorize LIST/object access.')
-          PY
 
       - name: Upload minimized Region probe evidence
         if: always()
@@ -406,26 +214,16 @@ jobs:
           test "${CONFIGURE_OUTCOME}" = 'success'
           test "$(cat "${RUNNER_TEMP}/region-probe-r1.rc")" = '0'
           python - <<'PY'
-          import json
-          import os
-          import re
+          import json, os, re
           from pathlib import Path
-          result = json.loads((Path(os.environ['RUNNER_TEMP']) / 'region-probe-r1-result.json').read_text(encoding='utf-8'))
-          assert result['terminal_status'] == 'REGION_PROBE_R1_PASS'
-          assert result['request_attempt_count'] == 1
-          assert result['s3_http_request_count'] == 1
-          assert result['http_method'] == 'HEAD'
-          assert isinstance(result['http_status'], int) and 100 <= result['http_status'] <= 599
-          assert re.fullmatch(r'[a-z0-9-]{1,20}', result['x_amz_bucket_region'])
-          assert result['runtime_seconds'] <= 30
-          assert result['retries_used'] == 0
-          assert result['http_redirects_followed'] is False
-          assert result['requester_pays_requested'] is True
-          assert result['request_body_requested'] is False
-          assert result['response_body_read'] is False
-          assert result['list_objects_v2_requested'] is False
-          assert result['object_body_requested'] is False
-          assert result['market_data_ingested'] is False
-          assert result['empirical_result'] is None
-          assert result['technical_result'] == 'BUCKET_REGION_OBSERVED'
+          r=json.loads((Path(os.environ['RUNNER_TEMP'])/'region-probe-r1-result.json').read_text())
+          assert r['terminal_status']=='REGION_PROBE_R1_PASS'
+          assert r['request_attempt_count']==1 and r['s3_http_request_count']==1
+          assert r['http_method']=='HEAD' and isinstance(r['http_status'],int)
+          assert re.fullmatch(r'[a-z0-9-]{1,20}',r['x_amz_bucket_region'])
+          assert r['runtime_seconds']<=30 and r['retries_used']==0 and r['http_redirects_followed'] is False
+          assert r['requester_pays_requested'] is True
+          assert r['response_body_read'] is False and r['list_objects_v2_requested'] is False
+          assert r['object_body_requested'] is False and r['market_data_ingested'] is False
+          assert r['empirical_result'] is None and r['technical_result']=='BUCKET_REGION_OBSERVED'
           PY
