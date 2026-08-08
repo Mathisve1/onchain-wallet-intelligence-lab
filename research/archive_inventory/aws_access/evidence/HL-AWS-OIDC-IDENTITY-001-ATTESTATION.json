@@ -1,0 +1,33 @@
+{
+  "attestation_id": "HL-AWS-OIDC-IDENTITY-001-ATTESTATION",
+  "status": "ATTESTED_STS_IDENTITY_MATCH",
+  "reviewed_commit": "f34786eafd3689b575bdd3d2ada932b8ce204a61",
+  "workflow_run_id": 31250176507,
+  "workflow_job_id": 93085194965,
+  "workflow_run_attempt": 1,
+  "artifact_id": 9019744292,
+  "artifact_name": "hyperliquid-aws-oidc-identity-31250176507-1",
+  "artifact_zip_sha256": "3ebb71763783135c2c21bb7c0f8a801e0d873208e5a8b9afff473b208a2dc607",
+  "terminal_status": "STS_IDENTITY_MATCH",
+  "aws_account_id": "630956766927",
+  "assumed_role_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-metadata-canary/HLArchiveOidcIdentityCheck",
+  "explicit_sts_call_count": 1,
+  "s3_session_policy": "EXPLICIT_DENY_ALL_S3",
+  "s3_called": false,
+  "requester_pays_used": false,
+  "persistent_s3_permission_policy_independently_verified": false,
+  "persistent_s3_permission_policy_status": "USER_CONFIRMED_APPLIED_NOT_API_VERIFIED",
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "authorizations": {
+    "requester_pays": false,
+    "list_objects": false,
+    "object_body_download": false,
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
