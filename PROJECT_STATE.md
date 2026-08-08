@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical R0 release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`, canonical R0 run `31260043109`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, and explicit human approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`.
+Verified: 2026-08-08 against canonical R0 attestation merge `105673b91d233ffcfd19a7bf3d881dbee6d85c6a`, canonical R0 release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`, canonical R0 run `31260043109`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, and explicit consumed R0 approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`.
 
 ## Current status
 
@@ -47,6 +47,7 @@ Verified: 2026-08-08 against canonical R0 release commit `bc8a47a1cdeb1163657ea2
 | R0 run / job / artifact | `31260043109` / `93109335453` / `9022511541` |
 | R0 artifact SHA-256 | `40b26e33833b54a872a75be066a87b7e57a0e2f3930adada76ca3829a1142c8e` |
 | R0 terminal result | `ATTESTED_CONSUMED_PARTIAL_FAILURE_REGION_UNRESOLVED` |
+| R0 attestation canonical commit | `105673b91d233ffcfd19a7bf3d881dbee6d85c6a` |
 | R0 S3 HTTP requests executed | `7` |
 | R0 successful / failed requests | `2` / `5` |
 | R0 retained metadata entries | `50` |
@@ -60,6 +61,23 @@ Verified: 2026-08-08 against canonical R0 release commit `bc8a47a1cdeb1163657ea2
 | R0 execution ready | `false` |
 | R0 scoped Requester Pays currently authorized | `false` |
 | R0 scoped ListObjectsV2 currently authorized | `false` |
+| Region probe | `HL-ARCHIVE-REGION-PROBE-R1-001` |
+| Region probe status | `PREREGISTERED_NOT_AUTHORIZED` |
+| Region probe purpose | `RESOLVE_HL_MAINNET_NODE_DATA_BUCKET_REGION_ONLY` |
+| Region probe target bucket | `hl-mainnet-node-data` |
+| Region probe proposed operation | `HeadBucket` / `HEAD /` |
+| Region probe proposed S3 HTTP request cap | `1` |
+| Region probe proposed runtime / retries / redirects | `30 sec` / `0` / `false` |
+| Region probe proposed one-time ceiling | `EUR 0.10` |
+| Region probe maximum one-time budget | `null` |
+| Region probe maximum monthly budget | `EUR 0` |
+| Region probe human approval | `NOT_APPROVED` |
+| Region probe implementation authorized | `false` |
+| Region probe workflow installed | `false` |
+| Region probe executable installed | `false` |
+| Region probe execution authorized | `false` |
+| Region probe request executed | `false` |
+| Region probe exact bucket Region | `null` |
 | fresh paid attempt authorized | `false` |
 | broader archive Requester Pays/LIST | `NOT_AUTHORIZED` |
 | larger 300-request inventory authorized | `false` |
@@ -86,6 +104,14 @@ All five `hl-mainnet-node-data` requests failed with the same coarse class `S3_A
 
 This is an informative technical partial failure, not a market/alpha result. The first dispatch consumed `RELEASE_HL_ARCHIVE_METADATA_CANARY_R0_001` regardless of PASS/FAIL. A rerun or second paid attempt is not authorized.
 
+## Region probe R1 preregistration
+
+`HL-ARCHIVE-REGION-PROBE-R1-001` narrows the exact next research question to the S3 Region of `hl-mainnet-node-data`. Its static contract proposes at most one authenticated `HeadBucket`/HTTP `HEAD /` request, 30 seconds, zero retries and zero redirect following. It permits no request/response body, LIST, object retrieval, pagination, decompression or market-data ingestion.
+
+The only proposed retained network fields are coarse/exact HTTP status, `x-amz-bucket-region`, optional `x-amz-request-charged`, observation time and exact run/commit identity. Raw error bodies/headers, AWS request IDs, credentials/tokens and object data are forbidden.
+
+The `EUR 0.10` one-time value is only a conservative proposed human ceiling. `maximum_one_time_budget_eur` remains `null`, monthly budget remains `0`, no human approval exists, no Region-probe workflow/executable exists, and no network request is authorized by this preregistration.
+
 ## Hard boundary
 
 ```text
@@ -106,6 +132,18 @@ r0_failed_requests = 5
 r0_requester_pays_authorized = false
 r0_list_objects_v2_authorized = false
 r0_paid_request_authorized = false
+region_probe_r1_preregistered = true
+region_probe_r1_human_approved = false
+region_probe_r1_proposed_maximum_one_time_budget_eur = 0.10
+region_probe_r1_maximum_one_time_budget_eur = null
+region_probe_r1_maximum_monthly_budget_eur = 0
+region_probe_r1_maximum_s3_http_requests = 1
+region_probe_r1_implementation_authorized = false
+region_probe_r1_workflow_installed = false
+region_probe_r1_executable_installed = false
+region_probe_r1_execution_authorized = false
+region_probe_r1_request_executed = false
+region_probe_r1_exact_bucket_region = null
 fresh_paid_attempt_authorized = false
 requester_pays_authorized = false
 list_objects_authorized = false
@@ -131,11 +169,13 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Canonically attest run `31260043109` and preserve its minimized evidence.
-2. Keep the consumed R0 release closed; do not rerun or redispatch it.
-3. Preregister an exact Region-discovery successor for `hl-mainnet-node-data`. Preferred design: one direct `HeadBucket` request that retains only coarse HTTP status plus `x-amz-bucket-region`, with no object body, LIST pagination or market-data ingestion.
-4. Obtain separate human approval before that new network request. No new paid request is authorized by the old EUR 1.00 release.
-5. After exact Region discovery, separately review whether a fresh bounded LIST canary is justified.
-6. The 300-request inventory, object-body access, market-data ingestion, wallet P&L, clustering and every trading/capital stage remain separately gated.
+1. Run exact-head CI and clean-context review on the static Region-probe preregistration; no workflow/network call exists in this gate.
+2. Merge the preregistration only if all tests, manifest and governance checks pass.
+3. Verify the exact new canonical preregistration merge commit.
+4. Obtain a fresh explicit `APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001` approval bound to that exact canonical commit and the one-request / EUR 0.10 ceiling.
+5. Approval may permit building a separately reviewed implementation/workflow but does not itself execute `HeadBucket`.
+6. Only after later implementation/release gates may one Region-probe request be considered.
+7. Even a successful Region result would not authorize a fresh LIST call; that remains a separate bounded gate.
+8. The 300-request inventory, object-body access, market-data ingestion, wallet P&L, clustering and every trading/capital stage remain separately gated.
 
 Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.
