@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `R0_ATTESTED_PARTIAL_FAILURE_REGION_DISCOVERY_REQUIRED`
+- phase: `REGION_PROBE_R1_PREREGISTERED_NO_EXECUTION`
 - parent public probe: `ATTESTED_PUBLIC_PROBE_PASS`
 - parent archive route status: `ROUTES_CONFIRMED_ACCESS_RESTRICTED`
 - parent archive status: `PREREGISTERED_METADATA_ONLY_NO_EXECUTION`
@@ -45,6 +45,21 @@
 - R0 execution ready: `false`
 - current R0-scoped Requester Pays authorization: `false`
 - current R0-scoped ListObjectsV2 authorization: `false`
+- Region probe: `HL-ARCHIVE-REGION-PROBE-R1-001`
+- Region probe status: `PREREGISTERED_NOT_AUTHORIZED`
+- Region probe target: `hl-mainnet-node-data`
+- Region probe proposed operation: `HeadBucket` / `HEAD /`
+- Region probe proposed S3 HTTP request cap: `1`
+- Region probe proposed runtime cap: `30 seconds`
+- Region probe proposed retries / redirects: `0` / `false`
+- Region probe proposed one-time ceiling: `EUR 0.10`
+- Region probe maximum one-time budget: `null`
+- Region probe maximum monthly budget: `EUR 0`
+- Region probe human approval: `NOT_APPROVED`
+- Region probe workflow installed: `false`
+- Region probe executable installed: `false`
+- Region probe execution authorized: `false`
+- Region probe request executed: `false`
 - fresh paid attempt authorized: `false`
 - broader 300-request inventory authorized: `false`
 - GetObject authorized: `false`
@@ -54,6 +69,8 @@
 
 ## Next gate
 
-The existing release is consumed and cannot be reused. Preserve and merge the attested R0 evidence first. Then preregister a separate Region-discovery successor for `hl-mainnet-node-data`. The preferred minimum is one direct `HeadBucket` request retaining only coarse status and `x-amz-bucket-region`; no body, LIST pagination, object retrieval or market-data ingestion. That new network request requires fresh explicit approval.
+`HL-ARCHIVE-REGION-PROBE-R1-001` is preregistered as a static non-executing successor. The contract freezes exactly one future authenticated `HeadBucket` request to `hl-mainnet-node-data`, with zero retries/redirects and retention limited to coarse status, `x-amz-bucket-region`, optional request-charged value and exact run identity. No workflow or executable exists in this preregistration.
+
+Before any Region-probe network call, the preregistration must become canonical and then receive a fresh explicit approval bound to that exact canonical commit. The consumed R0 approval/release cannot be reused. Even a successful Region probe would not authorize a fresh LIST request.
 
 The larger 300-request inventory, all object-body access, market-data ingestion and all trading/capital stages remain unauthorized.
