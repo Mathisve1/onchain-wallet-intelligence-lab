@@ -11,9 +11,10 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main",
+          "token.actions.githubusercontent.com:sub": "repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main",
           "token.actions.githubusercontent.com:repository_id": "1326362646",
-          "token.actions.githubusercontent.com:repository_owner_id": "163474992"
+          "token.actions.githubusercontent.com:repository_owner_id": "163474992",
+          "token.actions.githubusercontent.com:ref": "refs/heads/main"
         }
       }
     }
