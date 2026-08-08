@@ -1,0 +1,11 @@
+{
+  "correction_id": "HL-ARCHIVE-IAM-CORRECTION-001",
+  "status": "POLICY_SYNTAX_REPAIRED_NO_SCOPE_EXPANSION",
+  "invalid_action_removed": "s3:SelectObjectContent",
+  "authorizing_action_for_select_object_content_api": "s3:GetObject",
+  "get_object_remains_explicitly_denied": true,
+  "requester_pays_authorized": false,
+  "list_objects_authorized": false,
+  "paid_request_authorized": false,
+  "object_body_download_authorized": false
+}
