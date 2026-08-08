@@ -1,0 +1,22 @@
+{
+  "check_id": "HL-AWS-OIDC-IDENTITY-001",
+  "checked_out_commit": "f34786eafd3689b575bdd3d2ada932b8ce204a61",
+  "configure_aws_outcome": "success",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "f34786eafd3689b575bdd3d2ada932b8ce204a61",
+  "empirical_result": null,
+  "expected_account_id": "630956766927",
+  "expected_assumed_role_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-metadata-canary/HLArchiveOidcIdentityCheck",
+  "explicit_sts_call_count": 1,
+  "market_data_ingested": false,
+  "observed_account_id": "630956766927",
+  "observed_assumed_role_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-metadata-canary/HLArchiveOidcIdentityCheck",
+  "requester_pays_used": false,
+  "reviewed_commit": "f34786eafd3689b575bdd3d2ada932b8ce204a61",
+  "s3_called": false,
+  "s3_session_policy": "EXPLICIT_DENY_ALL_S3",
+  "schema_version": "1.0",
+  "terminal_status": "STS_IDENTITY_MATCH",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31250176507
+}
