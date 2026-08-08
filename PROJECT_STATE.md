@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical Region-probe R1 preregistration merge `910997423f5e008f3c7bca65fd739d6aa14d25a7`, canonical R0 attestation merge `105673b91d233ffcfd19a7bf3d881dbee6d85c6a`, canonical R0 release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`, canonical R0 run `31260043109`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, consumed R0 approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`, and fresh Region-probe approval `APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001`.
+Verified: 2026-08-08 against canonical Region-probe R1 approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, canonical preregistration merge `910997423f5e008f3c7bca65fd739d6aa14d25a7`, canonical R0 attestation merge `105673b91d233ffcfd19a7bf3d881dbee6d85c6a`, canonical R0 release commit `bc8a47a1cdeb1163657ea243d6694286d6612bed`, canonical R0 run `31260043109`, canonical public-probe evidence, attested AWS OIDC identity run `31250176507`, consumed R0 approval `APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001`, and fresh Region-probe approval `APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001`.
 
 ## Current status
 
@@ -63,10 +63,11 @@ Verified: 2026-08-08 against canonical Region-probe R1 preregistration merge `91
 | R0 scoped ListObjectsV2 currently authorized | `false` |
 | Region probe | `HL-ARCHIVE-REGION-PROBE-R1-001` |
 | Region probe preregistration commit | `910997423f5e008f3c7bca65fd739d6aa14d25a7` |
-| Region probe status | `HUMAN_APPROVED_AWAITING_IMPLEMENTATION` |
+| Region probe approval canonical commit | `b86156d71ef438441e6d3903a8bbc2da564a2046` |
+| Region probe status | `IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION` |
 | Region probe purpose | `RESOLVE_HL_MAINNET_NODE_DATA_BUCKET_REGION_ONLY` |
 | Region probe target bucket | `hl-mainnet-node-data` |
-| Region probe proposed operation | `HeadBucket` / `HEAD /` |
+| Region probe operation | `HeadBucket` / `HEAD /` |
 | Region probe S3 HTTP request cap | `1` |
 | Region probe runtime / retries / redirects | `30 sec` / `0` / `false` |
 | Region probe human approval | `APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION` |
@@ -76,9 +77,12 @@ Verified: 2026-08-08 against canonical Region-probe R1 preregistration merge `91
 | Region probe maximum one-time budget | `EUR 0.10` |
 | Region probe maximum monthly budget | `EUR 0` |
 | Region probe implementation phase | `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY` |
-| Region probe implementation installed | `false` |
-| Region probe workflow installed | `false` |
-| Region probe executable installed | `false` |
+| Region probe implementation candidate | `PRESENT_REQUIRES_EXACT_HEAD_CI_AND_REVIEW` |
+| Region probe workflow candidate | `PRESENT_BUT_RELEASE_GATED_BEFORE_OIDC` |
+| Region probe executable candidate | `PRESENT_DIRECT_SIGV4_HEAD_ONLY` |
+| Region probe session S3 boundary | `EXPLICIT_DENY_ALL_S3` |
+| Region probe canonical implementation | `false` |
+| Region probe canonical implementation commit | `null` |
 | Region probe execution release | `false` |
 | Region probe execution authorized | `false` |
 | Region probe request executed | `false` |
@@ -109,11 +113,13 @@ All five `hl-mainnet-node-data` requests failed with the same coarse class `S3_A
 
 This is an informative technical partial failure, not a market/alpha result. The first dispatch consumed `RELEASE_HL_ARCHIVE_METADATA_CANARY_R0_001` regardless of PASS/FAIL. A rerun or second paid attempt is not authorized.
 
-## Region probe R1 approval
+## Region probe R1 approval and implementation candidate
 
-The static preregistration remains an immutable non-self-authorizing snapshot. The user's fresh exact approval `APPROVE_HL_ARCHIVE_REGION_PROBE_R1_001` is recorded separately and hash-bound to canonical preregistration commit `910997423f5e008f3c7bca65fd739d6aa14d25a7` with one `HeadBucket` request, 30 seconds, zero retries, zero redirect following and an absolute one-time ceiling of EUR 0.10.
+The immutable preregistration remains non-self-authorizing. The separate human approval is hash-bound to preregistration commit `910997423f5e008f3c7bca65fd739d6aa14d25a7` and the canonical approval record is `b86156d71ef438441e6d3903a8bbc2da564a2046`.
 
-This approval opens only the repository implementation/review phase. It does not install a workflow, does not authorize a runtime release, does not permit any LIST/object-body operation and does not itself execute an AWS request. A separately reviewed implementation and single-use execution release remain mandatory before one Region probe may run.
+The current review branch contains a direct standard-library SigV4 `HEAD /` implementation and a manual-only workflow. The probe may construct exactly one S3 HTTP HEAD request to `hl-mainnet-node-data.s3.amazonaws.com`, with `x-amz-request-payer: requester`, no retry, no redirect follow and no response-body read. Its temporary OIDC session is further restricted by an explicit session-level `Deny s3:*`; no persistent IAM permission expansion is required for the candidate.
+
+This candidate is not yet a canonical implementation result. The workflow deliberately contains `PENDING_CANONICAL_IMPLEMENTATION_MERGE` and requires a separate `REGION_PROBE_EXECUTION_RELEASE.json` before AWS OIDC. That release file is absent. Therefore implementation review cannot itself issue the approved network request.
 
 ## Hard boundary
 
@@ -143,9 +149,11 @@ region_probe_r1_maximum_one_time_budget_eur = 0.10
 region_probe_r1_maximum_monthly_budget_eur = 0
 region_probe_r1_maximum_s3_http_requests = 1
 region_probe_r1_implementation_phase_authorized = true
-region_probe_r1_implementation_installed = false
-region_probe_r1_workflow_installed = false
-region_probe_r1_executable_installed = false
+region_probe_r1_implementation_candidate_present = true
+region_probe_r1_workflow_candidate_present = true
+region_probe_r1_executable_candidate_present = true
+region_probe_r1_implementation_canonical = false
+region_probe_r1_implementation_commit = null
 region_probe_r1_execution_release_present = false
 region_probe_r1_execution_authorized = false
 region_probe_r1_request_executed = false
@@ -175,13 +183,13 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Canonically record this Region-probe approval with exact-head CI, manifest validation and clean-context review.
-2. Build the minimal one-request implementation and manual-only workflow on a separate branch from the approval merge.
-3. Require direct HTTPS `HEAD /`, exactly one transport attempt, zero retry/redirect following and strict response-header allowlisting.
-4. Keep execution false during implementation CI/review; no AWS request may occur in PR/CI.
-5. After canonical implementation merge, create a separate single-use execution release bound to the exact implementation commit and this approval.
-6. Only then may one manual Region-probe dispatch be started against exact canonical `main`; the first dispatch consumes the release regardless of PASS/FAIL.
-7. Even a successful Region result does not authorize a fresh LIST request; that remains a separate bounded gate.
+1. Run exact-head CI, byte-exact manifest validation, the Region-probe implementation validator and clean-context review on this candidate.
+2. Merge only if direct-HEAD-only behavior, deny-all-S3 session policy, release-before-OIDC gating and all existing R0/public-probe invariants remain green.
+3. Verify the actual implementation squash-merge SHA from remote `main`; do not invent it in advance.
+4. Build a separate single-use `REGION_PROBE_EXECUTION_RELEASE.json` bound to that exact implementation merge and the approved scope/budget.
+5. Keep the implementation workflow unusable until the release PR replaces `PENDING_CANONICAL_IMPLEMENTATION_MERGE` with that exact merge SHA and installs the reviewed release.
+6. Only after that release merges may exactly one manual Region-probe dispatch occur. The first dispatch consumes the release regardless of PASS/FAIL.
+7. Even a successful bucket Region result does not authorize a LIST request; a fresh bounded LIST canary remains a separate human/repository gate.
 8. The 300-request inventory, object-body access, market-data ingestion, wallet P&L, clustering and every trading/capital stage remain separately gated.
 
 Entity-resolution research remains downstream of demonstrated individual-wallet copyability. No probabilistic wallet merge may create false consensus in the first study.

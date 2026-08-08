@@ -37,7 +37,7 @@ class ArchiveRegionProbeR1ApprovalTests(unittest.TestCase):
         self.assertTrue(r["head_bucket_scope_approved"])
         self.assertTrue(r["requester_pays_acknowledgement_scope_approved"])
 
-    def test_approval_does_not_open_execution_or_data_access(self) -> None:
+    def test_approval_snapshot_does_not_open_execution_or_data_access(self) -> None:
         r = self.load()
         for key in (
             "list_objects_v2_authorized",
@@ -53,11 +53,14 @@ class ArchiveRegionProbeR1ApprovalTests(unittest.TestCase):
         ):
             self.assertFalse(r[key], key)
 
-    def test_project_state_separates_human_approval_from_runtime_release(self) -> None:
+    def test_project_state_separates_candidate_from_runtime_release(self) -> None:
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("region_probe_r1_human_approved = true", state)
         self.assertIn("region_probe_r1_implementation_phase_authorized = true", state)
-        self.assertIn("region_probe_r1_implementation_installed = false", state)
+        self.assertIn("region_probe_r1_implementation_candidate_present = true", state)
+        self.assertIn("region_probe_r1_workflow_candidate_present = true", state)
+        self.assertIn("region_probe_r1_executable_candidate_present = true", state)
+        self.assertIn("region_probe_r1_implementation_canonical = false", state)
         self.assertIn("region_probe_r1_execution_release_present = false", state)
         self.assertIn("region_probe_r1_execution_authorized = false", state)
         self.assertIn("region_probe_r1_request_executed = false", state)
