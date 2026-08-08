@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `REGION_PROBE_R1_HUMAN_APPROVED_AWAITING_IMPLEMENTATION`
+- phase: `REGION_PROBE_R1_IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION`
 - parent public probe: `ATTESTED_PUBLIC_PROBE_PASS`
 - parent archive route status: `ROUTES_CONFIRMED_ACCESS_RESTRICTED`
 - parent archive status: `PREREGISTERED_METADATA_ONLY_NO_EXECUTION`
@@ -23,8 +23,9 @@
 - current R0-scoped ListObjectsV2 authorization: `false`
 - Region probe: `HL-ARCHIVE-REGION-PROBE-R1-001`
 - Region probe preregistration canonical commit: `910997423f5e008f3c7bca65fd739d6aa14d25a7`
+- Region probe approval canonical commit: `b86156d71ef438441e6d3903a8bbc2da564a2046`
 - Region probe preregistration snapshot: `PREREGISTERED_NOT_AUTHORIZED`
-- Region probe current status: `HUMAN_APPROVED_AWAITING_IMPLEMENTATION`
+- Region probe current status: `IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION`
 - Region probe target: `hl-mainnet-node-data`
 - Region probe operation: `HeadBucket` / `HEAD /`
 - Region probe S3 HTTP request cap: `1`
@@ -37,9 +38,14 @@
 - Region probe one-time ceiling: `EUR 0.10`
 - Region probe monthly ceiling: `EUR 0`
 - Region probe implementation phase authorized: `true`
-- Region probe implementation installed: `false`
-- Region probe workflow installed: `false`
-- Region probe executable installed: `false`
+- Region probe implementation candidate present: `true`
+- Region probe workflow candidate present: `true`
+- Region probe executable candidate present: `true`
+- Region probe transport: `DIRECT_SIGV4_HTTPS_HEAD_NO_REDIRECT_NO_BODY`
+- Region probe session S3 boundary: `EXPLICIT_DENY_ALL_S3`
+- Region probe persistent role expansion required: `false`
+- Region probe canonical implementation: `false`
+- Region probe canonical implementation commit: `null`
 - Region probe execution release present: `false`
 - Region probe execution authorized: `false`
 - Region probe request executed: `false`
@@ -56,8 +62,10 @@
 
 ## Next gate
 
-The exact human approval is now recorded separately from the immutable preregistration snapshot. It authorizes only the implementation/review phase for a future single `HeadBucket` Region-discovery attempt under an absolute EUR 0.10 ceiling. Approval alone does not install a workflow, does not create an execution release and does not execute AWS/S3.
+The approved implementation candidate now exists on the review branch. It uses exactly one direct SigV4 HTTPS `HEAD /` transport, retains no response body, performs no retry or redirect following, and the temporary OIDC session is constrained by explicit `Deny s3:*` with no S3 Allow in the workflow.
 
-Next: merge this approval record only after exact-head CI, byte-exact manifest validation and clean-context review. Then build a minimal direct-HTTPS HEAD implementation and manual-only workflow on a separate branch. Runtime execution must remain closed until a later separately reviewed single-use release.
+The candidate deliberately cannot execute: `REGION_PROBE_EXECUTION_RELEASE.json` is absent and the workflow still contains `PENDING_CANONICAL_IMPLEMENTATION_MERGE`. Both conditions are checked before AWS OIDC.
 
-Even a successful Region probe will not authorize a fresh LIST request. The larger 300-request inventory, all object-body access, market-data ingestion and all trading/capital stages remain unauthorized.
+Next: exact-head CI, byte-exact manifest validation, Region-probe-specific governance validation and clean-context review. Only after the actual implementation merge SHA is remotely verified may a separate single-use execution release be built. Even that later Region result will not authorize a fresh LIST request.
+
+The larger 300-request inventory, all object-body access, market-data ingestion and all trading/capital stages remain unauthorized.
