@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-nodedata-canary-r2.yml"
 BASE = ROOT / "research/archive_inventory/r2"
 RELEASE = BASE / "R2_EXECUTION_RELEASE.json"
+IMPLEMENTATION_COMMIT = "142ce50be20507761c4cce37b325ac69d57f8b25"
 
 
 class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
@@ -23,14 +24,15 @@ class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
         self.assertIn('test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"', text)
         self.assertIn('test "$(git rev-parse HEAD)" = "${EXACT_REVIEWED_COMMIT}"', text)
 
-    def test_approval_and_implementation_are_exactly_bound(self) -> None:
+    def test_approval_release_and_canonical_implementation_are_exactly_bound(self) -> None:
         text = self.text()
         self.assertIn("PREREGISTRATION_COMMIT: 39b40cccc7e9a3fdbc439d06fb188e946d9da2aa", text)
         self.assertIn("APPROVAL_MERGE_COMMIT: 151e08f54037ca7d3a0a9c17d3bdfb84d707a66e", text)
         self.assertIn("APPROVAL_TEXT_SHA256: 728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6", text)
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        self.assertIn(f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION_COMMIT}", text)
+        self.assertNotIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
         self.assertIn("EXECUTION_RELEASE_PATH: research/archive_inventory/r2/R2_EXECUTION_RELEASE.json", text)
-        self.assertFalse(RELEASE.exists())
+        self.assertTrue(RELEASE.is_file())
 
     def test_release_proof_occurs_before_oidc(self) -> None:
         text = self.text()
@@ -42,6 +44,7 @@ class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
         self.assertIn("assert expected != 'PENDING_CANONICAL_IMPLEMENTATION_MERGE'", text)
         self.assertIn("assert release_path.is_file()", text)
         self.assertIn("test \"${CURRENT_RUN_ATTEMPT}\" = '1'", text)
+        self.assertIn("a previous R2 dispatch already consumed this release", text)
 
     def test_oidc_session_is_exact_five_prefix_list_only(self) -> None:
         text = self.text()
@@ -50,11 +53,7 @@ class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
         self.assertIn('"Resource":"arn:aws:s3:::hl-mainnet-node-data"', text)
         self.assertIn('"s3:max-keys":"25"', text)
         for prefix in (
-            "node_fills_by_block/*",
-            "node_fills/*",
-            "node_trades/*",
-            "explorer_blocks/*",
-            "replica_cmds/*",
+            "node_fills_by_block/*", "node_fills/*", "node_trades/*", "explorer_blocks/*", "replica_cmds/*",
         ):
             self.assertIn(prefix, text)
         self.assertNotIn('"Action":"s3:GetObject"', text)
@@ -66,15 +65,9 @@ class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
     def test_release_contract_keeps_broader_capabilities_closed(self) -> None:
         text = self.text()
         for key in (
-            "get_object_authorized",
-            "head_object_authorized",
-            "get_object_attributes_authorized",
-            "range_get_authorized",
-            "list_object_versions_authorized",
-            "list_all_my_buckets_authorized",
-            "object_body_download_authorized",
-            "decompression_authorized",
-            "market_data_ingestion_authorized",
+            "get_object_authorized", "head_object_authorized", "get_object_attributes_authorized",
+            "range_get_authorized", "list_object_versions_authorized", "list_all_my_buckets_authorized",
+            "object_body_download_authorized", "decompression_authorized", "market_data_ingestion_authorized",
             "larger_300_request_inventory_authorized",
         ):
             self.assertIn(key, text)

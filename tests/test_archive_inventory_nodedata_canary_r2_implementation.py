@@ -47,11 +47,10 @@ class ArchiveNodeDataCanaryR2ImplementationTests(unittest.TestCase):
         self.assertFalse(c["continuation_token_value_retained"])
         self.assertEqual(c["allowed_response_header_fields"], ["x-amz-request-charged"])
 
-    def test_implementation_is_release_gated_and_nonexecuting(self) -> None:
+    def test_immutable_implementation_snapshot_never_self_releases(self) -> None:
         c = self.load()
         self.assertEqual(c["expected_canonical_implementation_commit"], "PENDING_CANONICAL_IMPLEMENTATION_MERGE")
         self.assertTrue(c["execution_release_required"])
-        self.assertFalse(RELEASE.exists())
         for key in (
             "execution_release_present",
             "execution_authorized",
@@ -74,6 +73,17 @@ class ArchiveNodeDataCanaryR2ImplementationTests(unittest.TestCase):
         self.assertEqual(c["metadata_entries_observed"], 0)
         self.assertIsNone(c["empirical_result"])
         self.assertTrue(all(value is False for value in c["trading_authorizations"].values()))
+
+    def test_separate_release_exists_without_rewriting_implementation_snapshot(self) -> None:
+        self.assertTrue(RELEASE.is_file())
+        release = json.loads(RELEASE.read_text(encoding="utf-8"))
+        self.assertEqual(release["implementation_commit"], "142ce50be20507761c4cce37b325ac69d57f8b25")
+        self.assertTrue(release["single_workflow_dispatch_authorized"])
+        self.assertFalse(release["rerun_authorized"])
+        c = self.load()
+        self.assertFalse(c["execution_release_present"])
+        self.assertFalse(c["execution_authorized"])
+        self.assertFalse(c["list_objects_v2_authorized"])
 
     def test_session_scope_is_narrower_than_persistent_role(self) -> None:
         c = self.load()
