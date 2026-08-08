@@ -70,15 +70,20 @@ class ArchiveNodeDataCanaryR2ApprovalTests(unittest.TestCase):
         self.assertFalse(record["execution_workflow_installed"])
         self.assertFalse(record["execution_release_present"])
         self.assertFalse(record["execution_ready"])
+        self.assertEqual(record["s3_requests_executed"], 0)
+        self.assertEqual(record["metadata_entries_observed"], 0)
 
-    def test_project_state_keeps_pre_dispatch_runtime_zero(self) -> None:
+    def test_project_state_records_approval_lineage_and_later_consumed_run(self) -> None:
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("r2_human_approved = true", state)
         self.assertIn(f"r2_approval_reviewed_commit = {EXPECTED_COMMIT}", state)
         self.assertIn(f"r2_approval_text_sha256 = {EXPECTED_SHA}", state)
-        self.assertIn("r2_s3_requests_executed = 0", state)
+        self.assertIn("r2_successor_release_consumed = true", state)
+        self.assertIn("r2_s3_requests_executed = 5", state)
+        self.assertIn("r2_metadata_entries_observed = 125", state)
         self.assertIn("region_probe_r1_execution_release_consumed = true", state)
         self.assertIn("region_probe_r1_exact_bucket_region = ap-northeast-1", state)
+        self.assertIn("larger_300_request_inventory_authorized = false", state)
 
 
 if __name__ == "__main__":
