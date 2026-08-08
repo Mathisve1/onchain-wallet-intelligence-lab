@@ -68,7 +68,7 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
         self.assertEqual(c["region_value_validation"]["allowed_characters_regex"], "^[a-z0-9-]+$")
         self.assertEqual(c["missing_region_header_behavior"], "TERMINAL_FAIL_NO_RETRY_NO_REDIRECT")
 
-    def test_budget_is_only_proposed_and_requires_fresh_human_approval(self) -> None:
+    def test_budget_is_only_proposed_in_immutable_preregistration_snapshot(self) -> None:
         c = self.load()
         self.assertEqual(c["proposed_maximum_one_time_budget_eur"], 0.10)
         self.assertIsNone(c["maximum_one_time_budget_eur"])
@@ -82,10 +82,16 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
         self.assertIn("list_objects_v2_authorized=false", text)
         self.assertIn("object_body_download_authorized=false", text)
 
-    def test_preregistration_installs_no_region_probe_workflow_or_executable(self) -> None:
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-region-probe-r1.yml").exists())
-        self.assertFalse((PROBE / "probe.py").exists())
-        self.assertFalse((PROBE / "collector.py").exists())
+    def test_preregistration_snapshot_remains_non_self_authorizing_after_separate_implementation(self) -> None:
+        c = self.load()
+        self.assertFalse(c["implementation_authorized"])
+        self.assertFalse(c["workflow_installation_authorized"])
+        self.assertFalse(c["execution_authorized"])
+        self.assertFalse(c["fresh_paid_attempt_authorized"])
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-region-probe-r1.yml").is_file())
+        self.assertTrue((PROBE / "probe.py").is_file())
+        self.assertTrue((PROBE / "REGION_PROBE_IMPLEMENTATION_CONTRACT.json").is_file())
+        self.assertFalse((PROBE / "REGION_PROBE_EXECUTION_RELEASE.json").exists())
         self.assertFalse((PROBE / "evidence").exists())
         self.assertFalse((PROBE / "outputs").exists())
 
