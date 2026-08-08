@@ -48,7 +48,7 @@
     "object_body_download"
   ],
   "cost_gate": {
-    "pricing_evidence_status_required": "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL",
+    "pricing_freeze_status_required": "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL",
     "human_approval_required": true,
     "approval_id_required": "APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001",
     "proposed_maximum_one_time_budget_eur": 1.0,
