@@ -47,14 +47,16 @@ class ArchiveRegionProbeR1ApprovalTests(unittest.TestCase):
         ):
             self.assertFalse(r[key], key)
 
-    def test_project_state_records_separate_reviewed_implementation_and_release(self) -> None:
+    def test_project_state_records_consumed_release_and_observed_region(self) -> None:
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("region_probe_r1_human_approved = true", state)
         self.assertIn("region_probe_r1_implementation_canonical = true", state)
         self.assertIn("region_probe_r1_implementation_commit = 91687b4c803e331d4b2ef8493df731c99e25a0e5", state)
         self.assertIn("region_probe_r1_execution_release_present = true", state)
-        self.assertIn("region_probe_r1_execution_ready = true", state)
-        self.assertIn("region_probe_r1_request_executed = false", state)
+        self.assertIn("region_probe_r1_execution_release_consumed = true", state)
+        self.assertIn("region_probe_r1_execution_ready = false", state)
+        self.assertIn("region_probe_r1_request_executed = true", state)
+        self.assertIn("region_probe_r1_exact_bucket_region = ap-northeast-1", state)
         self.assertIn("fresh_list_attempt_authorized = false", state)
 
 
