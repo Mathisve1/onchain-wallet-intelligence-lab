@@ -34,7 +34,7 @@ class ArchiveR0ApprovalRecordTests(unittest.TestCase):
         self.assertTrue(record["requester_pays_scope_approved"])
         self.assertTrue(record["list_objects_v2_scope_approved"])
 
-    def test_approval_record_is_not_execution_release(self) -> None:
+    def test_approval_record_remains_immutable_snapshot_not_current_release_state(self) -> None:
         record = json.loads((APPROVAL_DIR / f"{APPROVAL_ID}.json").read_text(encoding="utf-8"))
         self.assertFalse(record["implementation_installed"])
         self.assertFalse(record["execution_workflow_installed"])
@@ -44,7 +44,12 @@ class ArchiveR0ApprovalRecordTests(unittest.TestCase):
         self.assertIsNone(record["empirical_result"])
         self.assertTrue(all(record["forbidden_capabilities"].values()))
         self.assertTrue(all(value is False for value in record["trading_authorizations"].values()))
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-metadata-canary-r0.yml").exists())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-metadata-canary-r0.yml").exists())
+        implementation = json.loads(
+            (ROOT / "research/archive_inventory/r0/R0_IMPLEMENTATION_CONTRACT.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(implementation["human_approval_text_sha256"], record["exact_approval_text_sha256"])
+        self.assertEqual(implementation["human_approval_reviewed_commit"], record["reviewed_commit"])
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ class ArchiveR0PricingBudgetTests(unittest.TestCase):
     def load(self, name: str) -> dict:
         return json.loads((ARCHIVE / name).read_text(encoding="utf-8"))
 
-    def test_pricing_freeze_is_conservative_but_not_authorization(self) -> None:
+    def test_pricing_freeze_is_conservative_but_not_self_authorizing(self) -> None:
         pricing = self.load("PRICING_EVIDENCE_TEMPLATE.json")
         self.assertEqual(pricing["status"], "PENDING_PRE_EXECUTION_PRICING_REFRESH")
         self.assertEqual(pricing["pricing_freeze_status"], "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL")
@@ -29,7 +29,7 @@ class ArchiveR0PricingBudgetTests(unittest.TestCase):
         self.assertFalse(pricing["requester_pays_authorized"])
         self.assertFalse(pricing["list_objects_authorized"])
 
-    def test_r0_contract_is_exactly_seven_non_paginated_first_pages(self) -> None:
+    def test_r0_preregistration_remains_frozen_after_separate_approval(self) -> None:
         contract = self.load("METADATA_CANARY_R0_CONTRACT.json")
         self.assertEqual(contract["canary_id"], "HL-ARCHIVE-METADATA-CANARY-R0-001")
         self.assertEqual(contract["status"], "PREREGISTERED_MICRO_CANARY_NOT_AUTHORIZED")
@@ -67,7 +67,7 @@ class ArchiveR0PricingBudgetTests(unittest.TestCase):
         self.assertEqual(total, Decimal("0.0045443040"))
         self.assertEqual(Decimal(str(pricing["modeled_costs_usd"]["stress_total_cost_at_all_caps"])), Decimal("0.004544304"))
 
-    def test_approval_template_and_workflow_remain_closed(self) -> None:
+    def test_human_approval_and_installed_workflow_are_separate_from_frozen_pricing_template(self) -> None:
         approval = (ARCHIVE / "HUMAN_APPROVAL_TEMPLATE.md").read_text(encoding="utf-8")
         for token in (
             "APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001",
@@ -82,6 +82,7 @@ class ArchiveR0PricingBudgetTests(unittest.TestCase):
             "object_body_download_authorized=false",
         ):
             self.assertIn(token, approval)
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-metadata-canary-r0.yml").exists())
         self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-metadata-canary.yml").exists())
 
 
