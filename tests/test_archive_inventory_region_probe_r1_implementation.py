@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory/region_probe_r1"
 CONTRACT = BASE / "REGION_PROBE_IMPLEMENTATION_CONTRACT.json"
 RELEASE = BASE / "REGION_PROBE_EXECUTION_RELEASE.json"
+EVIDENCE = BASE / "evidence"
 
 
 class ArchiveRegionProbeR1ImplementationTests(unittest.TestCase):
@@ -56,7 +57,7 @@ class ArchiveRegionProbeR1ImplementationTests(unittest.TestCase):
         self.assertIsNone(c["empirical_result"])
         self.assertTrue(all(value is False for value in c["trading_authorizations"].values()))
 
-    def test_candidate_requires_and_is_separate_from_release(self) -> None:
+    def test_candidate_and_release_remain_immutable_after_attested_run(self) -> None:
         c = self.load()
         self.assertTrue(c["separate_execution_release_required"])
         self.assertFalse(c["implementation_self_releases_execution"])
@@ -66,7 +67,12 @@ class ArchiveRegionProbeR1ImplementationTests(unittest.TestCase):
         self.assertEqual(r["release_id"], "RELEASE_HL_ARCHIVE_REGION_PROBE_R1_001")
         self.assertEqual(r["implementation_commit"], "91687b4c803e331d4b2ef8493df731c99e25a0e5")
         self.assertFalse(r["s3_request_executed"])
-        self.assertFalse((BASE / "evidence").exists())
+        self.assertIsNone(r["exact_bucket_region"])
+        self.assertTrue((EVIDENCE / "HL-ARCHIVE-REGION-PROBE-R1-001-ATTESTATION.json").is_file())
+        attestation = json.loads((EVIDENCE / "HL-ARCHIVE-REGION-PROBE-R1-001-ATTESTATION.json").read_text(encoding="utf-8"))
+        self.assertTrue(attestation["release_consumed"])
+        self.assertEqual(attestation["x_amz_bucket_region"], "ap-northeast-1")
+        self.assertFalse(attestation["fresh_list_attempt_authorized"])
         self.assertFalse((BASE / "outputs").exists())
 
 

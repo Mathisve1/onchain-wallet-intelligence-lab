@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArchiveRegionProbeR1GovernanceTests(unittest.TestCase):
-    def test_region_probe_r1_release_validator_passes(self) -> None:
+    def test_region_probe_r1_evidence_validator_passes(self) -> None:
         completed = subprocess.run(
             [sys.executable, "governance/validate_region_probe_r1_implementation.py"],
             cwd=ROOT,
@@ -18,7 +18,7 @@ class ArchiveRegionProbeR1GovernanceTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-        self.assertIn("REGION_PROBE_R1_RELEASE_VALIDATION_PASS", completed.stdout)
+        self.assertIn("REGION_PROBE_R1_EVIDENCE_VALIDATION_PASS", completed.stdout)
 
 
 if __name__ == "__main__":

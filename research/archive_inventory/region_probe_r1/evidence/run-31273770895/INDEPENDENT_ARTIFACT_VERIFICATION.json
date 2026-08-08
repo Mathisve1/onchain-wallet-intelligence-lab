@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "workflow_run_id": 31273770895,
+  "workflow_job_id": 93143945097,
+  "artifact_id": 9026393705,
+  "artifact_name": "hyperliquid-archive-region-probe-r1-31273770895-1",
+  "artifact_size_bytes": 2811,
+  "github_artifact_digest": "sha256:5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405",
+  "independently_downloaded_zip_sha256": "5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405",
+  "provider_digest_match": true,
+  "internal_hash_ledger_match": true,
+  "verified_files": {
+    "region-probe-r1-context.json": "b26f3a57ac3e337be10cb0fa4cb09b656fabb7eb37d526c0c6f6f86a1a27d373",
+    "region-probe-r1-result.json": "cd2f02900bc5e30bc4ef2a65ba7ebc764eb8c0cddf124c46cc5373d81746c059",
+    "region-probe-r1.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "verification_status": "PASS"
+}

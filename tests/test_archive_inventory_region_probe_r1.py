@@ -9,6 +9,7 @@ PROBE = ROOT / "research/archive_inventory/region_probe_r1"
 CONTRACT = PROBE / "REGION_PROBE_CONTRACT.json"
 APPROVAL = PROBE / "HUMAN_APPROVAL_TEMPLATE.md"
 RELEASE = PROBE / "REGION_PROBE_EXECUTION_RELEASE.json"
+EVIDENCE = PROBE / "evidence"
 
 
 class ArchiveRegionProbeR1Tests(unittest.TestCase):
@@ -76,7 +77,7 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
         self.assertIn("list_objects_v2_authorized=false", text)
         self.assertIn("object_body_download_authorized=false", text)
 
-    def test_preregistration_snapshot_remains_non_self_authorizing_after_separate_release(self) -> None:
+    def test_preregistration_snapshot_remains_non_self_authorizing_after_attested_run(self) -> None:
         c = self.load()
         self.assertFalse(c["implementation_authorized"])
         self.assertFalse(c["workflow_installation_authorized"])
@@ -87,7 +88,12 @@ class ArchiveRegionProbeR1Tests(unittest.TestCase):
         self.assertEqual(release["implementation_commit"], "91687b4c803e331d4b2ef8493df731c99e25a0e5")
         self.assertFalse(release["s3_request_executed"])
         self.assertIsNone(release["exact_bucket_region"])
-        self.assertFalse((PROBE / "evidence").exists())
+        self.assertTrue((EVIDENCE / "HL-ARCHIVE-REGION-PROBE-R1-001-ATTESTATION.json").is_file())
+        result = json.loads((EVIDENCE / "run-31273770895/region-probe-r1-result.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["x_amz_bucket_region"], "ap-northeast-1")
+        self.assertEqual(result["s3_http_request_count"], 1)
+        self.assertFalse(result["list_objects_v2_requested"])
+        self.assertFalse(result["response_body_read"])
         self.assertFalse((PROBE / "outputs").exists())
 
 
