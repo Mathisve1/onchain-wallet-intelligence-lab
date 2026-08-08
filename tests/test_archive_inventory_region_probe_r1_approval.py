@@ -37,34 +37,25 @@ class ArchiveRegionProbeR1ApprovalTests(unittest.TestCase):
         self.assertTrue(r["head_bucket_scope_approved"])
         self.assertTrue(r["requester_pays_acknowledgement_scope_approved"])
 
-    def test_approval_snapshot_does_not_open_execution_or_data_access(self) -> None:
+    def test_approval_snapshot_does_not_self_open_execution_or_data_access(self) -> None:
         r = self.load()
         for key in (
-            "list_objects_v2_authorized",
-            "get_object_authorized",
-            "head_object_authorized",
-            "object_body_download_authorized",
-            "market_data_ingestion_authorized",
-            "larger_300_request_inventory_authorized",
-            "implementation_authorized",
-            "workflow_installation_authorized",
-            "execution_authorized",
-            "fresh_paid_attempt_authorized",
+            "list_objects_v2_authorized", "get_object_authorized", "head_object_authorized",
+            "object_body_download_authorized", "market_data_ingestion_authorized",
+            "larger_300_request_inventory_authorized", "implementation_authorized",
+            "workflow_installation_authorized", "execution_authorized", "fresh_paid_attempt_authorized",
         ):
             self.assertFalse(r[key], key)
 
-    def test_project_state_separates_candidate_from_runtime_release(self) -> None:
+    def test_project_state_records_separate_reviewed_implementation_and_release(self) -> None:
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("region_probe_r1_human_approved = true", state)
-        self.assertIn("region_probe_r1_implementation_phase_authorized = true", state)
-        self.assertIn("region_probe_r1_implementation_candidate_present = true", state)
-        self.assertIn("region_probe_r1_workflow_candidate_present = true", state)
-        self.assertIn("region_probe_r1_executable_candidate_present = true", state)
-        self.assertIn("region_probe_r1_implementation_canonical = false", state)
-        self.assertIn("region_probe_r1_execution_release_present = false", state)
-        self.assertIn("region_probe_r1_execution_authorized = false", state)
+        self.assertIn("region_probe_r1_implementation_canonical = true", state)
+        self.assertIn("region_probe_r1_implementation_commit = 91687b4c803e331d4b2ef8493df731c99e25a0e5", state)
+        self.assertIn("region_probe_r1_execution_release_present = true", state)
+        self.assertIn("region_probe_r1_execution_ready = true", state)
         self.assertIn("region_probe_r1_request_executed = false", state)
-        self.assertIn("fresh_paid_attempt_authorized = false", state)
+        self.assertIn("fresh_list_attempt_authorized = false", state)
 
 
 if __name__ == "__main__":
