@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-07 against canonical public-probe evidence commit `cf5585c45fc8f1ac5f79df6e210cf4d37a591452`.
+Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a678644c29548a38ebfa1c0af91d4a9a92c09` plus user-confirmed AWS account/OIDC-provider setup. AWS role existence is not independently verified.
 
 ## Current status
 
@@ -13,17 +13,18 @@ Verified: 2026-08-07 against canonical public-probe evidence commit `cf5585c45fc
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
 | archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
 | archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
-| public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
-| canonical reviewed commit | `c11046bf288687c6945fe9b8f17141204d24aae6` |
-| canonical workflow run / job | `31200124642` / `92937868268` |
-| canonical artifact | `9002459643` |
-| public-probe result | `PUBLIC_PROBE_PASS` |
-| archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
+| AWS account ID | `630956766927` |
+| GitHub OIDC provider | `USER_CONFIRMED_CREATED_NOT_API_VERIFIED` |
+| expected AWS role | `onchain-wallet-intelligence-hl-archive-metadata-canary` |
+| expected role ARN | `arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary` |
 | AWS identity bound | `false` |
+| OIDC identity check authorized | `false` |
 | requester-pays authorized | `false` |
 | ListObjectsV2 authorized | `false` |
 | GetObject authorized | `false` |
 | object-body download authorized | `false` |
+| public-probe result | `PUBLIC_PROBE_PASS` |
+| archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
 | empirical result | `null` |
 | integration authorized | `false` |
 | paper authorized | `false` |
@@ -34,27 +35,39 @@ Verified: 2026-08-07 against canonical public-probe evidence commit `cf5585c45fc
 
 ## Canonical technical evidence
 
-The canonical public probe was manually dispatched from `refs/heads/main` and proved exact identity before network access. It ended `PUBLIC_PROBE_PASS` with 16/16 registered probes passing and classified the official S3 archive routes as `ROUTES_CONFIRMED_ACCESS_RESTRICTED`.
+The canonical public probe remains immutable and attested. `HL-ARCHIVE-INVENTORY-001` is canonically preregistered as metadata/access/cost-only research. No historical archive object has been listed or downloaded.
 
-The public-probe evidence remains immutable under `research/wallet_copyability/probe_r1/evidence/`.
+## Proposed AWS OIDC access boundary
 
-## Archive inventory preregistration
+The user confirmed that AWS account `630956766927` is active, root MFA/payment prerequisites are satisfied, and the GitHub OIDC provider has been created. This repository cannot independently query those AWS control-plane facts, so they remain human-attested until a separately reviewed identity-only verification is executed.
 
-`HL-ARCHIVE-INVENTORY-001` is preregistered as a metadata/access/cost-only successor. Its deterministic code can build and validate exact `ListObjectsV2` request plans and enforce request/page/entry/byte/runtime caps, but it contains no network-capable AWS SDK/client in this phase.
-
-The proposed future canary is not authorized:
+The proposed role is restricted to:
 
 ```text
-network_execution_authorized = false
+provider = token.actions.githubusercontent.com
+audience = sts.amazonaws.com
+repository = Mathisve1/onchain-wallet-intelligence-lab
+repository_id = 1326362646
+repository_owner_id = 163474992
+ref = refs/heads/main
+subject = repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main
+```
+
+The proposed permission policy permits only `s3:ListBucket` for the seven preregistered prefixes, requires `s3:max-keys <= 1000`, and explicitly denies prefix escape, version listing, account-wide bucket enumeration, object-body reads and mutation.
+
+## Hard boundary
+
+```text
 aws_identity_bound = false
+network_identity_check_authorized = false
 requester_pays_authorized = false
 list_objects_authorized = false
+paid_request_authorized = false
 get_object_authorized = false
 head_object_authorized = false
 range_get_authorized = false
 object_body_download_authorized = false
 decompression_authorized = false
-paid_request_authorized = false
 maximum_one_time_budget_eur = null
 maximum_monthly_budget_eur = 0
 market_data_ingested = false
@@ -63,11 +76,11 @@ empirical_result = null
 
 ## Exact next gate
 
-1. Review and merge the `HL-ARCHIVE-INVENTORY-001` metadata-only preregistration/implementation.
-2. Refresh official AWS pricing and resolve the requesting AWS billing identity without exposing credentials.
-3. Review a listing-only IAM boundary and bind an exact canonical commit.
-4. Obtain a separate explicit human one-time euro budget/Requester Pays approval.
-5. Only then implement/enable a network adapter and run a bounded metadata canary.
+1. Review and merge the account-specific OIDC trust/permission boundary.
+2. Human creates exactly one role named `onchain-wallet-intelligence-hl-archive-metadata-canary` using the reviewed policies; no AWS access keys or GitHub AWS secrets.
+3. Separately preregister and run an STS-only OIDC identity verification against the exact canonical main commit. It must not touch S3.
+4. Only after identity verification: refresh/freeze exact applicable S3 pricing and obtain explicit one-time human Requester Pays budget approval.
+5. Only after that: implement/enable the bounded metadata `ListObjectsV2` adapter and canary.
 
 No paid S3 call, object-body retrieval, market-data ingestion, wallet performance calculation, entity clustering or trading stage is currently open.
 
