@@ -84,11 +84,16 @@ class ArchiveNodeDataCanaryR2ApprovalTests(unittest.TestCase):
         self.assertIn("region_probe_r1_execution_release_consumed = true", state)
         self.assertIn("region_probe_r1_exact_bucket_region = ap-northeast-1", state)
 
-    def test_no_implementation_or_release_is_installed_by_approval(self) -> None:
-        self.assertFalse((BASE / "collector.py").exists())
-        self.assertFalse((BASE / "R2_IMPLEMENTATION_CONTRACT.json").exists())
+    def test_later_implementation_candidate_does_not_mutate_approval_snapshot(self) -> None:
+        self.assertTrue((BASE / "collector.py").is_file())
+        self.assertTrue((BASE / "R2_IMPLEMENTATION_CONTRACT.json").is_file())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-nodedata-canary-r2.yml").is_file())
         self.assertFalse((BASE / "R2_EXECUTION_RELEASE.json").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-nodedata-canary-r2.yml").exists())
+        record = self.load()
+        self.assertFalse(record["implementation_installed"])
+        self.assertFalse(record["execution_workflow_installed"])
+        self.assertFalse(record["execution_release_present"])
+        self.assertFalse(record["execution_ready"])
 
 
 if __name__ == "__main__":

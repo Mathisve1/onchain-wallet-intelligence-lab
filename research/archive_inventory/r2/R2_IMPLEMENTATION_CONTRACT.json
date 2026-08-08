@@ -1,0 +1,87 @@
+{
+  "allowed_response_header_fields": [
+    "x-amz-request-charged"
+  ],
+  "approval_id": "APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001",
+  "approval_merge_commit": "151e08f54037ca7d3a0a9c17d3bdfb84d707a66e",
+  "approval_reviewed_commit": "39b40cccc7e9a3fdbc439d06fb188e946d9da2aa",
+  "canary_id": "HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001",
+  "continuation_token_follow_authorized": false,
+  "continuation_token_value_retained": false,
+  "dataset_families": [
+    {
+      "dataset_family_id": "node_fills_by_block",
+      "prefix": "node_fills_by_block/"
+    },
+    {
+      "dataset_family_id": "node_fills",
+      "prefix": "node_fills/"
+    },
+    {
+      "dataset_family_id": "node_trades",
+      "prefix": "node_trades/"
+    },
+    {
+      "dataset_family_id": "explorer_blocks",
+      "prefix": "explorer_blocks/"
+    },
+    {
+      "dataset_family_id": "replica_cmds",
+      "prefix": "replica_cmds/"
+    }
+  ],
+  "decompression_authorized": false,
+  "empirical_result": null,
+  "exactly_one_request_per_family": true,
+  "execution_authorized": false,
+  "execution_release_present": false,
+  "execution_release_required": true,
+  "expected_canonical_implementation_commit": "PENDING_CANONICAL_IMPLEMENTATION_MERGE",
+  "get_object_attributes_authorized": false,
+  "get_object_authorized": false,
+  "head_object_authorized": false,
+  "http_method": "GET",
+  "http_redirect_following_authorized": false,
+  "human_approval_text_sha256": "728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6",
+  "inventory_id": "HL-ARCHIVE-INVENTORY-001",
+  "larger_300_request_inventory_authorized": false,
+  "list_all_my_buckets_authorized": false,
+  "list_object_versions_authorized": false,
+  "list_objects_v2_authorized": false,
+  "market_data_ingestion_authorized": false,
+  "maximum_keys_per_request": 25,
+  "maximum_list_requests": 5,
+  "maximum_retries_per_request": 0,
+  "maximum_runtime_seconds": 120,
+  "maximum_total_entries": 125,
+  "maximum_total_response_bytes": 8388608,
+  "metadata_entries_observed": 0,
+  "object_body_download_authorized": false,
+  "operation": "ListObjectsV2",
+  "pagination_authorized": false,
+  "paid_request_authorized": false,
+  "persistent_iam_expansion_required": false,
+  "preregistration_commit": "39b40cccc7e9a3fdbc439d06fb188e946d9da2aa",
+  "range_get_authorized": false,
+  "raw_list_response_retained": false,
+  "regional_virtual_hosted_endpoint": "hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com",
+  "request_counter_incremented_before_transport": true,
+  "request_payer": "requester",
+  "requester_pays_authorized": false,
+  "s3_requests_executed": 0,
+  "s3_transport": "DIRECT_SIGV4_HTTPS_REGIONAL_ENDPOINT_NO_REDIRECT_FOLLOW",
+  "schema_version": "1.0",
+  "session_s3_policy": "ALLOW_LISTBUCKET_EXACT_FIVE_PREFIXES_MAX25_ONLY",
+  "signing_region": "ap-northeast-1",
+  "status": "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION",
+  "target_bucket": "hl-mainnet-node-data",
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  },
+  "workflow_trigger": "workflow_dispatch_only"
+}

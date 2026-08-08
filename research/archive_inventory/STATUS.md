@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `R2_HUMAN_APPROVAL_UNDER_REVIEW_NO_EXECUTION`
+- phase: `R2_IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION`
 - parent public probe: `ATTESTED_PUBLIC_PROBE_PASS`
 - parent archive route status: `ROUTES_CONFIRMED_ACCESS_RESTRICTED`
 - parent archive status: `PREREGISTERED_METADATA_ONLY_NO_EXECUTION`
@@ -39,10 +39,13 @@
 - Region probe current Requester Pays authorization: `false`
 - R2 canary: `HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001`
 - R2 preregistration canonical commit: `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`
-- R2 preregistration snapshot: `PREREGISTERED_CORRECT_REGION_METADATA_CANARY_NOT_AUTHORIZED`
-- R2 current status: `HUMAN_APPROVAL_UNDER_REVIEW_NO_EXECUTION`
+- R2 approval canonical commit: `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`
+- R2 immutable preregistration snapshot: `PREREGISTERED_CORRECT_REGION_METADATA_CANARY_NOT_AUTHORIZED`
+- R2 immutable approval snapshot: `APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION`
+- R2 current status: `IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION`
 - R2 target bucket: `hl-mainnet-node-data`
 - R2 signing Region: `ap-northeast-1`
+- R2 regional endpoint: `hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com`
 - R2 frozen prefixes: `node_fills_by_block/`, `node_fills/`, `node_trades/`, `explorer_blocks/`, `replica_cmds/`
 - R2 maximum ListObjectsV2 requests: `5`
 - R2 maximum keys/request / total entries: `25` / `125`
@@ -55,10 +58,15 @@
 - R2 approval text SHA-256: `728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6`
 - R2 one-time ceiling: `EUR 0.10`
 - R2 monthly ceiling: `EUR 0`
-- R2 human scope/budget approval: `RECORDED_ON_REVIEW_BRANCH_NOT_YET_CANONICAL`
-- R2 implementation phase after approval merge: `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY`
-- R2 implementation installed: `false`
-- R2 workflow installed: `false`
+- R2 human scope/budget approval: `CANONICAL`
+- R2 implementation phase: `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY`
+- R2 implementation candidate: `PRESENT_REQUIRES_EXACT_HEAD_CI_AND_REVIEW`
+- R2 collector candidate: `PRESENT_DIRECT_SIGV4_REGIONAL_LIST_ONLY`
+- R2 workflow candidate: `PRESENT_BUT_RELEASE_GATED_BEFORE_OIDC`
+- R2 temporary S3 session boundary: `LISTBUCKET_EXACT_FIVE_PREFIXES_MAX25_ONLY`
+- R2 persistent IAM expansion required: `false`
+- R2 canonical implementation: `false`
+- R2 canonical implementation commit: `null`
 - R2 execution release present: `false`
 - R2 execution ready: `false`
 - R2 current paid request authorization: `false`
@@ -81,10 +89,10 @@
 
 ## Next gate
 
-The fresh R2 approval is being recorded on a dedicated review branch and is exact-commit/hash bound to canonical preregistration `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`. The approval covers only the frozen five-prefix first-page metadata scope and EUR 0.10 one-time / EUR 0 monthly budget.
+The R2 human approval is canonical as `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`. The current branch contains a separately built implementation candidate only. It binds the exact approved bucket, Region, five prefixes and request/cost envelope, uses direct standard-library SigV4 against the regional endpoint, and retains only first-page metadata.
 
-This approval branch contains no R2 collector, no R2 network workflow and no R2 execution release. No AWS/S3 request may occur from this PR or its CI. Operational Requester Pays, paid-request and `ListObjectsV2` flags remain false.
+The manual-only workflow deliberately remains unusable for AWS execution: `EXPECTED_IMPLEMENTATION_COMMIT` is `PENDING_CANONICAL_IMPLEMENTATION_MERGE` and `research/archive_inventory/r2/R2_EXECUTION_RELEASE.json` is absent. The workflow must prove both bindings before AWS OIDC. Therefore this implementation PR and its CI cannot execute the five paid LIST requests.
 
-Next: exact-head CI, byte-exact manifest validation and clean-context review. Only after this approval record is canonically merged may a separate minimal R2 implementation/workflow be built and reviewed. That implementation must still fail closed before OIDC until a later exact-implementation-bound single-use release is canonically present.
+Next: run exact-head Research CI, byte-exact repository-manifest validation, the dedicated R2 implementation validator and clean-context review. Merge only if all remain green. After merge, verify the actual canonical implementation SHA and create a separate exact-SHA-bound single-use release. Only that later release may open the already-human-approved Requester Pays/ListObjectsV2 scope for one manual canonical dispatch; the first dispatch consumes the release regardless of PASS/FAIL.
 
 The larger 300-request inventory, all object-body access, market-data ingestion and all trading/capital stages remain unauthorized.
