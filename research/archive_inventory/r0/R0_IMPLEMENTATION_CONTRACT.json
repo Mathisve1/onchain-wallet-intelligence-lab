@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "implementation_id": "HL-ARCHIVE-METADATA-CANARY-R0-IMPL-001",
   "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
   "inventory_id": "HL-ARCHIVE-INVENTORY-001",
@@ -34,7 +34,10 @@
   ],
   "session_policy_maximum_permissions": "EXACT_PREFIX_S3_LISTBUCKET_ONLY",
   "implementation_network_execution_authorized_on_noncanonical_branch": false,
-  "manual_execution_authorized_after_canonical_merge": true,
+  "manual_execution_authorized_after_canonical_merge": false,
+  "post_merge_execution_release_required": true,
+  "execution_release_path": "research/archive_inventory/r0/R0_EXECUTION_RELEASE.json",
+  "execution_release_present_on_implementation_candidate": false,
   "forbidden_operations": [
     "GetObject",
     "HeadObject",
