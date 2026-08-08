@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory/r2"
 CONTRACT = BASE / "NODEDATA_METADATA_CANARY_R2_CONTRACT.json"
 APPROVAL = BASE / "HUMAN_APPROVAL_TEMPLATE.md"
-WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-nodedata-canary-r2.yml"
 
 
 class ArchiveNodeDataCanaryR2Tests(unittest.TestCase):
@@ -85,12 +84,17 @@ class ArchiveNodeDataCanaryR2Tests(unittest.TestCase):
         self.assertIn("object_body_download_authorized=false", text)
         self.assertIn("larger_300_request_inventory_authorized=false", text)
 
-    def test_preregistration_has_no_executable_or_workflow(self) -> None:
-        self.assertFalse((BASE / "collector.py").exists())
-        self.assertFalse((BASE / "implementation.py").exists())
+    def test_preregistration_snapshot_remains_non_executing(self) -> None:
+        c = self.load()
+        self.assertFalse(c["implementation_authorized"])
+        self.assertFalse(c["workflow_installation_authorized"])
+        self.assertFalse(c["execution_authorized"])
+        self.assertFalse(c["fresh_paid_attempt_authorized"])
+        self.assertFalse(c["list_objects_v2_authorized"])
+        self.assertFalse(c["requester_pays_authorized"])
+        self.assertFalse((BASE / "R2_EXECUTION_RELEASE.json").exists())
         self.assertFalse((BASE / "evidence").exists())
         self.assertFalse((BASE / "outputs").exists())
-        self.assertFalse(WORKFLOW.exists())
 
 
 if __name__ == "__main__":
