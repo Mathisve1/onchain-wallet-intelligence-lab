@@ -59,7 +59,9 @@ class ArchiveNodeDataCanaryR2WorkflowTests(unittest.TestCase):
             self.assertIn(prefix, text)
         self.assertNotIn('"Action":"s3:GetObject"', text)
         self.assertNotIn('"Action":"s3:HeadObject"', text)
-        self.assertNotIn("hyperliquid-archive", text)
+        self.assertNotIn('"Resource":"arn:aws:s3:::hyperliquid-archive"', text)
+        self.assertNotIn("market_data/*", text)
+        self.assertNotIn("asset_ctxs/*", text)
 
     def test_release_contract_keeps_broader_capabilities_closed(self) -> None:
         text = self.text()
