@@ -14,6 +14,7 @@ Verified: 2026-08-08 against canonical `main` commit `549e70dedc0eefb9336a9fcd86
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | canonical public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
 | archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
+| archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
 | AWS account ID | `630956766927` |
 | GitHub OIDC federation | `PROVEN_BY_CANONICAL_STS_RUN` |
 | canonical STS run / job / artifact | `31250176507` / `93085194965` / `9019744292` |
