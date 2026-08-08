@@ -1,0 +1,26 @@
+{
+  "verification_id": "HL-AWS-OIDC-IDENTITY-001-ARTIFACT-VERIFY",
+  "workflow_run_id": 31250176507,
+  "workflow_job_id": 93085194965,
+  "artifact_id": 9019744292,
+  "artifact_name": "hyperliquid-aws-oidc-identity-31250176507-1",
+  "provider_digest": "sha256:3ebb71763783135c2c21bb7c0f8a801e0d873208e5a8b9afff473b208a2dc607",
+  "downloaded_zip_sha256": "3ebb71763783135c2c21bb7c0f8a801e0d873208e5a8b9afff473b208a2dc607",
+  "downloaded_zip_size_bytes": 2536,
+  "files": {
+    "sts-identity-context.json": "858fd3ad0ed591f965a3ce7551089285f9a47385bf26dd1349bd6e990442e650",
+    "sts-identity-result.json": "4e637b527807253474c05ec10fbba021b40ee8c7a4677463a0ca97f2062efac9",
+    "sts-identity.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "validation": {
+    "provider_zip_digest_match": true,
+    "internal_file_hashes_match": true,
+    "exact_main_identity_match": true,
+    "account_id_match": true,
+    "assumed_role_arn_match": true,
+    "single_explicit_sts_call": true,
+    "s3_called": false,
+    "requester_pays_used": false,
+    "all_checks_pass": true
+  }
+}

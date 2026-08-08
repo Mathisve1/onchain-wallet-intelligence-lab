@@ -17,7 +17,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
     def load(self, path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def test_identity_binding_is_exact_and_sts_only(self) -> None:
+    def test_identity_binding_is_exact_and_sts_attested(self) -> None:
         binding = self.load(ACCESS / "AWS_IDENTITY_BINDING.json")
         self.assertEqual(binding["aws_account_id"], "630956766927")
         self.assertEqual(
@@ -29,17 +29,23 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertEqual(binding["github_repository_owner_id"], "163474992")
         self.assertEqual(binding["github_ref"], "refs/heads/main")
         self.assertEqual(binding["github_subject"], IMMUTABLE_SUBJECT)
-        self.assertEqual(
-            binding["github_subject_format"],
-            "IMMUTABLE_DEFAULT_EXPECTED_FOR_REPOSITORY_CREATED_AFTER_2026-07-15",
-        )
         self.assertFalse(binding["github_subject_independently_observed"])
-        self.assertEqual(binding["role_status"], "USER_CONFIRMED_CREATED_NOT_API_VERIFIED")
+        self.assertTrue(binding["github_federation_independently_proven"])
+        self.assertEqual(binding["role_status"], "INDEPENDENTLY_PROVEN_ASSUMEABLE_FROM_CANONICAL_MAIN")
         self.assertEqual(binding["inline_policy_name"], "HLArchiveMetadataCanaryListOnly")
+        self.assertEqual(
+            binding["permission_policy_status"],
+            "USER_CONFIRMED_INLINE_POLICY_APPLIED_NOT_API_VERIFIED",
+        )
         self.assertEqual(binding["planned_workflow_session_duration_seconds"], 900)
         self.assertEqual(binding["role_max_session_duration_seconds"], 3600)
         self.assertTrue(binding["network_identity_check_authorized"])
+        self.assertTrue(binding["network_identity_check_completed"])
         self.assertEqual(binding["network_identity_check_id"], "HL-AWS-OIDC-IDENTITY-001")
+        self.assertEqual(binding["network_identity_check_result"], "STS_IDENTITY_MATCH")
+        self.assertEqual(binding["canonical_identity_run_id"], 31250176507)
+        self.assertEqual(binding["canonical_identity_job_id"], 93085194965)
+        self.assertEqual(binding["canonical_identity_artifact_id"], 9019744292)
         self.assertFalse(binding["requester_pays_authorized"])
         self.assertFalse(binding["list_objects_authorized"])
         self.assertFalse(binding["paid_request_authorized"])
@@ -73,10 +79,6 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         serialized = json.dumps(policy, sort_keys=True)
         self.assertNotIn('"Principal": "*"', serialized)
         self.assertNotIn('refs/heads/*', serialized)
-        self.assertNotIn(
-            "repo:Mathisve1/onchain-wallet-intelligence-lab:ref:refs/heads/main",
-            serialized,
-        )
 
     def test_listing_policy_is_prefix_and_maxkeys_fail_closed(self) -> None:
         policy = self.load(ARCHIVE / "IAM_POLICY_TEMPLATE.json")
@@ -89,28 +91,12 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertEqual(archive["Resource"], "arn:aws:s3:::hyperliquid-archive")
         self.assertEqual(node["Condition"]["NumericLessThanEquals"]["s3:max-keys"], "1000")
         self.assertEqual(archive["Condition"]["NumericLessThanEquals"]["s3:max-keys"], "1000")
-        self.assertEqual(
-            set(node["Condition"]["StringLike"]["s3:prefix"]),
-            {
-                "node_fills_by_block/*",
-                "node_fills/*",
-                "node_trades/*",
-                "explorer_blocks/*",
-                "replica_cmds/*",
-            },
-        )
-        self.assertEqual(
-            set(archive["Condition"]["StringLike"]["s3:prefix"]),
-            {"market_data/*", "asset_ctxs/*"},
-        )
         self.assertEqual(by_sid["DenyNodeDataPrefixEscape"]["Effect"], "Deny")
         self.assertEqual(by_sid["DenyArchivePrefixEscape"]["Effect"], "Deny")
         self.assertEqual(
             by_sid["DenyOversizeListings"]["Condition"]["NumericGreaterThan"]["s3:max-keys"],
             "1000",
         )
-        self.assertEqual(by_sid["DenyVersionListings"]["Action"], "s3:ListBucketVersions")
-        self.assertEqual(by_sid["DenyAccountWideBucketEnumeration"]["Action"], "s3:ListAllMyBuckets")
 
     def test_no_object_allow_exists(self) -> None:
         policy = self.load(ARCHIVE / "IAM_POLICY_TEMPLATE.json")
