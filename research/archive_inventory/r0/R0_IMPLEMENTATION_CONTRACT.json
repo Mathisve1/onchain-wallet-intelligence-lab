@@ -1,10 +1,11 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "implementation_id": "HL-ARCHIVE-METADATA-CANARY-R0-IMPL-001",
   "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
   "inventory_id": "HL-ARCHIVE-INVENTORY-001",
-  "status": "IMPLEMENTATION_CANDIDATE_PENDING_CANONICAL_MERGE",
+  "status": "CANONICAL_IMPLEMENTATION_PENDING_SEPARATE_EXECUTION_RELEASE",
   "implementation_base_commit": "62e0750382216afb5875ad52cb7443d43265e862",
+  "canonical_implementation_commit": "cd5c46b25502b671693dd5ebb091e7273399bccf",
   "human_approval_id": "APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001",
   "human_approval_reviewed_commit": "9af4b21863e47fb3bb2997ce77b9940eecf4597f",
   "human_approval_text_sha256": "d70008eac7521b324f61161bcc0075e28cc3a116dd30f0c52b48d8cf5eb6ed46",
@@ -29,6 +30,7 @@
   "workflow_dispatch_only": true,
   "exact_canonical_main_sha_required": true,
   "workflow_permissions": [
+    "actions: read",
     "contents: read",
     "id-token: write"
   ],
@@ -36,8 +38,9 @@
   "implementation_network_execution_authorized_on_noncanonical_branch": false,
   "manual_execution_authorized_after_canonical_merge": false,
   "post_merge_execution_release_required": true,
+  "execution_authorized_only_by_separate_release": true,
   "execution_release_path": "research/archive_inventory/r0/R0_EXECUTION_RELEASE.json",
-  "execution_release_present_on_implementation_candidate": false,
+  "execution_release_present_on_canonical_main": false,
   "forbidden_operations": [
     "GetObject",
     "HeadObject",
