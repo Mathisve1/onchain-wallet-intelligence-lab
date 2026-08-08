@@ -119,14 +119,16 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             self.assertIn(action, denied_actions)
         self.assertNotIn("s3:SelectObjectContent", allowed_actions | denied_actions)
 
-    def test_only_reviewed_identity_and_r0_workflows_may_request_oidc(self) -> None:
+    def test_only_reviewed_identity_r0_and_region_probe_workflows_may_request_oidc(self) -> None:
         workflows = ROOT / ".github/workflows"
         identity = workflows / "hyperliquid-aws-oidc-identity-check.yml"
         r0 = workflows / "hyperliquid-archive-metadata-canary-r0.yml"
+        region = workflows / "hyperliquid-archive-region-probe-r1.yml"
         self.assertTrue(identity.is_file())
         self.assertTrue(r0.is_file())
+        self.assertTrue(region.is_file())
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
-        allowed = {identity, r0}
+        allowed = {identity, r0, region}
         other = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(workflows.glob("*.yml"))
@@ -134,8 +136,10 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         )
         self.assertNotIn("id-token: write", other)
         self.assertNotIn("aws-actions/configure-aws-credentials", other)
-        self.assertIn("id-token: write", identity.read_text(encoding="utf-8"))
-        self.assertIn("id-token: write", r0.read_text(encoding="utf-8"))
+        for path in allowed:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("id-token: write", text)
+            self.assertIn("aws-actions/configure-aws-credentials", text)
 
 
 if __name__ == "__main__":
