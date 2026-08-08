@@ -8,6 +8,6 @@ Approved envelope: exact bucket `hl-mainnet-node-data`, signing Region `ap-north
 
 The five approved prefix families remain exactly `node_fills_by_block/`, `node_fills/`, `node_trades/`, `explorer_blocks/` and `replica_cmds/`.
 
-The immutable approval snapshot itself installed no workflow or executable and created no single-use execution release. It opened only the implementation/review phase. A later implementation candidate now exists separately on the R2 implementation review branch; that does not mutate or widen this approval snapshot.
+The immutable approval snapshot itself installed no workflow or executable and does not create a single-use execution release. It opened only the implementation/review phase. A later implementation candidate now exists separately on the R2 implementation review branch; that does not mutate or widen this approval snapshot.
 
 Runtime remains closed. `R2_EXECUTION_RELEASE.json` is absent, the implementation SHA is still pending canonical merge, and operational paid-request, Requester Pays and `ListObjectsV2` authorization remain false. GetObject, HeadObject, GetObjectAttributes, range GET, object-version or account-wide bucket listing, object-body download, decompression, market-data ingestion and the larger 300-request inventory remain forbidden. All trading/capital stages remain false.
