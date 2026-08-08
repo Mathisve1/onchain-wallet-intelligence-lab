@@ -1,0 +1,11 @@
+# Correct-region node-data metadata canary R2 approval status
+
+`APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` is recorded as a fresh human scope/budget approval bound to canonical R2 preregistration commit `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`.
+
+The exact approval text SHA-256 is `728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6`.
+
+Approved envelope: exact bucket `hl-mainnet-node-data`, signing Region `ap-northeast-1`, exactly one first-page `ListObjectsV2` request for each of the five frozen prefixes, maximum 5 requests total, maximum 25 keys per request / 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination and no redirect following, with Requester Pays acknowledgement and a EUR 0.10 maximum one-time / EUR 0 monthly budget.
+
+The five approved prefix families remain exactly `node_fills_by_block/`, `node_fills/`, `node_trades/`, `explorer_blocks/` and `replica_cmds/`.
+
+This approval opens only the implementation/review phase. It does not install a workflow or executable, does not create a single-use execution release, and does not itself authorize runtime paid/LIST/Requester Pays execution. GetObject, HeadObject, GetObjectAttributes, range GET, object-version or account-wide bucket listing, object-body download, decompression, market-data ingestion and the larger 300-request inventory remain forbidden. All trading/capital stages remain false.
