@@ -1,0 +1,299 @@
+name: Hyperliquid Archive Metadata Canary R0
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_commit:
+        description: Exact current canonical main commit SHA to execute
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-metadata-canary-r0
+  cancel-in-progress: false
+
+env:
+  EXACT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  EXPECTED_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001
+  APPROVAL_TEXT_SHA256: d70008eac7521b324f61161bcc0075e28cc3a116dd30f0c52b48d8cf5eb6ed46
+  AWS_MAX_ATTEMPTS: '1'
+  AWS_RETRY_MODE: standard
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r0-metadata-canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact reviewed commit without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_REVIEWED_COMMIT }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical main dispatch and exact reviewed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXACT_REVIEWED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+          test "${DISPATCH_REF}" = "refs/heads/main"
+          test "${EXACT_REVIEWED_COMMIT}" = "${DISPATCH_SHA}"
+          observed="$(git rev-parse HEAD)"
+          test "${observed}" = "${EXACT_REVIEWED_COMMIT}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove repository and R0 static gates before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          test "${AWS_MAX_ATTEMPTS}" = '1'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('.')
+          approval_text = root / 'research/archive_inventory/approvals/APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001.txt'
+          approval = json.loads((root / 'research/archive_inventory/approvals/APPROVE_HL_ARCHIVE_METADATA_CANARY_R0_001.json').read_text(encoding='utf-8'))
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['approval_status'] == 'APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION'
+          assert approval['maximum_one_time_budget_eur'] == 1.0
+          assert approval['maximum_list_requests'] == 7
+          assert approval['maximum_keys_per_request'] == 25
+          assert approval['maximum_retries_per_request'] == 0
+          assert approval['pagination_authorized'] is False
+          assert approval['requester_pays_scope_approved'] is True
+          assert approval['list_objects_v2_scope_approved'] is True
+          PY
+
+      - name: Freeze pending R0 run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          context = {
+              'schema_version': '1.0',
+              'canary_id': 'HL-ARCHIVE-METADATA-CANARY-R0-001',
+              'terminal_status': 'PENDING_AWS_OIDC',
+              'dispatch_ref': os.environ['DISPATCH_REF'],
+              'dispatch_sha': os.environ['DISPATCH_SHA'],
+              'reviewed_commit': os.environ['EXACT_REVIEWED_COMMIT'],
+              'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'approval_id': os.environ['APPROVAL_ID'],
+              'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
+              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+              'expected_role_arn': os.environ['EXPECTED_ROLE_ARN'],
+              'configure_aws_outcome': None,
+              'aws_max_attempts': int(os.environ['AWS_MAX_ATTEMPTS']),
+              'maximum_list_requests': 7,
+              'maximum_keys_per_request': 25,
+              'maximum_total_entries': 175,
+              'maximum_total_response_bytes': 8388608,
+              'maximum_runtime_seconds': 180,
+              'maximum_retries_per_request': 0,
+              'pagination_authorized': False,
+              'requester_pays_authorized_for_r0': True,
+              'list_objects_v2_authorized_for_r0': True,
+              'object_body_authorized': False,
+              'market_data_ingestion_authorized': False,
+          }
+          path = Path(os.environ['RUNNER_TEMP']) / 'r0-metadata-context.json'
+          path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Assume exact AWS role with R0-only session permissions
+        id: configure
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+          aws-region: us-east-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveR0Canary
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R0NodeDataExactPrefixes","Effect":"Allow","Action":"s3:ListBucket","Resource":"arn:aws:s3:::hl-mainnet-node-data","Condition":{"StringLike":{"s3:prefix":["node_fills_by_block/*","node_fills/*","node_trades/*","explorer_blocks/*","replica_cmds/*"]},"NumericLessThanEquals":{"s3:max-keys":"25"}}},{"Sid":"R0ArchiveExactPrefixes","Effect":"Allow","Action":"s3:ListBucket","Resource":"arn:aws:s3:::hyperliquid-archive","Condition":{"StringLike":{"s3:prefix":["market_data/*","asset_ctxs/*"]},"NumericLessThanEquals":{"s3:max-keys":"25"}}}]}
+
+      - name: Execute bounded seven-family R0 collector
+        if: steps.configure.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="${RUNNER_TEMP}/r0-metadata-result.json"
+          set +e
+          python research/archive_inventory/r0/collector.py "${result}" >/dev/null
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" >"${RUNNER_TEMP}/r0-metadata.rc"
+
+      - name: Record non-execution when AWS role assumption fails
+        if: steps.configure.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'NOT_RUN' >"${RUNNER_TEMP}/r0-metadata.rc"
+
+      - name: Finalize minimized R0 evidence
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          context_path = root / 'r0-metadata-context.json'
+          result_path = root / 'r0-metadata-result.json'
+          context = json.loads(context_path.read_text(encoding='utf-8'))
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          if not result_path.is_file():
+              result = {
+                  'schema_version': '1.0',
+                  'canary_id': 'HL-ARCHIVE-METADATA-CANARY-R0-001',
+                  'terminal_status': 'R0_OIDC_ROLE_ASSUMPTION_FAILED',
+                  'request_attempt_count': 0,
+                  'successful_request_count': 0,
+                  'failed_request_count': 0,
+                  'total_entries': 0,
+                  'total_response_bytes': 0,
+                  'runtime_seconds': 0.0,
+                  'maximum_list_requests': 7,
+                  'maximum_keys_per_request': 25,
+                  'maximum_total_entries': 175,
+                  'maximum_total_response_bytes': 8388608,
+                  'maximum_runtime_seconds': 180,
+                  'aws_max_attempts': 1,
+                  'retries_used': 0,
+                  'pagination_followed': False,
+                  'requester_pays_requested': False,
+                  'continuation_token_values_retained': False,
+                  'object_body_requested': False,
+                  'market_data_ingested': False,
+                  'empirical_result': None,
+                  'observations': [],
+              }
+              result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          result = json.loads(result_path.read_text(encoding='utf-8'))
+          for key in (
+              'terminal_status', 'request_attempt_count', 'successful_request_count',
+              'failed_request_count', 'total_entries', 'total_response_bytes',
+              'runtime_seconds', 'retries_used', 'pagination_followed',
+              'requester_pays_requested', 'object_body_requested',
+              'market_data_ingested', 'empirical_result',
+          ):
+              context[key] = result.get(key)
+          context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          cd "${RUNNER_TEMP}"
+          sha256sum r0-metadata-context.json r0-metadata-result.json r0-metadata.rc >R0_METADATA_FILES.sha256
+          cat R0_METADATA_FILES.sha256
+
+      - name: Publish minimized R0 job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >>"${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'r0-metadata-context.json'
+          data = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
+          print('# Hyperliquid Archive Metadata Canary R0')
+          for key in (
+              'dispatch_ref', 'dispatch_sha', 'reviewed_commit', 'checked_out_commit',
+              'workflow_run_id', 'terminal_status', 'configure_aws_outcome',
+              'request_attempt_count', 'successful_request_count', 'failed_request_count',
+              'total_entries', 'total_response_bytes', 'runtime_seconds',
+              'retries_used', 'pagination_followed', 'requester_pays_requested',
+              'object_body_requested', 'market_data_ingested',
+          ):
+              print(f'- **{key}**: `{data.get(key)}`')
+          print('\nR0 retains first-page object metadata only. No object body is requested or downloaded.')
+          PY
+
+      - name: Upload minimized R0 metadata evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: hyperliquid-archive-metadata-r0-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/r0-metadata-context.json
+            ${{ runner.temp }}/r0-metadata-result.json
+            ${{ runner.temp }}/r0-metadata.rc
+            ${{ runner.temp }}/R0_METADATA_FILES.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Enforce exact successful R0 result
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          test "${CONFIGURE_OUTCOME}" = 'success'
+          test "$(cat "${RUNNER_TEMP}/r0-metadata.rc")" = '0'
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = json.loads((Path(os.environ['RUNNER_TEMP']) / 'r0-metadata-result.json').read_text(encoding='utf-8'))
+          assert result['terminal_status'] == 'R0_METADATA_CANARY_PASS'
+          assert result['request_attempt_count'] == 7
+          assert result['successful_request_count'] == 7
+          assert result['failed_request_count'] == 0
+          assert result['total_entries'] <= 175
+          assert result['total_response_bytes'] <= 8388608
+          assert result['runtime_seconds'] <= 180
+          assert result['aws_max_attempts'] == 1
+          assert result['retries_used'] == 0
+          assert result['pagination_followed'] is False
+          assert result['requester_pays_requested'] is True
+          assert result['continuation_token_values_retained'] is False
+          assert result['object_body_requested'] is False
+          assert result['market_data_ingested'] is False
+          assert result['empirical_result'] is None
+          assert len(result['observations']) == 7
+          PY
