@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "raw_file": "r2-metadata-result.json",
+  "encoded_file": "r2-metadata-result.json.gz.b64",
+  "encoding": "base64(gzip(raw_json))",
+  "raw_size_bytes": 36900,
+  "raw_sha256": "ac85b1269f6c9e64dca1047246e682a8c0e47f3e4c4739a0fe72d8de9a662367",
+  "gzip_size_bytes": 5551,
+  "gzip_sha256": "dce6809c8428bfd61de2eecb9233ca17f85f8d32b3a998982a9c1a73651ea954",
+  "encoded_size_bytes": 7404,
+  "encoded_sha256": "4de2d26b07b30535036ace05fdbd6f245118edf8b3483efcb0b361fd32cb98f3"
+}
