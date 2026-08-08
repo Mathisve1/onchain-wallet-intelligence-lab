@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, and fresh R2 human approval `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001`.
+Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, and canonical R2 approval merge `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`.
 
 ## Current status
 
@@ -35,9 +35,11 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | Region probe LIST/object data requested | `false` |
 | R2 canary | `HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001` |
 | R2 preregistration commit | `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` |
-| R2 status | `HUMAN_APPROVED_SCOPE_AND_BUDGET_AWAITING_IMPLEMENTATION` |
+| R2 approval canonical commit | `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e` |
+| R2 status | `IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION` |
 | R2 parent Region attestation | `9378f625648592bd4a5890f47a98b36028cbd433` |
 | R2 target / signing Region | `hl-mainnet-node-data` / `ap-northeast-1` |
+| R2 regional endpoint | `hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com` |
 | R2 frozen prefixes | `5` previously failing node-data families |
 | R2 request envelope | `5 x ListObjectsV2`, max `25` keys each / `125` entries total |
 | R2 response/runtime cap | `8 MiB` / `120 sec` |
@@ -47,7 +49,12 @@ Verified: 2026-08-08 against canonical public-probe evidence, canonical R0 evide
 | R2 approval text SHA-256 | `728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a882cf1831c6` |
 | R2 maximum one-time / monthly budget | `EUR 0.10` / `EUR 0` |
 | R2 implementation phase | `AUTHORIZED_TO_BUILD_AND_REVIEW_ONLY` |
-| R2 implementation / workflow installed | `false` / `false` |
+| R2 implementation candidate | `PRESENT_REQUIRES_EXACT_HEAD_CI_AND_REVIEW` |
+| R2 collector candidate | `PRESENT_DIRECT_SIGV4_REGIONAL_LIST_ONLY` |
+| R2 workflow candidate | `PRESENT_BUT_RELEASE_GATED_BEFORE_OIDC` |
+| R2 temporary S3 session boundary | `LISTBUCKET_EXACT_FIVE_PREFIXES_MAX25_ONLY` |
+| R2 canonical implementation | `false` |
+| R2 canonical implementation commit | `null` |
 | R2 execution release / execution ready | `false` / `false` |
 | R2 operational paid request / Requester Pays / LIST | `false` / `false` / `false` |
 | R2 S3 requests / metadata entries observed | `0` / `0` |
@@ -66,9 +73,11 @@ AWS returned HTTP `400` together with `x-amz-bucket-region: ap-northeast-1`. Und
 
 The artifact `9026393705` is independently verified. GitHub's provider digest and the independently downloaded ZIP SHA-256 both equal `5f66d4a961c3f32804af3d40adcd2d2c3f3b35e93896c9861839465e2d83d405`, and the internal hash ledger matches the retained context, result and return-code files.
 
-R2 remains a separate successor to that consumed Region probe. Its immutable preregistration binds signing Region `ap-northeast-1` and exactly the five node-data prefixes that failed R0. The fresh user approval `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` is hash-bound to canonical preregistration commit `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` and approves the frozen scope/budget envelope: five first-page `ListObjectsV2` requests maximum, 25 keys each, 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination or redirect following, and EUR 0.10 one-time / EUR 0 monthly ceilings.
+R2 remains a separate successor to that consumed Region probe. Its immutable preregistration binds signing Region `ap-northeast-1` and exactly the five node-data prefixes that failed R0. The user's approval `APPROVE_HL_ARCHIVE_NODEDATA_CANARY_R2_001` is hash-bound to preregistration commit `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa` and was canonically recorded as `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`. It approves the frozen scope/budget envelope: five first-page `ListObjectsV2` requests maximum, 25 keys each, 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination or redirect following, and EUR 0.10 one-time / EUR 0 monthly ceilings.
 
-That human approval opens only the implementation/review phase. It does not itself install executable code or a workflow, create a single-use execution release, or authorize a runtime paid request. Operational Requester Pays and LIST flags remain false until a separately reviewed implementation is canonically merged and a separately reviewed single-use release is present.
+The current review branch contains the separately gated R2 implementation candidate. It reuses direct standard-library SigV4 metadata listing, narrows the target to `hl-mainnet-node-data`, signs in `ap-northeast-1` and addresses the regional virtual-hosted endpoint directly. The collector increments the request counter before transport, retains only approved first-page metadata, requires successful Requester Pays responses to report `x-amz-request-charged: requester`, never retains a continuation-token value and never follows pagination or redirects.
+
+The manual-only workflow is present only as a release-gated candidate. It still contains `EXPECTED_IMPLEMENTATION_COMMIT=PENDING_CANONICAL_IMPLEMENTATION_MERGE`, and `research/archive_inventory/r2/R2_EXECUTION_RELEASE.json` is absent. Those proofs occur before AWS OIDC. Therefore implementation review, PR CI and an implementation merge cannot themselves execute an R2 S3 request. A later exact-implementation-bound single-use release remains mandatory.
 
 This remains infrastructure/access research only. It is not market data, wallet intelligence, P&L or alpha evidence.
 
@@ -111,9 +120,11 @@ region_probe_r1_exact_bucket_region = ap-northeast-1
 r2_canary_preregistered = true
 r2_canary_id = HL-ARCHIVE-NODEDATA-METADATA-CANARY-R2-001
 r2_preregistration_commit = 39b40cccc7e9a3fdbc439d06fb188e946d9da2aa
+r2_approval_canonical_commit = 151e08f54037ca7d3a0a9c17d3bdfb84d707a66e
 r2_parent_region_attestation_commit = 9378f625648592bd4a5890f47a98b36028cbd433
 r2_target_bucket = hl-mainnet-node-data
 r2_signing_region = ap-northeast-1
+r2_regional_endpoint = hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com
 r2_maximum_total_list_requests = 5
 r2_maximum_keys_per_request = 25
 r2_maximum_total_entries = 125
@@ -130,9 +141,12 @@ r2_approval_text_sha256 = 728f4e21c045eb10e883bdf0f2e970686f0e6b6cc4dc67a4f214a8
 r2_maximum_one_time_budget_eur = 0.10
 r2_maximum_monthly_budget_eur = 0
 r2_implementation_phase_authorized = true
-r2_implementation_installed = false
-r2_workflow_installation_authorized = false
-r2_workflow_installed = false
+r2_implementation_candidate_present = true
+r2_collector_candidate_present = true
+r2_workflow_candidate_present = true
+r2_implementation_canonical = false
+r2_implementation_commit = null
+r2_expected_implementation_commit = PENDING_CANONICAL_IMPLEMENTATION_MERGE
 r2_execution_release_present = false
 r2_execution_ready = false
 r2_execution_authorized = false
@@ -177,10 +191,10 @@ capital_allocation_authorized = false
 
 ## Exact next gate
 
-1. Canonically record the R2 human approval only if exact-head CI, byte-exact manifest validation and clean-context review are green.
-2. After that approval merge, build the minimal corrected-region R2 implementation and manual-only workflow on a separate branch bound to the canonical approval.
-3. The implementation must enforce exactly five first-page `ListObjectsV2` requests, one per frozen prefix, signed in `ap-northeast-1`, with Requester Pays acknowledgement, max 25 keys/request, 125 entries total, 8 MiB aggregate response bytes, 120 seconds, zero retries, no pagination and no redirect following.
-4. Implementation CI/review must remain non-executing. No AWS/S3 request may occur from PR or push CI, and the workflow must fail closed before OIDC while the canonical implementation/release bindings are absent.
-5. After the implementation is canonically merged, create a separate exact-implementation-bound single-use execution release. Only that later release may open the already-human-approved Requester Pays/LIST scope for one canonical manual dispatch.
-6. The first later dispatch consumes the release regardless of PASS/FAIL. No rerun or second dispatch is implied by this approval.
+1. Run exact-head Research CI, byte-exact repository-manifest validation, the dedicated R2 implementation validator and clean-context review on the implementation candidate.
+2. Merge only if the regional direct-SigV4 five-prefix transport, request/entry/byte/runtime caps, no-retry/no-pagination/no-redirect behavior, exact session-level ListBucket boundary and all prior R0/R1/public-probe invariants remain green.
+3. Verify the actual R2 implementation squash-merge SHA from remote `main`; do not invent it in advance.
+4. Build a separate single-use `R2_EXECUTION_RELEASE.json` bound to that exact implementation merge, canonical approval `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e` and the unchanged approved envelope.
+5. Keep the implementation workflow unusable until the release PR replaces `PENDING_CANONICAL_IMPLEMENTATION_MERGE` with the exact canonical implementation SHA and installs the reviewed release.
+6. Only after that release merges may exactly one manual R2 dispatch occur. The first dispatch consumes the release regardless of PASS/FAIL; no rerun or second dispatch is implied.
 7. A successful R2 result still does not authorize the 300-request inventory, object-body access, market-data ingestion, wallet analysis or any trading/capital stage.
