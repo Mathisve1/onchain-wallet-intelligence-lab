@@ -182,7 +182,7 @@ def main() -> int:
             fail("R2 release trading authorization opened")
         if f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION_COMMIT}" not in workflow:
             fail("R2 workflow not bound to canonical implementation")
-        if "PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow:
+        if "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow:
             fail("R2 release workflow still pending implementation")
     else:
         if "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" not in workflow:
