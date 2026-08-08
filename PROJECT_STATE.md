@@ -11,8 +11,16 @@ Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a67864
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
+| public-probe implementation | `INSTALLED_ON_CANONICAL_MAIN` |
+| public-probe implementation commit | `33683532ca3e6cf7512a728157791d3bfef1375f` |
+| canonical public-probe reviewed commit | `c11046bf288687c6945fe9b8f17141204d24aae6` |
+| canonical public-probe workflow run / job | `31200124642` / `92937868268` |
+| canonical public-probe artifact | `9002459643` |
+| public-probe result | `PUBLIC_PROBE_PASS` |
+| archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
 | archive inventory study | `HL-ARCHIVE-INVENTORY-001` |
 | archive inventory status | `PREREGISTERED_METADATA_ONLY_NO_EXECUTION` |
+| archive preregistration commit | `0e8a678644c29548a38ebfa1c0af91d4a9a92c09` |
 | AWS account ID | `630956766927` |
 | GitHub OIDC provider | `USER_CONFIRMED_CREATED_NOT_API_VERIFIED` |
 | expected GitHub OIDC subject | `repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main` |
@@ -25,8 +33,6 @@ Verified: 2026-08-08 against canonical archive-preregistration commit `0e8a67864
 | ListObjectsV2 authorized | `false` |
 | GetObject authorized | `false` |
 | object-body download authorized | `false` |
-| public-probe result | `PUBLIC_PROBE_PASS` |
-| archive access result | `ROUTES_CONFIRMED_ACCESS_RESTRICTED` |
 | empirical result | `null` |
 | integration authorized | `false` |
 | paper authorized | `false` |
