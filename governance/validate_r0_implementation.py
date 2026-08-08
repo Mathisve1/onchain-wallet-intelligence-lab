@@ -135,7 +135,11 @@ def validate() -> None:
     collector = (R0 / "collector.py").read_text(encoding="utf-8")
     for required_token in ("http.client.HTTPSConnection", 'connection.request("GET"', "x-amz-request-payer", "list-type", "max-keys"):
         require(required_token in collector, f"collector boundary missing: {required_token}")
-    for forbidden in ("subprocess", "urllib.request", "boto3", "botocore", '"aws"', "GetObject", "HeadObject", "PutObject", "DeleteObject"):
+    for forbidden in (
+        "subprocess", "urllib.request", "boto3", "botocore", '"aws"',
+        "GetObject", "HeadObject", "GetObjectAttributes", "ListObjectVersions",
+        "ListAllMyBuckets", "PutObject", "DeleteObject", "RestoreObject",
+    ):
         require(forbidden not in collector, f"forbidden collector capability/literal: {forbidden}")
 
     state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
