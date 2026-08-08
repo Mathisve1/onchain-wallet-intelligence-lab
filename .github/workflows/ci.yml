@@ -35,6 +35,16 @@ jobs:
         with:
           python-version: '3.12.13'
           check-latest: false
+      - name: Validate R0 collector contract
+        run: python -m unittest discover -s tests -p 'test_archive_inventory_r0_collector.py'
+      - name: Validate R0 workflow contract
+        run: python -m unittest discover -s tests -p 'test_archive_inventory_r0_workflow.py'
+      - name: Validate R0 governance contract
+        run: python -m unittest discover -s tests -p 'test_archive_inventory_r0_governance.py'
+      - name: Validate R0 approval and pricing contracts
+        run: |
+          python -m unittest discover -s tests -p 'test_archive_inventory_r0_approval_record.py'
+          python -m unittest discover -s tests -p 'test_archive_inventory_r0_pricing_budget.py'
       - name: Run unit and mutation tests
         run: python -m unittest discover -s tests
       - name: Validate repository governance
