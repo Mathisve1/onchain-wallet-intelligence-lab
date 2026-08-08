@@ -2,7 +2,8 @@
   "inventory_id": "HL-ARCHIVE-INVENTORY-001",
   "canary_id": "HL-ARCHIVE-METADATA-CANARY-R0-001",
   "schema_version": "1.1",
-  "status": "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL",
+  "status": "PENDING_PRE_EXECUTION_PRICING_REFRESH",
+  "pricing_freeze_status": "FROZEN_CONSERVATIVE_R0_PRE_APPROVAL",
   "captured_at_utc": "2026-08-08T09:30:00Z",
   "official_sources": {
     "s3_pricing": "https://aws.amazon.com/s3/pricing/",
@@ -56,6 +57,7 @@
   "list_objects_authorized": false,
   "notes": [
     "The EUR 1.00 figure is a proposed human authorization ceiling, not current authorization.",
+    "Exact bucket-region pricing remains unresolved; the conservative R0 freeze is intentionally separate from applicable-region pricing status.",
     "The stress request rate is 10x the referenced USD 0.005/1000 rate and the stress transfer rate is deliberately much higher than the USD 0.09/GB reference example.",
     "Taxes, FX, credits, discounts and the perpetual 100 GB transfer allowance are not needed to make the R0 usage envelope conservative.",
     "Software request/entry/byte/runtime caps are the primary stop controls; AWS billing alerts are not treated as a real-time hard stop."
