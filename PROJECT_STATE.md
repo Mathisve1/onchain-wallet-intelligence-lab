@@ -66,12 +66,16 @@ Human budget/scope approval is deliberately distinct from operational release. T
 ```text
 human_r0_scope_budget_approved = true
 human_maximum_one_time_budget_eur = 1.00
+maximum_one_time_budget_eur = null
 maximum_monthly_budget_eur = 0
 r0_implementation_installed = false
 r0_execution_workflow_installed = false
 r0_execution_ready = false
 operational_requester_pays_authorized = false
 operational_list_objects_authorized = false
+requester_pays_authorized = false
+list_objects_authorized = false
+paid_request_authorized = false
 get_object_authorized = false
 head_object_authorized = false
 get_object_attributes_authorized = false
