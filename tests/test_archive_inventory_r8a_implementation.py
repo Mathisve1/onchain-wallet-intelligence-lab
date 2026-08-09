@@ -36,7 +36,15 @@ class ArchiveR8AImplementationTests(unittest.TestCase):
         self.assertEqual(impl["s3_requests_executed"], 0)
         self.assertEqual(impl["wallet_addresses_retained"], 0)
         self.assertIsNone(impl["empirical_result"])
-        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE.json").exists())
+        release_path = R8 / "R8A_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = self.load(release_path)
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
+            self.assertEqual(release["wallet_addresses_retained"], 0)
+            self.assertIsNone(release["empirical_result"])
         self.assertFalse((R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_future_retention_matches_approved_minimum(self) -> None:

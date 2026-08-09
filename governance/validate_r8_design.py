@@ -172,7 +172,15 @@ def main() -> int:
         assert impl["s3_requests_executed"] == 0
         assert impl["wallet_addresses_retained"] == 0
         assert impl["empirical_result"] is None
-    assert not (R8 / "R8A_EXECUTION_RELEASE.json").exists()
+    release_path = R8 / "R8A_EXECUTION_RELEASE.json"
+    if release_path.exists():
+        release = load(release_path)
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["s3_requests_executed"] == 0
+        assert release["wallet_addresses_retained"] == 0
+        assert release["empirical_result"] is None
     assert not (R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
 
     print("R8_STATIC_DESIGN_VALID")

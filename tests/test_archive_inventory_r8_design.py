@@ -102,7 +102,15 @@ class ArchiveR8DesignTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in impl["current_runtime_authority"].values()))
         self.assertTrue((R8 / "collector.py").is_file())
         self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-index-r8a.yml").is_file())
-        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE.json").exists())
+        release_path = R8 / "R8A_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = self.load(release_path)
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
+            self.assertEqual(release["wallet_addresses_retained"], 0)
+            self.assertIsNone(release["empirical_result"])
         self.assertFalse((R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_dedicated_r8_validator_passes(self) -> None:
