@@ -128,7 +128,17 @@ def main() -> int:
     assert impl["status"] == "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION"
     assert all(v is False for v in impl["current_runtime_authority"].values())
     assert reuse["aws_iam_mutation_performed"] is False
-    assert not ACTIVATION.exists()
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["release_id"] == release["release_id"]
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R9_RUN"
+        assert activation["candidate_sha256"] == sha(RELEASE)
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["release_consumed"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_feature_rows_created"] == 0
+        assert activation["empirical_result"] is None
 
     print("R9_RELEASE_CANDIDATE_VALID")
     return 0

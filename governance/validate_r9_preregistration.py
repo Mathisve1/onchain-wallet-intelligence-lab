@@ -206,7 +206,17 @@ def main() -> int:
         assert release["s3_requests_executed"] == 0
         assert release["wallet_feature_rows_created"] == 0
         assert release["empirical_result"] is None
-    assert not (R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
+    activation_path = R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json"
+    if activation_path.exists():
+        activation = load(activation_path)
+        assert release_path.exists()
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R9_RUN"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["release_consumed"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_feature_rows_created"] == 0
+        assert activation["empirical_result"] is None
 
     print("R9_PREREGISTRATION_VALID")
     return 0
