@@ -53,6 +53,16 @@ class ArchiveR10ImplementationTests(unittest.TestCase):
         self.assertEqual(conditions["token.actions.githubusercontent.com:ref"], "refs/heads/main")
         self.assertEqual(conditions["token.actions.githubusercontent.com:workflow"], "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10")
 
+    def test_role_max_session_duration_is_aws_valid_but_workflow_stays_900_seconds(self) -> None:
+        runbook = (IMPL / "R10_ROLE_CREATION_RUNBOOK.md").read_text(encoding="utf-8")
+        attestation = (IMPL / "R10_OPERATOR_ATTESTATION_TEMPLATE.txt").read_text(encoding="utf-8")
+        self.assertIn("--max-session-duration 3600", runbook)
+        self.assertNotIn("--max-session-duration 900", runbook)
+        self.assertIn("role_max_session_duration_seconds=3600", attestation)
+        self.assertIn("future_workflow_role_duration_seconds=900", attestation)
+        for path in (IMPL / "workflows").glob("*.yml"):
+            self.assertIn("role-duration-seconds: 900", path.read_text(encoding="utf-8"))
+
     def test_workflows_are_frozen_candidates_not_installed_actions(self) -> None:
         candidates = IMPL / "workflows"
         self.assertTrue((candidates / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml").is_file())
