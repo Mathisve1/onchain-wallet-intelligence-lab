@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import sys
 import unittest
@@ -11,10 +12,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 R8 = ROOT / "research/archive_inventory/r8"
 R4 = ROOT / "research/archive_inventory/r4"
-sys.path.insert(0, str(R8))
+COLLECTOR_PATH = R8 / "collector.py"
+spec = importlib.util.spec_from_file_location("r8a_modern_wallet_index_collector", COLLECTOR_PATH)
+assert spec is not None and spec.loader is not None
+r8a = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = r8a
+spec.loader.exec_module(r8a)
 sys.path.insert(0, str(R4))
-
-import collector as r8a  # noqa: E402
 from lz4_frame import LZ4_FRAME_MAGIC, xxh32  # noqa: E402
 
 
@@ -24,10 +28,10 @@ def frame(payload: bytes) -> bytes:
     descriptor = bytes((flg, bd)) + len(payload).to_bytes(8, "little")
     encoded = bytearray(LZ4_FRAME_MAGIC + descriptor + bytes(((xxh32(descriptor) >> 8) & 0xFF,)))
     for start in range(0, len(payload), 64 * 1024):
-        block = payload[start : start + 64 * 1024]
-        encoded.extend((len(block) | 0x80000000).to_bytes(4, "little"))
-        encoded.extend(block)
-        encoded.extend(xxh32(block).to_bytes(4, "little"))
+        block_data = payload[start : start + 64 * 1024]
+        encoded.extend((len(block_data) | 0x80000000).to_bytes(4, "little"))
+        encoded.extend(block_data)
+        encoded.extend(xxh32(block_data).to_bytes(4, "little"))
     encoded.extend((0).to_bytes(4, "little"))
     encoded.extend(xxh32(payload).to_bytes(4, "little"))
     return bytes(encoded)
