@@ -171,7 +171,11 @@ def main() -> int:
     assert "id-token: write" in workflow
     assert "persist-credentials: false" in workflow
     assert f"R5_ROLE_ARN: {ROLE_ARN}" in workflow
-    assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
+    if ACTIVATION.exists():
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: 40bc4d138c71a4367c9415982f58bcd24c5a57eb" in workflow
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" not in workflow
+    else:
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
     assert "R5_EXECUTION_RELEASE_CANONICALIZATION.json" in workflow
     assert "hyperliquid-archive-legacy-format-fingerprint-r5.yml/runs" in workflow
     assert workflow.index("Prove canonical R5 implementation and release before AWS OIDC") < workflow.index("Assume unchanged dedicated AWS role with exact-one-object R5 session permissions")
@@ -198,7 +202,16 @@ def main() -> int:
         assert release["get_object_authorized_by_candidate"] is False
         assert release["s3_requests_executed"] == 0
         assert release["empirical_result"] is None
-    assert not ACTIVATION.exists()
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R5_RUN"
+        assert activation["implementation_commit"] == "40bc4d138c71a4367c9415982f58bcd24c5a57eb"
+        assert activation["release_candidate_merge_commit"] == "0ed4aed8f2361e995122a0fc57c84135952f70d5"
+        assert activation["activation_anchor_commit"] == "308054c3e69a79a4be2c395e3c47fe725b5abc6c"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["empirical_result"] is None
 
     print("R5_IMPLEMENTATION_VALID")
     return 0

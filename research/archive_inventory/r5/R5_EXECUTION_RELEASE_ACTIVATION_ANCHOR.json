@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "release_id": "RELEASE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001",
+  "status": "R5_ACTIVATION_WINDOW_ANCHOR_ONLY_NO_AUTHORITY",
+  "release_candidate_merge_commit": "0ed4aed8f2361e995122a0fc57c84135952f70d5",
+  "implementation_commit": "40bc4d138c71a4367c9415982f58bcd24c5a57eb",
+  "purpose": "Provide a GitHub-committed lower bound for the later R5 single-use workflow_dispatch window. This anchor does not authorize AWS authentication or any S3 request.",
+  "execution_authorized": false,
+  "requester_pays_authorized": false,
+  "get_object_authorized": false,
+  "decompression_authorized": false,
+  "format_classification_authorized": false,
+  "single_workflow_dispatch_authorized": false,
+  "rerun_authorized": false,
+  "aws_role_mutation_authorized": false,
+  "s3_requests_executed": 0,
+  "compressed_bytes_downloaded": 0,
+  "decompressed_bytes_processed": 0,
+  "empirical_result": null
+}

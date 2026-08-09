@@ -86,7 +86,14 @@ class ArchiveLegacyFormatFingerprintR5ImplementationTests(unittest.TestCase):
             self.assertFalse(release["execution_ready"])
             self.assertFalse(release["single_workflow_dispatch_authorized"])
             self.assertEqual(release["s3_requests_executed"], 0)
-        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        activation_path = R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json"
+        if activation_path.exists():
+            activation = json.loads(activation_path.read_text(encoding="utf-8"))
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R5_RUN")
+            self.assertEqual(activation["implementation_commit"], "40bc4d138c71a4367c9415982f58bcd24c5a57eb")
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertEqual(activation["s3_requests_executed"], 0)
 
     def test_payload_semantic_market_and_trading_boundaries_stay_closed(self) -> None:
         for key in (

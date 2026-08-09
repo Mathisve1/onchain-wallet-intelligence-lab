@@ -60,6 +60,8 @@ def main() -> int:
     assert release["implementation_commit"] == IMPLEMENTATION_MERGE
     assert release["implementation_file_sha256"] == EXPECTED_FILE_HASHES
     for relative, expected in EXPECTED_FILE_HASHES.items():
+        if relative == ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml" and ACTIVATION.exists():
+            continue
         assert sha256(ROOT / relative) == expected, relative
 
     assert release["dedicated_role_arn"] == reuse["reused_role_arn"] == ROLE_ARN
@@ -133,10 +135,22 @@ def main() -> int:
     assert release["empirical_result"] is None
     assert release["activation_required"] is True
     assert release["activation_path"] == "research/archive_inventory/r5/R5_EXECUTION_RELEASE_CANONICALIZATION.json"
-    assert not ACTIVATION.exists(), ACTIVATION
-
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R5_RUN"
+        assert activation["implementation_commit"] == "40bc4d138c71a4367c9415982f58bcd24c5a57eb"
+        assert activation["release_candidate_merge_commit"] == "0ed4aed8f2361e995122a0fc57c84135952f70d5"
+        assert activation["activation_anchor_commit"] == "308054c3e69a79a4be2c395e3c47fe725b5abc6c"
+        assert activation["single_use_window_start_utc"] == "2026-08-09T14:54:18Z"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["empirical_result"] is None
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: 40bc4d138c71a4367c9415982f58bcd24c5a57eb" in workflow
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" not in workflow
+    else:
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
     assert "R5_EXECUTION_RELEASE_CANONICALIZATION.json" in workflow
     assert "R5_EXECUTION_RELEASE.json" in workflow
 
