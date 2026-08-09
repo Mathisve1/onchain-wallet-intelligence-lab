@@ -90,10 +90,23 @@ def main() -> int:
     assert release["object_bytes_downloaded"] == 0
     assert release["empirical_result"] is None
 
+    assert body["status"] == "RELEASE_CANDIDATE_AWAITING_DEDICATED_R4_ROLE_ATTESTATION"
     assert body["single_workflow_dispatch_authorized"] is False
     assert body["get_object_authorized"] is False
     assert body["execution_ready"] is False
-    assert not BODY_ACTIVATION.exists()
+
+    if BODY_ACTIVATION.exists():
+        activation = load(BODY_ACTIVATION)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN"
+        assert activation["release_candidate_immutable"] is True
+        assert activation["preflight_run_id"] == 31312067367
+        assert activation["preflight_release_consumed"] is True
+        assert activation["preflight_rerun_authorized"] is False
+        assert activation["preflight_s3_requests_executed"] == 0
+        assert activation["preflight_evidence_merge_commit"] == "a91f0849e8cf14b6924da73ca2b72595deab5d8d"
+        assert activation["dedicated_r4_role_independently_verified"] is True
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
 
     text = WORKFLOW.read_text(encoding="utf-8")
     assert f"EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}" in text
