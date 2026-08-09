@@ -1,0 +1,257 @@
+name: Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10
+run-name: R10 bounded six-hour multi-wallet feature pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-r10-multihour-feature
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R10_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+  ROLE_ATTESTATION_PATH: research/archive_inventory/r10_role_attestation/R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json
+  STS_EVIDENCE_PATH: research/archive_inventory/r10_role_attestation/evidence/R10_STS_PREFLIGHT_ATTESTATION.json
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r10_runtime/R10_EXECUTION_RELEASE_CANONICALIZATION.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r10-multihour-feature:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove role attestation preflight evidence and single-use release before OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python governance/validate_repository.py
+          python governance/validate_r10_approval.py
+          python governance/validate_r10_implementation.py
+          test -f "${ROLE_ATTESTATION_PATH}"
+          test -f "${STS_EVIDENCE_PATH}"
+          test -f "${EXECUTION_RELEASE_PATH}"
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          role = json.loads(Path(os.environ['ROLE_ATTESTATION_PATH']).read_text())
+          sts = json.loads(Path(os.environ['STS_EVIDENCE_PATH']).read_text())
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          expected_role = os.environ['R10_ROLE_ARN']
+          assert role['status'] == 'ATTESTED_EXACT_R10_ROLE'
+          assert role['role_arn'] == expected_role
+          assert role['existing_r4_role_modified'] is False
+          assert role['s3_requests_executed_during_role_creation'] == 0
+          assert sts['status'] == 'ATTESTED_R10_STS_PREFLIGHT_PASS'
+          assert sts['technical_result'] == 'STS_IDENTITY_MATCH'
+          assert sts['s3_requests_executed'] == 0
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10_RUN'
+          assert release['role_arn'] == expected_role
+          assert release['maximum_get_object_requests'] == 6
+          assert release['maximum_total_compressed_bytes'] == 120999698
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert all(v is False for v in release['downstream_authorizations'].values())
+          assert all(v is False for v in release['trading_authorizations'].values())
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z','+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          url = f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req = urllib.request.Request(url, headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'r10-single-use-check'})
+          with urllib.request.urlopen(req, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc) >= start]
+          assert len(eligible) == 1, 'R10 release is not single-use within its window'
+          assert int(eligible[0]['id']) == current, 'a prior R10 dispatch already consumed the release'
+          assert int(os.environ['CURRENT_RUN_ATTEMPT']) == 1, 'R10 rerun forbidden'
+          PY
+
+      - name: Create minimized pending execution context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          context = {
+            'schema_version':'1.0',
+            'pilot_id':'HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001',
+            'terminal_status':'PENDING_AWS_OIDC',
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+            'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R10_ROLE_ARN'],
+            'configure_aws_outcome':None,
+            'target_bucket':'hl-mainnet-node-data',
+            'signing_region':'ap-northeast-1',
+            'selected_hour_count':6,
+            'maximum_get_object_requests':6,
+            'maximum_total_compressed_bytes':120999698,
+            'maximum_total_decompressed_bytes':1073741824,
+            'maximum_retries_per_request':0,
+            'wallet_ranking_authorized':False,
+            'pnl_or_alpha_analysis_authorized':False,
+            'copyability_analysis_authorized':False,
+          }
+          (Path(os.environ['RUNNER_TEMP'])/'r10-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Assume exact R10 role with exact-six session scope
+        id: configure
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveR10MultiHourFeature
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R10ExactSixOnly","Effect":"Allow","Action":"s3:GetObject","Resource":["arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/9.lz4","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/10.lz4","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/11.lz4","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/12.lz4","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/13.lz4","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/14.lz4"]}]}
+
+      - name: Execute bounded R10 collector once
+        shell: bash
+        run: |
+          set +e
+          python research/archive_inventory/r10_implementation/collector.py \
+            --result-output "${RUNNER_TEMP}/r10-result.json" \
+            --wallet-feature-output "${RUNNER_TEMP}/r10-wallet-features.ndjson"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r10.rc"
+
+      - name: Finalize minimized artifact ledger
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp/'r10-context.json'
+          result_path = temp/'r10-result.json'
+          feature_path = temp/'r10-wallet-features.ndjson'
+          rc_path = temp/'r10.rc'
+          context = json.loads(context_path.read_text())
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          if not result_path.exists():
+              result_path.write_text(json.dumps({'schema_version':'1.0','pilot_id':'HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001','terminal_status':'R10_TRANSPORT_OR_INTEGRITY_FAIL','technical_result':'PRE_COLLECTOR_AWS_FAILURE','research_conclusion':'R10_TRANSPORT_OR_INTEGRITY_FAIL'},indent=2,sort_keys=True)+'\n')
+          if not feature_path.exists(): feature_path.write_bytes(b'')
+          if not rc_path.exists(): rc_path.write_text('83\n')
+          lines=[]
+          for path in (context_path,result_path,feature_path,rc_path):
+              lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp/'R10_FILES.sha256').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Upload bounded R10 evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r10-multihour-wallet-features-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r10-context.json
+            ${{ runner.temp }}/r10-result.json
+            ${{ runner.temp }}/r10-wallet-features.ndjson
+            ${{ runner.temp }}/r10.rc
+            ${{ runner.temp }}/R10_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Enforce terminal research result and semantic boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          result = json.loads((temp/'r10-result.json').read_text())
+          feature = temp/'r10-wallet-features.ndjson'
+          rc = int((temp/'r10.rc').read_text().strip())
+          if rc != 0 or result.get('terminal_status') == 'R10_TRANSPORT_OR_INTEGRITY_FAIL':
+              raise SystemExit(1)
+          assert result.get('terminal_status') == 'R10_MULTI_HOUR_FEATURE_STUDY_COMPLETE'
+          assert result.get('research_conclusion') in {'MULTI_HOUR_FEATURE_PIPELINE_COMPLETE','MULTI_HOUR_FEATURE_PIPELINE_UNRESOLVED'}
+          assert result.get('request_attempt_count') <= 6
+          assert result.get('s3_http_request_count') <= 6
+          assert result.get('retries_used') == 0
+          assert result.get('http_redirects_followed') is False
+          assert result.get('total_compressed_bytes') <= 120999698
+          assert result.get('total_decompressed_bytes') <= 1073741824
+          for key in ('historical_window_beyond_six_hours_performed','full_population_historical_ingestion_performed','legacy_modern_merged_history_performed','public_api_enrichment_performed','entity_clustering_performed','wallet_ranking_performed','candidate_shortlisting_performed','pnl_or_alpha_analysis_performed','copyability_analysis_performed','market_data_ingested','strategy_inference_performed','sum_closed_pnl_interpreted_as_exact_account_return','sum_closed_pnl_used_as_wallet_ranking_score','notional_proxy_interpreted_as_copyable_notional','active_hour_count_interpreted_as_wallet_quality_score'):
+              assert result.get(key) is False, key
+          if result['research_conclusion'] == 'MULTI_HOUR_FEATURE_PIPELINE_UNRESOLVED':
+              assert feature.read_bytes() == b''
+              assert result.get('wallet_feature_retained') is False
+              raise SystemExit(0)
+          assert result.get('completed_hour_count') == 6
+          assert result.get('successful_request_count') == 6
+          assert result.get('failed_request_count') == 0
+          assert result.get('wallet_feature_retained') is True
+          summary = result['aggregate_wallet_feature_summary']
+          assert summary['sum_fill_count'] == summary['sum_side_count']
+          assert summary['duplicate_wallet_tid_count'] == 0
+          data = feature.read_bytes()
+          assert 0 < len(data) <= 67108864
+          assert hashlib.sha256(data).hexdigest() == summary['wallet_feature_sha256']
+          addresses=[]
+          for raw in data.splitlines():
+              row=json.loads(raw.decode())
+              assert re.fullmatch(r'^0x[0-9a-f]{40}$', row['wallet_address'])
+              assert 1 <= row['active_hour_count'] <= 6
+              assert row['side_a_count'] + row['side_b_count'] == row['fill_count']
+              assert row['duplicate_tid_count'] == 0
+              addresses.append(row['wallet_address'])
+          assert addresses == sorted(addresses)
+          assert len(addresses) == len(set(addresses)) == summary['wallet_feature_row_count']
+          PY
