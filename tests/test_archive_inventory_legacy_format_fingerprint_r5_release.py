@@ -49,9 +49,17 @@ class ArchiveLegacyFormatFingerprintR5ReleaseTests(unittest.TestCase):
         self.assertFalse(self.release["execution_ready"])
         self.assertEqual(self.release["s3_requests_executed"], 0)
         self.assertIsNone(self.release["empirical_result"])
-        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        activation_path = R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json"
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        if activation_path.exists():
+            activation = json.loads(activation_path.read_text(encoding="utf-8"))
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R5_RUN")
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: 40bc4d138c71a4367c9415982f58bcd24c5a57eb", text)
+            self.assertNotIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        else:
+            self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
 
     def test_release_scope_is_exactly_one_r4_bound_legacy_object(self) -> None:
         self.assertEqual(self.release["object_key"], "node_fills/hourly/20250727/8.lz4")
