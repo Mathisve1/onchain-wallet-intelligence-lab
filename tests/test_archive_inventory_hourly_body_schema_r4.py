@@ -114,12 +114,18 @@ class ArchiveHourlyBodySchemaR4Tests(unittest.TestCase):
         self.assertEqual(c["maximum_monthly_budget_eur_proposed"], 0)
         self.assertEqual(c["pricing_status"], "PROPOSED_CEILING_REQUIRES_FRESH_PRE_EXECUTION_VERIFICATION")
 
-    def test_no_r4_executable_or_workflow_exists(self) -> None:
-        self.assertFalse((BASE / "collector.py").exists())
+    def test_preregistration_snapshot_remains_non_self_authorizing_after_later_implementation(self) -> None:
+        c = self.load(CONTRACT)
+        self.assertEqual(c["status"], "PREREGISTERED_STATIC_ONLY_NO_EXECUTION")
+        self.assertFalse(c["get_object_authorized"])
+        self.assertFalse(c["requester_pays_authorized"])
+        self.assertFalse(c["decompression_authorized"])
+        self.assertFalse(c["execution_authorized"])
+        self.assertTrue((BASE / "collector.py").is_file())
+        self.assertTrue((BASE / "R4_IMPLEMENTATION_CONTRACT.json").is_file())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml").is_file())
         self.assertFalse((BASE / "R4_EXECUTION_RELEASE.json").exists())
-        workflows = ROOT / ".github/workflows"
-        self.assertFalse(any("r4" in path.name.lower() for path in workflows.glob("*.yml")))
-        self.assertFalse(any("r4" in path.name.lower() for path in workflows.glob("*.yaml")))
+        self.assertFalse((BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_approval_template_repeats_exact_frozen_boundary(self) -> None:
         text = APPROVAL_TEMPLATE.read_text(encoding="utf-8")
