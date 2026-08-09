@@ -89,13 +89,21 @@ def main() -> int:
     assert body_release["get_object_authorized"] is False
     assert body_release["execution_ready"] is False
     assert not BODY_ACTIVATION.exists()
-    assert not PREFLIGHT_RELEASE.exists(), "implementation candidate must not self-release preflight"
+
+    if PREFLIGHT_RELEASE.exists():
+        later = load(PREFLIGHT_RELEASE)
+        assert later["preflight_release_id"] == "RELEASE_HL_ARCHIVE_R4_ROLE_STS_PREFLIGHT_001"
+        assert later["role_attestation_merge_commit"] == ROLE_ATTESTATION_MERGE
+        assert later["role_arn"] == ROLE_ARN
+        assert later["s3_requests_authorized"] is False
+        assert later["object_body_download_authorized"] is False
+        assert later["body_release_consumed_by_preflight"] is False
+        assert later["body_execution_activation_authorized"] is False
 
     assert hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest() == BODY_WORKFLOW_SHA256
     text = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
     assert text.startswith(f"name: {WORKFLOW_NAME}\n")
     assert "run-name: R4 dedicated role STS-only preflight" in text
-    assert "EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE" in text
     assert "DenyAllS3DuringR4RolePreflight" in text
     assert '"Action":"s3:*"' in text
     assert '"Effect":"Deny"' in text
