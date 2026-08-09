@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001",
+  "status": "PROPOSED_NOT_AUTHORIZED",
+  "pricing_evidence_parent": "research/archive_inventory/r4/R4_PRICING_EVIDENCE.json",
+  "pricing_evidence_checked_at_utc": "2026-08-09T08:24:00Z",
+  "pricing_evidence_summary": {
+    "requester_pays_shifts_request_and_download_charges_to_requester": true,
+    "aws_first_100_gb_monthly_internet_data_transfer_out_may_apply": true,
+    "account_remaining_free_transfer_allowance_known": false,
+    "taxes_fx_and_final_invoice_known": false
+  },
+  "selected_object_count": 6,
+  "selected_compressed_bytes": 120999698,
+  "selected_compressed_gib": "0.11268975026905537",
+  "maximum_get_object_requests": 6,
+  "maximum_retries_per_request": 0,
+  "maximum_one_time_budget_eur": 0.10,
+  "maximum_monthly_budget_eur": 0,
+  "cost_control_basis": "EXACT_REQUEST_COUNT_PLUS_EXACT_R3_BOUND_COMPRESSED_BYTE_CAP",
+  "budget_is_not_cost_prediction": true,
+  "budget_cannot_expand_request_or_byte_scope": true,
+  "new_pricing_network_request_executed": false,
+  "s3_request_executed": false,
+  "execution_authorized_by_this_file": false
+}
