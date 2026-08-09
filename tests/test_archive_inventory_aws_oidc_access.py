@@ -116,12 +116,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r7 = workflows / "hyperliquid-archive-wallet-index-r7.yml"
         r8a = workflows / "hyperliquid-archive-modern-wallet-index-r8a.yml"
         r9 = workflows / "hyperliquid-archive-modern-wallet-feature-r9.yml"
-        r10_preflight = workflows / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
-        r10 = workflows / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
-        allowed = {
-            identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor,
-            r7, r8a, r9, r10_preflight, r10,
-        }
+        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a, r9}
         for path in allowed:
             self.assertTrue(path.is_file(), path)
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
@@ -132,11 +127,6 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn("id-token: write", text)
             self.assertIn("aws-actions/configure-aws-credentials", text)
-        for path in (r10_preflight, r10):
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("workflow_dispatch:", text)
-            self.assertIn("persist-credentials: false", text)
-            self.assertLess(text.index("test -f"), text.index("aws-actions/configure-aws-credentials"))
 
 
 if __name__ == "__main__":
