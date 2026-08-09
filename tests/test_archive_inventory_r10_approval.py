@@ -9,8 +9,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 R10 = ROOT / "research/archive_inventory/r10"
-TXT = R10 / "approvals/APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.txt"
-JSON_PATH = R10 / "approvals/APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.json"
+R10_APPROVAL = ROOT / "research/archive_inventory/r10_approval"
+TXT = R10_APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.txt"
+JSON_PATH = R10_APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.json"
+RECEIPT = R10_APPROVAL / "APPROVAL_RECEIPT.md"
 CONTRACT = R10 / "POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_CONTRACT.json"
 
 
@@ -23,6 +25,12 @@ class ArchiveR10ApprovalTests(unittest.TestCase):
         self.assertEqual(approval["reviewed_commit"], "37e4486a7f68982feafcb361bd40dffd546def05")
         self.assertEqual(approval["exact_approval_text_sha256"], "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882")
         self.assertEqual(hashlib.sha256(TXT.read_bytes()).hexdigest(), approval["exact_approval_text_sha256"])
+
+    def test_approval_is_separate_from_immutable_preregistration_snapshot(self) -> None:
+        self.assertFalse((R10 / "approvals").exists())
+        self.assertTrue(RECEIPT.is_file())
+        self.assertIn("outside the immutable `research/archive_inventory/r10/` preregistration snapshot", RECEIPT.read_text(encoding="utf-8"))
+        self.assertIn("AWAITING_SEPARATE_HUMAN_APPROVAL", (R10 / "APPROVAL_STATUS.md").read_text(encoding="utf-8"))
 
     def test_approval_opens_implementation_and_role_creation_but_not_runtime(self) -> None:
         approval = self.load(JSON_PATH)
