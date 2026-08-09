@@ -63,6 +63,10 @@ class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
         body = BODY_WORKFLOW.read_text(encoding="utf-8")
         preflight = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
         expected_name = "name: Hyperliquid Archive Hourly Body Schema Pilot R4\n"
+        pending_assignment = (
+            "EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: "
+            "PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE"
+        )
         self.assertTrue(body.startswith(expected_name))
         self.assertTrue(preflight.startswith(expected_name))
         self.assertIn("run-name: R4 dedicated role STS-only preflight", preflight)
@@ -70,9 +74,9 @@ class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
         self.assertIn("refs/heads/main", preflight)
         if PREFLIGHT_RELEASE.exists():
             self.assertIn(f"EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: {PREFLIGHT_IMPLEMENTATION}", preflight)
-            self.assertNotIn("PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE", preflight)
+            self.assertNotIn(pending_assignment, preflight)
         else:
-            self.assertIn("PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE", preflight)
+            self.assertIn(pending_assignment, preflight)
 
     def test_preflight_session_policy_explicitly_denies_all_s3_and_has_no_s3_operation(self) -> None:
         text = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
