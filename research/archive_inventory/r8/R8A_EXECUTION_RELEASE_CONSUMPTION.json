@@ -1,0 +1,40 @@
+{
+  "artifact_id": 9043584172,
+  "artifact_zip_sha256": "185037463a1eab27b35c5f8b6edad810a28bce599101e4d26734020717a392c8",
+  "canonical_dispatch_sha": "2f8237de806dcf149579aefc6ece1ae537ef7aeb",
+  "compressed_bytes_downloaded": 1517603,
+  "decompressed_bytes_processed": 7380378,
+  "downstream_authorizations": {
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "historical_multi_hour_ingestion": false,
+    "market_data_ingestion": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "failed_get_object_requests": 0,
+  "future_r8a_dispatch_authorized": false,
+  "http_redirects_followed": false,
+  "pilot_id": "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001",
+  "release_consumed": true,
+  "release_id": "RELEASE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001",
+  "remaining_get_object_budget": 0,
+  "rerun_authorized": false,
+  "retries_used": 0,
+  "schema_version": "1.0",
+  "status": "CONSUMED_BY_CANONICAL_R8A_RUN",
+  "successful_get_object_requests": 1,
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  },
+  "workflow_job_id": 93295166161,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31333421763
+}
