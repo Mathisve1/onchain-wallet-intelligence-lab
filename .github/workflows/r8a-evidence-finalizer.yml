@@ -1,0 +1,287 @@
+name: R8A Evidence Finalizer
+
+on:
+  push:
+    branches:
+      - research/r8a-modern-wallet-index-evidence
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: r8a-evidence-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out R8A evidence branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: research/r8a-modern-wallet-index-evidence
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+      - name: Download exact successful artifact and build minimized canonical evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = 'refs/heads/research/r8a-modern-wallet-index-evidence'
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib, io, json, os, urllib.error, urllib.request, zipfile
+          from pathlib import Path
+
+          ROOT = Path('.')
+          R8 = ROOT / 'research/archive_inventory/r8'
+          RUN = R8 / 'evidence/run-31333421763'
+          RUN.mkdir(parents=True, exist_ok=True)
+          EVIDENCE = R8 / 'evidence'
+          R7_INDEX = ROOT / 'research/archive_inventory/r7/evidence/run-31330248235/r7-wallet-index.ndjson'
+          RUN_ID = 31333421763
+          JOB_ID = 93295166161
+          ARTIFACT_ID = 9043584172
+          ZIP_SHA = '185037463a1eab27b35c5f8b6edad810a28bce599101e4d26734020717a392c8'
+          ZIP_SIZE = 25269
+          DISPATCH_SHA = '2f8237de806dcf149579aefc6ece1ae537ef7aeb'
+          expected = {
+              'r8a-context.json':'a967cd8061d61064f6cb234c031527145d3698703af78b5c2d882934ed07722c',
+              'r8a-result.json':'c99f29b443110bc3840c8d2f12b6617a874c5af70fc07894b55d1d19bdf1de6c',
+              'r8a-wallet-index.ndjson':'e7f208c7e4150e88ae98daab055d183739140698a4f6e310e37fc814f463013e',
+              'r8a.rc':'9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa',
+              'R8A_FILES.sha256':'c81dd3758cadea0e944998026b62f68e50f52e47ccdadec6595cfc06ad24e12d',
+          }
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          api = f'https://api.github.com/repos/Mathisve1/onchain-wallet-intelligence-lab/actions/artifacts/{ARTIFACT_ID}/zip'
+          req = urllib.request.Request(api, headers={
+              'Accept':'application/vnd.github+json',
+              'Authorization':f"Bearer {os.environ['GH_TOKEN']}",
+              'X-GitHub-Api-Version':'2022-11-28',
+              'User-Agent':'r8a-evidence-finalizer',
+          })
+          opener = urllib.request.build_opener(NoRedirect())
+          try:
+              opener.open(req, timeout=20)
+              raise AssertionError('artifact endpoint unexpectedly did not redirect')
+          except urllib.error.HTTPError as exc:
+              assert exc.code in (301,302,303,307,308), exc.code
+              location = exc.headers.get('Location')
+              assert location and location.startswith('https://')
+          with urllib.request.urlopen(location, timeout=20) as response:
+              archive = response.read(ZIP_SIZE + 1)
+          assert len(archive) == ZIP_SIZE
+          assert hashlib.sha256(archive).hexdigest() == ZIP_SHA
+
+          with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+              assert sorted(zf.namelist()) == sorted(expected)
+              for name, digest in expected.items():
+                  data = zf.read(name)
+                  assert hashlib.sha256(data).hexdigest() == digest, name
+                  (RUN / name).write_bytes(data)
+
+          context = json.loads((RUN/'r8a-context.json').read_text())
+          result = json.loads((RUN/'r8a-result.json').read_text())
+          assert context['workflow_run_id'] == RUN_ID and context['workflow_run_attempt'] == 1
+          assert context['dispatch_sha'] == DISPATCH_SHA and context['configure_aws_outcome'] == 'success'
+          assert result['research_conclusion'] == 'MODERN_WALLET_INDEX_BRIDGE_COMPLETE'
+          assert result['request_attempt_count'] == 1 and result['retries_used'] == 0
+          assert result['wallet_index_summary']['unique_wallet_count'] == 887
+          assert result['wallet_index_summary']['valid_event_pair_count'] == 17516
+
+          def read_index(path: Path) -> dict[str,int]:
+              rows = {}
+              for line in path.read_text(encoding='utf-8').splitlines():
+                  row = json.loads(line)
+                  rows[row['wallet_address']] = row['fill_count']
+              return rows
+
+          legacy = read_index(R7_INDEX)
+          modern = read_index(RUN/'r8a-wallet-index.ndjson')
+          assert len(legacy) == 4637 and sum(legacy.values()) == 162815
+          assert len(modern) == 887 and sum(modern.values()) == 17516
+          lk, mk = set(legacy), set(modern)
+          overlap = lk & mk
+          modern_only = mk - lk
+          legacy_only = lk - mk
+          comparison = {
+              'schema_version':'1.0',
+              'comparison_id':'R8A_LEGACY_MODERN_WALLET_INDEX_BRIDGE_COMPARISON_001',
+              'legacy_index_source':'research/archive_inventory/r7/evidence/run-31330248235/r7-wallet-index.ndjson',
+              'modern_index_source':'research/archive_inventory/r8/evidence/run-31333421763/r8a-wallet-index.ndjson',
+              'legacy_unique_wallet_count':len(legacy),
+              'legacy_sum_fill_count':sum(legacy.values()),
+              'modern_unique_wallet_count':len(modern),
+              'modern_sum_fill_count':sum(modern.values()),
+              'overlapping_wallet_count':len(overlap),
+              'modern_only_wallet_count':len(modern_only),
+              'legacy_only_wallet_count':len(legacy_only),
+              'modern_address_set_subset_of_legacy':len(modern_only) == 0,
+              'overlap_wallets_with_equal_fill_count':sum(modern[a] == legacy[a] for a in overlap),
+              'overlap_wallets_with_modern_fill_count_lt_legacy':sum(modern[a] < legacy[a] for a in overlap),
+              'overlap_wallets_with_modern_fill_count_gt_legacy':sum(modern[a] > legacy[a] for a in overlap),
+              'modern_fill_count_sum_on_overlap':sum(modern[a] for a in overlap),
+              'legacy_fill_count_sum_on_overlap':sum(legacy[a] for a in overlap),
+              'exact_fill_identity_inferred':False,
+              'temporal_subset_inferred':False,
+              'schema_equivalence_inferred':False,
+              'semantic_equivalence_inferred':False,
+              'wallet_ranking_performed':False,
+              'copyability_analysis_performed':False,
+              'pnl_or_alpha_analysis_performed':False,
+          }
+          comparison_path = EVIDENCE/'R8A_LEGACY_MODERN_BRIDGE_COMPARISON.json'
+          comparison_path.write_text(json.dumps(comparison,indent=2,sort_keys=True)+'\n', encoding='utf-8')
+          comparison_sha = hashlib.sha256(comparison_path.read_bytes()).hexdigest()
+
+          verification = {
+              'schema_version':'1.0',
+              'verification_id':'R8A_RUN_31333421763_ARTIFACT_VERIFICATION',
+              'workflow_run_id':RUN_ID,
+              'workflow_job_id':JOB_ID,
+              'artifact_id':ARTIFACT_ID,
+              'artifact_name':'r8a-modern-wallet-index-31333421763',
+              'artifact_size_bytes':ZIP_SIZE,
+              'artifact_zip_sha256':ZIP_SHA,
+              'artifact_expired_at_verification':False,
+              'retained_file_sha256':expected,
+              'internal_hash_ledger_matches_retained_files':True,
+              'wallet_index_hash_matches_result_summary':True,
+              'all_checks_pass':True,
+          }
+          (RUN/'INDEPENDENT_ARTIFACT_VERIFICATION.json').write_text(json.dumps(verification,indent=2,sort_keys=True)+'\n')
+
+          false_downstream = {
+              'historical_multi_hour_ingestion':False,
+              'public_api_enrichment':False,
+              'entity_clustering':False,
+              'wallet_ranking':False,
+              'copyability_analysis':False,
+              'pnl_or_alpha_analysis':False,
+              'market_data_ingestion':False,
+              'strategy_inference':False,
+          }
+          false_trading = {
+              'integration':False,'paper':False,'shadow':False,'live':False,
+              'leverage':False,'capital_allocation':False,
+          }
+          consumption = {
+              'schema_version':'1.0',
+              'release_id':'RELEASE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001',
+              'pilot_id':'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001',
+              'status':'CONSUMED_BY_CANONICAL_R8A_RUN',
+              'release_consumed':True,
+              'canonical_dispatch_sha':DISPATCH_SHA,
+              'workflow_run_id':RUN_ID,
+              'workflow_run_attempt':1,
+              'workflow_job_id':JOB_ID,
+              'artifact_id':ARTIFACT_ID,
+              'artifact_zip_sha256':ZIP_SHA,
+              'successful_get_object_requests':1,
+              'failed_get_object_requests':0,
+              'retries_used':0,
+              'http_redirects_followed':False,
+              'compressed_bytes_downloaded':1517603,
+              'decompressed_bytes_processed':7380378,
+              'remaining_get_object_budget':0,
+              'future_r8a_dispatch_authorized':False,
+              'rerun_authorized':False,
+              'downstream_authorizations':false_downstream,
+              'trading_authorizations':false_trading,
+          }
+          (R8/'R8A_EXECUTION_RELEASE_CONSUMPTION.json').write_text(json.dumps(consumption,indent=2,sort_keys=True)+'\n')
+
+          attestation = {
+              'schema_version':'1.0',
+              'attestation_id':'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001-ATTESTATION',
+              'pilot_id':'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001',
+              'canonical_dispatch_sha':DISPATCH_SHA,
+              'workflow_run_id':RUN_ID,
+              'workflow_run_attempt':1,
+              'workflow_job_id':JOB_ID,
+              'artifact_id':ARTIFACT_ID,
+              'artifact_zip_sha256':ZIP_SHA,
+              'object_key':'node_fills_by_block/hourly/20250727/8.lz4',
+              'request_attempt_count':1,
+              'successful_request_count':1,
+              'retries_used':0,
+              'compressed_sha256':'928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105',
+              'compressed_bytes':1517603,
+              'decompressed_bytes':7380378,
+              'research_conclusion':'MODERN_WALLET_INDEX_BRIDGE_COMPLETE',
+              'wallet_index_summary':result['wallet_index_summary'],
+              'bridge_comparison_sha256':comparison_sha,
+              'release_consumed':True,
+              'claims_proven':{
+                  'exact_modern_object_retrieved_once_with_frozen_integrity_guards':True,
+                  'modern_block_record_count_exactly_4345':True,
+                  'modern_event_pairs_reduced_to_address_plus_fill_count':True,
+                  'valid_event_pair_count_exactly_17516':True,
+                  'unique_wallet_count_exactly_887':True,
+                  'deterministic_sorted_wallet_index_retained':True,
+                  'cross_format_wallet_count_comparison_computed_from_retained_indexes':True,
+              },
+              'claims_not_proven':{
+                  'exact_fill_identity_across_legacy_and_modern_formats':False,
+                  'temporal_subset_relation':False,
+                  'full_schema_equivalence':False,
+                  'semantic_equivalence':False,
+                  'performance_correctness':False,
+                  'pnl_or_alpha':False,
+                  'copyability':False,
+                  'one_wallet_equals_one_human_or_entity':False,
+              },
+              'claims_not_authorized':{
+                  'historical_multi_hour_ingestion':False,
+                  'public_api_enrichment':False,
+                  'entity_clustering':False,
+                  'wallet_ranking':False,
+                  'pnl_or_alpha_analysis':False,
+                  'copyability_analysis':False,
+                  'market_data_ingestion':False,
+                  'strategy_inference':False,
+                  'integration':False,
+                  'paper':False,
+                  'shadow':False,
+                  'live':False,
+                  'leverage':False,
+                  'capital_allocation':False,
+              },
+          }
+          (EVIDENCE/'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001-ATTESTATION.json').write_text(json.dumps(attestation,indent=2,sort_keys=True)+'\n')
+
+          conclusion = f'''# R8A research conclusion\n\n`MODERN_WALLET_INDEX_BRIDGE_COMPLETE`\n\nThe exact modern boundary object `node_fills_by_block/hourly/20250727/8.lz4` was retrieved once by canonical run `{RUN_ID}` with zero retries and zero redirects. Frozen integrity checks matched exactly: 1,517,603 compressed bytes, SHA-256 `928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105`, 7,380,378 decompressed bytes, and 4,345 top-level block records.\n\nThe modern block stream contained **17,516** valid `[address, fill_object]` event pairs and reduced deterministically to **887** unique lowercase wallet addresses with only `wallet_address` and `fill_count` retained. No fill payload, performance field, block number, block timestamp, market data, PnL, ranking, clustering or copyability output was retained.\n\nFor the already-retained same-hour legacy R7 wallet index, the aggregate bridge comparison found **{comparison['overlapping_wallet_count']}** overlapping wallet addresses, **{comparison['modern_only_wallet_count']}** modern-only wallet addresses and **{comparison['legacy_only_wallet_count']}** legacy-only wallet addresses. The modern address set being a subset of the legacy set is recorded as `{str(comparison['modern_address_set_subset_of_legacy']).lower()}`. These are address/count aggregate facts only: this does not prove exact fill identity, temporal subset semantics, schema equivalence or semantic equivalence between the two archive formats.\n\nThe single-use R8A release is consumed by run `{RUN_ID}`. **No second R8A dispatch or rerun is authorized.** Any next step that retains performance/economic fill fields, scans more hours, enriches wallets, ranks wallets, estimates PnL/alpha or studies copyability requires a new separately preregistered and human-approved scope.\n'''
+          (EVIDENCE/'R8A_RESEARCH_CONCLUSION.md').write_text(conclusion, encoding='utf-8')
+          PY
+      - name: Self-delete finalizer, regenerate exact manifest and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/r8a-evidence-finalizer.yml
+          python governance/regenerate_manifest.py --write
+          python -m unittest discover -s tests -v
+          python governance/validate_r8a_evidence.py
+          python governance/validate_repository.py
+          test ! -e .github/workflows/r8a-evidence-finalizer.yml
+          git add governance/REPOSITORY_MANIFEST.sha256 governance/validate_r8a_evidence.py tests/test_archive_inventory_r8a_evidence.py research/archive_inventory/r8
+          git diff --cached --check
+      - name: Commit and push canonical R8A evidence tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'evidence: attest canonical R8A modern wallet-index run'
+          git push origin HEAD:research/r8a-modern-wallet-index-evidence
