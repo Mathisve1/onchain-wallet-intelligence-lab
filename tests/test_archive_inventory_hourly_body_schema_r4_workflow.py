@@ -59,8 +59,9 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
             "assert approval['maximum_retries_per_request'] == 0",
             "assert release['dedicated_r4_role_operator_attested'] is True",
             "assert release['rerun_authorized'] is False",
-            "assert release['wallet_reconstruction_authorized'] is False",
-            "assert release['market_data_ingestion_authorized'] is False",
+            "'wallet_reconstruction_authorized'",
+            "'market_data_ingestion_authorized'",
+            "assert release[key] is False",
         ):
             self.assertIn(assertion, text)
 
