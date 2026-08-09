@@ -145,7 +145,17 @@ def main() -> int:
         assert release["s3_requests_executed"] == 0
         assert release["wallet_feature_rows_created"] == 0
         assert release["empirical_result"] is None
-    assert not ACTIVATION.exists()
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert RELEASE.exists()
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R9_RUN"
+        assert activation["canonical_implementation_merge_commit"] == "35afca156a99cc71360b338968cb842f9f31ab3b"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["release_consumed"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_feature_rows_created"] == 0
+        assert activation["empirical_result"] is None
 
     print("R9_IMPLEMENTATION_VALID")
     return 0
