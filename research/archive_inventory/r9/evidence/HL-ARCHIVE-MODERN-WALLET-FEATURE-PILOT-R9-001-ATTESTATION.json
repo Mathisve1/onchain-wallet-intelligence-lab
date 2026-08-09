@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "attestation_id": "HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001-ATTESTATION",
+  "pilot_id": "HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001",
+  "status": "ATTESTED_COMPLETE",
+  "canonical_lineage": {
+    "r9_preregistration_merge_commit": "62ce0009c3c4aad70d2a91f242a690cd26ace355",
+    "approval_merge_commit": "332aa535b0de19a18befb8529450ae88acf35762",
+    "implementation_merge_commit": "35afca156a99cc71360b338968cb842f9f31ab3b",
+    "release_candidate_merge_commit": "2ce37ca972907e55de30a4f1aed41ae3cd5b805b",
+    "activation_dispatch_commit": "42791333fccee2262aa0d35fea85997eeb0dc332"
+  },
+  "execution_identity": {
+    "workflow_run_id": 31336490854,
+    "workflow_run_attempt": 1,
+    "workflow_job_id": 93303097917,
+    "artifact_id": 9044483094,
+    "artifact_zip_sha256": "00c049def4ef2db334067f7f6ff00abaee7761fbc3de2e07dd742019119a3459"
+  },
+  "network_result": {
+    "successful_get_object_requests": 1,
+    "failed_get_object_requests": 0,
+    "retries_used": 0,
+    "redirects_followed": 0,
+    "compressed_bytes": 1517603,
+    "compressed_sha256": "928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105",
+    "decompressed_bytes": 7380378,
+    "top_level_block_record_count": 4345,
+    "valid_event_pair_count": 17516
+  },
+  "technical_result": "MODERN_WALLET_FEATURE_PIPELINE_COMPLETE",
+  "retained_feature_result": {
+    "row_count": 887,
+    "sha256": "e8bf51556d3d2e08d3d79c6b23a20f9d1ef76018364c701c06f6abf9d993fec5",
+    "bytes": 334216,
+    "sort_order": "WALLET_ADDRESS_LEXICOGRAPHIC_ASCENDING",
+    "sum_fill_count": 17516,
+    "sum_side_count": 17516,
+    "fields_only": [
+      "wallet_address",
+      "fill_count",
+      "first_fill_time",
+      "last_fill_time",
+      "distinct_coin_count",
+      "side_a_count",
+      "side_b_count",
+      "crossed_true_count",
+      "liquidation_associated_fill_count",
+      "duplicate_tid_count",
+      "sum_abs_px_times_sz_notional_proxy",
+      "sum_closed_pnl_fill_statistic"
+    ]
+  },
+  "direct_aggregate_observations": {
+    "crossed_true_count_total": 8758,
+    "liquidation_associated_fill_count_total": 0,
+    "duplicate_tid_count_total": 0,
+    "sum_abs_px_times_sz_notional_proxy_total": "41195607.73093746",
+    "sum_closed_pnl_fill_statistic_total": "-8612.81910500",
+    "global_first_fill_time_ms": 1753606210273,
+    "global_first_fill_time_utc": "2025-07-27T08:50:10.273Z",
+    "global_last_fill_time_ms": 1753606799895,
+    "global_last_fill_time_utc": "2025-07-27T08:59:59.895Z",
+    "observed_feature_time_span_ms": 589622
+  },
+  "claims_proven": {
+    "one_exact_authorized_object_was_retrieved_once": true,
+    "frozen_object_integrity_matched": true,
+    "modern_block_and_event_pair_counts_matched_preregistration": true,
+    "deterministic_per_wallet_feature_reducer_completed": true,
+    "feature_rows_are_unique_sorted_and_conserve_fill_and_side_counts": true,
+    "raw_fill_payloads_were_not_retained": true,
+    "modern_boundary_observed_feature_times_start_at_2025_07_27T08_50_10_273Z": true,
+    "modern_boundary_observed_feature_times_end_at_2025_07_27T08_59_59_895Z": true
+  },
+  "claims_not_proven": {
+    "boundary_fixture_is_historically_representative": false,
+    "canonical_cross_format_boundary_hour_is_complete": false,
+    "exact_legacy_modern_cutover_instant_is_proven": false,
+    "absence_of_fill_level_gap_or_overlap_is_proven": false,
+    "sum_closed_pnl_is_exact_account_return": false,
+    "sum_closed_pnl_is_wallet_ranking_score": false,
+    "notional_proxy_is_copyable_notional": false,
+    "single_fixture_features_measure_wallet_quality": false,
+    "wallet_ranking_is_authorized": false,
+    "candidate_shortlisting_is_authorized": false,
+    "copyability_analysis_is_authorized": false,
+    "pnl_or_alpha_analysis_is_authorized": false,
+    "historical_multi_hour_ingestion_is_authorized": false
+  },
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "all_trading_and_capital_authorizations_remain_false": true
+}
