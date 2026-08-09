@@ -12,6 +12,10 @@ BASE = ROOT / "research/archive_inventory/r5"
 APPROVAL = BASE / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json"
 APPROVAL_TEXT = BASE / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt"
 CONTRACT = BASE / "LEGACY_FORMAT_FINGERPRINT_R5_CONTRACT.json"
+IMPL = BASE / "R5_IMPLEMENTATION_CONTRACT.json"
+ROLE_REUSE = BASE / "R5_AWS_ROLE_REUSE_ANALYSIS.json"
+COLLECTOR = BASE / "collector.py"
+WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml"
 APPROVAL_SHA = "667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8"
 
 
@@ -38,9 +42,8 @@ class ArchiveLegacyFormatFingerprintR5ApprovalTests(unittest.TestCase):
         self.assertEqual(self.approval["expected_compressed_sha256"], target["expected_compressed_sha256"])
         self.assertEqual(self.approval["expected_decompressed_byte_count"], target["expected_decompressed_byte_count"])
         for key in (
-            "maximum_get_object_requests", "maximum_requests_per_object",
-            "maximum_total_compressed_bytes", "maximum_total_decompressed_bytes",
-            "maximum_runtime_seconds", "maximum_retries_per_request",
+            "maximum_get_object_requests", "maximum_requests_per_object", "maximum_total_compressed_bytes",
+            "maximum_total_decompressed_bytes", "maximum_runtime_seconds", "maximum_retries_per_request",
         ):
             self.assertEqual(self.approval[key], envelope[key], key)
         for key in (
@@ -63,23 +66,27 @@ class ArchiveLegacyFormatFingerprintR5ApprovalTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in self.approval["inference_authorizations"].values()))
         self.assertTrue(all(value is False for value in self.approval["trading_authorizations"].values()))
 
-    def test_no_runtime_artifact_exists_in_approval_snapshot(self) -> None:
-        for path in (
-            BASE / "collector.py",
-            BASE / "R5_IMPLEMENTATION_CONTRACT.json",
-            BASE / "R5_EXECUTION_RELEASE.json",
-            BASE / "R5_EXECUTION_RELEASE_CANONICALIZATION.json",
-            ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml",
-        ):
-            self.assertFalse(path.exists(), path)
+    def test_approval_snapshot_remains_inert_after_separate_implementation(self) -> None:
+        for path in (IMPL, ROLE_REUSE, COLLECTOR, WORKFLOW):
+            self.assertTrue(path.exists(), path)
+        impl = json.loads(IMPL.read_text(encoding="utf-8"))
+        reuse = json.loads(ROLE_REUSE.read_text(encoding="utf-8"))
+        self.assertEqual(impl["status"], "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION")
+        self.assertEqual(impl["approval_merge_commit"], "c22e28074ba2e95e1fe88912c364124e01eb0ff7")
+        self.assertEqual(impl["approval_text_sha256"], APPROVAL_SHA)
+        self.assertFalse(impl["execution_release_present"])
+        self.assertFalse(impl["execution_authorized"])
+        self.assertEqual(impl["s3_requests_executed"], 0)
+        self.assertFalse(reuse["aws_iam_mutation_performed"])
+        self.assertFalse((BASE / "R5_EXECUTION_RELEASE.json").exists())
+        self.assertFalse((BASE / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        self.assertFalse(self.approval["execution_authorized_by_this_record"])
+        self.assertTrue(all(value is False for value in self.approval["current_runtime_authority"].values()))
 
     def test_dedicated_approval_validator_passes(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(ROOT / "governance/validate_r5_approval.py")],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
+            [sys.executable, str(ROOT / "governance/validate_r5_approval.py")], cwd=ROOT,
+            check=False, capture_output=True, text=True,
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("R5_APPROVAL_VALID", completed.stdout)
