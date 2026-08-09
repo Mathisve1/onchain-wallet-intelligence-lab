@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "attestation_id": "ATTEST_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001",
+  "inventory_id": "HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001",
+  "release_id": "RELEASE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001",
+  "activation_merge_commit": "d2cc879ceb789c33ea7c6fe6ace17d1636de80ef",
+  "run_id": 31299905850,
+  "job_id": 93210902329,
+  "artifact_id": 9034170863,
+  "artifact_sha256": "1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88",
+  "artifact_size_bytes": 471178,
+  "terminal_status": "R3_HOURLY_METADATA_INVENTORY_PASS",
+  "technical_result": "THREE_HOURLY_FAMILIES_COMPLETE",
+  "request_attempt_count": 14,
+  "s3_http_request_count": 14,
+  "successful_request_count": 14,
+  "failed_request_count": 0,
+  "continuation_request_count": 11,
+  "total_entries": 12119,
+  "total_response_bytes": 3997072,
+  "runtime_seconds": 17.313515,
+  "retries_used": 0,
+  "pagination_followed": true,
+  "continuation_token_values_retained": false,
+  "http_redirects_followed": false,
+  "requester_pays_requested": true,
+  "object_body_requested": false,
+  "decompression_used": false,
+  "market_data_ingested": false,
+  "empirical_result": null,
+  "families": {
+    "node_fills_by_block": {
+      "status": "COMPLETE",
+      "page_count": 10,
+      "entry_count": 9070,
+      "earliest_path_hour_utc": "2025-07-27T08:00:00Z",
+      "latest_path_hour_utc": "2026-08-09T05:00:00Z",
+      "gap_status": "NO_GAP_CLAIM"
+    },
+    "node_fills": {
+      "status": "COMPLETE",
+      "page_count": 2,
+      "entry_count": 1507,
+      "earliest_path_hour_utc": "2025-05-25T14:00:00Z",
+      "latest_path_hour_utc": "2025-07-27T08:00:00Z",
+      "gap_status": "NO_GAP_CLAIM"
+    },
+    "node_trades": {
+      "status": "COMPLETE",
+      "page_count": 2,
+      "entry_count": 1542,
+      "earliest_path_hour_utc": "2025-03-22T10:00:00Z",
+      "latest_path_hour_utc": "2025-06-21T09:00:00Z",
+      "gap_status": "PROVEN_KEY_GAP",
+      "missing_internal_hour_count": 633,
+      "first_missing_internal_hour_utc": "2025-05-25T15:00:00Z",
+      "last_missing_internal_hour_utc": "2025-06-20T23:00:00Z"
+    }
+  },
+  "metadata_transition": {
+    "legacy_node_fills_latest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "modern_node_fills_by_block_earliest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "delta_hours": 0,
+    "relation": "METADATA_OVERLAP_OR_REVERSED_BOUNDARY",
+    "schema_or_body_continuity_inferred": false
+  },
+  "claims_not_proven": [
+    "object body readability",
+    "compression or schema validity",
+    "wallet reconstruction correctness",
+    "semantic equivalence between node_fills and node_fills_by_block bodies",
+    "alpha or profitability",
+    "copyability",
+    "live trading suitability"
+  ],
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "object_body_download_authorized_after_run": false,
+  "market_data_ingestion_authorized_after_run": false,
+  "trading_authorizations_after_run": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
