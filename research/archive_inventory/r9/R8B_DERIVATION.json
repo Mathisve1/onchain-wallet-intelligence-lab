@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "R9_FROM_R8B_AND_R8A_001",
+  "parent_r8b_commit": "b77debdf57cbe07bfa190fd40946f2fe897e3a33",
+  "parent_r8a_evidence_commit": "04c23127a553c53e9c3c9b80dabb4a9b7e61de61",
+  "r8b_boundary_rule": "CUTOVER_CENSOR_HOUR_20250727_08",
+  "boundary_fixture_canonical_history_eligible": false,
+  "why_reuse_boundary_object_for_r9_fixture": [
+    "R8A already proved exact content length, ETag, compressed SHA-256, decompressed byte count, block-record count and valid event-pair count for the object.",
+    "R8B excludes the hour from canonical historical continuity, so R9 explicitly uses it only to validate feature extraction mechanics and not to estimate wallet performance or population distributions.",
+    "Reusing the integrity-bound object avoids introducing a second unknown object fingerprint before the feature schema and aggregate invariants have been tested."
+  ],
+  "r9_may_claim_if_successful": [
+    "the selected fill fields can be parsed under the frozen strict rules",
+    "the exact known modern object can be reduced deterministically to the frozen per-wallet aggregate schema",
+    "the feature table satisfies the preregistered conservation and output-bound invariants"
+  ],
+  "r9_may_not_claim_even_if_successful": [
+    "the boundary hour is historically representative",
+    "the feature values identify good or bad traders",
+    "closedPnl aggregates are exact account returns",
+    "any wallet is copyable or profitable",
+    "the modern archive is complete for all market time",
+    "multi-hour performance or persistence"
+  ],
+  "new_network_authority_created": false,
+  "new_retention_authority_created": false,
+  "new_trading_authority_created": false
+}
