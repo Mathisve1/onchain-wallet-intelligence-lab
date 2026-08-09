@@ -124,7 +124,17 @@ class ArchiveHourlyBodySchemaR4Tests(unittest.TestCase):
         self.assertTrue((BASE / "collector.py").is_file())
         self.assertTrue((BASE / "R4_IMPLEMENTATION_CONTRACT.json").is_file())
         self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml").is_file())
-        self.assertFalse((BASE / "R4_EXECUTION_RELEASE.json").exists())
+        release_path = BASE / "R4_EXECUTION_RELEASE.json"
+        self.assertTrue(release_path.is_file())
+        release = self.load(release_path)
+        self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_DEDICATED_R4_ROLE_ATTESTATION")
+        self.assertFalse(release["single_workflow_dispatch_authorized"])
+        self.assertFalse(release["requester_pays_authorized"])
+        self.assertFalse(release["get_object_authorized"])
+        self.assertFalse(release["decompression_authorized"])
+        self.assertFalse(release["execution_ready"])
+        self.assertEqual(release["s3_requests_executed"], 0)
+        self.assertIsNone(release["empirical_result"])
         self.assertFalse((BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_approval_template_repeats_exact_frozen_boundary(self) -> None:

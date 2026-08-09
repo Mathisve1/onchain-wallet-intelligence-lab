@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-ARCHIVE-HOURLY-BODY-SCHEMA-PILOT-R4-001",
+  "checked_at_utc": "2026-08-09T08:24:00Z",
+  "pricing_status": "FRESH_AWS_PRICING_REVIEWED_ACCOUNT_SPECIFIC_FINAL_CHARGE_NOT_ASSERTED",
+  "sources": [
+    {
+      "title": "Amazon S3 pricing",
+      "publisher": "Amazon Web Services",
+      "source_type": "official_current_pricing_page",
+      "claim_used": "S3 charges requests by request type and currently provides the first 100 GB per month of internet data transfer out free, aggregated across AWS services and regions except China and GovCloud."
+    },
+    {
+      "title": "Using Requester Pays general purpose buckets for storage transfers and usage",
+      "publisher": "Amazon Web Services",
+      "source_type": "official_current_documentation",
+      "claim_used": "Requester Pays shifts request and data-download charges from the bucket owner to the requester."
+    }
+  ],
+  "r3_storage_class_evidence": {
+    "source_run_id": 31299905850,
+    "source_artifact_id": 9034170863,
+    "source_raw_result_sha256": "94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479",
+    "object_1_key": "node_fills/hourly/20250727/8.lz4",
+    "object_1_storage_class": "STANDARD",
+    "object_2_key": "node_fills_by_block/hourly/20250727/8.lz4",
+    "object_2_storage_class": "STANDARD",
+    "storage_class_retrieval_surcharge_inferred": false
+  },
+  "hard_execution_envelope": {
+    "maximum_get_object_requests": 2,
+    "maximum_requests_per_object": 1,
+    "maximum_total_compressed_bytes": 14243987,
+    "maximum_runtime_seconds": 180,
+    "maximum_retries_per_request": 0,
+    "maximum_one_time_budget_eur": 0.10,
+    "maximum_monthly_budget_eur": 0
+  },
+  "billing_notes": [
+    "The workflow will run from GitHub-hosted infrastructure, so S3-to-internet data transfer rules may apply if the account has already exhausted applicable free outbound transfer.",
+    "This evidence does not assert the account's remaining free transfer allowance, taxes, FX conversion or final invoice amount.",
+    "The approved request count and byte caps are the enforceable cost-control boundary; pricing evidence cannot expand them.",
+    "No additional request is authorized for pricing discovery or post-run billing inspection."
+  ],
+  "release_budget_decision": "RETAIN_USER_APPROVED_EUR_0_10_ONE_TIME_CEILING_WITH_EXACT_REQUEST_AND_BYTE_CAPS",
+  "execution_authorized_by_this_file": false,
+  "requests_executed": 0,
+  "empirical_result": null
+}
