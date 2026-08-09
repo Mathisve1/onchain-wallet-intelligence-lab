@@ -1,0 +1,32 @@
+{
+  "artifact_id": 9042152700,
+  "artifact_name": "r6a-successor-legacy-user-key-lexical-31328268134",
+  "artifact_size_bytes": 2360,
+  "files": {
+    "R6A_SUCCESSOR_FILES.sha256": {
+      "sha256": "083cb3a8f4f3fa68a8ffbd3e515b52084209349375c114bc3673af6f13578b99",
+      "size_bytes": 268
+    },
+    "r6a-successor-context.json": {
+      "sha256": "d0dd7e29d36ce19f64dd18ee674d2231d1dc63eb30aa9e31d411b18c70511e8b",
+      "size_bytes": 1618
+    },
+    "r6a-successor-result.json": {
+      "sha256": "96a1e866834d70324f59fc4563c4b591b29156c5e1cdf5894e0cb7b7bb4904bd",
+      "size_bytes": 2070
+    },
+    "r6a-successor.rc": {
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "size_bytes": 2
+    }
+  },
+  "independently_downloaded_artifact_zip_sha256": "928a5d378a63f2da62d44f939e56a99a578637faa10e52c54b3fdc1556d0d93f",
+  "internal_hash_ledger_verified": true,
+  "provider_and_independent_zip_digest_match": true,
+  "provider_artifact_zip_sha256": "928a5d378a63f2da62d44f939e56a99a578637faa10e52c54b3fdc1556d0d93f",
+  "schema_version": "1.0",
+  "verification_id": "VERIFY_R6A_SUCCESSOR_ARTIFACT_31328268134",
+  "verification_result": "PASS_EXACT_SUCCESSOR_ARTIFACT",
+  "workflow_job_id": 93282146403,
+  "workflow_run_id": 31328268134
+}
