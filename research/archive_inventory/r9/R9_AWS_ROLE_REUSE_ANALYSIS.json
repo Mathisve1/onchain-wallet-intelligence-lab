@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "R9_AWS_ROLE_REUSE_ANALYSIS_001",
+  "pilot_id": "HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001",
+  "status": "STATIC_ROLE_REUSE_ANALYSIS_NO_IAM_MUTATION",
+  "approval_merge_commit": "332aa535b0de19a18befb8529450ae88acf35762",
+  "reused_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4",
+  "trust_binding_model": "EXISTING_CANONICAL_MAIN_GITHUB_OIDC_TRUST_REUSED_WITH_TRUST_COMPATIBLE_WORKFLOW_NAME",
+  "workflow_name_required_for_reuse": "Hyperliquid Archive Hourly Body Schema Pilot R4",
+  "new_sts_preflight_required": false,
+  "reason_new_sts_preflight_not_required": "The same dedicated role was already successfully assumed by canonical R8A under the same trust-compatible workflow name and R9 uses the same exact S3 object while further restricting retained output to approved derived aggregates.",
+  "aws_iam_mutation_required": false,
+  "aws_iam_mutation_authorized": false,
+  "aws_iam_mutation_performed": false,
+  "persistent_role_scope_expanded": false,
+  "r9_session_scope": {
+    "policy_id": "ALLOW_GETOBJECT_EXACT_R9_MODERN_FIXTURE_ONLY",
+    "allowed_actions": ["s3:GetObject"],
+    "allowed_object_arns": ["arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"],
+    "list_bucket_allowed": false,
+    "get_object_version_allowed": false,
+    "get_object_attributes_allowed": false,
+    "put_object_allowed": false,
+    "delete_object_allowed": false,
+    "session_policy_strict_subset_of_persistent_role": true
+  },
+  "request_envelope": {
+    "maximum_get_object_requests": 1,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_content_length_required": true,
+    "exact_etag_required": true,
+    "exact_compressed_sha256_required": true,
+    "http_redirect_following_authorized": false
+  },
+  "current_runtime_authority": {
+    "workflow_dispatch": false,
+    "aws_oidc": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false
+  },
+  "network_requests_executed": 0,
+  "empirical_result": null
+}

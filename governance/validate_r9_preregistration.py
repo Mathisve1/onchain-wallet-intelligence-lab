@@ -10,6 +10,7 @@ DERIVATION = R9 / "R8B_DERIVATION.json"
 TEMPLATE = R9 / "HUMAN_APPROVAL_TEMPLATE_R9.md"
 STATUS = R9 / "APPROVAL_STATUS.md"
 APPROVAL = R9 / "approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001.json"
+IMPLEMENTATION = R9 / "R9_IMPLEMENTATION_CONTRACT.json"
 R8B = ROOT / "research/archive_inventory/r8b/CUTOVER_FORENSICS_R8B_CONTRACT.json"
 R8A_RESULT = ROOT / "research/archive_inventory/r8/evidence/run-31333421763/r8a-result.json"
 
@@ -176,9 +177,25 @@ def main() -> int:
     else:
         assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in status
 
-    assert not (R9 / "collector.py").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml").exists()
-    assert not (R9 / "R9_IMPLEMENTATION_CONTRACT.json").exists()
+    collector = R9 / "collector.py"
+    workflow = ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml"
+    if IMPLEMENTATION.exists():
+        impl = load(IMPLEMENTATION)
+        assert APPROVAL.exists()
+        assert impl["approval_merge_commit"] == "332aa535b0de19a18befb8529450ae88acf35762"
+        assert impl["status"] == "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION"
+        assert all(value is False for value in impl["current_runtime_authority"].values())
+        assert all(value is False for value in impl["downstream_authorizations"].values())
+        assert all(value is False for value in impl["trading_authorizations"].values())
+        assert impl["s3_requests_executed"] == 0
+        assert impl["wallet_feature_rows_created"] == 0
+        assert impl["empirical_result"] is None
+        assert collector.is_file()
+        assert workflow.is_file()
+    else:
+        assert not collector.exists()
+        assert not workflow.exists()
+
     assert not (R9 / "R9_EXECUTION_RELEASE.json").exists()
     assert not (R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
 
