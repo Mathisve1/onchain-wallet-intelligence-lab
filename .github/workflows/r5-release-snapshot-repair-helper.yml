@@ -1,0 +1,78 @@
+name: R5 Release Snapshot Repair Helper
+
+on:
+  push:
+    branches:
+      - research/r5-legacy-format-release-canonical
+    paths:
+      - .github/workflows/r5-release-snapshot-repair-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-release-snapshots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check out exact release-branch commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Make historical R5 snapshots release-aware and self-delete
+        shell: bash
+        env:
+          EXPECTED_REF: refs/heads/research/r5-legacy-format-release-canonical
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "${EXPECTED_REF}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "governance/validate_r5_preregistration.py": (
+                  '''    # Release/activation remain forbidden at this stage.\n    assert not RELEASE.exists(), RELEASE\n    assert not ACTIVATION.exists(), ACTIVATION\n''',
+                  '''    # A later release candidate may exist, but it must remain separately inert.\n    if RELEASE.exists():\n        release = load(RELEASE)\n        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"\n        assert release["preregistration_commit"] == EXPECTED_PREREG_MERGE\n        assert release["approval_merge_commit"] == EXPECTED_APPROVAL_MERGE\n        assert release["execution_ready"] is False\n        assert release["single_workflow_dispatch_authorized"] is False\n        assert release["requester_pays_authorized_by_candidate"] is False\n        assert release["get_object_authorized_by_candidate"] is False\n        assert release["s3_requests_executed"] == 0\n        assert release["empirical_result"] is None\n    assert not ACTIVATION.exists(), ACTIVATION\n''',
+              ),
+              "governance/validate_r5_approval.py": (
+                  '''    assert not RELEASE.exists(), RELEASE\n    assert not ACTIVATION.exists(), ACTIVATION\n''',
+                  '''    if RELEASE.exists():\n        release = load(RELEASE)\n        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"\n        assert release["preregistration_commit"] == PREREG_MERGE\n        assert release["approval_merge_commit"] == APPROVAL_MERGE\n        assert release["approval_text_sha256"] == APPROVAL_SHA\n        assert release["execution_ready"] is False\n        assert release["single_workflow_dispatch_authorized"] is False\n        assert release["requester_pays_authorized_by_candidate"] is False\n        assert release["get_object_authorized_by_candidate"] is False\n        assert release["s3_requests_executed"] == 0\n        assert release["empirical_result"] is None\n    assert not ACTIVATION.exists(), ACTIVATION\n''',
+              ),
+              "governance/validate_r5_implementation.py": (
+                  '''    # Implementation PR must remain non-release. Later validators may become release-aware explicitly.\n    assert not RELEASE.exists()\n    assert not ACTIVATION.exists()\n''',
+                  '''    # Immutable implementation remains inert even after a separate release candidate exists.\n    if RELEASE.exists():\n        release = load(RELEASE)\n        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"\n        assert release["implementation_reviewed_exact_head"] == "defc33f7316acee3640cbba360690f4fc969b13a"\n        assert release["implementation_commit"] == "40bc4d138c71a4367c9415982f58bcd24c5a57eb"\n        assert release["execution_ready"] is False\n        assert release["single_workflow_dispatch_authorized"] is False\n        assert release["requester_pays_authorized_by_candidate"] is False\n        assert release["get_object_authorized_by_candidate"] is False\n        assert release["s3_requests_executed"] == 0\n        assert release["empirical_result"] is None\n    assert not ACTIVATION.exists()\n''',
+              ),
+              "tests/test_archive_inventory_legacy_format_fingerprint_r5.py": (
+                  '''        self.assertFalse((R5 / "R5_EXECUTION_RELEASE.json").exists())\n        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n''',
+                  '''        release_path = R5 / "R5_EXECUTION_RELEASE.json"\n        if release_path.exists():\n            release = load(release_path)\n            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")\n            self.assertFalse(release["execution_ready"])\n            self.assertFalse(release["single_workflow_dispatch_authorized"])\n            self.assertEqual(release["s3_requests_executed"], 0)\n        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n''',
+              ),
+              "tests/test_archive_inventory_legacy_format_fingerprint_r5_approval.py": (
+                  '''        self.assertFalse((BASE / "R5_EXECUTION_RELEASE.json").exists())\n        self.assertFalse((BASE / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n        self.assertFalse(self.approval["execution_authorized_by_this_record"])\n''',
+                  '''        release_path = BASE / "R5_EXECUTION_RELEASE.json"\n        if release_path.exists():\n            release = json.loads(release_path.read_text(encoding="utf-8"))\n            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")\n            self.assertFalse(release["execution_ready"])\n            self.assertFalse(release["single_workflow_dispatch_authorized"])\n            self.assertEqual(release["s3_requests_executed"], 0)\n        self.assertFalse((BASE / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n        self.assertFalse(self.approval["execution_authorized_by_this_record"])\n''',
+              ),
+              "tests/test_archive_inventory_legacy_format_fingerprint_r5_implementation.py": (
+                  '''        self.assertFalse((R5 / "R5_EXECUTION_RELEASE.json").exists())\n        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n''',
+                  '''        release_path = R5 / "R5_EXECUTION_RELEASE.json"\n        if release_path.exists():\n            release = json.loads(release_path.read_text(encoding="utf-8"))\n            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")\n            self.assertEqual(release["implementation_commit"], "40bc4d138c71a4367c9415982f58bcd24c5a57eb")\n            self.assertFalse(release["execution_ready"])\n            self.assertFalse(release["single_workflow_dispatch_authorized"])\n            self.assertEqual(release["s3_requests_executed"], 0)\n        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())\n''',
+              ),
+          }
+
+          for relative, (old, new) in replacements.items():
+              path = Path(relative)
+              text = path.read_text(encoding="utf-8")
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected exactly one snapshot block in {relative}")
+              path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+          git rm .github/workflows/r5-release-snapshot-repair-helper.yml
+          python3 governance/regenerate_manifest.py --write
+          python3 governance/regenerate_manifest.py --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --exit-code >/dev/null && exit 1 || true
+          git commit -m "governance: make R5 snapshots release-aware and regenerate manifest"
+          git push origin HEAD:research/r5-legacy-format-release-canonical
