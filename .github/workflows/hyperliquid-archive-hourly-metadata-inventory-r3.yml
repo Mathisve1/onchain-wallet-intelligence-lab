@@ -1,0 +1,516 @@
+name: Hyperliquid Archive Hourly Metadata Inventory R3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-hourly-metadata-inventory-r3
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  EXPECTED_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+  PREREGISTRATION_COMMIT: ab4d42be02fe49d7f90f933317ef856f0322fd85
+  APPROVAL_MERGE_COMMIT: e562f3fbd8f1dac1b4d7e93eed2f5ee6b77c5da6
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001
+  APPROVAL_TEXT_SHA256: 3c3931133fb8b0dd322d7a296b7b70fca65dd341401a6eda2b6372938ed6cd10
+  EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  hourly-metadata-inventory-r3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main dispatch and checked-out identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed_head="$(git rev-parse HEAD)"
+          printf 'EVENT_NAME=%s\n' "${EVENT_NAME}"
+          printf 'DISPATCH_REF=%s\n' "${DISPATCH_REF}"
+          printf 'DISPATCH_SHA=%s\n' "${DISPATCH_SHA}"
+          printf 'CHECKED_OUT_HEAD=%s\n' "${observed_head}"
+
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" ]]; then
+            echo "::error title=R3 identity gate 41::Expected workflow_dispatch, observed ${EVENT_NAME}"
+            exit 41
+          fi
+          if [[ "${DISPATCH_REF}" != "refs/heads/main" ]]; then
+            echo "::error title=R3 identity gate 42::Expected refs/heads/main, observed ${DISPATCH_REF}"
+            exit 42
+          fi
+          if [[ ! "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=R3 identity gate 43::github.sha is not exactly 40 lowercase hexadecimal characters"
+            exit 43
+          fi
+          if [[ "${observed_head}" != "${DISPATCH_SHA}" ]]; then
+            echo "::error title=R3 identity gate 44::Checked-out HEAD ${observed_head} differs from github.sha ${DISPATCH_SHA}"
+            exit 44
+          fi
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove canonical implementation and release before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r3_implementation.py
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path('.')
+          base = root / 'research/archive_inventory/r3'
+          approval_text = base / 'approvals/APPROVE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001.txt'
+          approval = json.loads((base / 'approvals/APPROVE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001.json').read_text(encoding='utf-8'))
+          impl = json.loads((base / 'R3_IMPLEMENTATION_CONTRACT.json').read_text(encoding='utf-8'))
+          expected = os.environ['EXPECTED_IMPLEMENTATION_COMMIT']
+          release_path = root / os.environ['EXECUTION_RELEASE_PATH']
+
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['reviewed_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert approval['exact_approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['maximum_one_time_budget_eur'] == 0.10
+          assert approval['maximum_monthly_budget_eur'] == 0
+          assert approval['maximum_list_requests'] == 48
+          assert approval['maximum_pages_per_family'] == 16
+          assert approval['maximum_keys_per_request'] == 1000
+          assert approval['maximum_total_entries'] == 48000
+          assert approval['maximum_total_response_bytes'] == 33554432
+          assert approval['maximum_runtime_seconds'] == 300
+          assert approval['maximum_retries_per_request'] == 0
+          assert approval['pagination_authorized'] is True
+          assert approval['continuation_token_follow_authorized'] is True
+          assert approval['continuation_token_values_retained'] is False
+          assert approval['repeated_continuation_token_fails_closed'] is True
+          assert approval['http_redirect_following_authorized'] is False
+          assert approval['start_after_authorized'] is False
+          assert approval['delimiter_authorized'] is False
+          assert approval['target_bucket'] == 'hl-mainnet-node-data'
+          assert approval['signing_region'] == 'ap-northeast-1'
+          assert approval['prefixes'] == [
+              'node_fills_by_block/hourly/',
+              'node_fills/hourly/',
+              'node_trades/hourly/',
+          ]
+          assert approval['requester_pays_scope_approved'] is True
+          assert approval['list_objects_v2_scope_approved'] is True
+
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert impl['target_bucket'] == 'hl-mainnet-node-data'
+          assert impl['signing_region'] == 'ap-northeast-1'
+          assert impl['regional_virtual_hosted_endpoint'] == 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com'
+          assert impl['session_s3_policy'] == 'ALLOW_LISTBUCKET_EXACT_THREE_HOURLY_PREFIXES_MAX1000_ONLY'
+          assert impl['execution_release_required'] is True
+          assert impl['execution_release_present'] is False
+          assert impl['execution_authorized'] is False
+
+          if expected == 'PENDING_CANONICAL_IMPLEMENTATION_MERGE':
+              print('::error title=R3 release gate 45::Implementation is not yet canonical; no AWS authentication is allowed')
+              sys.exit(45)
+          assert re.fullmatch(r'[0-9a-f]{40}', expected)
+          assert release_path.is_file(), 'R3 execution release is absent'
+          release = json.loads(release_path.read_text(encoding='utf-8'))
+          assert release['release_id'] == 'RELEASE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001'
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R3_RUN'
+          assert release['implementation_commit'] == expected
+          assert release['preregistration_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert release['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert release['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['canonical_dispatch_sha_source'] == 'github.sha'
+          assert release['target_bucket'] == 'hl-mainnet-node-data'
+          assert release['signing_region'] == 'ap-northeast-1'
+          assert release['prefixes'] == [
+              'node_fills_by_block/hourly/',
+              'node_fills/hourly/',
+              'node_trades/hourly/',
+          ]
+          assert release['maximum_one_time_budget_eur'] == 0.10
+          assert release['maximum_monthly_budget_eur'] == 0
+          assert release['maximum_list_requests'] == 48
+          assert release['maximum_pages_per_family'] == 16
+          assert release['maximum_keys_per_request'] == 1000
+          assert release['maximum_total_entries'] == 48000
+          assert release['maximum_total_response_bytes'] == 33554432
+          assert release['maximum_runtime_seconds'] == 300
+          assert release['maximum_retries_per_request'] == 0
+          assert release['pagination_authorized'] is True
+          assert release['continuation_token_follow_authorized'] is True
+          assert release['continuation_token_values_retained'] is False
+          assert release['repeated_continuation_token_fails_closed'] is True
+          assert release['http_redirect_following_authorized'] is False
+          assert release['start_after_authorized'] is False
+          assert release['delimiter_authorized'] is False
+          assert release['requester_pays_authorized'] is True
+          assert release['list_objects_v2_authorized'] is True
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          for key in (
+              'get_object_authorized', 'head_object_authorized',
+              'get_object_attributes_authorized', 'range_get_authorized',
+              'list_object_versions_authorized', 'list_all_my_buckets_authorized',
+              'object_body_download_authorized', 'decompression_authorized',
+              'explorer_blocks_inventory_authorized', 'replica_cmds_inventory_authorized',
+              'market_data_ingestion_authorized', 'larger_300_request_inventory_authorized',
+          ):
+              assert release[key] is False
+          assert all(value is False for value in release['trading_authorizations'].values())
+          assert release['s3_requests_executed'] == 0
+          assert release['metadata_entries_observed'] == 0
+          assert release['empirical_result'] is None
+          PY
+
+      - name: Enforce R3 single-use release before AWS OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "${CURRENT_RUN_ATTEMPT}" != '1' ]]; then
+            echo "::error title=R3 single-use gate::Run attempt must be 1; re-runs are forbidden"
+            exit 51
+          fi
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current_run_id = int(os.environ['CURRENT_RUN_ID'])
+          url = (
+              f'https://api.github.com/repos/{repo}/actions/workflows/'
+              'hyperliquid-archive-hourly-metadata-inventory-r3.yml/runs'
+              '?event=workflow_dispatch&branch=main&per_page=100'
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'hl-hourly-metadata-r3-single-use-check',
+              },
+              method='GET',
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [
+              row for row in runs
+              if datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(timezone.utc) >= start
+          ]
+          assert len(eligible) == 1, 'R3 release is not single-use within its release window'
+          assert int(eligible[0]['id']) == current_run_id, 'a previous dispatch already consumed the R3 release'
+          assert eligible[0]['event'] == 'workflow_dispatch'
+          assert eligible[0]['head_branch'] == 'main'
+          PY
+
+      - name: Freeze pending R3 run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          context = {
+              'schema_version': '1.0',
+              'inventory_id': 'HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001',
+              'terminal_status': 'PENDING_AWS_OIDC',
+              'event_name': os.environ['EVENT_NAME'],
+              'dispatch_ref': os.environ['DISPATCH_REF'],
+              'dispatch_sha': os.environ['DISPATCH_SHA'],
+              'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'approval_id': os.environ['APPROVAL_ID'],
+              'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
+              'execution_release_id': release['release_id'],
+              'implementation_commit': release['implementation_commit'],
+              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+              'expected_role_arn': os.environ['EXPECTED_ROLE_ARN'],
+              'configure_aws_outcome': None,
+              'target_bucket': 'hl-mainnet-node-data',
+              'signing_region': 'ap-northeast-1',
+              'regional_endpoint': 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com',
+              'prefixes': [
+                  'node_fills_by_block/hourly/',
+                  'node_fills/hourly/',
+                  'node_trades/hourly/',
+              ],
+              'maximum_list_requests': 48,
+              'maximum_pages_per_family': 16,
+              'maximum_keys_per_request': 1000,
+              'maximum_total_entries': 48000,
+              'maximum_total_response_bytes': 33554432,
+              'maximum_runtime_seconds': 300,
+              'maximum_retries_per_request': 0,
+              'pagination_authorized': True,
+              'continuation_token_follow_authorized': True,
+              'continuation_token_values_retained': False,
+              'http_redirect_following_authorized': False,
+              'requester_pays_authorized_for_r3': True,
+              'list_objects_v2_authorized_for_r3': True,
+              'object_body_authorized': False,
+              'market_data_ingestion_authorized': False,
+          }
+          (Path(os.environ['RUNNER_TEMP']) / 'r3-metadata-context.json').write_text(
+              json.dumps(context, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Assume exact AWS role with R3-only session permissions
+        id: configure
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-metadata-canary
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveHourlyMetadataR3
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R3HourlyMetadataExactPrefixes","Effect":"Allow","Action":"s3:ListBucket","Resource":"arn:aws:s3:::hl-mainnet-node-data","Condition":{"StringLike":{"s3:prefix":["node_fills_by_block/hourly/*","node_fills/hourly/*","node_trades/hourly/*"]},"NumericLessThanEquals":{"s3:max-keys":"1000"}}}]}
+
+      - name: Execute bounded paginated R3 collector
+        if: steps.configure.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="${RUNNER_TEMP}/r3-metadata-result.json"
+          set +e
+          python research/archive_inventory/r3/collector.py "${result}" >/dev/null
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" >"${RUNNER_TEMP}/r3-metadata.rc"
+
+      - name: Record non-execution when AWS role assumption fails
+        if: steps.configure.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'NOT_RUN' >"${RUNNER_TEMP}/r3-metadata.rc"
+
+      - name: Finalize minimized R3 evidence
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          context_path = root / 'r3-metadata-context.json'
+          result_path = root / 'r3-metadata-result.json'
+          if context_path.is_file():
+              context = json.loads(context_path.read_text(encoding='utf-8'))
+              context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+              context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          else:
+              context = {
+                  'schema_version': '1.0',
+                  'inventory_id': 'HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001',
+                  'terminal_status': 'R3_PRE_OIDC_GATE_FAILED',
+                  'event_name': os.environ.get('EVENT_NAME'),
+                  'dispatch_ref': os.environ.get('DISPATCH_REF'),
+                  'dispatch_sha': os.environ.get('DISPATCH_SHA'),
+                  'checked_out_commit': None,
+                  'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+                  'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+                  'approval_id': os.environ.get('APPROVAL_ID'),
+                  'approval_text_sha256': os.environ.get('APPROVAL_TEXT_SHA256'),
+                  'execution_release_id': None,
+                  'implementation_commit': os.environ.get('EXPECTED_IMPLEMENTATION_COMMIT'),
+                  'configure_aws_outcome': os.environ.get('CONFIGURE_OUTCOME'),
+                  'target_bucket': 'hl-mainnet-node-data',
+                  'signing_region': 'ap-northeast-1',
+                  'regional_endpoint': 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com',
+                  'prefixes': [
+                      'node_fills_by_block/hourly/',
+                      'node_fills/hourly/',
+                      'node_trades/hourly/',
+                  ],
+                  'maximum_list_requests': 48,
+                  'maximum_pages_per_family': 16,
+                  'maximum_keys_per_request': 1000,
+                  'maximum_total_entries': 48000,
+                  'maximum_total_response_bytes': 33554432,
+                  'maximum_runtime_seconds': 300,
+                  'maximum_retries_per_request': 0,
+                  'pagination_authorized': True,
+                  'continuation_token_follow_authorized': True,
+                  'continuation_token_values_retained': False,
+                  'http_redirect_following_authorized': False,
+                  'requester_pays_authorized_for_r3': False,
+                  'list_objects_v2_authorized_for_r3': False,
+                  'object_body_authorized': False,
+                  'market_data_ingestion_authorized': False,
+              }
+              context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          if not result_path.is_file():
+              result = {
+                  'schema_version': '1.0',
+                  'inventory_id': 'HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001',
+                  'terminal_status': 'R3_NOT_EXECUTED',
+                  'technical_result': None,
+                  'terminal_failure_status': 'PRE_OIDC_OR_AWS_AUTHENTICATION_FAILURE',
+                  'request_attempt_count': 0,
+                  's3_http_request_count': 0,
+                  'successful_request_count': 0,
+                  'failed_request_count': 0,
+                  'continuation_request_count': 0,
+                  'total_entries': 0,
+                  'total_response_bytes': 0,
+                  'runtime_seconds': 0.0,
+                  'maximum_list_requests': 48,
+                  'maximum_pages_per_family': 16,
+                  'maximum_keys_per_request': 1000,
+                  'maximum_total_entries': 48000,
+                  'maximum_total_response_bytes': 33554432,
+                  'maximum_runtime_seconds': 300,
+                  'retries_used': 0,
+                  'pagination_followed': False,
+                  'continuation_token_values_retained': False,
+                  'repeated_continuation_token_fails_closed': True,
+                  'http_redirects_followed': False,
+                  'start_after_used': False,
+                  'delimiter_used': False,
+                  'signing_region': 'ap-northeast-1',
+                  'regional_endpoint': 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com',
+                  'requester_pays_requested': False,
+                  'object_body_requested': False,
+                  'decompression_used': False,
+                  'market_data_ingested': False,
+                  'empirical_result': None,
+                  'family_summaries': [],
+                  'transition_analysis': {
+                      'status': 'NOT_EXECUTED',
+                      'schema_or_body_continuity_inferred': False,
+                  },
+                  'observations': [],
+              }
+              result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          rc_path = root / 'r3-metadata.rc'
+          if not rc_path.exists():
+              rc_path.write_text('NOT_RUN\n', encoding='utf-8')
+          PY
+          cd "${RUNNER_TEMP}"
+          sha256sum r3-metadata-context.json r3-metadata-result.json r3-metadata.rc >R3_METADATA_FILES.sha256
+
+      - name: Upload minimized R3 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: hyperliquid-archive-hourly-metadata-r3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/r3-metadata-context.json
+            ${{ runner.temp }}/r3-metadata-result.json
+            ${{ runner.temp }}/r3-metadata.rc
+            ${{ runner.temp }}/R3_METADATA_FILES.sha256
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
+          overwrite: false
+
+      - name: Enforce exact successful R3 result
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          test "${CONFIGURE_OUTCOME}" = 'success'
+          test "$(cat "${RUNNER_TEMP}/r3-metadata.rc")" = '0'
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = json.loads((Path(os.environ['RUNNER_TEMP']) / 'r3-metadata-result.json').read_text(encoding='utf-8'))
+          assert result['terminal_status'] == 'R3_HOURLY_METADATA_INVENTORY_PASS'
+          assert result['technical_result'] in {
+              'THREE_HOURLY_FAMILIES_COMPLETE',
+              'THREE_HOURLY_FAMILIES_COMPLETE_OR_CENSORED',
+          }
+          assert 3 <= result['request_attempt_count'] <= 48
+          assert result['s3_http_request_count'] == result['request_attempt_count']
+          assert result['successful_request_count'] == result['request_attempt_count']
+          assert result['failed_request_count'] == 0
+          assert result['total_entries'] <= 48000
+          assert result['total_response_bytes'] <= 33554432
+          assert result['runtime_seconds'] <= 300
+          assert result['retries_used'] == 0
+          assert result['continuation_token_values_retained'] is False
+          assert result['repeated_continuation_token_fails_closed'] is True
+          assert result['http_redirects_followed'] is False
+          assert result['start_after_used'] is False
+          assert result['delimiter_used'] is False
+          assert result['signing_region'] == 'ap-northeast-1'
+          assert result['regional_endpoint'] == 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com'
+          assert result['requester_pays_requested'] is True
+          assert result['object_body_requested'] is False
+          assert result['decompression_used'] is False
+          assert result['market_data_ingested'] is False
+          assert result['empirical_result'] is None
+          assert len(result['family_summaries']) == 3
+          assert {row['family_status'] for row in result['family_summaries']} <= {'COMPLETE', 'CENSORED_BY_LIMIT'}
+          assert result['transition_analysis']['schema_or_body_continuity_inferred'] is False
+          PY
