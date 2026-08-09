@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "DERIVE_HL_ARCHIVE_R4_FROM_R3_001",
+  "r4_pilot_id": "HL-ARCHIVE-HOURLY-BODY-SCHEMA-PILOT-R4-001",
+  "source_r3_evidence_merge_commit": "98eca5b7b13b25aed3d11f006972acea2ee5c258",
+  "source_r3_run_id": 31299905850,
+  "source_r3_job_id": 93210902329,
+  "source_r3_artifact_id": 9034170863,
+  "source_r3_artifact_sha256": "1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88",
+  "source_r3_raw_result_sha256": "94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479",
+  "source_r3_technical_result": "THREE_HOURLY_FAMILIES_COMPLETE",
+  "source_r3_total_entries": 12119,
+  "metadata_transition": {
+    "legacy_family": "node_fills",
+    "legacy_latest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "modern_family": "node_fills_by_block",
+    "modern_earliest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "delta_hours": 0,
+    "schema_or_body_continuity_inferred_by_r3": false
+  },
+  "selected_objects": [
+    {
+      "dataset_family_id": "node_fills",
+      "key": "node_fills/hourly/20250727/8.lz4",
+      "size_bytes": 12726384,
+      "etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+      "last_modified_utc": "2025-07-28T17:06:55.000Z",
+      "selection_basis": "exact legacy terminal metadata hour"
+    },
+    {
+      "dataset_family_id": "node_fills_by_block",
+      "key": "node_fills_by_block/hourly/20250727/8.lz4",
+      "size_bytes": 1517603,
+      "etag": "\"60d4c1277f76651b5f04666bbe8d7594\"",
+      "last_modified_utc": "2025-07-27T10:02:31.000Z",
+      "selection_basis": "exact modern initial metadata hour and smallest observed modern object"
+    }
+  ],
+  "total_selected_compressed_bytes": 14243987,
+  "selection_is_empirical_body_result": false,
+  "body_readability_known": false,
+  "lz4_container_validity_known": false,
+  "schema_known": false,
+  "schema_equivalence_known": false,
+  "wallet_reconstruction_known": false,
+  "reason_code": "EXACT_SAME_HOUR_LEGACY_MODERN_BOUNDARY_MINIMIZES_OBJECT_COUNT_WHILE_MAXIMIZING_SCHEMA_TRANSITION_INFORMATION"
+}
