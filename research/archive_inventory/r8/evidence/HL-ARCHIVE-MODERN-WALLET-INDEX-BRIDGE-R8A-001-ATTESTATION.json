@@ -1,0 +1,70 @@
+{
+  "artifact_id": 9043584172,
+  "artifact_zip_sha256": "185037463a1eab27b35c5f8b6edad810a28bce599101e4d26734020717a392c8",
+  "attestation_id": "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001-ATTESTATION",
+  "bridge_comparison_sha256": "63e131e2b935436c6730921d06f7b54594b1c097697bede25e5ad8c92f12933a",
+  "canonical_dispatch_sha": "2f8237de806dcf149579aefc6ece1ae537ef7aeb",
+  "claims_not_authorized": {
+    "capital_allocation": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "historical_multi_hour_ingestion": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "market_data_ingestion": false,
+    "paper": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "shadow": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "claims_not_proven": {
+    "copyability": false,
+    "exact_fill_identity_across_legacy_and_modern_formats": false,
+    "full_schema_equivalence": false,
+    "one_wallet_equals_one_human_or_entity": false,
+    "performance_correctness": false,
+    "pnl_or_alpha": false,
+    "semantic_equivalence": false,
+    "temporal_subset_relation": false
+  },
+  "claims_proven": {
+    "cross_format_wallet_count_comparison_computed_from_retained_indexes": true,
+    "deterministic_sorted_wallet_index_retained": true,
+    "exact_modern_object_retrieved_once_with_frozen_integrity_guards": true,
+    "modern_block_record_count_exactly_4345": true,
+    "modern_event_pairs_reduced_to_address_plus_fill_count": true,
+    "unique_wallet_count_exactly_887": true,
+    "valid_event_pair_count_exactly_17516": true
+  },
+  "compressed_bytes": 1517603,
+  "compressed_sha256": "928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105",
+  "decompressed_bytes": 7380378,
+  "object_key": "node_fills_by_block/hourly/20250727/8.lz4",
+  "pilot_id": "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001",
+  "release_consumed": true,
+  "request_attempt_count": 1,
+  "research_conclusion": "MODERN_WALLET_INDEX_BRIDGE_COMPLETE",
+  "retries_used": 0,
+  "schema_version": "1.0",
+  "successful_request_count": 1,
+  "wallet_index_summary": {
+    "sum_fill_count": 17516,
+    "top_level_block_record_count": 4345,
+    "unique_wallet_count": 887,
+    "valid_event_pair_count": 17516,
+    "wallet_index_bytes": 70343,
+    "wallet_index_fields_only": [
+      "wallet_address",
+      "fill_count"
+    ],
+    "wallet_index_format": "UTF8_NDJSON",
+    "wallet_index_sha256": "e7f208c7e4150e88ae98daab055d183739140698a4f6e310e37fc814f463013e",
+    "wallet_index_sort_order": "LEXICOGRAPHIC_ASCENDING"
+  },
+  "workflow_job_id": 93295166161,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31333421763
+}
