@@ -1,0 +1,205 @@
+{
+  "copyability_analysis_performed": false,
+  "empirical_result": null,
+  "entity_clustering_performed": false,
+  "exact_content_length_required": true,
+  "failed_request_count": 0,
+  "http_redirects_followed": false,
+  "if_match_etag_required": true,
+  "market_data_ingested": false,
+  "observations": [
+    {
+      "compressed_object_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+      "compressed_object_size_bytes": 12726384,
+      "dataset_family_id": "node_fills",
+      "decompressed_byte_count": 62169139,
+      "decompression_status": "LZ4_FRAME_DECOMPRESSED",
+      "expected_content_length": 12726384,
+      "expected_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+      "failure_class": "UTF8_NDJSON_OBJECT_SCHEMA_UNRESOLVED",
+      "field_path_names": [],
+      "field_path_presence_counts": {},
+      "field_path_type_sets": {},
+      "http_status": 200,
+      "key": "node_fills/hourly/20250727/8.lz4",
+      "lz4_frame_recognized": true,
+      "maximum_observed_nesting_depth": 0,
+      "observed_content_length": 12726384,
+      "observed_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+      "record_count": 0,
+      "request_charged": "requester",
+      "request_index": 1,
+      "role": "LEGACY_BOUNDARY_OBJECT",
+      "schema_status": "BODY_READABLE_SCHEMA_UNRESOLVED",
+      "status": "OBJECT_PROCESSED",
+      "top_level_json_type": null
+    },
+    {
+      "compressed_object_sha256": "928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105",
+      "compressed_object_size_bytes": 1517603,
+      "dataset_family_id": "node_fills_by_block",
+      "decompressed_byte_count": 7380378,
+      "decompression_status": "LZ4_FRAME_DECOMPRESSED",
+      "expected_content_length": 1517603,
+      "expected_etag": "\"60d4c1277f76651b5f04666bbe8d7594\"",
+      "failure_class": null,
+      "field_path_names": [
+        "/block_number",
+        "/block_time",
+        "/events",
+        "/events/*",
+        "/events/*/*",
+        "/events/*/*/builder",
+        "/events/*/*/builderFee",
+        "/events/*/*/cloid",
+        "/events/*/*/closedPnl",
+        "/events/*/*/coin",
+        "/events/*/*/crossed",
+        "/events/*/*/dir",
+        "/events/*/*/fee",
+        "/events/*/*/feeToken",
+        "/events/*/*/hash",
+        "/events/*/*/oid",
+        "/events/*/*/px",
+        "/events/*/*/side",
+        "/events/*/*/startPosition",
+        "/events/*/*/sz",
+        "/events/*/*/tid",
+        "/events/*/*/time",
+        "/local_time"
+      ],
+      "field_path_presence_counts": {
+        "/block_number": 4345,
+        "/block_time": 4345,
+        "/events": 4345,
+        "/events/*": 946,
+        "/events/*/*": 946,
+        "/events/*/*/builder": 111,
+        "/events/*/*/builderFee": 108,
+        "/events/*/*/cloid": 927,
+        "/events/*/*/closedPnl": 946,
+        "/events/*/*/coin": 946,
+        "/events/*/*/crossed": 946,
+        "/events/*/*/dir": 946,
+        "/events/*/*/fee": 946,
+        "/events/*/*/feeToken": 946,
+        "/events/*/*/hash": 946,
+        "/events/*/*/oid": 946,
+        "/events/*/*/px": 946,
+        "/events/*/*/side": 946,
+        "/events/*/*/startPosition": 946,
+        "/events/*/*/sz": 946,
+        "/events/*/*/tid": 946,
+        "/events/*/*/time": 946,
+        "/local_time": 4345
+      },
+      "field_path_type_sets": {
+        "/block_number": [
+          "integer"
+        ],
+        "/block_time": [
+          "string"
+        ],
+        "/events": [
+          "array"
+        ],
+        "/events/*": [
+          "array"
+        ],
+        "/events/*/*": [
+          "object",
+          "string"
+        ],
+        "/events/*/*/builder": [
+          "string"
+        ],
+        "/events/*/*/builderFee": [
+          "string"
+        ],
+        "/events/*/*/cloid": [
+          "string"
+        ],
+        "/events/*/*/closedPnl": [
+          "string"
+        ],
+        "/events/*/*/coin": [
+          "string"
+        ],
+        "/events/*/*/crossed": [
+          "bool"
+        ],
+        "/events/*/*/dir": [
+          "string"
+        ],
+        "/events/*/*/fee": [
+          "string"
+        ],
+        "/events/*/*/feeToken": [
+          "string"
+        ],
+        "/events/*/*/hash": [
+          "string"
+        ],
+        "/events/*/*/oid": [
+          "integer"
+        ],
+        "/events/*/*/px": [
+          "string"
+        ],
+        "/events/*/*/side": [
+          "string"
+        ],
+        "/events/*/*/startPosition": [
+          "string"
+        ],
+        "/events/*/*/sz": [
+          "string"
+        ],
+        "/events/*/*/tid": [
+          "integer"
+        ],
+        "/events/*/*/time": [
+          "integer"
+        ],
+        "/local_time": [
+          "string"
+        ]
+      },
+      "http_status": 200,
+      "key": "node_fills_by_block/hourly/20250727/8.lz4",
+      "lz4_frame_recognized": true,
+      "maximum_observed_nesting_depth": 4,
+      "observed_content_length": 1517603,
+      "observed_etag": "\"60d4c1277f76651b5f04666bbe8d7594\"",
+      "record_count": 4345,
+      "request_charged": "requester",
+      "request_index": 2,
+      "role": "MODERN_BOUNDARY_OBJECT",
+      "schema_status": "FULL_SCHEMA_PARSED",
+      "status": "OBJECT_PROCESSED",
+      "top_level_json_type": "object"
+    }
+  ],
+  "observed_at_utc": "2026-08-09T12:41:58.507255Z",
+  "payload_values_retained": false,
+  "pilot_id": "HL-ARCHIVE-HOURLY-BODY-SCHEMA-PILOT-R4-001",
+  "pnl_or_alpha_analysis_performed": false,
+  "raw_compressed_object_persisted": false,
+  "raw_decompressed_payload_retained": false,
+  "record_payload_retained": false,
+  "request_attempt_count": 2,
+  "requester_pays_requested": true,
+  "retries_used": 0,
+  "runtime_seconds": 25.73558,
+  "s3_http_request_count": 2,
+  "schema_comparison_class": "SCHEMA_UNRESOLVED",
+  "schema_version": "1.0",
+  "semantic_equivalence_inferred": false,
+  "successful_request_count": 2,
+  "technical_result": "TWO_OBJECT_BODY_FORMAT_UNRESOLVED",
+  "terminal_status": "R4_BODY_SCHEMA_PILOT_COMPLETE",
+  "total_compressed_bytes": 14243987,
+  "total_decompressed_bytes": 69549517,
+  "wallet_addresses_retained_from_body": false,
+  "wallet_reconstruction_performed": false
+}
