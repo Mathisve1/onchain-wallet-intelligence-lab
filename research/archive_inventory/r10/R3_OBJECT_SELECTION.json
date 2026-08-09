@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "selection_id": "HL-ARCHIVE-POST-BOUNDARY-SIX-HOUR-SELECTION-R10-001",
+  "source_inventory_id": "HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001",
+  "source_r3_run_id": 31299905850,
+  "source_r3_job_id": 93210902329,
+  "source_r3_artifact_id": 9034170863,
+  "source_r3_artifact_sha256": "1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88",
+  "source_r3_raw_result_sha256": "94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479",
+  "source_r3_family_status": "COMPLETE",
+  "source_r3_modern_family_entry_count": 9070,
+  "source_r3_modern_family_missing_internal_hour_count": 0,
+  "parent_r8b_cutover_commit": "b77debdf57cbe07bfa190fd40946f2fe897e3a33",
+  "parent_r9_evidence_commit": "bdbcb94305670beda4cf5629951ee8c9e41c7495",
+  "canonical_cutover_rule": {
+    "legacy_history_latest_eligible_path_hour_utc": "2025-07-27T07:00:00Z",
+    "censored_shared_path_hour_utc": "2025-07-27T08:00:00Z",
+    "modern_history_earliest_eligible_path_hour_utc": "2025-07-27T09:00:00Z"
+  },
+  "selection_purpose": "FIRST_POST_BOUNDARY_CROSS_OBJECT_FEATURE_AGGREGATION_MECHANICS_PILOT_ONLY",
+  "selection_rule": "EXACT_FIRST_SIX_CONTIGUOUS_R3_PROVEN_MODERN_PATH_HOURS_AFTER_CENSORED_BOUNDARY",
+  "window_start_utc": "2025-07-27T09:00:00Z",
+  "window_end_exclusive_utc": "2025-07-27T15:00:00Z",
+  "selected_hour_count": 6,
+  "selected_objects": [
+    {
+      "path_hour_utc": "2025-07-27T09:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/9.lz4",
+      "size_bytes": 18147822,
+      "etag": "\"5a9941a240118a57f77a4c3ee95b8430-3\"",
+      "last_modified": "2025-07-27T11:02:31.000Z",
+      "storage_class": "STANDARD"
+    },
+    {
+      "path_hour_utc": "2025-07-27T10:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/10.lz4",
+      "size_bytes": 21349239,
+      "etag": "\"cb25fba5dc3be80fd8c46dde03144655-3\"",
+      "last_modified": "2025-07-27T12:02:29.000Z",
+      "storage_class": "STANDARD"
+    },
+    {
+      "path_hour_utc": "2025-07-27T11:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/11.lz4",
+      "size_bytes": 17582600,
+      "etag": "\"758da733bb2d3913d0fdd8088b6fb63d-3\"",
+      "last_modified": "2025-07-27T12:53:30.000Z",
+      "storage_class": "STANDARD"
+    },
+    {
+      "path_hour_utc": "2025-07-27T12:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/12.lz4",
+      "size_bytes": 21672141,
+      "etag": "\"d6ee46b1bdfad4026e21d4285ed0cbc5-3\"",
+      "last_modified": "2025-07-27T14:02:44.000Z",
+      "storage_class": "STANDARD"
+    },
+    {
+      "path_hour_utc": "2025-07-27T13:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/13.lz4",
+      "size_bytes": 20840630,
+      "etag": "\"c3c9db0101ff278b5ced13ab278a2b85-3\"",
+      "last_modified": "2025-07-27T15:02:54.000Z",
+      "storage_class": "STANDARD"
+    },
+    {
+      "path_hour_utc": "2025-07-27T14:00:00Z",
+      "key": "node_fills_by_block/hourly/20250727/14.lz4",
+      "size_bytes": 21407266,
+      "etag": "\"3c6ab944be1ed8bd12932eb390267a21-3\"",
+      "last_modified": "2025-07-27T16:03:00.000Z",
+      "storage_class": "STANDARD"
+    }
+  ],
+  "aggregate_selected_compressed_bytes": 120999698,
+  "maximum_selected_object_size_bytes": 21672141,
+  "all_selected_storage_class_standard": true,
+  "selection_contiguous_by_path_hour": true,
+  "selection_includes_censored_boundary_hour": false,
+  "selection_derived_without_new_s3_request": true,
+  "new_s3_requests_executed": 0,
+  "market_data_ingested": false,
+  "wallet_ranking_performed": false,
+  "empirical_result": null
+}
