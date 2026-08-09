@@ -121,9 +121,24 @@ def main() -> int:
     assert release["decompressed_bytes_processed"] == 0
     assert release["empirical_result"] is None
 
-    assert not ACTIVATION.exists(), "release candidate must not self-create canonical activation"
     workflow = (ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml").read_text(encoding="utf-8")
-    assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["release_id"] == release["release_id"]
+        assert activation["release_candidate_path"] == "research/archive_inventory/r4/R4_EXECUTION_RELEASE.json"
+        assert activation["release_candidate_immutable"] is True
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN"
+        assert activation["implementation_commit"] == IMPLEMENTATION_COMMIT
+        assert activation["preflight_evidence_merge_commit"] == "a91f0849e8cf14b6924da73ca2b72595deab5d8d"
+        assert activation["preflight_run_id"] == 31312067367
+        assert activation["preflight_s3_requests_executed"] == 0
+        assert activation["dedicated_r4_role_independently_verified"] is True
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["execution_ready"] is True
+        assert f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION_COMMIT}" in workflow
+    else:
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
     assert "R4 release gate 45" in workflow
 
     print("R4_RELEASE_CANDIDATE_VALID")
