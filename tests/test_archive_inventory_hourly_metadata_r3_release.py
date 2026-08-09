@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import unittest
@@ -65,13 +66,17 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertFalse(r["start_after_authorized"])
         self.assertFalse(r["delimiter_authorized"])
 
-    def test_release_candidate_is_inert_until_separate_activation(self) -> None:
+    def test_release_candidate_remains_byte_immutable_and_inert_after_activation(self) -> None:
         r = self.load(RELEASE)
+        self.assertEqual(
+            hashlib.sha256(RELEASE.read_bytes()).hexdigest(),
+            "c64719a8e9b8a82a361dcc7e4b03c12fba8027cd8d1e72bfc05487a2ef6ad55b",
+        )
         self.assertTrue(r["activation_required"])
         self.assertFalse(r["activation_record_present"])
         self.assertIsNone(r["canonical_release_merge_commit"])
         self.assertIsNone(r["single_use_window_start_utc"])
-        self.assertFalse(ACTIVATION.exists())
+        self.assertTrue(ACTIVATION.exists())
         self.assertTrue(r["requester_pays_scope_authorized_after_activation"])
         self.assertTrue(r["list_objects_v2_scope_authorized_after_activation"])
         self.assertTrue(r["single_workflow_dispatch_authorized_after_activation"])
@@ -83,6 +88,11 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertEqual(r["s3_requests_executed"], 0)
         self.assertEqual(r["metadata_entries_observed"], 0)
         self.assertIsNone(r["empirical_result"])
+
+        a = self.load(ACTIVATION)
+        self.assertEqual(a["release_candidate_path"], "research/archive_inventory/r3/R3_EXECUTION_RELEASE.json")
+        self.assertTrue(a["release_candidate_immutable"])
+        self.assertEqual(a["release_merge_commit"], "6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5")
 
     def test_forbidden_capabilities_and_trading_remain_closed(self) -> None:
         r = self.load(RELEASE)
@@ -107,21 +117,22 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertEqual(impl["s3_requests_executed"], 0)
         self.assertEqual(impl["metadata_entries_observed"], 0)
 
-    def test_workflow_still_fails_closed_after_release_candidate_merge(self) -> None:
+    def test_current_workflow_uses_separate_activation_overlay(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
-        self.assertIn("Implementation is not yet canonical; no AWS authentication is allowed", text)
+        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: 3b1dd0df4c5194875e22c1b790e0b41961313aa8", text)
+        self.assertIn("EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json", text)
+        self.assertIn("RELEASE_CANDIDATE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json", text)
         self.assertLess(
             text.index("Prove canonical implementation and release before AWS OIDC"),
             text.index("Assume exact AWS role with R3-only session permissions"),
         )
 
-    def test_status_records_canonical_impl_but_inert_release_candidate(self) -> None:
+    def test_status_records_canonical_release_and_activation_review(self) -> None:
         status = (ROOT / "research/archive_inventory/STATUS.md").read_text(encoding="utf-8")
-        self.assertIn("R3_RELEASE_CANDIDATE_UNDER_REVIEW_NO_EXECUTION", status)
-        self.assertIn("canonical implementation merge: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`", status)
-        self.assertIn("activation record present: `false`", status)
-        self.assertIn("workflow therefore execution-capable after release-candidate merge alone: `false`", status)
+        self.assertIn("R3_CANONICAL_ACTIVATION_UNDER_REVIEW_NO_EXECUTION", status)
+        self.assertIn("canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`", status)
+        self.assertIn("activation anchor commit: `4bc99701f6a24a045c84b205963685a2fe8c3122`", status)
+        self.assertIn("single-use window start: `2026-08-09T06:38:46Z`", status)
         self.assertIn("R3 S3 requests executed / entries observed: `0 / 0`", status)
 
     def test_release_validator_passes(self) -> None:

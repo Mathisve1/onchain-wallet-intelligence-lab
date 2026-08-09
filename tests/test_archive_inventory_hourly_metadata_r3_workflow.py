@@ -23,10 +23,11 @@ class ArchiveHourlyMetadataR3WorkflowTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", text)
         self.assertNotIn("reviewed_commit:", text)
 
-    def test_implementation_and_release_gate_precede_oidc(self) -> None:
+    def test_implementation_and_activation_overlay_gate_precede_oidc(self) -> None:
         text = self.text()
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
-        self.assertIn("R3_EXECUTION_RELEASE.json", text)
+        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: 3b1dd0df4c5194875e22c1b790e0b41961313aa8", text)
+        self.assertIn("EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json", text)
+        self.assertIn("RELEASE_CANDIDATE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json", text)
         self.assertLess(
             text.index("Prove canonical implementation and release before AWS OIDC"),
             text.index("Assume exact AWS role with R3-only session permissions"),
@@ -35,7 +36,7 @@ class ArchiveHourlyMetadataR3WorkflowTests(unittest.TestCase):
             text.index("Enforce R3 single-use release before AWS OIDC"),
             text.index("Assume exact AWS role with R3-only session permissions"),
         )
-        self.assertIn("Implementation is not yet canonical; no AWS authentication is allowed", text)
+        self.assertIn("RELEASED_FOR_EXACTLY_ONE_CANONICAL_R3_RUN", text)
 
     def test_oidc_session_is_exact_three_prefix_list_only(self) -> None:
         text = self.text()
@@ -73,6 +74,7 @@ class ArchiveHourlyMetadataR3WorkflowTests(unittest.TestCase):
         self.assertIn("Run attempt must be 1; re-runs are forbidden", text)
         self.assertIn("?event=workflow_dispatch&branch=main&per_page=100", text)
         self.assertIn("a previous dispatch already consumed the R3 release", text)
+        self.assertIn("single_use_window_start_utc", text)
         self.assertLess(
             text.index("Run attempt must be 1; re-runs are forbidden"),
             text.index("Assume exact AWS role with R3-only session permissions"),
