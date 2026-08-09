@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "anchor_id": "HL-ARCHIVE-R4-ROLE-STS-PREFLIGHT-RELEASE-ANCHOR-001",
+  "preflight_id": "HL-ARCHIVE-R4-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "preflight_implementation_merge_commit": "3b0a1ae634288646f3757493d4e90258bae21421",
+  "role_attestation_merge_commit": "c45527941dea7d152e332327ebd0593dc2413bea",
+  "purpose": "IMMUTABLE_TIMESTAMP_ANCHOR_ONLY",
+  "execution_authorized_by_this_file": false,
+  "single_workflow_dispatch_authorized": false,
+  "sts_get_caller_identity_authorized": false,
+  "s3_requests_authorized": false,
+  "object_body_download_authorized": false,
+  "body_execution_activation_authorized": false,
+  "requests_executed": 0,
+  "empirical_result": null
+}
