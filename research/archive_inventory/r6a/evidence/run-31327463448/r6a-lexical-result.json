@@ -1,0 +1,18 @@
+{
+  "compressed_bytes": 0,
+  "decompressed_bytes": 0,
+  "failed_request_count": 0,
+  "failure_class": "PRE_OIDC_OR_COLLECTOR_EVIDENCE_MISSING",
+  "leading_string_values_retained": false,
+  "lexical_aggregates": null,
+  "payload_values_retained": false,
+  "pilot_id": "HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001",
+  "request_attempt_count": 0,
+  "research_conclusion": "R6A_TRANSPORT_OR_INTEGRITY_FAIL",
+  "s3_http_request_count": 0,
+  "schema_version": "1.0",
+  "successful_request_count": 0,
+  "technical_result": "R6A_TRANSPORT_OR_INTEGRITY_FAIL",
+  "terminal_status": "R6A_TRANSPORT_OR_INTEGRITY_FAIL",
+  "wallet_addresses_retained": false
+}

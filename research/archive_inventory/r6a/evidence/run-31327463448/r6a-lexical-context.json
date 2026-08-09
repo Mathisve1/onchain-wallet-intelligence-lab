@@ -1,0 +1,9 @@
+{
+  "configure_aws_outcome": "skipped",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "87d326e80ccc0820696a7fe479190ccade4c69e8",
+  "event_name": "workflow_dispatch",
+  "pilot_id": "HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001",
+  "schema_version": "1.0",
+  "terminal_status": "PRE_OIDC_GATE_FAILED"
+}
