@@ -1,0 +1,448 @@
+name: Hyperliquid Archive Hourly Body Schema Pilot R4
+run-name: R7 bounded wallet-index reconstruction
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-wallet-index-r7
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R7_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+  PREREGISTRATION_COMMIT: 795281b2992466785ba48314d59feb61ac0b3aef
+  APPROVAL_MERGE_COMMIT: 65a7b53796231b3aaea4c1dc1b41aa847b4ea3ba
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001
+  APPROVAL_TEXT_SHA256: 43f32634859eb39e4b1e464276f9721ed4ef8bcc30161f1f301f82e0312042a6
+  RELEASE_CANDIDATE_PATH: research/archive_inventory/r7/R7_EXECUTION_RELEASE.json
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r7/R7_EXECUTION_RELEASE_CANONICALIZATION.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  wallet-index-r7:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main dispatch identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed_head="$(git rev-parse HEAD)"
+          test "${EVENT_NAME}" = "workflow_dispatch"
+          test "${DISPATCH_REF}" = "refs/heads/main"
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "${observed_head}" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove canonical R7 implementation and active release before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r7_preregistration.py
+          python governance/validate_r7_approval.py
+          python governance/validate_r7_implementation.py
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path('.')
+          r7 = root / 'research/archive_inventory/r7'
+          approval_text = r7 / 'approvals/APPROVE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001.txt'
+          approval = json.loads((r7 / 'approvals/APPROVE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001.json').read_text(encoding='utf-8'))
+          impl = json.loads((r7 / 'R7_IMPLEMENTATION_CONTRACT.json').read_text(encoding='utf-8'))
+          candidate_path = root / os.environ['RELEASE_CANDIDATE_PATH']
+          activation_path = root / os.environ['EXECUTION_RELEASE_PATH']
+          assert candidate_path.is_file(), 'R7 inert release candidate is absent'
+          assert activation_path.is_file(), 'R7 active execution release is absent'
+          candidate = json.loads(candidate_path.read_text(encoding='utf-8'))
+          release = json.loads(activation_path.read_text(encoding='utf-8'))
+
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['reviewed_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert approval['exact_approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(value is False for value in approval['current_runtime_authority'].values())
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(value is False for value in impl['current_runtime_authority'].values())
+
+          assert candidate['release_id'] == 'RELEASE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001'
+          assert candidate['status'] == 'RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION'
+          assert candidate['execution_ready'] is False
+          assert candidate['single_workflow_dispatch_authorized'] is False
+          assert candidate['preregistration_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert candidate['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert candidate['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+
+          assert release['release_id'] == candidate['release_id']
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R7_RUN'
+          assert release['candidate_sha256'] == hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert re.fullmatch(r'[0-9a-f]{40}', release['canonical_implementation_merge_commit'])
+
+          bindings = release['implementation_byte_binding']
+          for field, path in {
+              'implementation_contract_sha256': r7 / 'R7_IMPLEMENTATION_CONTRACT.json',
+              'role_reuse_analysis_sha256': r7 / 'R7_AWS_ROLE_REUSE_ANALYSIS.json',
+              'collector_sha256': r7 / 'collector.py',
+              'workflow_sha256': root / '.github/workflows/hyperliquid-archive-wallet-index-r7.yml',
+              'implementation_validator_sha256': root / 'governance/validate_r7_implementation.py',
+          }.items():
+              assert bindings[field] == hashlib.sha256(path.read_bytes()).hexdigest(), field
+
+          for value in (candidate, release):
+              assert value['target_bucket'] == 'hl-mainnet-node-data'
+              assert value['signing_region'] == 'ap-northeast-1'
+              assert value['object_key'] == 'node_fills/hourly/20250727/8.lz4'
+              assert value['object_size_bytes'] == 12726384
+              assert value['object_etag'] == '"b21cdc16a4ec69d9c5b72c0c27ff148d-2"'
+              assert value['expected_compressed_sha256'] == 'f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622'
+              assert value['expected_decompressed_byte_count'] == 62169139
+              assert value['expected_nonempty_record_count'] == 162815
+              assert value['maximum_one_time_budget_eur'] == 0.10
+              assert value['maximum_monthly_budget_eur'] == 0
+              assert value['maximum_get_object_requests'] == 1
+              assert value['maximum_requests_per_object'] == 1
+              assert value['maximum_total_compressed_bytes'] == 12726384
+              assert value['maximum_total_decompressed_bytes'] == 134217728
+              assert value['maximum_runtime_seconds'] == 120
+              assert value['maximum_retries_per_request'] == 0
+              assert value['wallet_index_entry_cap'] == 162815
+              assert value['wallet_index_output_byte_cap'] == 16777216
+              assert value['retained_wallet_index_fields_only'] == ['wallet_address', 'fill_count']
+              assert value['wallet_address_retention_authorized'] is True
+              assert value['per_wallet_fill_count_retention_authorized'] is True
+              assert value['raw_compressed_object_retention_authorized'] is False
+              assert value['raw_decompressed_payload_retention_authorized'] is False
+              assert value['record_payload_retention_authorized'] is False
+              assert value['fill_object_retention_authorized'] is False
+              assert value['payload_values_in_evidence_authorized'] is False
+              assert all(flag is False for flag in value['downstream_authorizations'].values())
+              assert all(flag is False for flag in value['trading_authorizations'].values())
+              assert value['s3_requests_executed'] == 0
+              assert value['compressed_bytes_downloaded'] == 0
+              assert value['decompressed_bytes_processed'] == 0
+              assert value['wallet_addresses_retained'] == 0
+              assert value['empirical_result'] is None
+          PY
+
+      - name: Enforce R7 single-use release before AWS OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "${CURRENT_RUN_ATTEMPT}" = '1'
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current_run_id = int(os.environ['CURRENT_RUN_ID'])
+          url = (
+              f'https://api.github.com/repos/{repo}/actions/workflows/'
+              'hyperliquid-archive-wallet-index-r7.yml/runs'
+              '?event=workflow_dispatch&branch=main&per_page=100'
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'hl-r7-wallet-index-single-use-check',
+              },
+              method='GET',
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [
+              row for row in runs
+              if datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(timezone.utc) >= start
+          ]
+          assert len(eligible) == 1, 'R7 release is not single-use within its release window'
+          assert int(eligible[0]['id']) == current_run_id, 'a previous R7 dispatch already consumed the release'
+          assert eligible[0]['event'] == 'workflow_dispatch'
+          assert eligible[0]['head_branch'] == 'main'
+          PY
+
+      - name: Freeze pending R7 run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          context = {
+              'schema_version': '1.0',
+              'pilot_id': 'HL-ARCHIVE-WALLET-INDEX-RECONSTRUCTION-R7-001',
+              'release_id': release['release_id'],
+              'terminal_status': 'PENDING_AWS_OIDC',
+              'event_name': os.environ['EVENT_NAME'],
+              'dispatch_ref': os.environ['DISPATCH_REF'],
+              'dispatch_sha': os.environ['DISPATCH_SHA'],
+              'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'approval_id': os.environ['APPROVAL_ID'],
+              'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
+              'canonical_implementation_merge_commit': release['canonical_implementation_merge_commit'],
+              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+              'expected_role_arn': os.environ['R7_ROLE_ARN'],
+              'configure_aws_outcome': None,
+              'target_bucket': 'hl-mainnet-node-data',
+              'signing_region': 'ap-northeast-1',
+              'object_key': 'node_fills/hourly/20250727/8.lz4',
+              'maximum_get_object_requests': 1,
+              'maximum_total_compressed_bytes': 12726384,
+              'maximum_total_decompressed_bytes': 134217728,
+              'maximum_runtime_seconds': 120,
+              'maximum_retries_per_request': 0,
+              'wallet_address_retention_authorized': True,
+              'per_wallet_fill_count_retention_authorized': True,
+              'retained_wallet_index_fields_only': ['wallet_address', 'fill_count'],
+              'entity_clustering_authorized': False,
+              'copyability_analysis_authorized': False,
+              'pnl_or_alpha_analysis_authorized': False,
+              'market_data_ingestion_authorized': False,
+              'historical_multi_hour_ingestion_authorized': False,
+              'strategy_inference_authorized': False,
+          }
+          (Path(os.environ['RUNNER_TEMP']) / 'r7-context.json').write_text(
+              json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Assume unchanged dedicated AWS role with exact-one-object R7 session
+        id: configure
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ env.R7_ROLE_ARN }}
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveWalletIndexR7
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R7ExactLegacyObjectOnly","Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4"}]}
+
+      - name: Execute bounded R7 wallet-index collector
+        if: steps.configure.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          python research/archive_inventory/r7/collector.py \
+            --result-output "${RUNNER_TEMP}/r7-result.json" \
+            --wallet-index-output "${RUNNER_TEMP}/r7-wallet-index.ndjson"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r7.rc"
+
+      - name: Record R7 pre-collector AWS failure without network fallback
+        if: steps.configure.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          result = {
+              'schema_version': '1.0',
+              'pilot_id': 'HL-ARCHIVE-WALLET-INDEX-RECONSTRUCTION-R7-001',
+              'terminal_status': 'R7_TRANSPORT_OR_INTEGRITY_FAIL',
+              'technical_result': 'R7_TRANSPORT_OR_INTEGRITY_FAIL',
+              'research_conclusion': 'R7_TRANSPORT_OR_INTEGRITY_FAIL',
+              'failure_class': 'AWS_OIDC_CONFIGURATION_FAILED',
+              'request_attempt_count': 0,
+              's3_http_request_count': 0,
+              'successful_request_count': 0,
+              'failed_request_count': 0,
+              'compressed_bytes': 0,
+              'decompressed_bytes': 0,
+              'wallet_index_summary': None,
+              'wallet_index_retained': False,
+              'wallet_addresses_retained': False,
+              'per_wallet_fill_counts_retained': False,
+              'raw_compressed_object_persisted': False,
+              'raw_decompressed_payload_retained': False,
+              'record_payload_retained': False,
+              'fill_object_retained': False,
+              'payload_values_retained': False,
+          }
+          (temp / 'r7-result.json').write_text(json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (temp / 'r7-wallet-index.ndjson').write_bytes(b'')
+          (temp / 'r7.rc').write_text('82\n', encoding='utf-8')
+          PY
+
+      - name: Finalize minimized R7 context and evidence ledger
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp / 'r7-context.json'
+          result_path = temp / 'r7-result.json'
+          index_path = temp / 'r7-wallet-index.ndjson'
+          rc_path = temp / 'r7.rc'
+          context = json.loads(context_path.read_text(encoding='utf-8'))
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          if not result_path.exists():
+              raise SystemExit('R7 result missing')
+          if not index_path.exists():
+              index_path.write_bytes(b'')
+          if not rc_path.exists():
+              rc_path.write_text('83\n', encoding='utf-8')
+          lines = []
+          for path in (context_path, result_path, index_path, rc_path):
+              lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp / 'R7_FILES.sha256').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Upload bounded R7 evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r7-wallet-index-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r7-context.json
+            ${{ runner.temp }}/r7-result.json
+            ${{ runner.temp }}/r7-wallet-index.ndjson
+            ${{ runner.temp }}/r7.rc
+            ${{ runner.temp }}/R7_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Enforce exact R7 terminal result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import re
+          import os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          result = json.loads((temp / 'r7-result.json').read_text(encoding='utf-8'))
+          index_path = temp / 'r7-wallet-index.ndjson'
+          rc = int((temp / 'r7.rc').read_text(encoding='utf-8').strip())
+          if rc != 0 or result.get('terminal_status') == 'R7_TRANSPORT_OR_INTEGRITY_FAIL':
+              raise SystemExit(1)
+          assert result.get('terminal_status') == 'R7_WALLET_INDEX_STUDY_COMPLETE'
+          assert result.get('research_conclusion') in {
+              'WALLET_INDEX_RECONSTRUCTION_COMPLETE',
+              'WALLET_INDEX_RECONSTRUCTION_UNRESOLVED',
+          }
+          assert result.get('request_attempt_count') == 1
+          assert result.get('s3_http_request_count') == 1
+          assert result.get('successful_request_count') == 1
+          assert result.get('failed_request_count') == 0
+          assert result.get('retries_used') == 0
+          assert result.get('http_redirects_followed') is False
+          assert result.get('compressed_bytes') == 12726384
+          assert result.get('decompressed_bytes') == 62169139
+          for key in (
+              'raw_compressed_object_persisted', 'raw_decompressed_payload_retained',
+              'record_payload_retained', 'fill_object_retained', 'payload_values_retained',
+              'coin_values_retained', 'price_values_retained', 'size_values_retained',
+              'side_values_retained', 'time_values_retained', 'closed_pnl_values_retained',
+              'fee_values_retained', 'transaction_hashes_retained', 'order_ids_retained',
+              'trade_ids_retained', 'client_order_ids_retained', 'entity_clustering_performed',
+              'copyability_analysis_performed', 'pnl_or_alpha_analysis_performed',
+              'market_data_ingested', 'historical_multi_hour_ingestion_performed',
+              'strategy_inference_performed',
+          ):
+              assert result.get(key) is False, key
+          if result['research_conclusion'] == 'WALLET_INDEX_RECONSTRUCTION_UNRESOLVED':
+              assert index_path.read_bytes() == b''
+              assert result.get('wallet_index_retained') is False
+              assert result.get('wallet_addresses_retained') is False
+              raise SystemExit(0)
+          assert result.get('wallet_index_retained') is True
+          assert result.get('wallet_addresses_retained') is True
+          assert result.get('leading_string_values_retained') is True
+          assert result.get('per_wallet_fill_counts_retained') is True
+          summary = result['wallet_index_summary']
+          data = index_path.read_bytes()
+          assert 0 < len(data) <= 16777216
+          assert hashlib.sha256(data).hexdigest() == summary['wallet_index_sha256']
+          assert len(data) == summary['wallet_index_bytes']
+          rows = []
+          for raw in data.splitlines():
+              row = json.loads(raw.decode('utf-8'))
+              assert list(row.keys()) == ['wallet_address', 'fill_count']
+              assert re.fullmatch(r'^0x[0-9a-f]{40}$', row['wallet_address'])
+              assert isinstance(row['fill_count'], int) and row['fill_count'] > 0
+              rows.append(row)
+          assert 1 <= len(rows) <= 162815
+          addresses = [row['wallet_address'] for row in rows]
+          assert addresses == sorted(addresses)
+          assert len(addresses) == len(set(addresses))
+          assert sum(row['fill_count'] for row in rows) == 162815
+          assert summary['unique_wallet_count'] == len(rows)
+          assert summary['sum_fill_count'] == 162815
+          PY

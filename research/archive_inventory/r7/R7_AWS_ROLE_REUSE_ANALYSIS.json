@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "R7-AWS-ROLE-REUSE-001",
+  "status": "STATIC_REVALIDATION_ONLY_NO_AWS_MUTATION_NO_NETWORK",
+  "r7_preregistration_merge": "795281b2992466785ba48314d59feb61ac0b3aef",
+  "r7_approval_merge": "65a7b53796231b3aaea4c1dc1b41aa847b4ea3ba",
+  "r7_approval_text_sha256": "43f32634859eb39e4b1e464276f9721ed4ef8bcc30161f1f301f82e0312042a6",
+  "reused_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4",
+  "canonical_trust_policy_sha256": "2ebb60a7747a636a475a23016951265fe377fd9d68f2d9f3a63e33f3bc0189b4",
+  "canonical_permission_policy_sha256": "14d055105b80e0c41462d4934bbaa8d860b0aeda9f2f1b9529267fd0d4d3613d",
+  "persistent_role_permission_scope": {
+    "allowed_action": "s3:GetObject",
+    "allowed_object_arns": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"
+    ]
+  },
+  "r7_session_scope": {
+    "allowed_action": "s3:GetObject",
+    "allowed_object_arns": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4"
+    ],
+    "strict_subset_of_persistent_role": true,
+    "same_exact_object_as_successful_r5_and_r6a_sessions": true
+  },
+  "oidc_trust_compatibility": {
+    "required_workflow_claim": "Hyperliquid Archive Hourly Body Schema Pilot R4",
+    "r7_workflow_file_must_be_distinct": true,
+    "r7_run_name_must_identify_r7": true,
+    "new_role_or_trust_policy_mutation_required": false
+  },
+  "independent_prior_network_proofs": {
+    "sts_only_preflight_run": 31312067367,
+    "sts_only_preflight_zero_s3": true,
+    "r5_run": 31321019885,
+    "r5_same_exact_legacy_get_succeeded": true,
+    "r5_zero_retries": true,
+    "r6a_successor_run": 31328268134,
+    "r6a_same_exact_legacy_get_succeeded": true,
+    "r6a_zero_retries": true,
+    "r6a_exact_compressed_sha256_matched": true,
+    "r6a_exact_decompressed_byte_count_matched": true
+  },
+  "current_r7_network_authority": false,
+  "approved_future_wallet_address_retention": true,
+  "approved_future_wallet_index_reconstruction": true,
+  "current_wallet_address_retention_authority": false,
+  "current_wallet_index_reconstruction_authority": false,
+  "aws_iam_mutation_authorized": false,
+  "aws_iam_mutation_performed": false,
+  "new_sts_preflight_required": false,
+  "reason_new_preflight_not_required": "The unchanged dedicated R4 role/trust path already succeeded repeatedly against this exact legacy object, including R5 and R6A. R7 uses the same exact-one-object S3 session scope and changes only local post-download retention semantics under a new human approval; no IAM mutation or broader network authority is required.",
+  "entity_clustering_authorized": false,
+  "copyability_analysis_authorized": false,
+  "pnl_or_alpha_analysis_authorized": false,
+  "market_data_ingestion_authorized": false,
+  "historical_multi_hour_ingestion_authorized": false,
+  "strategy_inference_authorized": false,
+  "trading_authorized": false
+}
