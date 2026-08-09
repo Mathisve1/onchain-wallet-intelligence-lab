@@ -10,7 +10,10 @@ This runbook is an operator gate. It does **not** authorize execution of the R10
 - trust policy source: `research/archive_inventory/r10_implementation/R10_OIDC_TRUST_POLICY.json`
 - inline permission policy source: `research/archive_inventory/r10_implementation/R10_PERMISSION_POLICY.json`
 - inline policy name: `HLArchivePostBoundaryMultiHourR10ExactSixOnly`
-- role maximum session duration target: `900` seconds
+- IAM role `MaxSessionDuration`: `3600` seconds
+- intended GitHub Actions assumed-role session duration: `900` seconds
+
+AWS IAM requires a role's `MaxSessionDuration` to be between 3600 and 43200 seconds. The R10 workflows remain more restrictive and request only a 900-second assumed-role session. Setting the role maximum to 3600 therefore satisfies the IAM API without expanding the actual R10 workflow session beyond the already frozen 900 seconds.
 
 Do not edit either JSON policy in the AWS console. If the role already exists, stop and inspect it rather than widening, reusing or overwriting it.
 
@@ -29,7 +32,7 @@ If and only if AWS reports that the role does not exist, create it from the cano
 aws iam create-role \
   --role-name onchain-wallet-intelligence-hl-archive-multihour-r10 \
   --assume-role-policy-document file://research/archive_inventory/r10_implementation/R10_OIDC_TRUST_POLICY.json \
-  --max-session-duration 900
+  --max-session-duration 3600
 ```
 
 Attach exactly one inline permission policy from the canonical file:
@@ -61,8 +64,9 @@ After creation, compare the installed trust and permission documents with the ca
 1. the canonical implementation merge commit;
 2. SHA-256 of both canonical policy files;
 3. exact role ARN and inline policy name;
-4. confirmation that no existing R4 role was changed;
-5. confirmation that no S3 request was made;
-6. confirmation that no extra managed/inline permission policy was attached for this R10 role.
+4. the installed IAM role `MaxSessionDuration=3600` while the future workflow session remains `900` seconds;
+5. confirmation that no existing R4 role was changed;
+6. confirmation that no S3 request was made;
+7. confirmation that no extra managed/inline permission policy was attached for this R10 role.
 
 Only after that attestation is reviewed and merged may a separate STS-only preflight release be prepared. The preflight session policy will explicitly deny all S3 actions and may call only STS identity inspection. A successful preflight still does not authorize the six archive downloads.

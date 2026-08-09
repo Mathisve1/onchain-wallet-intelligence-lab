@@ -55,6 +55,7 @@ def validate_workflow_candidate(path: Path) -> str:
     assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in text
     assert "aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c" in text
     assert "persist-credentials: false" in text
+    assert "role-duration-seconds: 900" in text
     assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
     return text
 
@@ -149,9 +150,14 @@ def main() -> int:
     runbook = RUNBOOK.read_text(encoding="utf-8")
     attestation = ATTESTATION_TEMPLATE.read_text(encoding="utf-8")
     assert "If and only if AWS reports that the role does not exist" in runbook
+    assert "--max-session-duration 3600" in runbook
+    assert "IAM role `MaxSessionDuration`: `3600` seconds" in runbook
+    assert "intended GitHub Actions assumed-role session duration: `900` seconds" in runbook
     assert "Do **not** run `aws s3`, `aws s3api`" in runbook
     assert "separate STS-only preflight release" in runbook
     assert "ATTEST_R10_DEDICATED_ROLE_CREATED_EXACTLY" in attestation
+    assert "role_max_session_duration_seconds=3600" in attestation
+    assert "future_workflow_role_duration_seconds=900" in attestation
     assert "existing_r4_role_modified=false" in attestation
     assert "s3_requests_executed_during_role_creation=0" in attestation
 
