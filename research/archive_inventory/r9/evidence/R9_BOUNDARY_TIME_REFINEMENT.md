@@ -20,6 +20,6 @@ It does **not** prove the exact cutover instant, exact fill-level continuity, ab
 
 - legacy path hours through `2025-07-27T07` are eligible for future legacy-side history;
 - modern path hours from `2025-07-27T09` are eligible for future modern-side history;
-- both `2025-07-27T08` boundary objects remain excluded from canonical merged history.
+- both `2025-07-27T08` boundary objects remain **censored and excluded** from canonical merged history.
 
 No new S3 request is required to reach this refinement; it is derived solely from R9's already authorized retained aggregate feature output.
