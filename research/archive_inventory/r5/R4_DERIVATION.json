@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "R5-DERIVATION-FROM-R4-001",
+  "parent_evidence_merge_commit": "fe06874aeeb958d375a27100378f89bd25b4741b",
+  "parent_run_id": 31313913525,
+  "parent_result_path": "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json",
+  "legacy_observation": {
+    "key": "node_fills/hourly/20250727/8.lz4",
+    "compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+    "compressed_size_bytes": 12726384,
+    "decompressed_byte_count": 62169139,
+    "decompression_status": "LZ4_FRAME_DECOMPRESSED",
+    "schema_status": "BODY_READABLE_SCHEMA_UNRESOLVED",
+    "failure_class": "UTF8_NDJSON_OBJECT_SCHEMA_UNRESOLVED",
+    "record_count": 0,
+    "top_level_json_type": null
+  },
+  "modern_observation": {
+    "key": "node_fills_by_block/hourly/20250727/8.lz4",
+    "schema_status": "FULL_SCHEMA_PARSED",
+    "record_count": 4345,
+    "event_field_path": "/events",
+    "event_container_field_path": "/events/*",
+    "event_member_field_path": "/events/*/*",
+    "event_container_type": "array",
+    "event_member_type_set": [
+      "object",
+      "string"
+    ],
+    "observed_inner_object_field_names": [
+      "builder",
+      "builderFee",
+      "cloid",
+      "closedPnl",
+      "coin",
+      "crossed",
+      "dir",
+      "fee",
+      "feeToken",
+      "hash",
+      "oid",
+      "px",
+      "side",
+      "startPosition",
+      "sz",
+      "tid",
+      "time"
+    ]
+  },
+  "reasoning": [
+    "R4 proved the legacy object is a valid LZ4 frame and produced readable decompressed bytes, so R5 does not treat compression as the unresolved layer.",
+    "R4's legacy parser required each NDJSON record to be a top-level object and returned zero records, so a different JSON root/container shape is a narrower hypothesis than corruption.",
+    "R4 proved modern /events/* values are arrays whose members include both object and string types.",
+    "Official Hyperliquid documentation states node_fills matches API fill format and node_fills_by_block is produced with --write-fills --batch-by-block, while --batch-by-block wraps events per block.",
+    "Therefore a line-delimited event array containing one string and one fill-like object is the primary R5 hypothesis, but this remains an inference until R5 evidence exists."
+  ],
+  "inference_status": "HYPOTHESIS_ONLY_NOT_EMPIRICALLY_PROVEN",
+  "prohibited_overclaim": [
+    "The string member is a wallet or user address.",
+    "Legacy and modern schemas are equivalent.",
+    "Legacy and modern events are semantically equivalent.",
+    "The archive is suitable for wallet reconstruction, copy trading, PnL, alpha or live trading."
+  ]
+}

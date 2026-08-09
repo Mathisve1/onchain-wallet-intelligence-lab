@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "R5-OFFICIAL-SOURCE-EVIDENCE-001",
+  "checked_at_utc": "2026-08-09T13:18:00Z",
+  "sources": [
+    {
+      "publisher": "Hyperliquid",
+      "title": "Historical data",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data",
+      "claims_used": [
+        "hl-mainnet-node-data/node_fills_by_block contains fills streamed with --write-fills --batch-by-block",
+        "older node_fills and node_trades data are in a different format",
+        "node_fills matches the API format while node_trades does not"
+      ]
+    },
+    {
+      "publisher": "hyperliquid-dex",
+      "title": "node README",
+      "url": "https://github.com/hyperliquid-dex/node",
+      "claims_used": [
+        "--write-fills streams fills in API fills format",
+        "--batch-by-block writes one block per line",
+        "the batch-by-block schema contains local_time, block_time, block_number and events"
+      ]
+    },
+    {
+      "publisher": "Hyperliquid",
+      "title": "Info endpoint",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint",
+      "claims_used": [
+        "userFills returns fill objects containing structural fields such as coin, px, sz, side, time, startPosition, dir, closedPnl, hash, oid, crossed, fee, tid and feeToken"
+      ]
+    }
+  ],
+  "research_use_only": true,
+  "network_execution_authority": false,
+  "semantic_equivalence_authority": false,
+  "trading_authority": false
+}
