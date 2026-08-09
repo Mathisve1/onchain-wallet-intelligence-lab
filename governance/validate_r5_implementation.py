@@ -186,8 +186,18 @@ def main() -> int:
     assert "r5-format.rc" in workflow
     assert "R5_FORMAT_FILES.sha256" in workflow
 
-    # Implementation PR must remain non-release. Later validators may become release-aware explicitly.
-    assert not RELEASE.exists()
+    # Immutable implementation remains inert even after a separate release candidate exists.
+    if RELEASE.exists():
+        release = load(RELEASE)
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["implementation_reviewed_exact_head"] == "defc33f7316acee3640cbba360690f4fc969b13a"
+        assert release["implementation_commit"] == "40bc4d138c71a4367c9415982f58bcd24c5a57eb"
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["requester_pays_authorized_by_candidate"] is False
+        assert release["get_object_authorized_by_candidate"] is False
+        assert release["s3_requests_executed"] == 0
+        assert release["empirical_result"] is None
     assert not ACTIVATION.exists()
 
     print("R5_IMPLEMENTATION_VALID")
