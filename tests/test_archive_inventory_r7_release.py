@@ -20,10 +20,17 @@ class ArchiveR7ReleaseTests(unittest.TestCase):
         self.assertFalse(release["execution_ready"])
         self.assertFalse(release["single_workflow_dispatch_authorized"])
         self.assertFalse(release["rerun_authorized"])
-        self.assertFalse((R7 / "R7_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
         self.assertEqual(release["s3_requests_executed"], 0)
         self.assertEqual(release["wallet_addresses_retained"], 0)
         self.assertIsNone(release["empirical_result"])
+
+        activation_path = R7 / "R7_EXECUTION_RELEASE_CANONICALIZATION.json"
+        if activation_path.exists():
+            activation = self.load(activation_path)
+            self.assertEqual(activation["release_id"], release["release_id"])
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R7_RUN")
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
 
     def test_exact_canonical_lineage_and_object_scope(self) -> None:
         release = self.load(R7 / "R7_EXECUTION_RELEASE.json")
