@@ -88,16 +88,27 @@ class ArchiveR7PreregistrationTests(unittest.TestCase):
         self.assertIn("PnL or alpha", claims)
         self.assertIn("live trading suitability", claims)
 
-    def test_preregistration_is_inert_and_requires_new_human_approval(self) -> None:
+    def test_preregistration_snapshot_stays_inert_after_later_stages(self) -> None:
         contract = self.load(R7 / "WALLET_INDEX_RECONSTRUCTION_R7_CONTRACT.json")
         self.assertEqual(contract["status"], "PREREGISTERED_NO_EXECUTION")
         self.assertTrue(contract["human_approval_required_before_implementation"])
         self.assertTrue(contract["implementation_required_before_execution_release"])
         self.assertTrue(contract["separate_execution_release_required"])
+        self.assertTrue(all(value is False for value in contract["current_runtime_authority"].values()))
+        self.assertEqual(contract["network_requests_executed_by_this_preregistration"], 0)
         self.assertEqual(contract["wallet_addresses_retained_by_this_preregistration"], 0)
         self.assertIsNone(contract["empirical_result"])
-        self.assertFalse((R7 / "collector.py").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-wallet-index-r7.yml").exists())
+
+        implementation_path = R7 / "R7_IMPLEMENTATION_CONTRACT.json"
+        if implementation_path.exists():
+            implementation = self.load(implementation_path)
+            self.assertEqual(implementation["status"], "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION")
+            self.assertTrue(implementation["execution_release_required"])
+            self.assertFalse(implementation["execution_release_present"])
+            self.assertTrue(all(value is False for value in implementation["current_runtime_authority"].values()))
+            self.assertEqual(implementation["s3_requests_executed"], 0)
+            self.assertEqual(implementation["wallet_addresses_retained"], 0)
+            self.assertIsNone(implementation["empirical_result"])
 
     def test_dedicated_preregistration_validator_passes(self) -> None:
         completed = subprocess.run(
