@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-ARCHIVE-WALLET-INDEX-RECONSTRUCTION-R7-001",
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "parent_r6a_evidence_commit": "6b7dcd85e6d0f82b63ab8c4dd50d56ef8dc72a57",
+  "parent_r6a_run_id": 31328268134,
+  "parent_r6a_terminal_result": "R6A_LEXICAL_CONFIRMATION_COMPLETE",
+  "parent_r6a_research_conclusion": "ALL_LEADING_STRINGS_MATCH_HYPERLIQUID_ADDRESS_SHAPE",
+  "working_semantic_contract": {
+    "leading_string_label": "HYPERLIQUID_USER_ADDRESS",
+    "status": "HIGH_CONFIDENCE_CONVERGENT_STATIC_AND_LEXICAL_EVIDENCE_NOT_DIRECT_SERIALIZER_PROOF",
+    "direct_unpublished_serializer_proof_claimed": false
+  },
+  "research_question": "Can the exact legacy node_fills object be deterministically grouped by its leading Hyperliquid user-address key into a minimal one-hour wallet index without retaining fill payload values?",
+  "hypothesis": "If the R6/R6A working semantic contract is correct, every valid record can be grouped by the normalized leading address and the sum of per-wallet fill counts will exactly equal the 162815 R5/R6A records.",
+  "exact_future_network_target": {
+    "bucket": "hl-mainnet-node-data",
+    "signing_region": "ap-northeast-1",
+    "key": "node_fills/hourly/20250727/8.lz4",
+    "expected_size_bytes": 12726384,
+    "expected_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+    "expected_compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+    "expected_decompressed_byte_count": 62169139,
+    "expected_nonempty_record_count": 162815,
+    "required_top_level_record_type": "array",
+    "required_array_arity": 2,
+    "required_ordered_element_types": [
+      "string",
+      "object"
+    ],
+    "required_leading_string_pattern": "^0x[0-9a-f]{40}$"
+  },
+  "proposed_future_request_envelope": {
+    "maximum_one_time_budget_eur": 0.10,
+    "maximum_monthly_budget_eur": 0,
+    "maximum_get_object_requests": 1,
+    "maximum_requests_per_object": 1,
+    "maximum_total_compressed_bytes": 12726384,
+    "maximum_total_decompressed_bytes": 134217728,
+    "maximum_runtime_seconds": 120,
+    "maximum_retries_per_request": 0,
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_content_length_required": true,
+    "exact_response_etag_required": true,
+    "exact_compressed_sha256_required": true,
+    "exact_decompressed_byte_count_required": true,
+    "http_redirect_following_authorized": false,
+    "head_object_authorized": false,
+    "range_get_authorized": false,
+    "list_objects_v2_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_all_my_buckets_authorized": false,
+    "lz4_frame_stream_only": true,
+    "alternate_decompressor_fallback_authorized": false,
+    "strict_utf8_decode": true,
+    "strict_json_duplicate_keys_rejected": true,
+    "strict_json_nonfinite_constants_rejected": true,
+    "maximum_record_bytes": 16777216,
+    "maximum_records_parsed": 5000000
+  },
+  "proposed_future_retention_boundary": {
+    "wallet_address_retention_authorized": true,
+    "leading_string_value_retention_authorized": true,
+    "normalization": "LOWERCASE_EXACT_0X40HEX",
+    "per_wallet_fill_count_retention_authorized": true,
+    "unique_wallet_count_retention_authorized": true,
+    "wallet_index_entry_cap": 162815,
+    "wallet_index_output_byte_cap": 16777216,
+    "retained_wallet_index_fields_only": [
+      "wallet_address",
+      "fill_count"
+    ],
+    "raw_compressed_object_retention_authorized": false,
+    "raw_decompressed_payload_retention_authorized": false,
+    "record_payload_retention_authorized": false,
+    "fill_object_retention_authorized": false,
+    "payload_values_in_evidence_authorized": false,
+    "coin_value_retention_authorized": false,
+    "price_value_retention_authorized": false,
+    "size_value_retention_authorized": false,
+    "side_value_retention_authorized": false,
+    "time_value_retention_authorized": false,
+    "closed_pnl_value_retention_authorized": false,
+    "fee_value_retention_authorized": false,
+    "transaction_hash_retention_authorized": false,
+    "order_id_retention_authorized": false,
+    "trade_id_retention_authorized": false,
+    "client_order_id_retention_authorized": false,
+    "distinct_payload_value_sets_authorized": false
+  },
+  "deterministic_output_contract": {
+    "format": "UTF8_NDJSON",
+    "one_row_per_unique_wallet": true,
+    "wallet_address_unique": true,
+    "wallet_address_sort_order": "LEXICOGRAPHIC_ASCENDING",
+    "fill_count_positive_integer": true,
+    "sum_fill_count_required": 162815,
+    "duplicate_wallet_rows_authorized": false,
+    "empty_wallet_address_authorized": false,
+    "nonmatching_wallet_address_authorized": false
+  },
+  "allowed_research_results": [
+    "WALLET_INDEX_RECONSTRUCTION_COMPLETE",
+    "WALLET_INDEX_RECONSTRUCTION_UNRESOLVED"
+  ],
+  "success_criteria": {
+    "all_records_parse_under_frozen_r5_shape": true,
+    "all_leading_strings_match_frozen_lowercase_address_shape": true,
+    "exact_record_count": 162815,
+    "unique_wallet_count_must_be_between": [
+      1,
+      162815
+    ],
+    "wallet_index_contains_no_duplicate_addresses": true,
+    "sum_of_wallet_fill_counts": 162815,
+    "retention_boundary_satisfied": true
+  },
+  "claims_not_authorized_by_r7_success": [
+    "one wallet address equals one human or economic entity",
+    "entity clustering correctness",
+    "copyability",
+    "PnL or alpha",
+    "risk-adjusted performance",
+    "market-data suitability",
+    "strategy inference",
+    "paper trading suitability",
+    "live trading suitability"
+  ],
+  "current_runtime_authority": {
+    "workflow_dispatch": false,
+    "aws_oidc": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "wallet_address_retention": false,
+    "wallet_index_reconstruction": false
+  },
+  "downstream_authorizations": {
+    "entity_clustering": false,
+    "copyability_analysis": false,
+    "pnl_or_alpha_analysis": false,
+    "market_data_ingestion": false,
+    "historical_multi_hour_ingestion": false,
+    "strategy_inference": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "human_approval_required_before_implementation": true,
+  "implementation_required_before_execution_release": true,
+  "separate_execution_release_required": true,
+  "rerun_requires_new_release_and_new_authority": true,
+  "network_requests_executed_by_this_preregistration": 0,
+  "wallet_addresses_retained_by_this_preregistration": 0,
+  "empirical_result": null
+}
