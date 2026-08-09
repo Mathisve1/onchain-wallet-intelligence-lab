@@ -1,0 +1,215 @@
+name: Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10
+run-name: R10 dedicated role STS-only preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-r10-role-sts-preflight
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R10_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+  PREFLIGHT_RELEASE_PATH: research/archive_inventory/r10_runtime/R10_STS_PREFLIGHT_RELEASE.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r10-role-sts-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main preflight identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove separate single-use STS-only release before OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python governance/validate_repository.py
+          python governance/validate_r10_approval.py
+          python governance/validate_r10_implementation.py
+          test -f "${PREFLIGHT_RELEASE_PATH}"
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          release = json.loads(Path(os.environ['PREFLIGHT_RELEASE_PATH']).read_text())
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_R10_STS_ONLY_PREFLIGHT'
+          assert release['role_arn'] == os.environ['R10_ROLE_ARN']
+          assert release['s3_access_authorized_during_preflight'] is False
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert release['operator_attestation_reviewed'] is True
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z','+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          url = f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req = urllib.request.Request(url, headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'r10-sts-single-use-check'})
+          with urllib.request.urlopen(req, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc) >= start]
+          assert len(eligible) == 1, 'R10 STS preflight release is not single-use'
+          assert int(eligible[0]['id']) == current, 'a prior R10 STS preflight already consumed the release'
+          assert int(os.environ['CURRENT_RUN_ATTEMPT']) == 1, 'R10 STS preflight rerun forbidden'
+          PY
+
+      - name: Create minimized pending context before OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          context = {
+            'schema_version':'1.0',
+            'pilot_id':'HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001',
+            'preflight_id':'HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001',
+            'terminal_status':'PENDING_AWS_OIDC',
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+            'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R10_ROLE_ARN'],
+            'configure_aws_outcome':None,
+            's3_requests_authorized':False,
+            's3_requests_executed':0,
+          }
+          (Path(os.environ['RUNNER_TEMP'])/'r10-sts-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Assume exact R10 role with all S3 explicitly denied
+        id: configure
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveR10STSPreflight
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"DenyAllS3DuringR10Preflight","Effect":"Deny","Action":"s3:*","Resource":"*"}]}
+
+      - name: Execute exactly one STS identity call
+        shell: bash
+        run: |
+          set +e
+          aws sts get-caller-identity --output json > "${RUNNER_TEMP}/r10-sts-identity.json"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r10-sts.rc"
+
+      - name: Minimize and validate preflight evidence
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp/'r10-sts-context.json'
+          identity_path = temp/'r10-sts-identity.json'
+          rc_path = temp/'r10-sts.rc'
+          context = json.loads(context_path.read_text())
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          rc = int(rc_path.read_text().strip()) if rc_path.exists() else 83
+          result = {
+            'schema_version':'1.0',
+            'preflight_id':'HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001',
+            'terminal_status':'R10_STS_PREFLIGHT_FAIL',
+            'technical_result':'STS_IDENTITY_UNRESOLVED',
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R10_ROLE_ARN'],
+            'observed_account_id':None,
+            'observed_arn':None,
+            's3_requests_executed':0,
+          }
+          if rc == 0 and identity_path.exists():
+              raw = json.loads(identity_path.read_text())
+              account = raw.get('Account')
+              arn = raw.get('Arn')
+              result['observed_account_id'] = account
+              result['observed_arn'] = arn
+              if account == os.environ['EXPECTED_AWS_ACCOUNT_ID'] and isinstance(arn,str) and ':assumed-role/onchain-wallet-intelligence-hl-archive-multihour-r10/' in arn:
+                  result['terminal_status'] = 'R10_STS_PREFLIGHT_PASS'
+                  result['technical_result'] = 'STS_IDENTITY_MATCH'
+          result_path = temp/'r10-sts-result.json'
+          result_path.write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          if identity_path.exists(): identity_path.unlink()
+          lines=[]
+          for path in (context_path,result_path,rc_path):
+              if path.exists(): lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp/'R10_STS_FILES.sha256').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Upload minimized STS-only evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r10-sts-preflight-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r10-sts-context.json
+            ${{ runner.temp }}/r10-sts-result.json
+            ${{ runner.temp }}/r10-sts.rc
+            ${{ runner.temp }}/R10_STS_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce terminal STS-only result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = json.loads((Path(os.environ['RUNNER_TEMP'])/'r10-sts-result.json').read_text())
+          rc = int((Path(os.environ['RUNNER_TEMP'])/'r10-sts.rc').read_text().strip())
+          assert rc == 0
+          assert result['terminal_status'] == 'R10_STS_PREFLIGHT_PASS'
+          assert result['technical_result'] == 'STS_IDENTITY_MATCH'
+          assert result['s3_requests_executed'] == 0
+          PY
