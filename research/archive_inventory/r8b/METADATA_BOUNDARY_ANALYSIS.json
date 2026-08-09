@@ -1,0 +1,76 @@
+{
+  "address_set_comparison": {
+    "exact_fill_identity_inferred": false,
+    "legacy_only_wallet_count": 3949,
+    "modern_address_set_subset_of_legacy": false,
+    "modern_only_wallet_count": 199,
+    "overlapping_wallet_count": 688,
+    "temporal_subset_inferred": false
+  },
+  "analysis_id": "R8B_BOUNDARY_METADATA_ANALYSIS_001",
+  "analysis_mode": "EXISTING_CANONICAL_EVIDENCE_ONLY_NO_NEW_S3",
+  "boundary_body_counts": {
+    "combined_count_without_identity_deduplication": 180331,
+    "legacy_unique_wallets": 4637,
+    "legacy_valid_fill_records": 162815,
+    "modern_share_of_naive_combined_count": 0.097132495245,
+    "modern_to_legacy_compressed_size_ratio": 0.119248562671,
+    "modern_to_legacy_count_ratio": 0.107582225225,
+    "modern_unique_wallets": 887,
+    "modern_valid_event_pairs": 17516
+  },
+  "boundary_path_hour_utc": "2025-07-27T08:00:00Z",
+  "direct_observations": [
+    "The legacy family ends and the modern family begins at the same path hour.",
+    "The modern boundary object is the single smallest object in the complete 9070-object modern metadata inventory.",
+    "The modern boundary object is 8.3624525301% of the immediately following hour by compressed size and 6.6859312684% of the median of the next 24 path hours.",
+    "The legacy boundary object is 97.3056268649% of the immediately previous legacy hour and 89.8971882264% of the median of the previous eight path hours.",
+    "The boundary-hour address/count datasets are not a simple subset relation."
+  ],
+  "family_boundary": {
+    "delta_hours": 0,
+    "legacy_node_fills_latest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "modern_node_fills_by_block_earliest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "same_path_hour_boundary": true
+  },
+  "legacy_boundary_object": {
+    "boundary_to_previous_8_median_size_ratio": 0.898971882264,
+    "boundary_to_previous_hour_size_ratio": 0.973056268649,
+    "etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+    "key": "node_fills/hourly/20250727/8.lz4",
+    "last_modified": "2025-07-28T17:06:55.000Z",
+    "last_modified_is_not_event_time": true,
+    "previous_8_path_hours_median_size_bytes": 14156598.5,
+    "previous_path_hour_key": "node_fills/hourly/20250727/7.lz4",
+    "previous_path_hour_size_bytes": 13078775,
+    "size_bytes": 12726384
+  },
+  "modern_boundary_object": {
+    "boundary_to_next_24_median_size_ratio": 0.066859312684,
+    "boundary_to_next_hour_size_ratio": 0.083624525301,
+    "etag": "\"60d4c1277f76651b5f04666bbe8d7594\"",
+    "family_entry_count": 9070,
+    "family_global_minimum_size_bytes": 1517603,
+    "global_minimum_rank": 1,
+    "is_family_global_minimum": true,
+    "key": "node_fills_by_block/hourly/20250727/8.lz4",
+    "last_modified": "2025-07-27T10:02:31.000Z",
+    "last_modified_is_not_event_time": true,
+    "next_24_path_hours_median_size_bytes": 22698453.5,
+    "next_path_hour_key": "node_fills_by_block/hourly/20250727/9.lz4",
+    "next_path_hour_size_bytes": 18147822,
+    "size_bytes": 1517603
+  },
+  "not_directly_observed": [
+    "minimum and maximum event timestamps inside either boundary object",
+    "exact fill-level overlap or gap between the two objects",
+    "exact serializer cutover timestamp",
+    "schema equivalence or semantic equivalence across all fields"
+  ],
+  "parent_r3_artifact_id": 9034170863,
+  "parent_r3_evidence_commit": "98eca5b7b13b25aed3d11f006972acea2ee5c258",
+  "parent_r3_raw_result_sha256": "94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479",
+  "parent_r3_run_id": 31299905850,
+  "schema_version": "1.0",
+  "study_id": "HL-ARCHIVE-LEGACY-MODERN-CUTOVER-FORENSICS-R8B-001"
+}
