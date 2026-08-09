@@ -32,8 +32,7 @@ class ArchiveR8DesignTests(unittest.TestCase):
         flat = {item for items in fields.values() for item in items}
         for required in (
             "wallet_address", "time", "coin", "side", "dir", "px", "sz",
-            "closedPnl", "fee", "feeToken", "startPosition", "tid", "crossed",
-            "liquidation_presence",
+            "closedPnl", "fee", "feeToken", "startPosition", "tid", "crossed", "liquidation_presence",
         ):
             self.assertIn(required, flat)
         semantics = design["semantic_boundaries"]
@@ -46,19 +45,16 @@ class ArchiveR8DesignTests(unittest.TestCase):
 
     def test_population_archive_then_shortlist_api_pipeline_is_frozen(self) -> None:
         design = self.load(R8 / "PERFORMANCE_COPYABILITY_DATA_DESIGN_R8_CONTRACT.json")
-        stages = [row["stage"] for row in design["proposed_research_pipeline"]]
-        self.assertEqual(stages, [
-            "A_GLOBAL_ARCHIVE_SCREEN",
-            "B_CANDIDATE_REDUCTION",
-            "C_SHORTLIST_PUBLIC_API_ENRICHMENT",
-            "D_COPYABILITY_EXECUTION_RESEARCH",
+        self.assertEqual([row["stage"] for row in design["proposed_research_pipeline"]], [
+            "A_GLOBAL_ARCHIVE_SCREEN", "B_CANDIDATE_REDUCTION",
+            "C_SHORTLIST_PUBLIC_API_ENRICHMENT", "D_COPYABILITY_EXECUTION_RESEARCH",
         ])
         self.assertTrue(design["api_scaling_constraint"]["per_address_user_fills_is_not_primary_population_scan"])
         self.assertTrue(design["api_scaling_constraint"]["shortlist_first_required"])
         self.assertTrue(all(value is False for value in design["current_authority"].values()))
         self.assertTrue(all(value is False for value in design["trading_authorizations"].values()))
 
-    def test_r8a_is_one_exact_modern_object_and_current_authority_zero(self) -> None:
+    def test_r8a_is_one_exact_modern_object_and_preregistration_authority_zero(self) -> None:
         r8a = self.load(R8 / "MODERN_WALLET_INDEX_BRIDGE_R8A_CONTRACT.json")
         target = r8a["exact_future_network_target"]
         envelope = r8a["proposed_future_request_envelope"]
@@ -82,6 +78,7 @@ class ArchiveR8DesignTests(unittest.TestCase):
         self.assertTrue(retention["leading_string_value_retention_authorized"])
         self.assertTrue(retention["per_wallet_fill_count_retention_authorized"])
         self.assertTrue(retention["unique_wallet_count_retention_authorized"])
+        self.assertTrue(retention["valid_event_pair_count_retention_authorized"])
         self.assertEqual(retention["retained_wallet_index_fields_only"], ["wallet_address", "fill_count"])
         self.assertFalse(retention["performance_field_values_retention_authorized"])
         self.assertFalse(retention["fill_object_retention_authorized"])
@@ -92,14 +89,21 @@ class ArchiveR8DesignTests(unittest.TestCase):
         self.assertFalse(r8a["downstream_authorizations"]["copyability_analysis"])
         self.assertTrue(all(value is False for value in r8a["trading_authorizations"].values()))
 
-    def test_r8a_is_inert_until_new_human_approval(self) -> None:
+    def test_preregistration_snapshot_stays_inert_after_separate_approval_and_implementation(self) -> None:
         r8a = self.load(R8 / "MODERN_WALLET_INDEX_BRIDGE_R8A_CONTRACT.json")
+        approval = self.load(R8 / "approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001.json")
+        impl = self.load(R8 / "R8A_IMPLEMENTATION_CONTRACT.json")
         self.assertEqual(r8a["status"], "PREREGISTERED_NO_EXECUTION")
         self.assertTrue(r8a["human_approval_required_before_implementation"])
         self.assertTrue(r8a["implementation_required_before_execution_release"])
         self.assertTrue(r8a["separate_execution_release_required"])
-        self.assertFalse((R8 / "collector.py").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-index-r8a.yml").exists())
+        self.assertTrue(all(value is False for value in r8a["current_runtime_authority"].values()))
+        self.assertTrue(all(value is False for value in approval["current_runtime_authority"].values()))
+        self.assertTrue(all(value is False for value in impl["current_runtime_authority"].values()))
+        self.assertTrue((R8 / "collector.py").is_file())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-index-r8a.yml").is_file())
+        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE.json").exists())
+        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_dedicated_r8_validator_passes(self) -> None:
         completed = subprocess.run(

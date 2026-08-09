@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001",
+  "status": "STATIC_REVALIDATION_ONLY_NO_AWS_MUTATION_NO_NETWORK",
+  "approval_merge_commit": "6c011cb604dec1f169d42b02de4ae67f3f8f8395",
+  "reused_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4",
+  "canonical_trust_policy_path": "research/archive_inventory/r4/R4_OIDC_TRUST_POLICY_TEMPLATE.json",
+  "canonical_trust_policy_sha256": "2ebb60a7747a636a475a23016951265fe377fd9d68f2d9f3a63e33f3bc0189b4",
+  "canonical_permission_policy_path": "research/archive_inventory/r4/R4_IAM_POLICY_TEMPLATE.json",
+  "canonical_permission_policy_sha256": "14d055105b80e0c41462d4934bbaa8d860b0aeda9f2f1b9529267fd0d4d3613d",
+  "trust_workflow_name_required": "Hyperliquid Archive Hourly Body Schema Pilot R4",
+  "trust_ref_required": "refs/heads/main",
+  "persistent_role_exact_getobject_resources": [
+    "arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4",
+    "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"
+  ],
+  "r8a_session_scope": {
+    "allowed_actions": ["s3:GetObject"],
+    "allowed_object_arns": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"
+    ],
+    "strict_subset_of_persistent_role": true,
+    "list_authorized": false,
+    "range_get_authorized": false,
+    "other_object_get_authorized": false
+  },
+  "aws_iam_mutation_required": false,
+  "aws_iam_mutation_authorized": false,
+  "aws_iam_mutation_performed": false,
+  "new_sts_preflight_required": false,
+  "reason": "The existing dedicated R4 role already permits GetObject on the exact modern boundary object and its immutable trust is workflow-name plus canonical-main bound. R8A can only reduce that permission further with an exact-one-object inline session policy; no persistent IAM/trust change is necessary."
+}

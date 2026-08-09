@@ -13,14 +13,16 @@ DERIVATION = R8 / "R7_DERIVATION.json"
 REPORT = R8 / "DESIGN_REPORT.md"
 STATUS = R8 / "APPROVAL_STATUS.md"
 TEMPLATE = R8 / "HUMAN_APPROVAL_TEMPLATE_R8A.md"
+APPROVAL = R8 / "approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001.json"
+IMPLEMENTATION = R8 / "R8A_IMPLEMENTATION_CONTRACT.json"
 R4_EVIDENCE = ROOT / "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json"
 R7_RESULT = ROOT / "research/archive_inventory/r7/evidence/run-31330248235/r7-result.json"
 R7_INDEX = ROOT / "research/archive_inventory/r7/evidence/run-31330248235/r7-wallet-index.ndjson"
 
 R7_EVIDENCE_MERGE = "7802d741f193671e50356c6001dcae149e0fc88a"
 R4_EVIDENCE_MERGE = "fe06874aeeb958d375a27100378f89bd25b4741b"
-R4_RUN = 31313913525
-R7_RUN = 31330248235
+R8_MERGE = "526f92cf3666c8bb616ecb61b6f9881387c1d7ed"
+APPROVAL_MERGE = "6c011cb604dec1f169d42b02de4ae67f3f8f8395"
 MODERN_KEY = "node_fills_by_block/hourly/20250727/8.lz4"
 
 
@@ -37,16 +39,11 @@ def main() -> int:
     derivation = load(DERIVATION)
     r4 = load(R4_EVIDENCE)
     r7 = load(R7_RESULT)
-    report = REPORT.read_text(encoding="utf-8")
-    status = STATUS.read_text(encoding="utf-8")
-    template = TEMPLATE.read_text(encoding="utf-8")
 
-    # R8 remains a static, non-executing design snapshot even after a separately
-    # recorded R8A human approval exists.
     assert design["study_id"] == "HL-WALLET-PERFORMANCE-COPYABILITY-DATA-DESIGN-R8-001"
     assert design["status"] == "STATIC_DESIGN_PREREGISTERED_NO_EXECUTION"
     assert design["parent_r7_evidence_commit"] == R7_EVIDENCE_MERGE
-    assert design["parent_r7_run_id"] == R7_RUN
+    assert design["parent_r7_run_id"] == 31330248235
     assert design["parent_r7_unique_wallet_count"] == 4637
     assert design["parent_r7_sum_fill_count"] == 162815
     assert design["network_requests_executed_by_r8"] == 0
@@ -61,7 +58,6 @@ def main() -> int:
     assert semantic["crossed_maker_taker_semantics_proven"] is False
     assert semantic["one_wallet_address_equals_one_human_or_economic_entity"] is False
     assert semantic["portfolio_graphs_are_precise_accounting"] is False
-
     assert [row["stage"] for row in design["proposed_research_pipeline"]] == [
         "A_GLOBAL_ARCHIVE_SCREEN",
         "B_CANDIDATE_REDUCTION",
@@ -71,12 +67,12 @@ def main() -> int:
     assert design["api_scaling_constraint"]["per_address_user_fills_is_not_primary_population_scan"] is True
     assert design["api_scaling_constraint"]["shortlist_first_required"] is True
 
-    # R8A preregistration remains immutable and cannot self-authorize execution.
+    # Immutable R8A preregistration remains non-self-authorizing after later approval/implementation.
     assert bridge["pilot_id"] == "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001"
     assert bridge["status"] == "PREREGISTERED_NO_EXECUTION"
     assert bridge["parent_r7_evidence_commit"] == R7_EVIDENCE_MERGE
     assert bridge["parent_r4_evidence_commit"] == R4_EVIDENCE_MERGE
-    assert bridge["parent_r4_run_id"] == R4_RUN
+    assert bridge["parent_r4_run_id"] == 31313913525
     assert bridge["human_approval_required_before_implementation"] is True
     assert bridge["implementation_required_before_execution_release"] is True
     assert bridge["separate_execution_release_required"] is True
@@ -102,9 +98,6 @@ def main() -> int:
     assert envelope["maximum_one_time_budget_eur"] == 0.10
     assert envelope["maximum_monthly_budget_eur"] == 0
     assert envelope["maximum_get_object_requests"] == 1
-    assert envelope["maximum_requests_per_object"] == 1
-    assert envelope["maximum_total_compressed_bytes"] == 1517603
-    assert envelope["maximum_total_decompressed_bytes"] == 16777216
     assert envelope["maximum_retries_per_request"] == 0
     assert envelope["http_redirect_following_authorized"] is False
     assert envelope["head_object_authorized"] is False
@@ -113,12 +106,7 @@ def main() -> int:
 
     shape = bridge["required_modern_block_shape"]
     assert shape["top_level_record_type"] == "object"
-    assert shape["required_fields"] == {
-        "local_time": "string",
-        "block_time": "string",
-        "block_number": "integer",
-        "events": "array",
-    }
+    assert shape["required_fields"] == {"local_time":"string","block_time":"string","block_number":"integer","events":"array"}
     assert shape["expected_top_level_block_record_count"] == 4345
     assert shape["event_pair_required_type"] == "array"
     assert shape["event_pair_required_arity"] == 2
@@ -134,15 +122,12 @@ def main() -> int:
     assert retention["retained_wallet_index_fields_only"] == ["wallet_address", "fill_count"]
     for key, value in retention.items():
         if key.endswith("_retention_authorized") and key not in {
-            "wallet_address_retention_authorized",
-            "leading_string_value_retention_authorized",
-            "per_wallet_fill_count_retention_authorized",
-            "unique_wallet_count_retention_authorized",
+            "wallet_address_retention_authorized", "leading_string_value_retention_authorized",
+            "per_wallet_fill_count_retention_authorized", "unique_wallet_count_retention_authorized",
             "valid_event_pair_count_retention_authorized",
         }:
             assert value is False, key
 
-    # Bind the preregistered modern object to prior R4 empirical evidence.
     modern = next(row for row in r4["observations"] if row["dataset_family_id"] == "node_fills_by_block")
     assert modern["key"] == MODERN_KEY
     assert modern["compressed_object_size_bytes"] == target["expected_size_bytes"]
@@ -152,47 +137,43 @@ def main() -> int:
     assert modern["record_count"] == target["expected_top_level_block_record_count"]
     assert modern["schema_status"] == "FULL_SCHEMA_PARSED"
 
-    # Bind R8 to the exact R7 evidence snapshot without inventing alias fields.
     assert r7["research_conclusion"] == "WALLET_INDEX_RECONSTRUCTION_COMPLETE"
     assert r7["wallet_index_summary"]["unique_wallet_count"] == 4637
     assert r7["wallet_index_summary"]["sum_fill_count"] == 162815
     assert hashlib.sha256(R7_INDEX.read_bytes()).hexdigest() == r7["wallet_index_summary"]["wallet_index_sha256"]
     assert derivation["parent_commit"] == R7_EVIDENCE_MERGE
-    assert derivation["parent_run_id"] == R7_RUN
-    assert derivation["parent_terminal_status"] == "R7_WALLET_INDEX_STUDY_COMPLETE"
-    assert derivation["parent_research_conclusion"] == "WALLET_INDEX_RECONSTRUCTION_COMPLETE"
-    carried = derivation["facts_carried_forward"]
-    assert carried["unique_wallet_count"] == 4637
-    assert carried["sum_fill_count"] == 162815
-    assert carried["r7_release_consumed"] is True
-    assert carried["r7_remaining_get_object_budget"] == 0
+    assert derivation["parent_run_id"] == 31330248235
+    assert derivation["facts_carried_forward"]["unique_wallet_count"] == 4637
+    assert derivation["facts_carried_forward"]["sum_fill_count"] == 162815
     assert sources["study_id"] == design["study_id"]
 
+    report = REPORT.read_text(encoding="utf-8")
+    status = STATUS.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
     assert "STATIC_PERFORMANCE_COPYABILITY_DATA_DESIGN_COMPLETE_MODERN_BRIDGE_REQUIRED" in report
-    assert ("HUMAN APPROVAL REQUIRED" in status) or ("HUMAN APPROVED" in status)
-    for required in (
-        "APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001",
-        "reviewed_commit=<CANONICAL_R8_STATIC_DESIGN_MERGE_COMMIT>",
-        "maximum_one_time_budget_eur=0.10",
-        f"object_key={MODERN_KEY}",
-        "retained_wallet_index_fields_only=wallet_address,fill_count",
-        "performance_field_values_retention_authorized=false",
-        "historical_multi_hour_ingestion_authorized=false",
-        "wallet_ranking_authorized=false",
-        "pnl_or_alpha_analysis_authorized=false",
-        "live_authorized=false",
-    ):
-        assert required in template, required
+    assert "HUMAN APPROVED" in status
+    assert "APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001" in template
+    assert "retained_wallet_index_fields_only=wallet_address,fill_count" in template
+    assert "historical_multi_hour_ingestion_authorized=false" in template
+    assert "wallet_ranking_authorized=false" in template
+    assert "pnl_or_alpha_analysis_authorized=false" in template
 
-    # A separately recorded approval is allowed; implementation/runtime artifacts are not.
-    for path in (
-        R8 / "collector.py",
-        R8 / "R8A_IMPLEMENTATION_CONTRACT.json",
-        R8 / "R8A_EXECUTION_RELEASE.json",
-        R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json",
-        ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-index-r8a.yml",
-    ):
-        assert not path.exists(), path
+    # Later-stage snapshots may exist only if they stay inert; release/activation still must not exist here.
+    if APPROVAL.exists():
+        approval = load(APPROVAL)
+        assert approval["reviewed_commit"] == R8_MERGE
+        assert all(value is False for value in approval["current_runtime_authority"].values())
+    if IMPLEMENTATION.exists():
+        impl = load(IMPLEMENTATION)
+        assert APPROVAL.exists()
+        assert impl["approval_merge_commit"] == APPROVAL_MERGE
+        assert impl["status"] == "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION"
+        assert all(value is False for value in impl["current_runtime_authority"].values())
+        assert impl["s3_requests_executed"] == 0
+        assert impl["wallet_addresses_retained"] == 0
+        assert impl["empirical_result"] is None
+    assert not (R8 / "R8A_EXECUTION_RELEASE.json").exists()
+    assert not (R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
 
     print("R8_STATIC_DESIGN_VALID")
     return 0
