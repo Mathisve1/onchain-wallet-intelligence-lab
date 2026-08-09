@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 R9 = ROOT / "research/archive_inventory/r9"
+APPROVAL = R9 / "approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001.json"
 
 
 class ArchiveR9PreregistrationTests(unittest.TestCase):
@@ -71,16 +72,22 @@ class ArchiveR9PreregistrationTests(unittest.TestCase):
         self.assertEqual(c["wallet_feature_rows_created_by_r9_preregistration"], 0)
         self.assertIsNone(c["empirical_result"])
 
-    def test_approval_is_required_and_no_implementation_exists(self) -> None:
+    def test_approval_requirement_remains_frozen_while_later_approval_is_separate(self) -> None:
         c = self.load("MODERN_WALLET_FEATURE_PILOT_R9_CONTRACT.json")
         self.assertTrue(c["human_approval_required_before_implementation"])
         self.assertTrue(c["implementation_required_before_execution_release"])
         self.assertTrue(c["separate_execution_release_required"])
         self.assertTrue(c["separate_canonical_activation_required"])
+        if APPROVAL.exists():
+            approval = json.loads(APPROVAL.read_text(encoding="utf-8"))
+            self.assertEqual(approval["reviewed_commit"], "62ce0009c3c4aad70d2a91f242a690cd26ace355")
+            self.assertTrue(approval["implementation_authorized"])
+            self.assertFalse(approval["execution_authorized_by_this_record"])
+            self.assertTrue(all(value is False for value in approval["current_runtime_authority"].values()))
         self.assertFalse((R9 / "collector.py").exists())
         self.assertFalse((R9 / "R9_IMPLEMENTATION_CONTRACT.json").exists())
         self.assertFalse((R9 / "R9_EXECUTION_RELEASE.json").exists())
-        self.assertFalse((R9 / "approvals").exists())
+        self.assertFalse((R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_dedicated_preregistration_validator_passes(self) -> None:
         completed = subprocess.run(

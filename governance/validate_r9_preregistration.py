@@ -9,6 +9,7 @@ CONTRACT = R9 / "MODERN_WALLET_FEATURE_PILOT_R9_CONTRACT.json"
 DERIVATION = R9 / "R8B_DERIVATION.json"
 TEMPLATE = R9 / "HUMAN_APPROVAL_TEMPLATE_R9.md"
 STATUS = R9 / "APPROVAL_STATUS.md"
+APPROVAL = R9 / "approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001.json"
 R8B = ROOT / "research/archive_inventory/r8b/CUTOVER_FORENSICS_R8B_CONTRACT.json"
 R8A_RESULT = ROOT / "research/archive_inventory/r8/evidence/run-31333421763/r8a-result.json"
 
@@ -162,14 +163,24 @@ def main() -> int:
     assert "wallet_ranking_authorized=false" in template
     assert "historical_multi_hour_ingestion_authorized=false" in template
     assert "approval_reason_code=ONE_EXACT_R8A_BOUND_MODERN_TRANSITION_FIXTURE_FOR_PER_WALLET_AGGREGATE_FEATURE_PIPELINE_ONLY" in template
-    assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in status
+
+    if APPROVAL.exists():
+        approval = load(APPROVAL)
+        assert approval["reviewed_commit"] == "62ce0009c3c4aad70d2a91f242a690cd26ace355"
+        assert approval["implementation_authorized"] is True
+        assert approval["execution_authorized_by_this_record"] is False
+        assert all(value is False for value in approval["current_runtime_authority"].values())
+        assert all(value is False for value in approval["downstream_authorizations"].values())
+        assert all(value is False for value in approval["trading_authorizations"].values())
+        assert "HUMAN_APPROVAL_RECORDED_IMPLEMENTATION_ALLOWED_NO_EXECUTION" in status
+    else:
+        assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in status
 
     assert not (R9 / "collector.py").exists()
     assert not (ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml").exists()
     assert not (R9 / "R9_IMPLEMENTATION_CONTRACT.json").exists()
     assert not (R9 / "R9_EXECUTION_RELEASE.json").exists()
     assert not (R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
-    assert not (R9 / "approvals").exists()
 
     print("R9_PREREGISTRATION_VALID")
     return 0
