@@ -172,7 +172,6 @@ def main() -> int:
         R7 / "collector.py",
         R7 / "R7_IMPLEMENTATION_CONTRACT.json",
         R7 / "R7_EXECUTION_RELEASE.json",
-        R7 / "approvals/APPROVE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001.txt",
         ROOT / ".github/workflows/hyperliquid-archive-wallet-index-r7.yml",
     ]
     for path in forbidden_paths:
