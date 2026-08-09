@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `R3_CANONICAL_ACTIVATION_UNDER_REVIEW_NO_EXECUTION`
+- phase: `R3_HOURLY_METADATA_INVENTORY_ATTESTED_SUCCESS`
 - AWS identity: `ATTESTED_STS_IDENTITY_MATCH`
 - exact node-data Region: `ap-northeast-1`
 - R0 release: `CONSUMED_BY_RUN_31260043109`
@@ -20,67 +20,67 @@
 - canonical implementation merge: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`
 - implementation PR / exact head: `42` / `02681dbf13415f953fd3c79f66ee5de4919a169c`
 - implementation CI run / job / tests: `31297902934` / `93205871178` / `236/236 PASS`
-- implementation validator / manifest / governance: `R3_IMPLEMENTATION_VALID` / `BYTE_EXACT_PASS` / `PASS`
+- canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`
+- release PR / exact head / CI: `43` / `95dd5765728d2977cdf51b3ae13d6d76af93af2d` / `31299183537`
+- canonical activation merge / dispatch SHA: `d2cc879ceb789c33ea7c6fe6ace17d1636de80ef`
+- activation anchor / single-use window start: `4bc99701f6a24a045c84b205963685a2fe8c3122` / `2026-08-09T06:38:46Z`
 - exact target / Region: `hl-mainnet-node-data` / `ap-northeast-1`
-- exact prefixes:
-  - `node_fills_by_block/hourly/`
-  - `node_fills/hourly/`
-  - `node_trades/hourly/`
+- exact prefixes: `node_fills_by_block/hourly/`, `node_fills/hourly/`, `node_trades/hourly/`
 - approved hard envelope: max `48` LIST requests, `16` pages/family, `1000` keys/request, `48000` entries, `33554432` response bytes, `300` seconds, `0` retries
 - approved one-time / monthly budget: `EUR 0.10 / EUR 0`
-- pagination / continuation following within activated scope: `true / true`
+
+## R3 executed result
+
+- release status: `CONSUMED_BY_RUN_31299905850_SUCCESS`
+- rerun authorized: `false`
+- run / job / artifact: `31299905850` / `93210902329` / `9034170863`
+- artifact name: `hyperliquid-archive-hourly-metadata-r3-31299905850-1`
+- artifact size: `471178` bytes
+- provider and independently downloaded ZIP SHA-256: `1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88`
+- terminal / technical result: `R3_HOURLY_METADATA_INVENTORY_PASS` / `THREE_HOURLY_FAMILIES_COMPLETE`
+- requests attempted / S3 HTTP / successful / failed: `14 / 14 / 14 / 0`
+- continuation requests: `11`
+- total metadata entries / response bytes: `12119 / 3997072`
+- collector runtime: `17.313515 sec`
+- retries / redirects / StartAfter / Delimiter: `0 / 0 / false / false`
+- Requester Pays requested: `true`
 - continuation token values retained: `false`
-- repeated token / duplicate key: fail closed
-- redirect / StartAfter / Delimiter: `false / false / false`
+- object body requested / decompression / market-data ingestion: `false / false / false`
 
-## R3 canonical release candidate
+### Complete family inventory
 
-- release candidate file: `research/archive_inventory/r3/R3_EXECUTION_RELEASE.json`
-- release ID: `RELEASE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001`
-- immutable candidate status: `RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION`
-- release PR / exact head: `43` / `95dd5765728d2977cdf51b3ae13d6d76af93af2d`
-- release exact-head CI run / job / tests: `31299183537` / `93209089110` / `244/244 PASS`
-- release validator / manifest / governance: `R3_RELEASE_CANDIDATE_VALID` / `BYTE_EXACT_PASS` / `PASS`
-- canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`
-- release merge independently compared with `main`: `identical`
-- release candidate content SHA-256: `c64719a8e9b8a82a361dcc7e4b03c12fba8027cd8d1e72bfc05487a2ef6ad55b`
-- candidate runtime Requester Pays / ListObjectsV2 / dispatch authority: `false / false / false`
-- candidate execution ready: `false`
-- candidate rerun authorized: `false`
+| family | pages | entries | earliest path hour UTC | latest path hour UTC | gap result |
+|---|---:|---:|---|---|---|
+| `node_fills_by_block` | 10 | 9070 | `2025-07-27T08:00:00Z` | `2026-08-09T05:00:00Z` | `NO_GAP_CLAIM` |
+| `node_fills` | 2 | 1507 | `2025-05-25T14:00:00Z` | `2025-07-27T08:00:00Z` | `NO_GAP_CLAIM` |
+| `node_trades` | 2 | 1542 | `2025-03-22T10:00:00Z` | `2025-06-21T09:00:00Z` | `PROVEN_KEY_GAP` |
 
-The canonical release candidate remains an immutable, inert snapshot. It is not rewritten to create authority. Runtime scope is represented only by the separate activation overlay below.
+The preregistered internal-hour gap rule proves `633` missing internal `node_trades` hourly keys from `2025-05-25T15:00:00Z` through `2025-06-20T23:00:00Z`. Boundary-day hours are intentionally excluded from that count; no broader completeness claim is made beyond the enumerated prefix.
 
-## R3 canonical activation candidate
+The legacy `node_fills` latest path hour and modern `node_fills_by_block` earliest path hour are both exactly `2025-07-27T08:00:00Z` (`delta_hours=0`). This proves a metadata boundary overlap/same-hour transition, but does **not** prove body-schema equivalence or semantic continuity.
 
-- activation overlay: `research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json`
-- activation record present on review branch: `true`
-- activation status: `RELEASED_FOR_EXACTLY_ONE_CANONICAL_R3_RUN`
-- activation anchor commit: `4bc99701f6a24a045c84b205963685a2fe8c3122`
-- single-use window start: `2026-08-09T06:38:46Z`
-- activation is bound to canonical release merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`
-- activation is bound to canonical implementation: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`
-- active overlay Requester Pays / ListObjectsV2 / single dispatch scope: `true / true / true`
-- active overlay pagination / continuation-token following: `true / true`
-- active overlay rerun authorized: `false`
-- activation review branch itself network-executable: `false`; workflow requires `refs/heads/main`
-- authority becomes effective only after exact activation head is reviewed, CI-green and canonically merged to `main`
-- activation PR/CI AWS or S3 execution: `forbidden`
-- R3 S3 requests executed / entries observed: `0 / 0`
-- R3 empirical result: `null`
+## Evidence integrity
 
-The workflow candidate is bound to the exact implementation commit and the separate canonicalization overlay. Before AWS OIDC it must re-run the complete tests, repository governance, implementation/release/activation lineage checks, the exact approved envelope, canonical `workflow_dispatch` + `refs/heads/main` identity and the single-use run-history gate. A re-run is forbidden. The first eligible canonical dispatch after the immutable anchor consumes the activation whether later execution passes or fails.
+- context raw SHA-256: `b117a43f991db5bab0e2721e936b1cf536ef918747fe87e90ad1c2974439a54b`
+- result raw SHA-256: `94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479`
+- return-code raw SHA-256: `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa`
+- internal artifact ledger: `PASS`
+- provider digest vs independently downloaded ZIP: `MATCH`
+- compact durable summary: `research/archive_inventory/r3/evidence/run-31299905850/R3_COMPACT_INVENTORY_SUMMARY.json`
+- independent verification: `research/archive_inventory/r3/evidence/run-31299905850/INDEPENDENT_ARTIFACT_VERIFICATION.json`
 
-## Closed capabilities
+## Closed capabilities after R3
 
+- R3 execution ready / Requester Pays / ListObjectsV2: `false / false / false`; release consumed
 - GetObject / HeadObject / GetObjectAttributes / range GET: `false`
 - object-version or account-wide bucket listing: `false`
 - explorer-block / replica-command inventory: `false / false`
 - object-body download / decompression: `false / false`
-- `hyperliquid-archive` market-data or asset-context inventory: `false / false`
 - market-data ingestion: `false`
 - larger 300-request inventory: `false`
 - integration / paper / shadow / live / leverage / capital allocation: all `false`
+- empirical trading result: `null`
 
 ## Next gate
 
-Complete the activation implementation without making any AWS/S3 request. Require exact-head Research CI, `R3_IMPLEMENTATION_VALID`, `R3_RELEASE_CANDIDATE_VALID`, `R3_ACTIVATION_VALID`, byte-exact repository-manifest validation and clean-context review. Merge only the exact reviewed activation head. After merge, verify the actual activation merge is canonical `main`; only then may exactly one manual R3 workflow dispatch occur within the approved envelope. The first eligible dispatch consumes the single-use activation regardless of PASS or FAIL.
+R3 metadata inventory is complete and consumed. Do not rerun it. The next research gate is a separately preregistered, separately human-approved **minimal object-body/schema pilot** if body access is needed to determine whether the hourly archives can reconstruct wallet fills/trades. Any such pilot must bind exact object keys selected from this R3 metadata evidence, minimize bytes/objects, define decompression/schema limits, retain no unnecessary payload, and keep market ingestion and all trading/capital authorizations closed until separately reviewed.
