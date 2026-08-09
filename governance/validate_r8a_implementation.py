@@ -190,7 +190,17 @@ def main() -> int:
     for filename in ("r8a-context.json", "r8a-result.json", "r8a-wallet-index.ndjson", "r8a.rc", "R8A_FILES.sha256"):
         assert filename in workflow
 
-    assert not RELEASE.exists()
+    if RELEASE.exists():
+        release = load(RELEASE)
+        assert release["release_id"] == "RELEASE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001"
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["rerun_authorized"] is False
+        assert release["canonical_implementation_merge_commit"] == "cb4f0e3272917aa27f53c85432107b21d2d242b9"
+        assert release["s3_requests_executed"] == 0
+        assert release["wallet_addresses_retained"] == 0
+        assert release["empirical_result"] is None
     assert not ACTIVATION.exists()
     print("R8A_IMPLEMENTATION_VALID")
     return 0
