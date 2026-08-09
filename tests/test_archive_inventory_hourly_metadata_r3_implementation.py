@@ -10,6 +10,7 @@ BASE = ROOT / "research/archive_inventory/r3"
 IMPLEMENTATION = BASE / "R3_IMPLEMENTATION_CONTRACT.json"
 RELEASE = BASE / "R3_EXECUTION_RELEASE.json"
 ACTIVATION = BASE / "R3_EXECUTION_RELEASE_CANONICALIZATION.json"
+CONSUMPTION = BASE / "R3_EXECUTION_RELEASE_CONSUMPTION.json"
 VALIDATOR = ROOT / "governance/validate_r3_implementation.py"
 SPEC = importlib.util.spec_from_file_location("validate_r3_implementation", VALIDATOR)
 assert SPEC and SPEC.loader
@@ -101,16 +102,21 @@ class ArchiveHourlyMetadataR3ImplementationTests(unittest.TestCase):
             self.assertFalse(r[key], key)
         self.assertTrue(all(value is False for value in r["trading_authorizations"].values()))
 
-    def test_current_state_uses_separate_activation_without_mutating_implementation(self) -> None:
+    def test_current_state_records_consumed_run_without_mutating_implementation(self) -> None:
         status = (ROOT / "research/archive_inventory/STATUS.md").read_text(encoding="utf-8")
         self.assertIn("canonical implementation merge: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`", status)
         self.assertIn("canonical human approval merge: `e562f3fbd8f1dac1b4d7e93eed2f5ee6b77c5da6`", status)
         self.assertIn("canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`", status)
-        self.assertIn("R3_CANONICAL_ACTIVATION_UNDER_REVIEW_NO_EXECUTION", status)
-        self.assertIn("R3 S3 requests executed / entries observed: `0 / 0`", status)
+        self.assertIn("R3_HOURLY_METADATA_INVENTORY_ATTESTED_SUCCESS", status)
+        self.assertIn("CONSUMED_BY_RUN_31299905850_SUCCESS", status)
+        self.assertIn("requests attempted / S3 HTTP / successful / failed: `14 / 14 / 14 / 0`", status)
         self.assertTrue(ACTIVATION.exists())
+        self.assertTrue(CONSUMPTION.exists())
         activation = json.loads(ACTIVATION.read_text(encoding="utf-8"))
+        consumption = json.loads(CONSUMPTION.read_text(encoding="utf-8"))
         self.assertEqual(activation["implementation_commit"], "3b1dd0df4c5194875e22c1b790e0b41961313aa8")
+        self.assertEqual(consumption["status"], "CONSUMED_BY_RUN_31299905850_SUCCESS")
+        self.assertFalse(consumption["rerun_authorized"])
 
     def test_dedicated_validator_passes(self) -> None:
         self.assertEqual(validator.main(), 0)

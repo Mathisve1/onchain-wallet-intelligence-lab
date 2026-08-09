@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory/r3"
 RELEASE = BASE / "R3_EXECUTION_RELEASE.json"
 ACTIVATION = BASE / "R3_EXECUTION_RELEASE_CANONICALIZATION.json"
+CONSUMPTION = BASE / "R3_EXECUTION_RELEASE_CONSUMPTION.json"
 IMPLEMENTATION = BASE / "R3_IMPLEMENTATION_CONTRACT.json"
 VALIDATOR = ROOT / "governance/validate_r3_release.py"
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-metadata-inventory-r3.yml"
@@ -66,7 +67,7 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertFalse(r["start_after_authorized"])
         self.assertFalse(r["delimiter_authorized"])
 
-    def test_release_candidate_remains_byte_immutable_and_inert_after_activation(self) -> None:
+    def test_release_candidate_remains_byte_immutable_and_inert_after_run(self) -> None:
         r = self.load(RELEASE)
         self.assertEqual(
             hashlib.sha256(RELEASE.read_bytes()).hexdigest(),
@@ -77,6 +78,7 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertIsNone(r["canonical_release_merge_commit"])
         self.assertIsNone(r["single_use_window_start_utc"])
         self.assertTrue(ACTIVATION.exists())
+        self.assertTrue(CONSUMPTION.exists())
         self.assertTrue(r["requester_pays_scope_authorized_after_activation"])
         self.assertTrue(r["list_objects_v2_scope_authorized_after_activation"])
         self.assertTrue(r["single_workflow_dispatch_authorized_after_activation"])
@@ -90,9 +92,12 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertIsNone(r["empirical_result"])
 
         a = self.load(ACTIVATION)
+        c = self.load(CONSUMPTION)
         self.assertEqual(a["release_candidate_path"], "research/archive_inventory/r3/R3_EXECUTION_RELEASE.json")
         self.assertTrue(a["release_candidate_immutable"])
         self.assertEqual(a["release_merge_commit"], "6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5")
+        self.assertEqual(c["status"], "CONSUMED_BY_RUN_31299905850_SUCCESS")
+        self.assertFalse(c["rerun_authorized"])
 
     def test_forbidden_capabilities_and_trading_remain_closed(self) -> None:
         r = self.load(RELEASE)
@@ -117,23 +122,21 @@ class ArchiveHourlyMetadataR3ReleaseTests(unittest.TestCase):
         self.assertEqual(impl["s3_requests_executed"], 0)
         self.assertEqual(impl["metadata_entries_observed"], 0)
 
-    def test_current_workflow_uses_separate_activation_overlay(self) -> None:
+    def test_current_workflow_still_references_historical_activation_overlay(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: 3b1dd0df4c5194875e22c1b790e0b41961313aa8", text)
         self.assertIn("EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json", text)
         self.assertIn("RELEASE_CANDIDATE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json", text)
-        self.assertLess(
-            text.index("Prove canonical implementation and release before AWS OIDC"),
-            text.index("Assume exact AWS role with R3-only session permissions"),
-        )
+        self.assertIn("Run attempt must be 1; re-runs are forbidden", text)
 
-    def test_status_records_canonical_release_and_activation_review(self) -> None:
+    def test_status_records_consumed_successful_run(self) -> None:
         status = (ROOT / "research/archive_inventory/STATUS.md").read_text(encoding="utf-8")
-        self.assertIn("R3_CANONICAL_ACTIVATION_UNDER_REVIEW_NO_EXECUTION", status)
+        self.assertIn("R3_HOURLY_METADATA_INVENTORY_ATTESTED_SUCCESS", status)
         self.assertIn("canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`", status)
-        self.assertIn("activation anchor commit: `4bc99701f6a24a045c84b205963685a2fe8c3122`", status)
-        self.assertIn("single-use window start: `2026-08-09T06:38:46Z`", status)
-        self.assertIn("R3 S3 requests executed / entries observed: `0 / 0`", status)
+        self.assertIn("activation anchor / single-use window start: `4bc99701f6a24a045c84b205963685a2fe8c3122` / `2026-08-09T06:38:46Z`", status)
+        self.assertIn("CONSUMED_BY_RUN_31299905850_SUCCESS", status)
+        self.assertIn("run / job / artifact: `31299905850` / `93210902329` / `9034170863`", status)
+        self.assertIn("total metadata entries / response bytes: `12119 / 3997072`", status)
 
     def test_release_validator_passes(self) -> None:
         self.assertEqual(validator.main(), 0)
