@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "R6A-DERIVATION-001",
+  "parent_study_id": "HL-ARCHIVE-LEGACY-USER-KEY-PROVENANCE-R6-001",
+  "parent_canonical_commit": "17a907923f63476c983b8c2dc131d34c491af913",
+  "parent_terminal_result": "LEADING_STRING_USER_ADDRESS_SEMANTICS_HIGH_CONFIDENCE_STATIC_INFERENCE",
+  "parent_semantic_label": "HYPERLIQUID_USER_ADDRESS",
+  "parent_semantic_label_status": "SUPPORTED_INFERENCE_NOT_DIRECT_SERIALIZER_PROOF",
+  "parent_confidence_class": "HIGH",
+  "parent_remaining_gap": "R6 did not inspect any archive leading-string value or lexical-shape aggregate, so it did not directly establish that every leading string matches the 42-character 0x-prefixed hexadecimal onchain-address shape.",
+  "child_gate_id": "HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001",
+  "child_purpose": "Resolve only the remaining lexical-shape gap on the same exact R5-bound object while retaining counts only and no string or wallet-address values.",
+  "same_exact_parent_object": {
+    "bucket": "hl-mainnet-node-data",
+    "signing_region": "ap-northeast-1",
+    "key": "node_fills/hourly/20250727/8.lz4",
+    "expected_size_bytes": 12726384,
+    "expected_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+    "expected_compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+    "expected_decompressed_byte_count": 62169139
+  },
+  "why_no_broader_scope": [
+    "R5 already resolved the serialization shape on this exact object.",
+    "R6 already established the user-address semantics as a high-confidence static inference from historical official sources.",
+    "Only lexical confirmation remains before considering any separate address-retention or wallet-reconstruction gate.",
+    "A second object, pagination, range request, market data, wallet reconstruction or entity analysis would not be necessary to answer this lexical question."
+  ],
+  "current_network_authority": false,
+  "current_paid_request_authority": false,
+  "current_wallet_address_retention_authority": false,
+  "current_wallet_reconstruction_authority": false,
+  "current_trading_authority": false
+}

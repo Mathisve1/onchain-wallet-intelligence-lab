@@ -1,0 +1,161 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001",
+  "status": "PREREGISTERED_STATIC_NO_EXECUTION",
+  "purpose": "Confirm only whether every leading string in the exact R5-bound legacy node_fills object matches the expected Hyperliquid onchain-address lexical shape, without retaining any string, address or payload value.",
+  "parent_r6": {
+    "canonical_commit": "17a907923f63476c983b8c2dc131d34c491af913",
+    "study_id": "HL-ARCHIVE-LEGACY-USER-KEY-PROVENANCE-R6-001",
+    "terminal_result": "LEADING_STRING_USER_ADDRESS_SEMANTICS_HIGH_CONFIDENCE_STATIC_INFERENCE",
+    "semantic_label": "HYPERLIQUID_USER_ADDRESS",
+    "semantic_label_status": "SUPPORTED_INFERENCE_NOT_DIRECT_SERIALIZER_PROOF",
+    "confidence_class": "HIGH"
+  },
+  "parent_r5": {
+    "canonical_evidence_commit": "4400963aa972ed878650116202cc72880e667849",
+    "run_id": 31321019885,
+    "terminal_status": "R5_LEGACY_FORMAT_FINGERPRINT_COMPLETE",
+    "technical_result": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+    "nonempty_record_count": 162815,
+    "format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT"
+  },
+  "exact_future_network_target": {
+    "bucket": "hl-mainnet-node-data",
+    "signing_region": "ap-northeast-1",
+    "regional_virtual_hosted_endpoint": "hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com",
+    "key": "node_fills/hourly/20250727/8.lz4",
+    "expected_size_bytes": 12726384,
+    "expected_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+    "expected_compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+    "expected_decompressed_byte_count": 62169139
+  },
+  "proposed_future_execution_envelope": {
+    "maximum_one_time_budget_eur": 0.1,
+    "maximum_monthly_budget_eur": 0,
+    "maximum_get_object_requests": 1,
+    "maximum_requests_per_object": 1,
+    "maximum_total_compressed_bytes": 12726384,
+    "maximum_total_decompressed_bytes": 134217728,
+    "maximum_runtime_seconds": 120,
+    "maximum_retries_per_request": 0,
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_content_length_required": true,
+    "exact_compressed_sha256_required": true,
+    "exact_decompressed_byte_count_required": true,
+    "http_redirect_following_authorized": false,
+    "head_object_authorized": false,
+    "range_get_authorized": false,
+    "list_objects_v2_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_all_my_buckets_authorized": false
+  },
+  "proposed_streaming_lexical_classifier": {
+    "lz4_frame_stream_only": true,
+    "alternate_decompressor_fallback_authorized": false,
+    "strict_utf8_decode": true,
+    "strict_json_duplicate_keys_rejected": true,
+    "strict_json_nonfinite_constants_rejected": true,
+    "required_top_level_record_type": "array",
+    "required_array_arity": 2,
+    "required_ordered_element_types": [
+      "string",
+      "object"
+    ],
+    "maximum_record_bytes": 16777216,
+    "maximum_records_parsed": 5000000,
+    "expected_nonempty_record_count": 162815,
+    "leading_string_tests": {
+      "count_all_leading_strings": true,
+      "count_length_42": true,
+      "count_regex_0x_40_hex_case_insensitive": true,
+      "count_regex_0x_40_hex_lowercase": true,
+      "count_nonmatching_0x_40_hex": true,
+      "retain_any_leading_string": false,
+      "retain_any_address": false,
+      "retain_any_hash_of_leading_string": false,
+      "retain_distinct_address_set": false
+    },
+    "retained_aggregates_only": [
+      "nonempty_record_count",
+      "pair_string_object_record_count",
+      "leading_string_count",
+      "leading_string_length_42_count",
+      "leading_string_0x40hex_count",
+      "leading_string_lowercase_0x40hex_count",
+      "leading_string_non_0x40hex_count"
+    ],
+    "payload_values_in_evidence_authorized": false,
+    "string_values_in_evidence_authorized": false,
+    "numeric_values_in_evidence_authorized": false,
+    "wallet_address_retention_authorized": false,
+    "record_payload_retention_authorized": false,
+    "raw_compressed_object_retention_authorized": false,
+    "raw_decompressed_payload_retention_authorized": false
+  },
+  "allowed_research_conclusions": [
+    "ALL_LEADING_STRINGS_MATCH_HYPERLIQUID_ADDRESS_SHAPE",
+    "SOME_LEADING_STRINGS_DO_NOT_MATCH_HYPERLIQUID_ADDRESS_SHAPE",
+    "R6A_LEXICAL_SHAPE_UNRESOLVED",
+    "R6A_TRANSPORT_OR_INTEGRITY_FAIL"
+  ],
+  "interpretation_boundary": {
+    "lexical_match_may_strengthen_parent_r6_semantic_inference": true,
+    "lexical_match_alone_proves_control_or_identity_of_human_owner": false,
+    "lexical_match_alone_authorizes_wallet_address_retention": false,
+    "wallet_reconstruction_authorized": false,
+    "entity_clustering_authorized": false,
+    "copyability_analysis_authorized": false,
+    "pnl_or_alpha_analysis_authorized": false,
+    "market_data_ingestion_authorized": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "current_runtime_authority": {
+    "human_approval_recorded": false,
+    "implementation_authorized": false,
+    "execution_release_present": false,
+    "execution_authorized": false,
+    "paid_request_authorized": false,
+    "requester_pays_authorized": false,
+    "get_object_authorized": false,
+    "object_body_download_authorized": false,
+    "decompression_authorized": false,
+    "lexical_classification_authorized": false,
+    "s3_requests_executed": 0,
+    "compressed_bytes_downloaded": 0,
+    "decompressed_bytes_processed": 0,
+    "empirical_result": null
+  },
+  "required_future_gates": [
+    "canonical_preregistration_merge",
+    "explicit_human_scope_and_budget_approval_bound_to_preregistration_commit",
+    "separate_reviewed_implementation",
+    "explicit_revalidation_of_least_privilege_AWS_role_and_one-object_session_scope",
+    "separate_single_use_execution_release",
+    "manual_main_dispatch_attempt_1_only",
+    "independent_artifact_verification",
+    "canonical_evidence_merge"
+  ],
+  "forbidden_in_this_preregistration": [
+    "workflow_dispatch_workflow",
+    "network_collector",
+    "AWS_role_mutation",
+    "S3_request",
+    "object_download",
+    "decompression",
+    "archive_string_value_inspection",
+    "wallet_address_retention",
+    "wallet_reconstruction",
+    "entity_clustering",
+    "copyability_analysis",
+    "market_data_ingestion",
+    "trading"
+  ]
+}
