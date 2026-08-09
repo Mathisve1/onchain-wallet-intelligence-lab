@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "R6A-AWS-ROLE-REUSE-001",
+  "status": "STATIC_REVALIDATION_ONLY_NO_AWS_MUTATION_NO_NETWORK",
+  "r6a_preregistration_merge": "870fdf3e10a761d6c4589d43def8e436f3a129b5",
+  "r6a_approval_merge": "06c0086f80cdbc3d058bdeea64b618da276e95ec",
+  "r6a_approval_text_sha256": "b24c67f527a320e533408fd821d10b5e2ea01d020c837e87ae5e5bbd386c94ed",
+  "reused_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4",
+  "role_operator_attestation_merge": "c45527941dea7d152e332327ebd0593dc2413bea",
+  "role_preflight_evidence_merge": "a91f0849e8cf14b6924da73ca2b72595deab5d8d",
+  "r4_body_evidence_merge": "fe06874aeeb958d375a27100378f89bd25b4741b",
+  "r5_evidence_merge": "4400963aa972ed878650116202cc72880e667849",
+  "canonical_trust_policy_sha256": "2ebb60a7747a636a475a23016951265fe377fd9d68f2d9f3a63e33f3bc0189b4",
+  "canonical_permission_policy_sha256": "14d055105b80e0c41462d4934bbaa8d860b0aeda9f2f1b9529267fd0d4d3613d",
+  "persistent_role_permission_scope": {
+    "allowed_action": "s3:GetObject",
+    "allowed_object_arns": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"
+    ]
+  },
+  "r6a_session_scope": {
+    "allowed_action": "s3:GetObject",
+    "allowed_object_arns": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4"
+    ],
+    "strict_subset_of_persistent_role": true,
+    "same_exact_object_as_successful_r5_session": true
+  },
+  "oidc_trust_compatibility": {
+    "required_workflow_claim": "Hyperliquid Archive Hourly Body Schema Pilot R4",
+    "r6a_workflow_file_must_be_distinct": true,
+    "r6a_run_name_must_identify_r6a": true,
+    "new_role_or_trust_policy_mutation_required": false
+  },
+  "independent_prior_network_proofs": {
+    "sts_only_preflight_run": 31312067367,
+    "sts_only_preflight_zero_s3": true,
+    "r4_body_run": 31313913525,
+    "r4_body_role_assumption_succeeded": true,
+    "r4_body_exact_legacy_get_succeeded": true,
+    "r5_run": 31321019885,
+    "r5_role_assumption_succeeded": true,
+    "r5_same_exact_legacy_get_succeeded": true,
+    "r5_zero_retries": true
+  },
+  "current_r6a_network_authority": false,
+  "aws_iam_mutation_authorized": false,
+  "aws_iam_mutation_performed": false,
+  "new_sts_preflight_required": false,
+  "reason_new_preflight_not_required": "The unchanged dedicated R4 role/trust path already passed an S3-denied STS preflight, the bounded R4 body run, and the successful R5 run against this exact legacy object. R6A uses the same exact-one-object effective session scope and performs no IAM mutation; a new STS-only probe would add no narrower permission evidence.",
+  "market_data_ingestion_authorized": false,
+  "wallet_address_retention_authorized": false,
+  "wallet_reconstruction_authorized": false,
+  "entity_clustering_authorized": false,
+  "copyability_analysis_authorized": false,
+  "pnl_or_alpha_analysis_authorized": false,
+  "trading_authorized": false
+}
