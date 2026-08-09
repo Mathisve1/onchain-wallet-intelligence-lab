@@ -12,6 +12,7 @@ RELEASE = BASE / "R4_EXECUTION_RELEASE.json"
 PRICING = BASE / "R4_PRICING_EVIDENCE.json"
 ACTIVATION = BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json"
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml"
+IMPLEMENTATION = "180c89ead78f9a6f4560a1ec12575658e62586ee"
 
 
 class ArchiveHourlyBodySchemaR4ReleaseTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class ArchiveHourlyBodySchemaR4ReleaseTests(unittest.TestCase):
         self.assertEqual(release["preregistration_commit"], "25a1f621d15cb708a485893025f03b991628aae1")
         self.assertEqual(release["approval_merge_commit"], "0191350683c6c943d3538c8c51db176cd1d58211")
         self.assertEqual(release["approval_text_sha256"], "e52399feb7a0d36959089f556dd9f55062eb91d52feaa4c5af680d3c4e557264")
-        self.assertEqual(release["implementation_commit"], "180c89ead78f9a6f4560a1ec12575658e62586ee")
+        self.assertEqual(release["implementation_commit"], IMPLEMENTATION)
         self.assertEqual(release["pricing_status"], pricing["pricing_status"])
         self.assertTrue(pricing["checked_at_utc"].startswith("2026-08-09T"))
         self.assertFalse(pricing["execution_authorized_by_this_file"])
@@ -54,7 +55,7 @@ class ArchiveHourlyBodySchemaR4ReleaseTests(unittest.TestCase):
         self.assertTrue(release["get_object_scope_approved"])
         self.assertTrue(release["decompression_scope_approved"])
 
-    def test_candidate_cannot_execute_before_dedicated_role_attestation_and_activation(self) -> None:
+    def test_candidate_cannot_self_execute_and_later_activation_is_separate(self) -> None:
         release = self.load(RELEASE)
         self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_DEDICATED_R4_ROLE_ATTESTATION")
         self.assertFalse(release["dedicated_r4_role_operator_attested"])
@@ -65,9 +66,22 @@ class ArchiveHourlyBodySchemaR4ReleaseTests(unittest.TestCase):
         self.assertFalse(release["get_object_authorized"])
         self.assertFalse(release["decompression_authorized"])
         self.assertFalse(release["execution_ready"])
-        self.assertFalse(ACTIVATION.exists())
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", workflow)
+        if ACTIVATION.exists():
+            activation = self.load(ACTIVATION)
+            self.assertTrue(activation["release_candidate_immutable"])
+            self.assertEqual(activation["release_id"], release["release_id"])
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN")
+            self.assertEqual(activation["implementation_commit"], IMPLEMENTATION)
+            self.assertEqual(activation["preflight_evidence_merge_commit"], "a91f0849e8cf14b6924da73ca2b72595deab5d8d")
+            self.assertEqual(activation["preflight_run_id"], 31312067367)
+            self.assertTrue(activation["dedicated_r4_role_independently_verified"])
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertTrue(activation["execution_ready"])
+            self.assertIn(f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}", workflow)
+        else:
+            self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", workflow)
         self.assertIn("R4 release gate 45", workflow)
 
     def test_all_broader_capabilities_and_trading_stay_closed(self) -> None:
