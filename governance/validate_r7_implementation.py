@@ -186,8 +186,24 @@ def main() -> int:
     for filename in ("r7-context.json", "r7-result.json", "r7-wallet-index.ndjson", "r7.rc", "R7_FILES.sha256"):
         assert filename in workflow
 
-    assert not RELEASE.exists()
-    assert not ACTIVATION.exists()
+    if RELEASE.exists():
+        release = load(RELEASE)
+        assert release["release_id"] == "RELEASE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001"
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["s3_requests_executed"] == 0
+        assert release["wallet_addresses_retained"] == 0
+        assert release["empirical_result"] is None
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["release_id"] == "RELEASE_HL_ARCHIVE_WALLET_INDEX_RECONSTRUCTION_R7_001"
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R7_RUN"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_addresses_retained"] == 0
+        assert activation["empirical_result"] is None
 
     print("R7_IMPLEMENTATION_VALID")
     return 0
