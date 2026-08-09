@@ -107,7 +107,13 @@ class ArchiveLegacyFormatFingerprintR5Tests(unittest.TestCase):
         self.assertFalse(impl["execution_release_present"])
         self.assertFalse(impl["execution_authorized"])
         self.assertEqual(impl["s3_requests_executed"], 0)
-        self.assertFalse((R5 / "R5_EXECUTION_RELEASE.json").exists())
+        release_path = R5 / "R5_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = load(release_path)
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
         self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_semantic_wallet_and_all_trading_gates_remain_closed(self) -> None:

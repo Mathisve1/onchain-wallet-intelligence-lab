@@ -78,7 +78,14 @@ class ArchiveLegacyFormatFingerprintR5ImplementationTests(unittest.TestCase):
         self.assertEqual(self.impl["compressed_bytes_downloaded"], 0)
         self.assertEqual(self.impl["decompressed_bytes_processed"], 0)
         self.assertIsNone(self.impl["empirical_result"])
-        self.assertFalse((R5 / "R5_EXECUTION_RELEASE.json").exists())
+        release_path = R5 / "R5_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = json.loads(release_path.read_text(encoding="utf-8"))
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertEqual(release["implementation_commit"], "40bc4d138c71a4367c9415982f58bcd24c5a57eb")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
         self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_payload_semantic_market_and_trading_boundaries_stay_closed(self) -> None:

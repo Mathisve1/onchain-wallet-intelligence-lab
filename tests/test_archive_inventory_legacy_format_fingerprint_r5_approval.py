@@ -78,7 +78,13 @@ class ArchiveLegacyFormatFingerprintR5ApprovalTests(unittest.TestCase):
         self.assertFalse(impl["execution_authorized"])
         self.assertEqual(impl["s3_requests_executed"], 0)
         self.assertFalse(reuse["aws_iam_mutation_performed"])
-        self.assertFalse((BASE / "R5_EXECUTION_RELEASE.json").exists())
+        release_path = BASE / "R5_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = json.loads(release_path.read_text(encoding="utf-8"))
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
         self.assertFalse((BASE / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
         self.assertFalse(self.approval["execution_authorized_by_this_record"])
         self.assertTrue(all(value is False for value in self.approval["current_runtime_authority"].values()))

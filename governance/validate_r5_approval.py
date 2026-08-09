@@ -128,7 +128,18 @@ def main() -> int:
         assert reuse["aws_iam_mutation_performed"] is False
         assert reuse["current_r5_network_authority"] is False
 
-    assert not RELEASE.exists(), RELEASE
+    if RELEASE.exists():
+        release = load(RELEASE)
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["preregistration_commit"] == PREREG_MERGE
+        assert release["approval_merge_commit"] == APPROVAL_MERGE
+        assert release["approval_text_sha256"] == APPROVAL_SHA
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["requester_pays_authorized_by_candidate"] is False
+        assert release["get_object_authorized_by_candidate"] is False
+        assert release["s3_requests_executed"] == 0
+        assert release["empirical_result"] is None
     assert not ACTIVATION.exists(), ACTIVATION
 
     print("R5_APPROVAL_VALID")
