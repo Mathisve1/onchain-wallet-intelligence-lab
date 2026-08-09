@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowExactR4CanonicalMainWorkflow",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main",
+          "token.actions.githubusercontent.com:repository_id": "1326362646",
+          "token.actions.githubusercontent.com:repository_owner_id": "163474992",
+          "token.actions.githubusercontent.com:ref": "refs/heads/main",
+          "token.actions.githubusercontent.com:workflow": "Hyperliquid Archive Hourly Body Schema Pilot R4"
+        }
+      }
+    }
+  ]
+}
