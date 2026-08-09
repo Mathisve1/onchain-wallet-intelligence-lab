@@ -1,0 +1,246 @@
+name: R6A Activation Verifier Merger
+
+on:
+  push:
+    branches:
+      - research/r6a-lexical-activation
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: r6a-activation-verifier-merger
+  cancel-in-progress: false
+
+jobs:
+  verify-finalize-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out activation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: research/r6a-lexical-activation
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Finalize deterministic activation tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/research/r6a-lexical-activation"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          marker = 'CANONICAL_PR_66_BYTE_EXACT_BINDING'
+          activation_path = Path('research/archive_inventory/r6a/R6A_EXECUTION_RELEASE_CANONICALIZATION.json')
+          assert activation_path.is_file()
+          activation = json.loads(activation_path.read_text(encoding='utf-8'))
+          activation['implementation_commit'] = marker
+          activation['single_use_window_start_utc'] = '2026-08-09T16:36:00Z'
+          activation_path.write_text(json.dumps(activation, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          workflow_path = Path('.github/workflows/hyperliquid-archive-legacy-user-key-lexical-r6a.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          old_env = '  EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE\n'
+          active_env = f'  EXPECTED_IMPLEMENTATION_COMMIT: {marker}\n'
+          if old_env in workflow:
+              assert workflow.count(old_env) == 1
+              workflow = workflow.replace(old_env, active_env)
+          else:
+              assert workflow.count(active_env) == 1
+          old_guard = """          if expected == 'PENDING_CANONICAL_IMPLEMENTATION_MERGE':
+              print('::error title=R6A release gate 45::Implementation is not yet canonical; no AWS authentication is allowed')
+              sys.exit(45)
+          assert re.fullmatch(r'[0-9a-f]{40}', expected)
+"""
+          if old_guard in workflow:
+              assert workflow.count(old_guard) == 1
+              workflow = workflow.replace(old_guard, '')
+          assert 'PENDING_CANONICAL_IMPLEMENTATION_MERGE' not in workflow
+          assert 'Implementation is not yet canonical; no AWS authentication is allowed' not in workflow
+          workflow_path.write_text(workflow, encoding='utf-8')
+
+          implementation_test = Path('tests/test_archive_inventory_r6a_implementation.py')
+          text = implementation_test.read_text(encoding='utf-8')
+          old_line = '        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)\n'
+          active_line = f'        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: {marker}", text)\n'
+          if old_line in text:
+              assert text.count(old_line) == 1
+              text = text.replace(old_line, active_line)
+          else:
+              assert text.count(active_line) == 1
+          old_error = '        self.assertIn("Implementation is not yet canonical; no AWS authentication is allowed", text)\n'
+          active_error = '        self.assertNotIn("Implementation is not yet canonical; no AWS authentication is allowed", text)\n'
+          if old_error in text:
+              assert text.count(old_error) == 1
+              text = text.replace(old_error, active_error)
+          else:
+              assert text.count(active_error) == 1
+          implementation_test.write_text(text, encoding='utf-8')
+
+          workflow_test = Path('tests/test_archive_inventory_r6a_workflow.py')
+          text = workflow_test.read_text(encoding='utf-8')
+          old_line = '        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", self.text)\n'
+          active_line = f'        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: {marker}", self.text)\n'
+          if old_line in text:
+              assert text.count(old_line) == 1
+              text = text.replace(old_line, active_line)
+          else:
+              assert text.count(active_line) == 1
+          workflow_test.write_text(text, encoding='utf-8')
+          PY
+
+          git rm -f --ignore-unmatch \
+            .github/workflows/r6a-activation-tree-builder.yml \
+            .github/workflows/r6a-activation-verifier-merger.yml
+          git add \
+            .github/workflows/hyperliquid-archive-legacy-user-key-lexical-r6a.yml \
+            research/archive_inventory/r6a/R6A_EXECUTION_RELEASE_CANONICALIZATION.json \
+            tests/test_archive_inventory_r6a_implementation.py \
+            tests/test_archive_inventory_r6a_workflow.py
+
+          python - <<'PY'
+          import hashlib
+          import subprocess
+          from pathlib import Path
+
+          manifest = Path('governance/REPOSITORY_MANIFEST.sha256')
+          raw = subprocess.check_output(['git', 'ls-files', '-z'])
+          paths = sorted(
+              p.decode('utf-8')
+              for p in raw.split(b'\0')
+              if p and p.decode('utf-8') != manifest.as_posix()
+          )
+          manifest.write_text(
+              ''.join(
+                  f"{hashlib.sha256(Path(name).read_bytes()).hexdigest()}  {name}\n"
+                  for name in paths
+              ),
+              encoding='utf-8',
+          )
+          PY
+          git add governance/REPOSITORY_MANIFEST.sha256
+
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r6a_preregistration.py
+          python governance/validate_r6a_approval.py
+          python governance/validate_r6a_implementation.py
+
+          test ! -e .github/workflows/r6a-activation-tree-builder.yml
+          test ! -e .github/workflows/r6a-activation-verifier-merger.yml
+          git diff --cached --check
+
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'release: finalize exactly-one R6A activation tree'
+            git push origin HEAD:research/r6a-lexical-activation
+          fi
+
+      - name: Wait for exact-head Research CI and merge PR 69
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import time
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          pr_number = 69
+          head_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert len(head_sha) == 40
+
+          def request_json(url, method='GET', payload=None):
+              body = None if payload is None else json.dumps(payload).encode('utf-8')
+              req = urllib.request.Request(
+                  url,
+                  data=body,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'r6a-activation-verifier',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=15) as response:
+                  data = response.read()
+                  return json.loads(data) if data else {}
+
+          pr_url = f'https://api.github.com/repos/{repo}/pulls/{pr_number}'
+          pr = request_json(pr_url)
+          assert pr['state'] == 'open'
+          assert pr['base']['ref'] == 'main'
+          assert pr['head']['ref'] == 'research/r6a-lexical-activation'
+          assert pr['head']['sha'] == head_sha
+
+          allowed_files = {
+              '.github/workflows/hyperliquid-archive-legacy-user-key-lexical-r6a.yml',
+              'governance/REPOSITORY_MANIFEST.sha256',
+              'research/archive_inventory/r6a/R6A_EXECUTION_RELEASE_CANONICALIZATION.json',
+              'tests/test_archive_inventory_r6a_implementation.py',
+              'tests/test_archive_inventory_r6a_workflow.py',
+          }
+          files = request_json(f'{pr_url}/files?per_page=100')
+          observed_files = {row['filename'] for row in files}
+          assert observed_files == allowed_files, (observed_files, allowed_files)
+
+          runs_url = f'https://api.github.com/repos/{repo}/actions/runs?head_sha={head_sha}&event=pull_request&per_page=100'
+          deadline = time.time() + 210
+          last = None
+          while time.time() < deadline:
+              runs = request_json(runs_url).get('workflow_runs', [])
+              candidates = [row for row in runs if row.get('name') == 'Research CI']
+              if candidates:
+                  row = max(candidates, key=lambda value: int(value['id']))
+                  last = (row.get('status'), row.get('conclusion'), row.get('id'))
+                  if row.get('status') == 'completed':
+                      assert row.get('conclusion') == 'success', last
+                      break
+              time.sleep(5)
+          else:
+              raise RuntimeError(f'Research CI did not complete successfully before timeout; last={last}')
+
+          pr = request_json(pr_url)
+          assert pr['state'] == 'open'
+          assert pr['head']['sha'] == head_sha
+
+          comment = {
+              'body': (
+                  'Automated activation verification PASS on exact source head `' + head_sha + '`. '
+                  'The branch-local verifier self-deleted before the final commit; PR files are exactly the active R6A workflow, '
+                  'byte-exact manifest, execution-release canonicalization overlay and two activation-aware tests. '
+                  'Full unit/governance validation passed locally in the verifier, and exact-head Research CI completed successfully. '
+                  'No paid request was executed by this verification. The next and only runtime step remains one manual GitHub Actions dispatch on canonical main.'
+              )
+          }
+          request_json(f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments', method='POST', payload=comment)
+
+          merge_payload = {
+              'sha': head_sha,
+              'merge_method': 'squash',
+              'commit_title': 'release: activate exactly one canonical R6A lexical dispatch',
+              'commit_message': (
+                  'Activate RELEASE_HL_ARCHIVE_LEGACY_USER_KEY_LEXICAL_R6A_001 for exactly one manual canonical-main dispatch under the existing human-approved EUR 0.10 / one Requester Pays GetObject / zero-retry envelope. '
+                  'No IAM/trust mutation is performed. Evidence remains aggregate-only; no leading strings, wallet addresses, address hashes, distinct-address sets, payload values or raw/decompressed bodies may be retained. '
+                  'Wallet reconstruction, clustering, copyability, PnL/alpha, market-data and all trading/capital stages remain closed. Re-runs are forbidden.'
+              ),
+          }
+          merged = request_json(f'{pr_url}/merge', method='PUT', payload=merge_payload)
+          assert merged.get('merged') is True, merged
+          PY
