@@ -125,12 +125,14 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r0 = workflows / "hyperliquid-archive-metadata-canary-r0.yml"
         region = workflows / "hyperliquid-archive-region-probe-r1.yml"
         r2 = workflows / "hyperliquid-archive-nodedata-canary-r2.yml"
+        r3 = workflows / "hyperliquid-archive-hourly-metadata-inventory-r3.yml"
         self.assertTrue(identity.is_file())
         self.assertTrue(r0.is_file())
         self.assertTrue(region.is_file())
         self.assertTrue(r2.is_file())
+        self.assertTrue(r3.is_file())
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
-        allowed = {identity, r0, region, r2}
+        allowed = {identity, r0, region, r2, r3}
         other = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(workflows.glob("*.yml"))
