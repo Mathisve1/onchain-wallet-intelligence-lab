@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "parent_commit": "7802d741f193671e50356c6001dcae149e0fc88a",
+  "parent_study_id": "HL-ARCHIVE-WALLET-INDEX-RECONSTRUCTION-R7-001",
+  "parent_run_id": 31330248235,
+  "parent_terminal_status": "R7_WALLET_INDEX_STUDY_COMPLETE",
+  "parent_research_conclusion": "WALLET_INDEX_RECONSTRUCTION_COMPLETE",
+  "facts_carried_forward": {
+    "nonempty_record_count": 162815,
+    "unique_wallet_count": 4637,
+    "sum_fill_count": 162815,
+    "wallet_index_fields_only": [
+      "wallet_address",
+      "fill_count"
+    ],
+    "wallet_index_sha256": "2b8cbf709075aeda25394f22ee04b08656d5d165105976ed5d7e0890479e2d6d",
+    "wallet_index_sort_order": "LEXICOGRAPHIC_ASCENDING",
+    "r7_release_consumed": true,
+    "r7_remaining_get_object_budget": 0
+  },
+  "facts_not_carried_forward_as_proven": {
+    "one_address_equals_one_entity": false,
+    "wallet_profitability": false,
+    "wallet_alpha": false,
+    "wallet_copyability": false,
+    "wallet_role_classification": false,
+    "activity_persistence_outside_parent_hour": false,
+    "strategy_identity": false
+  },
+  "r8_static_design_uses_concrete_wallet_rows": false,
+  "r8_static_design_ranks_parent_wallets": false,
+  "r8_static_design_queries_parent_wallets": false,
+  "reason_for_next_stage": "R7 proves an address-level activity index for one legacy hour; finding robust copyable wallets requires a separately designed historical performance and execution-quality evidence chain rather than treating one-hour activity as quality."
+}
