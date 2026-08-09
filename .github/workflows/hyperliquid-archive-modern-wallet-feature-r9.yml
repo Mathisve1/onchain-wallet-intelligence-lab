@@ -1,0 +1,346 @@
+name: Hyperliquid Archive Hourly Body Schema Pilot R4
+run-name: R9 bounded modern wallet feature pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-modern-wallet-feature-r9
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R9_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+  R9_PREREGISTRATION_MERGE: 62ce0009c3c4aad70d2a91f242a690cd26ace355
+  APPROVAL_MERGE_COMMIT: 332aa535b0de19a18befb8529450ae88acf35762
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001
+  APPROVAL_TEXT_SHA256: 1e4642ef2eef660f7971c2632864cf78894340e3408f15d15597e4eb12a04330
+  RELEASE_CANDIDATE_PATH: research/archive_inventory/r9/R9_EXECUTION_RELEASE.json
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r9/R9_EXECUTION_RELEASE_CANONICALIZATION.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  modern-wallet-feature-r9:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main dispatch identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove canonical R9 implementation and active release before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r9_preregistration.py
+          python governance/validate_r9_approval.py
+          python governance/validate_r9_implementation.py
+          python - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          root = Path('.')
+          r9 = root / 'research/archive_inventory/r9'
+          approval_text = r9 / 'approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001.txt'
+          approval = json.loads((r9 / 'approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001.json').read_text())
+          impl_path = r9 / 'R9_IMPLEMENTATION_CONTRACT.json'
+          role_path = r9 / 'R9_AWS_ROLE_REUSE_ANALYSIS.json'
+          collector_path = r9 / 'collector.py'
+          workflow_path = root / '.github/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml'
+          candidate_path = root / os.environ['RELEASE_CANDIDATE_PATH']
+          activation_path = root / os.environ['EXECUTION_RELEASE_PATH']
+          assert candidate_path.is_file(), 'R9 inert release candidate is absent'
+          assert activation_path.is_file(), 'R9 active execution release is absent'
+          candidate = json.loads(candidate_path.read_text())
+          release = json.loads(activation_path.read_text())
+          impl = json.loads(impl_path.read_text())
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['reviewed_commit'] == os.environ['R9_PREREGISTRATION_MERGE']
+          assert approval['exact_approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(v is False for v in approval['current_runtime_authority'].values())
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(v is False for v in impl['current_runtime_authority'].values())
+          assert candidate['release_id'] == 'RELEASE_HL_ARCHIVE_MODERN_WALLET_FEATURE_PILOT_R9_001'
+          assert candidate['status'] == 'RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION'
+          assert candidate['execution_ready'] is False
+          assert candidate['single_workflow_dispatch_authorized'] is False
+          assert candidate['rerun_authorized'] is False
+          assert candidate['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert candidate['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert release['release_id'] == candidate['release_id']
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R9_RUN'
+          assert release['candidate_sha256'] == hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert re.fullmatch(r'[0-9a-f]{40}', release['canonical_implementation_merge_commit'])
+          bindings = release['implementation_byte_binding']
+          assert bindings['implementation_contract_sha256'] == hashlib.sha256(impl_path.read_bytes()).hexdigest()
+          assert bindings['role_reuse_analysis_sha256'] == hashlib.sha256(role_path.read_bytes()).hexdigest()
+          assert bindings['collector_sha256'] == hashlib.sha256(collector_path.read_bytes()).hexdigest()
+          assert bindings['workflow_sha256'] == hashlib.sha256(workflow_path.read_bytes()).hexdigest()
+          for value in (candidate, release):
+              assert value['target_bucket'] == 'hl-mainnet-node-data'
+              assert value['signing_region'] == 'ap-northeast-1'
+              assert value['object_key'] == 'node_fills_by_block/hourly/20250727/8.lz4'
+              assert value['object_size_bytes'] == 1517603
+              assert value['object_etag'] == '"60d4c1277f76651b5f04666bbe8d7594"'
+              assert value['expected_compressed_sha256'] == '928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105'
+              assert value['expected_decompressed_byte_count'] == 7380378
+              assert value['expected_top_level_block_record_count'] == 4345
+              assert value['expected_valid_event_pair_count'] == 17516
+              assert value['maximum_one_time_budget_eur'] == 0.10
+              assert value['maximum_monthly_budget_eur'] == 0
+              assert value['maximum_get_object_requests'] == 1
+              assert value['maximum_retries_per_request'] == 0
+              assert value['boundary_fixture_role'] == 'SERIALIZER_AND_FEATURE_PIPELINE_FIXTURE_ONLY'
+              assert value['boundary_fixture_historical_representativeness_authorized'] is False
+              assert value['canonical_cross_format_history_use_authorized'] is False
+              assert value['retained_wallet_feature_fields_only'] == ['wallet_address','fill_count','first_fill_time','last_fill_time','distinct_coin_count','side_a_count','side_b_count','crossed_true_count','liquidation_associated_fill_count','duplicate_tid_count','sum_abs_px_times_sz_notional_proxy','sum_closed_pnl_fill_statistic']
+              assert all(flag is False for flag in value['downstream_authorizations'].values())
+              assert all(flag is False for flag in value['trading_authorizations'].values())
+          PY
+
+      - name: Enforce R9 single-use release before AWS OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "${CURRENT_RUN_ATTEMPT}" = '1'
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          url = f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req = urllib.request.Request(url, headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'hl-r9-single-use-check'})
+          with urllib.request.urlopen(req, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc) >= start]
+          assert len(eligible) == 1, 'R9 release is not single-use within its window'
+          assert int(eligible[0]['id']) == current, 'a prior R9 dispatch already consumed the release'
+          assert eligible[0]['event'] == 'workflow_dispatch'
+          assert eligible[0]['head_branch'] == 'main'
+          PY
+
+      - name: Freeze pending R9 run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          context = {
+            'schema_version':'1.0',
+            'pilot_id':'HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001',
+            'release_id':release['release_id'],
+            'terminal_status':'PENDING_AWS_OIDC',
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+            'workflow_run_id':int(os.environ['WORKFLOW_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+            'approval_id':os.environ['APPROVAL_ID'],
+            'approval_text_sha256':os.environ['APPROVAL_TEXT_SHA256'],
+            'canonical_implementation_merge_commit':release['canonical_implementation_merge_commit'],
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R9_ROLE_ARN'],
+            'configure_aws_outcome':None,
+            'target_bucket':'hl-mainnet-node-data',
+            'signing_region':'ap-northeast-1',
+            'object_key':'node_fills_by_block/hourly/20250727/8.lz4',
+            'maximum_get_object_requests':1,
+            'maximum_total_compressed_bytes':1517603,
+            'maximum_total_decompressed_bytes':16777216,
+            'maximum_runtime_seconds':120,
+            'maximum_retries_per_request':0,
+            'boundary_fixture_role':'SERIALIZER_AND_FEATURE_PIPELINE_FIXTURE_ONLY',
+            'canonical_cross_format_history_use_authorized':False,
+            'historical_multi_hour_ingestion_authorized':False,
+            'wallet_ranking_authorized':False,
+            'candidate_shortlisting_authorized':False,
+            'copyability_analysis_authorized':False,
+            'pnl_or_alpha_analysis_authorized':False,
+          }
+          (Path(os.environ['RUNNER_TEMP'])/'r9-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Assume unchanged dedicated AWS role with exact-one-object R9 session
+        id: aws
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ env.R9_ROLE_ARN }}
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveModernWalletFeatureR9
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: '{"Version":"2012-10-17","Statement":[{"Sid":"R9ExactModernFixtureOnly","Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"}]}'
+
+      - name: Execute bounded R9 modern wallet feature collector
+        shell: bash
+        run: |
+          set +e
+          python research/archive_inventory/r9/collector.py --result-output "${RUNNER_TEMP}/r9-result.json" --wallet-feature-output "${RUNNER_TEMP}/r9-wallet-features.ndjson"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r9.rc"
+
+      - name: Finalize minimized R9 context and evidence ledger
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.aws.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp/'r9-context.json'
+          result_path = temp/'r9-result.json'
+          feature_path = temp/'r9-wallet-features.ndjson'
+          rc_path = temp/'r9.rc'
+          context = json.loads(context_path.read_text())
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          if not result_path.exists():
+              result_path.write_text(json.dumps({'schema_version':'1.0','pilot_id':'HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001','terminal_status':'R9_TRANSPORT_OR_INTEGRITY_FAIL','technical_result':'PRE_COLLECTOR_AWS_FAILURE','research_conclusion':'R9_TRANSPORT_OR_INTEGRITY_FAIL'},indent=2,sort_keys=True)+'\n')
+          if not feature_path.exists(): feature_path.write_bytes(b'')
+          if not rc_path.exists(): rc_path.write_text('83\n')
+          lines=[]
+          for path in (context_path,result_path,feature_path,rc_path):
+              lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp/'R9_FILES.sha256').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Upload bounded R9 evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r9-modern-wallet-features-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r9-context.json
+            ${{ runner.temp }}/r9-result.json
+            ${{ runner.temp }}/r9-wallet-features.ndjson
+            ${{ runner.temp }}/r9.rc
+            ${{ runner.temp }}/R9_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: false
+
+      - name: Enforce exact R9 terminal result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, re
+          from decimal import Decimal
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          result = json.loads((temp/'r9-result.json').read_text())
+          feature_path = temp/'r9-wallet-features.ndjson'
+          rc = int((temp/'r9.rc').read_text().strip())
+          if rc != 0 or result.get('terminal_status') == 'R9_TRANSPORT_OR_INTEGRITY_FAIL':
+              raise SystemExit(1)
+          assert result.get('terminal_status') == 'R9_MODERN_WALLET_FEATURE_STUDY_COMPLETE'
+          assert result.get('research_conclusion') in {'MODERN_WALLET_FEATURE_PIPELINE_COMPLETE','MODERN_WALLET_FEATURE_PIPELINE_UNRESOLVED'}
+          assert result.get('request_attempt_count') == 1
+          assert result.get('s3_http_request_count') == 1
+          assert result.get('successful_request_count') == 1
+          assert result.get('failed_request_count') == 0
+          assert result.get('retries_used') == 0
+          assert result.get('http_redirects_followed') is False
+          assert result.get('compressed_bytes') == 1517603
+          assert result.get('decompressed_bytes') == 7380378
+          assert result.get('boundary_fixture_role') == 'SERIALIZER_AND_FEATURE_PIPELINE_FIXTURE_ONLY'
+          assert result.get('boundary_fixture_historical_representativeness_inferred') is False
+          assert result.get('canonical_cross_format_history_used') is False
+          for key in ('raw_compressed_object_persisted','raw_decompressed_payload_retained','raw_block_records_retained','raw_event_pairs_retained','raw_fill_objects_retained','coin_values_retained','side_values_retained','individual_time_values_retained','individual_price_values_retained','individual_size_values_retained','individual_closed_pnl_values_retained','trade_id_values_retained','crossed_values_retained','liquidation_payload_values_retained','fee_values_processed','fee_token_values_processed','dir_values_processed','start_position_values_processed','transaction_hashes_processed','order_ids_processed','client_order_ids_processed','historical_multi_hour_ingestion_performed','legacy_modern_merged_history_performed','public_api_enrichment_performed','entity_clustering_performed','wallet_ranking_performed','candidate_shortlisting_performed','copyability_analysis_performed','pnl_or_alpha_analysis_performed','market_data_ingested','strategy_inference_performed','sum_closed_pnl_interpreted_as_exact_account_return','sum_closed_pnl_used_as_wallet_ranking_score','notional_proxy_interpreted_as_copyable_notional'):
+              assert result.get(key) is False, key
+          if result['research_conclusion'] == 'MODERN_WALLET_FEATURE_PIPELINE_UNRESOLVED':
+              assert feature_path.read_bytes() == b''
+              assert result.get('wallet_feature_retained') is False
+              raise SystemExit(0)
+          assert result.get('wallet_feature_retained') is True
+          summary = result['wallet_feature_summary']
+          assert summary['top_level_block_record_count'] == 4345
+          assert summary['valid_event_pair_count'] == 17516
+          assert summary['sum_fill_count'] == 17516
+          assert summary['sum_side_count'] == 17516
+          data = feature_path.read_bytes()
+          assert 0 < len(data) <= 33554432
+          assert hashlib.sha256(data).hexdigest() == summary['wallet_feature_sha256']
+          fields = ['wallet_address','fill_count','first_fill_time','last_fill_time','distinct_coin_count','side_a_count','side_b_count','crossed_true_count','liquidation_associated_fill_count','duplicate_tid_count','sum_abs_px_times_sz_notional_proxy','sum_closed_pnl_fill_statistic']
+          rows=[]
+          for raw in data.splitlines():
+              row=json.loads(raw.decode())
+              assert list(row.keys()) == fields
+              assert re.fullmatch(r'^0x[0-9a-f]{40}$', row['wallet_address'])
+              assert isinstance(row['fill_count'],int) and row['fill_count'] > 0
+              assert isinstance(row['first_fill_time'],int) and isinstance(row['last_fill_time'],int) and 0 <= row['first_fill_time'] <= row['last_fill_time']
+              assert row['side_a_count'] + row['side_b_count'] == row['fill_count']
+              assert row['distinct_coin_count'] >= 1
+              assert row['crossed_true_count'] >= 0
+              assert row['liquidation_associated_fill_count'] >= 0
+              assert row['duplicate_tid_count'] >= 0
+              assert 'e' not in row['sum_abs_px_times_sz_notional_proxy'].lower()
+              assert 'e' not in row['sum_closed_pnl_fill_statistic'].lower()
+              assert Decimal(row['sum_abs_px_times_sz_notional_proxy']) >= 0
+              Decimal(row['sum_closed_pnl_fill_statistic'])
+              rows.append(row)
+          addresses=[row['wallet_address'] for row in rows]
+          assert addresses == sorted(addresses)
+          assert len(addresses) == len(set(addresses)) == summary['wallet_feature_row_count']
+          assert sum(row['fill_count'] for row in rows) == 17516
+          assert sum(row['side_a_count'] + row['side_b_count'] for row in rows) == 17516
+          PY
