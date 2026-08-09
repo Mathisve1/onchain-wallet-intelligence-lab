@@ -6,6 +6,7 @@
   "artifact_id": 9044483094,
   "artifact_name": "r9-modern-wallet-features-31336490854",
   "observed_artifact_size_bytes": 48334,
+  "artifact_zip_sha256": "00c049def4ef2db334067f7f6ff00abaee7761fbc3de2e07dd742019119a3459",
   "observed_artifact_zip_sha256": "00c049def4ef2db334067f7f6ff00abaee7761fbc3de2e07dd742019119a3459",
   "github_reported_artifact_digest": "sha256:00c049def4ef2db334067f7f6ff00abaee7761fbc3de2e07dd742019119a3459",
   "dispatch_sha": "42791333fccee2262aa0d35fea85997eeb0dc332",
