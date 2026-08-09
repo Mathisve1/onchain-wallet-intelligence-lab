@@ -1,13 +1,16 @@
 # R9 approval status
 
 - pilot: `HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001`
-- status: `AWAITING_SEPARATE_HUMAN_APPROVAL`
+- status: `HUMAN_APPROVAL_RECORDED_IMPLEMENTATION_ALLOWED_NO_EXECUTION`
+- reviewed preregistration merge: `62ce0009c3c4aad70d2a91f242a690cd26ace355`
+- exact approval text SHA-256: `1e4642ef2eef660f7971c2632864cf78894340e3408f15d15597e4eb12a04330`
+- implementation lane: `AUTHORIZED`
 - current network authority: `NONE`
 - current retention authority: `NONE`
 - current execution authority: `NONE`
 - current wallet ranking / PnL / copyability authority: `NONE`
 - current trading/capital authority: `NONE`
 
-The canonical R9 preregistration must be merged first. Only then may the owner return the exact text in `HUMAN_APPROVAL_TEMPLATE_R9.md` with `reviewed_commit` replaced by the canonical R9 preregistration merge commit.
+The exact owner approval has been recorded against the canonical R9 preregistration. It permits implementation only. It does not itself authorize workflow dispatch, AWS OIDC, Requester Pays, GetObject, decompression, selected-field processing or wallet-feature retention.
 
-Human approval, if later recorded, opens only the implementation lane and a later separately reviewed release/activation path. It does not itself perform a Requester Pays request.
+A separate reviewed execution release and a separate canonical activation are still required before any paid request. Historical multi-hour ingestion, wallet ranking, candidate shortlisting, PnL/alpha, copyability and all trading/capital stages remain closed.
