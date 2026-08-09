@@ -1,0 +1,95 @@
+{
+  "canonical_cross_format_rule": {
+    "boundary_hour_status": "INTENTIONALLY_CENSORED_FROM_CANONICAL_CROSS_FORMAT_HISTORY",
+    "boundary_path_hour_utc": "2025-07-27T08:00:00Z",
+    "claim_continuous_market_time_history": false,
+    "double_count_boundary_hour": false,
+    "include_legacy_boundary_hour": false,
+    "include_modern_boundary_hour": false,
+    "legacy_last_format_boundary_unambiguous_path_hour_utc": "2025-07-27T07:00:00Z",
+    "modern_first_format_boundary_unambiguous_path_hour_utc": "2025-07-27T09:00:00Z",
+    "reason": "Excluding the shared boundary hour prevents both double-counting and unsupported assumptions about overlap/gaps. Exact transition-hour continuity can be studied later only if materially necessary.",
+    "rule_id": "CUTOVER_CENSOR_HOUR_20250727_08"
+  },
+  "current_authority": {
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "get_object": false,
+    "historical_multi_hour_ingestion": false,
+    "network_requests": false,
+    "object_body_download": false,
+    "performance_field_retention": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "requester_pays": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "direct_findings": {
+    "legacy_boundary_fill_count": 162815,
+    "legacy_boundary_object_size_bytes": 12726384,
+    "legacy_boundary_to_previous_hour_size_ratio": 0.973056268649,
+    "legacy_boundary_unique_wallets": 4637,
+    "legacy_latest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "legacy_only_wallets": 3949,
+    "legacy_previous_hour_size_bytes": 13078775,
+    "modern_address_set_subset_of_legacy": false,
+    "modern_boundary_fill_count": 17516,
+    "modern_boundary_is_global_minimum_object_size": true,
+    "modern_boundary_object_size_bytes": 1517603,
+    "modern_boundary_to_next_hour_size_ratio": 0.083624525301,
+    "modern_boundary_unique_wallets": 887,
+    "modern_earliest_path_hour_utc": "2025-07-27T08:00:00Z",
+    "modern_next_hour_size_bytes": 18147822,
+    "modern_only_wallets": 199,
+    "overlapping_wallets": 688,
+    "shared_boundary_path_hour": true
+  },
+  "empirical_result": "STATIC_CUTOVER_FORENSICS_SUPPORTS_CENSORING_SHARED_BOUNDARY_HOUR",
+  "interpretation": {
+    "classification": "HIGH_CONFIDENCE_WITHIN_HOUR_FORMAT_CUTOVER_OR_SEPARATE_BOUNDARY_COVERAGE_INFERENCE",
+    "direct_serializer_cutover_proven": false,
+    "exact_fill_overlap_or_gap_proven": false,
+    "exact_temporal_partition_proven": false,
+    "rationale": [
+      "official documentation before the boundary established both --write-fills and --batch-by-block as alternate output organization for fill streams",
+      "complete R3 metadata shows the legacy family ending and modern family beginning at the exact same path hour",
+      "the modern boundary object is an extreme one-off size minimum while the legacy boundary object remains close to preceding legacy hours",
+      "R7 and R8A show different non-subset wallet populations in the shared boundary path hour, which is consistent with separate within-hour coverage and inconsistent with treating the modern object as a simple nested copy of the legacy object"
+    ]
+  },
+  "method": [
+    "reuse already-canonical R3 complete metadata inventory and retained R7/R8A body-derived address/count evidence",
+    "reinspect the still-retained R3 GitHub artifact locally without any new S3 request",
+    "bind official Hyperliquid node documentation commits that predate the archive boundary",
+    "separate direct observations from supported inference",
+    "choose a fail-closed operational cutover rule that does not require exact transition-hour semantics"
+  ],
+  "network_requests_executed": 0,
+  "new_requester_pays_cost_eur": 0,
+  "new_s3_requests_executed": 0,
+  "next_research_implication": {
+    "exact_transition_hour_temporal_fingerprint_required_now": false,
+    "legacy_pre_cutover_data_may_be_added_later": true,
+    "modern_only_scaling_can_proceed_after_separate_preregistration": true,
+    "reason": "The long modern history starts immediately after the censored boundary. Initial wallet screening and feature-pipeline validation do not require reconstructing one ambiguous transition hour."
+  },
+  "parent_r3_evidence_commit": "98eca5b7b13b25aed3d11f006972acea2ee5c258",
+  "parent_r3_run_id": 31299905850,
+  "parent_r7_evidence_commit": "7802d741f193671e50356c6001dcae149e0fc88a",
+  "parent_r7_run_id": 31330248235,
+  "parent_r8a_evidence_commit": "04c23127a553c53e9c3c9b80dabb4a9b7e61de61",
+  "parent_r8a_run_id": 31333421763,
+  "research_question": "Why do the legacy node_fills and modern node_fills_by_block objects at path hour 2025-07-27/8 contain materially different wallet/fill populations, and what fail-closed cross-format history rule should be used before performance research scales?",
+  "schema_version": "1.0",
+  "status": "STATIC_FORENSICS_COMPLETE_NO_EXECUTION",
+  "study_id": "HL-ARCHIVE-LEGACY-MODERN-CUTOVER-FORENSICS-R8B-001",
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  }
+}
