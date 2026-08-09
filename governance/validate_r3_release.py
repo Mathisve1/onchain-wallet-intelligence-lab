@@ -18,6 +18,7 @@ APPROVAL_MERGE_COMMIT = "e562f3fbd8f1dac1b4d7e93eed2f5ee6b77c5da6"
 APPROVAL_SHA = "3c3931133fb8b0dd322d7a296b7b70fca65dd341401a6eda2b6372938ed6cd10"
 IMPLEMENTATION_COMMIT = "3b1dd0df4c5194875e22c1b790e0b41961313aa8"
 IMPLEMENTATION_HEAD = "02681dbf13415f953fd3c79f66ee5de4919a169c"
+RELEASE_SHA = "c64719a8e9b8a82a361dcc7e4b03c12fba8027cd8d1e72bfc05487a2ef6ad55b"
 PREFIXES = ["node_fills_by_block/hourly/", "node_fills/hourly/", "node_trades/hourly/"]
 
 
@@ -34,12 +35,14 @@ def main() -> int:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert hashlib.sha256(APPROVAL_TEXT.read_bytes()).hexdigest() == APPROVAL_SHA
+    assert hashlib.sha256(RELEASE.read_bytes()).hexdigest() == RELEASE_SHA
     assert approval["reviewed_commit"] == PREREG_COMMIT
     assert approval["exact_approval_text_sha256"] == APPROVAL_SHA
     assert impl["preregistration_commit"] == PREREG_COMMIT
     assert impl["approval_merge_commit"] == APPROVAL_MERGE_COMMIT
     assert impl["approval_text_sha256"] == APPROVAL_SHA
 
+    # This file is an immutable release-candidate snapshot even after a later activation exists.
     assert release["release_id"] == "RELEASE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001"
     assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
     assert release["inventory_id"] == "HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001"
@@ -63,7 +66,6 @@ def main() -> int:
     assert release["activation_record_present"] is False
     assert release["canonical_release_merge_commit"] is None
     assert release["single_use_window_start_utc"] is None
-    assert not ACTIVATION.exists()
 
     assert release["github_event_required"] == "workflow_dispatch"
     assert release["canonical_dispatch_ref_required"] == "refs/heads/main"
@@ -112,9 +114,25 @@ def main() -> int:
     assert release["metadata_entries_observed"] == 0
     assert release["empirical_result"] is None
 
-    # Release candidate merge must remain unable to reach AWS: workflow is still implementation-pending.
-    assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
-    assert "R3_EXECUTION_RELEASE.json" in workflow
+    # A later activation is allowed only as a separate overlay; it never mutates the candidate.
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["release_id"] == release["release_id"]
+        assert activation["release_candidate_path"] == "research/archive_inventory/r3/R3_EXECUTION_RELEASE.json"
+        assert activation["release_candidate_immutable"] is True
+        assert activation["release_merge_commit"] == "6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5"
+        assert activation["implementation_commit"] == IMPLEMENTATION_COMMIT
+        assert activation["preregistration_commit"] == PREREG_COMMIT
+        assert activation["approval_merge_commit"] == APPROVAL_MERGE_COMMIT
+        assert activation["approval_text_sha256"] == APPROVAL_SHA
+        assert activation["prefixes"] == PREFIXES
+        assert f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION_COMMIT}" in workflow
+        assert "EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json" in workflow
+        assert "RELEASE_CANDIDATE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json" in workflow
+    else:
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in workflow
+        assert "EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json" in workflow
+
     assert workflow.index("Prove canonical implementation and release before AWS OIDC") < workflow.index("Assume exact AWS role with R3-only session permissions")
 
     print("R3_RELEASE_CANDIDATE_VALID")
