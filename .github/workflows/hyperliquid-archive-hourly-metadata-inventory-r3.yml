@@ -22,8 +22,9 @@ env:
   APPROVAL_MERGE_COMMIT: e562f3fbd8f1dac1b4d7e93eed2f5ee6b77c5da6
   APPROVAL_ID: APPROVE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001
   APPROVAL_TEXT_SHA256: 3c3931133fb8b0dd322d7a296b7b70fca65dd341401a6eda2b6372938ed6cd10
-  EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE
-  EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json
+  EXPECTED_IMPLEMENTATION_COMMIT: 3b1dd0df4c5194875e22c1b790e0b41961313aa8
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json
+  RELEASE_CANDIDATE_PATH: research/archive_inventory/r3/R3_EXECUTION_RELEASE.json
   AWS_EC2_METADATA_DISABLED: 'true'
   AWS_PAGER: ''
 
@@ -80,6 +81,8 @@ jobs:
           python -m unittest discover -s tests -v
           python governance/validate_repository.py
           python governance/validate_r3_implementation.py
+          python governance/validate_r3_release.py
+          python governance/validate_r3_activation.py
           python - <<'PY'
           import hashlib
           import json
