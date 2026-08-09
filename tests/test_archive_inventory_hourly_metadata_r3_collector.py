@@ -215,7 +215,10 @@ class ArchiveHourlyMetadataR3CollectorTests(unittest.TestCase):
         self.assertEqual(result["technical_result"], "THREE_HOURLY_FAMILIES_COMPLETE")
         encoded = json.dumps(result, sort_keys=True)
         self.assertNotIn("next-node_", encoded)
-        self.assertNotIn("continuation_token_value", encoded)
+        self.assertFalse(result["continuation_token_values_retained"])
+        for observation in result["observations"]:
+            self.assertNotIn("continuation_token", observation)
+            self.assertNotIn("next_continuation_token", observation)
         self.assertEqual(len(seen_calls), 6)
 
     def test_page_16_truncation_is_censored_and_never_fetches_page_17(self) -> None:
