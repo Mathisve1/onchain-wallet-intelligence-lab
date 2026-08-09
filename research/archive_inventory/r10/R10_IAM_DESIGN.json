@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "design_id": "HL-ARCHIVE-POST-BOUNDARY-MULTIHOUR-R10-IAM-001",
+  "status": "STATIC_DESIGN_NO_IAM_MUTATION",
+  "existing_r4_role": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4",
+  "existing_r4_role_reuse_authorized": false,
+  "existing_r4_role_reuse_possible": false,
+  "existing_r4_role_reuse_blocker": "R4 persistent permission policy explicitly denies s3:GetObject outside the exact legacy/modern 20250727/8 boundary objects.",
+  "existing_role_mutation_authorized": false,
+  "new_dedicated_role_required_for_future_execution": true,
+  "proposed_role_name": "onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "proposed_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "proposed_workflow_name": "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10",
+  "proposed_trust_boundary": {
+    "oidc_provider_arn": "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com",
+    "aud": "sts.amazonaws.com",
+    "sub": "repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main",
+    "repository_id": "1326362646",
+    "repository_owner_id": "163474992",
+    "ref": "refs/heads/main",
+    "workflow": "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10"
+  },
+  "proposed_permission_boundary": {
+    "allowed_actions_only": ["s3:GetObject"],
+    "allowed_object_arns_only": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/9.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/10.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/11.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/12.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/13.lz4",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/14.lz4"
+    ],
+    "explicit_deny_getobject_outside_allowlist_required": true,
+    "explicit_deny_other_s3_read_capabilities_required": true,
+    "explicit_deny_s3_mutation_required": true,
+    "list_bucket_authorized": false,
+    "head_object_authorized": false,
+    "get_object_attributes_authorized": false,
+    "get_object_version_authorized": false,
+    "select_object_content_authorized": false,
+    "put_delete_restore_authorized": false
+  },
+  "future_operator_sequence_if_human_approved": [
+    "implementation freezes exact trust and permission JSON templates",
+    "clean-context review verifies templates and workflow binding",
+    "human operator creates the new role exactly from reviewed templates",
+    "operator attestation is retained",
+    "separate STS-only preflight proves exact role assumption with all S3 denied by session policy",
+    "only after successful preflight may a separate execution release and canonical activation be proposed"
+  ],
+  "iam_role_creation_authorized_now": false,
+  "aws_iam_mutation_performed": false,
+  "aws_sts_request_executed": false,
+  "s3_request_executed": false,
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
