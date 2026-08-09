@@ -92,10 +92,10 @@ class ArchiveHourlyBodySchemaR4ActivationTests(unittest.TestCase):
         self.assertIn(f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}", text)
         self.assertNotIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
         self.assertIn("R4_EXECUTION_RELEASE_CANONICALIZATION.json", text)
-        self.assertIn("assert release['dedicated_r4_role_independently_verified'] is True", text)
-        self.assertIn("assert release['preflight_run_id'] == 31312067367", text)
-        self.assertIn("assert release['preflight_s3_requests_executed'] == 0", text)
-        self.assertIn("assert release['execution_ready'] is True", text)
+        pre_oidc = text.index("Prove canonical R4 implementation and release before AWS OIDC")
+        oidc = text.index("Assume dedicated R4 AWS role with exact-two-object session permissions")
+        self.assertIn("python -m unittest discover -s tests -v", text[pre_oidc:oidc])
+        self.assertLess(pre_oidc, oidc)
 
     def test_dedicated_activation_validator_passes(self) -> None:
         completed = subprocess.run(
