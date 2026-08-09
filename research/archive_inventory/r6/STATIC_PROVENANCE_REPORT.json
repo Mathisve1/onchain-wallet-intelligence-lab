@@ -1,0 +1,212 @@
+{
+  "schema_version": "1.0",
+  "study_id": "HL-ARCHIVE-LEGACY-USER-KEY-PROVENANCE-R6-001",
+  "study_class": "STATIC_PRIMARY_SOURCE_PROVENANCE",
+  "status": "STATIC_RESEARCH_COMPLETE_NO_EXECUTION",
+  "checked_at_utc": "2026-08-09T16:13:00Z",
+  "research_question": "What does the leading string in each R5-observed legacy node_fills [string, object] record represent?",
+  "parent_r5": {
+    "canonical_evidence_merge_commit": "4400963aa972ed878650116202cc72880e667849",
+    "run_id": 31321019885,
+    "job_id": 93263905889,
+    "artifact_id": 9040171908,
+    "terminal_status": "R5_LEGACY_FORMAT_FINGERPRINT_COMPLETE",
+    "technical_result": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+    "format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT",
+    "nonempty_record_count": 162815,
+    "array_element_type_signature": "string,object",
+    "semantic_wallet_or_user_label_inferred_by_r5": false
+  },
+  "point_in_time_target": {
+    "legacy_object_key": "node_fills/hourly/20250727/8.lz4",
+    "object_date": "2025-07-27",
+    "historical_source_requirement": "Prefer immutable official evidence published before the legacy object date when available."
+  },
+  "method_boundary": {
+    "public_primary_sources_only": true,
+    "new_archive_request_performed": false,
+    "s3_request_performed": false,
+    "aws_role_or_policy_mutated": false,
+    "object_body_downloaded": false,
+    "payload_value_inspected": false,
+    "wallet_address_from_archive_retained": false,
+    "market_data_ingested": false,
+    "trading_or_capital_authority_opened": false
+  },
+  "primary_source_evidence": [
+    {
+      "source_id": "HL-NODE-WRITE-FILLS-COMMIT-20250527",
+      "publisher": "hyperliquid-dex",
+      "repository": "hyperliquid-dex/node",
+      "commit": "c4933f2273e4dfca6915971229d22149712641e0",
+      "commit_date_utc": "2025-05-27T10:46:44Z",
+      "file": "README.md",
+      "claim": "--write-fills streams fills in the API fills format to node_fills/hourly/{date}/{hour}.",
+      "predates_target_object": true,
+      "immutable": true
+    },
+    {
+      "source_id": "HL-NODE-BATCH-BY-BLOCK-COMMIT-20250627",
+      "publisher": "hyperliquid-dex",
+      "repository": "hyperliquid-dex/node",
+      "commit": "247aea04898c23f2cd8948ad0e70a5f47d8b43bc",
+      "commit_date_utc": "2025-06-27T08:50:26Z",
+      "file": "README.md",
+      "claim": "--batch-by-block changes the write-* output from one event per line to one block per line; therefore the unbatched writer is documented as one event per line.",
+      "predates_target_object": true,
+      "immutable": true
+    },
+    {
+      "source_id": "HL-PYSDK-0160-TYPES",
+      "publisher": "hyperliquid-dex",
+      "repository": "hyperliquid-dex/hyperliquid-python-sdk",
+      "tag": "0.16.0",
+      "tag_commit": "3ad503fd1ad6b609aad42d9be183306b9213cdb0",
+      "release_date_utc": "2025-07-02T20:33:00Z",
+      "file": "hyperliquid/utils/types.py",
+      "file_blob_sha": "051bcfa68442688d58bce10b4701252a534c465e",
+      "claims": [
+        "Fill is a fill object whose defined fields include coin, px, sz, side, time, startPosition, dir, closedPnl, hash, oid, crossed, fee, tid and feeToken.",
+        "The Fill type does not contain a user field.",
+        "UserFillsData contains user separately from fills: {user, isSnapshot, fills}."
+      ],
+      "predates_target_object": true,
+      "immutable": true
+    },
+    {
+      "source_id": "HL-PYSDK-0160-INFO-USER-FILLS",
+      "publisher": "hyperliquid-dex",
+      "repository": "hyperliquid-dex/hyperliquid-python-sdk",
+      "tag": "0.16.0",
+      "tag_commit": "3ad503fd1ad6b609aad42d9be183306b9213cdb0",
+      "release_date_utc": "2025-07-02T20:33:00Z",
+      "file": "hyperliquid/info.py",
+      "file_blob_sha": "cc831c93e1b20aebddc0dd28a38f4a2e00b35ec7",
+      "claims": [
+        "user_fills accepts an onchain address in 42-character hexadecimal format.",
+        "The userFills request passes that address in the separate user field.",
+        "The returned fill objects are documented without an embedded user field."
+      ],
+      "predates_target_object": true,
+      "immutable": true
+    },
+    {
+      "source_id": "HL-PYSDK-0160-WS-USER-FILLS",
+      "publisher": "hyperliquid-dex",
+      "repository": "hyperliquid-dex/hyperliquid-python-sdk",
+      "tag": "0.16.0",
+      "tag_commit": "3ad503fd1ad6b609aad42d9be183306b9213cdb0",
+      "release_date_utc": "2025-07-02T20:33:00Z",
+      "file": "hyperliquid/websocket_manager.py",
+      "file_blob_sha": "4c73a688148ad93648bfbdf500d58f71a2391d6a",
+      "claims": [
+        "userFills subscriptions are keyed by subscription.user.",
+        "userFills messages are routed by ws_msg.data.user."
+      ],
+      "predates_target_object": true,
+      "immutable": true
+    },
+    {
+      "source_id": "HL-HISTORICAL-DATA-CURRENT-CROSSCHECK",
+      "publisher": "Hyperliquid",
+      "title": "Historical data",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data",
+      "checked_at_utc": "2026-08-09T16:13:00Z",
+      "claims": [
+        "node_fills_by_block contains fills streamed with --write-fills --batch-by-block.",
+        "older node_fills data is in a different format.",
+        "node_fills matches the API format."
+      ],
+      "predates_target_object": null,
+      "immutable": false,
+      "use": "CURRENT_OFFICIAL_CROSSCHECK_NOT_SOLE_HISTORICAL_PROOF"
+    }
+  ],
+  "r5_structural_correspondence": {
+    "all_observed_records_are_pair_string_object": true,
+    "all_observed_record_count": 162815,
+    "observed_fill_like_object_field_paths_include": [
+      "coin",
+      "px",
+      "sz",
+      "side",
+      "time",
+      "startPosition",
+      "dir",
+      "closedPnl",
+      "hash",
+      "oid",
+      "crossed",
+      "fee",
+      "tid",
+      "feeToken"
+    ],
+    "correspondence_to_historical_sdk_fill_shape": "STRONG",
+    "archive_string_value_or_lexical_shape_observed_by_r6": false
+  },
+  "reasoning": {
+    "directly_documented_facts": [
+      "Before the target object date, Hyperliquid documented --write-fills as writing API-format fills.",
+      "Before the target object date, Hyperliquid documented unbatched write output as one event per line.",
+      "Before the target object date, the official SDK represented user separately from Fill in userFills websocket data.",
+      "Before the target object date, the official SDK documented user_fills input as a 42-character onchain address and returned fill objects without an embedded user field.",
+      "R5 empirically observed every legacy node_fills record as [string, object] with a fill-like object shape."
+    ],
+    "inference": "The convergent primary-source explanation is that the leading string is the Hyperliquid user/onchain account address associated with the fill object.",
+    "why_not_direct_proof": "The public node repository documents writer behavior but does not expose the node serializer implementation that would directly name the first tuple element, and R5 intentionally retained no leading-string values or lexical-shape aggregates."
+  },
+  "terminal_result": "LEADING_STRING_USER_ADDRESS_SEMANTICS_HIGH_CONFIDENCE_STATIC_INFERENCE",
+  "semantic_label": "HYPERLIQUID_USER_ADDRESS",
+  "semantic_label_status": "SUPPORTED_INFERENCE_NOT_DIRECT_SERIALIZER_PROOF",
+  "confidence_class": "HIGH",
+  "claims_proven": [
+    "The historical official write-fills documentation, batching documentation and SDK interface model predate the 2025-07-27 target object.",
+    "The R5 object-side structure is strongly correspondent with the historical official SDK Fill shape.",
+    "The official API/SDK model keeps the user identity outside the Fill object and represents it as an onchain address."
+  ],
+  "claims_not_proven": [
+    "The exact unpublished node serializer variable name or tuple type for the leading string.",
+    "That every R5 leading string lexically matches the 42-character 0x-prefixed address pattern.",
+    "Any specific wallet address contained in the archive object.",
+    "Wallet reconstruction correctness.",
+    "Entity clustering correctness.",
+    "Copyability or follower profitability.",
+    "Alpha, market-data suitability or live-trading suitability."
+  ],
+  "current_authorizations": {
+    "future_paid_archive_request": false,
+    "requester_pays": false,
+    "get_object": false,
+    "archive_wallet_address_retention": false,
+    "wallet_reconstruction": false,
+    "entity_clustering": false,
+    "copyability_analysis": false,
+    "pnl_or_alpha_analysis": false,
+    "market_data_ingestion": false,
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "next_minimum_empirical_gate_if_required": {
+    "gate_id": "HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001",
+    "status": "PROPOSED_NOT_AUTHORIZED",
+    "purpose": "Resolve the remaining lexical-shape gap without retaining any wallet address or payload value.",
+    "target": "the same exact R5-bound legacy object only",
+    "proposed_retained_aggregates_only": [
+      "leading_string_count",
+      "leading_string_42_char_count",
+      "leading_string_0x40hex_count",
+      "leading_string_lowercase_0x40hex_count",
+      "distinct_leading_string_count_only_if_computed_streaming_without_value_retention"
+    ],
+    "proposed_value_retention": false,
+    "proposed_wallet_address_retention": false,
+    "proposed_payload_retention": false,
+    "new_paid_request_required": true,
+    "separate_human_scope_and_budget_approval_required": true,
+    "execution_release_required": true
+  }
+}
