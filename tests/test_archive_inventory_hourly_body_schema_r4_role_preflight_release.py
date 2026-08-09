@@ -67,8 +67,12 @@ class ArchiveHourlyBodySchemaR4RolePreflightReleaseTests(unittest.TestCase):
 
     def test_workflow_is_bound_to_canonical_preflight_implementation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
+        pending_assignment = (
+            "EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: "
+            "PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE"
+        )
         self.assertIn(f"EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}", text)
-        self.assertNotIn("PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE", text)
+        self.assertNotIn(pending_assignment, text)
         self.assertIn("DenyAllS3DuringR4RolePreflight", text)
         self.assertEqual(text.count("aws sts get-caller-identity --output json"), 1)
         self.assertNotIn("aws s3", text)
