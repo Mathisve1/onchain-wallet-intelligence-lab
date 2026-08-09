@@ -8,6 +8,7 @@ import json
 import os
 import re
 import ssl
+import sys
 import time
 import urllib.parse
 from collections import defaultdict
@@ -16,9 +17,12 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, Iterable
 
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from research.archive_inventory.r4.lz4_frame import LZ4FrameError, LZ4FrameLimit, iter_lz4_frame
 
-ROOT = Path(__file__).resolve().parents[3]
 R10 = ROOT / "research/archive_inventory/r10"
 R10_APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 IMPL = ROOT / "research/archive_inventory/r10_implementation"
@@ -38,6 +42,7 @@ SIGNING_REGION = "ap-northeast-1"
 REGIONAL_ENDPOINT = f"{TARGET_BUCKET}.s3.{SIGNING_REGION}.amazonaws.com"
 SERVICE = "s3"
 EMPTY_PAYLOAD_SHA256 = hashlib.sha256(b"").hexdigest()
+
 MAX_REQUESTS = 6
 MAX_TOTAL_COMPRESSED_BYTES = 120_999_698
 MAX_INDIVIDUAL_COMPRESSED_BYTES = 21_672_141
@@ -165,9 +170,7 @@ def canonical_decimal(value: Decimal) -> str:
     text = format(value, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")
-    if text in {"", "-0", "+0"}:
-        return "0"
-    return text
+    return "0" if text in {"", "-0", "+0"} else text
 
 
 def _tid_key(value: object) -> tuple[str, str]:
@@ -223,26 +226,30 @@ def validate_static_inputs() -> None:
     if not all(value is False for value in impl.get("trading_authorizations", {}).values()):
         raise R10ContractError("implementation opens trading authority")
 
-    targets = prereg.get("exact_future_network_targets")
-    approved = approval.get("approved_future_objects")
-    installed = impl.get("exact_network_targets")
-    if not isinstance(targets, list) or not isinstance(approved, list) or not isinstance(installed, list):
+    prereg_targets = prereg.get("exact_future_network_targets")
+    approved_targets = approval.get("approved_future_objects")
+    impl_targets = impl.get("exact_network_targets")
+    if not all(isinstance(rows, list) for rows in (prereg_targets, approved_targets, impl_targets)):
         raise R10ContractError("target arrays absent")
-    if len(targets) != len(approved) != len(installed):
-        raise R10ContractError("target count drift")
-    if len(targets) != MAX_REQUESTS:
-        raise R10ContractError("target count must be six")
+    if not (len(prereg_targets) == len(approved_targets) == len(impl_targets) == len(TARGETS) == MAX_REQUESTS):
+        raise R10ContractError("target cardinality drift")
     for index, frozen in enumerate(TARGETS):
-        p = targets[index]
-        a = approved[index]
-        i = installed[index]
+        p = prereg_targets[index]
+        a = approved_targets[index]
+        i = impl_targets[index]
+        expected_impl = {
+            "path_hour_utc": frozen["path_hour_utc"],
+            "key": frozen["key"],
+            "expected_size_bytes": frozen["size"],
+            "expected_etag": frozen["etag"],
+        }
         if p.get("path_hour_utc") != frozen["path_hour_utc"] or p.get("key") != frozen["key"]:
             raise R10ContractError("preregistered target drift")
         if p.get("expected_size_bytes") != frozen["size"] or p.get("expected_etag") != frozen["etag"]:
             raise R10ContractError("preregistered object identity drift")
         if a != {"key": frozen["key"], "size_bytes": frozen["size"], "etag": frozen["etag"]}:
             raise R10ContractError("approved target drift")
-        if i != {"path_hour_utc": frozen["path_hour_utc"], "key": frozen["key"], "expected_size_bytes": frozen["size"], "expected_etag": frozen["etag"]}:
+        if i != expected_impl:
             raise R10ContractError("implementation target drift")
 
     envelope = impl.get("execution_envelope", {})
@@ -378,8 +385,7 @@ class MultiHourAggregator:
             raise R10FeatureUnresolved("strict modern block parse failed") from exc
         if not isinstance(block, dict):
             raise R10FeatureUnresolved("top-level record is not object")
-        required = {"local_time": str, "block_time": str, "block_number": int, "events": list}
-        for key, expected_type in required.items():
+        for key, expected_type in {"local_time": str, "block_time": str, "block_number": int, "events": list}.items():
             field = block.get(key)
             if expected_type is int:
                 if isinstance(field, bool) or not isinstance(field, int):
