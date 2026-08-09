@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml"
+ACTIVATION = ROOT / "research/archive_inventory/r4/R4_EXECUTION_RELEASE_CANONICALIZATION.json"
+IMPLEMENTATION = "180c89ead78f9a6f4560a1ec12575658e62586ee"
 
 
 class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
@@ -25,7 +27,11 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
 
     def test_implementation_candidate_is_inert_until_separate_release(self) -> None:
         text = self.text()
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        if ACTIVATION.exists():
+            self.assertIn(f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}", text)
+            self.assertNotIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        else:
+            self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
         self.assertIn("R4 release gate 45", text)
         self.assertIn("R4_EXECUTION_RELEASE_CANONICALIZATION.json", text)
         self.assertLess(
@@ -58,7 +64,11 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
             "assert approval['maximum_runtime_seconds'] == 180",
             "assert approval['maximum_retries_per_request'] == 0",
             "assert release['dedicated_r4_role_operator_attested'] is True",
+            "assert release['dedicated_r4_role_independently_verified'] is True",
+            "assert release['preflight_run_id'] == 31312067367",
+            "assert release['preflight_s3_requests_executed'] == 0",
             "assert release['rerun_authorized'] is False",
+            "assert release['execution_ready'] is True",
             "'wallet_reconstruction_authorized'",
             "'market_data_ingestion_authorized'",
             "assert release[key] is False",
