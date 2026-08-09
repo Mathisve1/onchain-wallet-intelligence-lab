@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from research.archive_inventory.r10_implementation import collector
 
-ROOT = Path(__file__).resolve().parents[1]
 R10 = ROOT / "research/archive_inventory/r10"
 APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 IMPL = ROOT / "research/archive_inventory/r10_implementation"
@@ -162,7 +166,6 @@ def main() -> int:
     assert "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json" in data_text
     assert "R10_STS_PREFLIGHT_ATTESTATION.json" in data_text
 
-    # Implementation freezes byte candidates but intentionally does not install either OIDC workflow yet.
     assert not PREFLIGHT_INSTALLED.exists()
     assert not DATA_INSTALLED.exists()
     assert not (ROOT / "research/archive_inventory/r10_role_attestation").exists()
