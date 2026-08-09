@@ -1,0 +1,333 @@
+name: Hyperliquid Archive Hourly Body Schema Pilot R4
+run-name: R8A modern wallet-index bridge
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-modern-wallet-index-r8a
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R8A_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+  R8_STATIC_DESIGN_COMMIT: 526f92cf3666c8bb616ecb61b6f9881387c1d7ed
+  APPROVAL_MERGE_COMMIT: 6c011cb604dec1f169d42b02de4ae67f3f8f8395
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001
+  APPROVAL_TEXT_SHA256: cb39246e2e5f345b14f87c15ac2c4d6aa993bcc9fbd28076f5f57eff94420e64
+  RELEASE_CANDIDATE_PATH: research/archive_inventory/r8/R8A_EXECUTION_RELEASE.json
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r8/R8A_EXECUTION_RELEASE_CANONICALIZATION.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  modern-wallet-index-r8a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main dispatch identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove canonical R8A implementation and active release before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r8_design.py
+          python governance/validate_r8a_approval.py
+          python governance/validate_r8a_implementation.py
+          python - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          root = Path('.')
+          r8 = root / 'research/archive_inventory/r8'
+          approval_text = r8 / 'approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001.txt'
+          approval = json.loads((r8 / 'approvals/APPROVE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001.json').read_text())
+          impl = json.loads((r8 / 'R8A_IMPLEMENTATION_CONTRACT.json').read_text())
+          candidate_path = root / os.environ['RELEASE_CANDIDATE_PATH']
+          activation_path = root / os.environ['EXECUTION_RELEASE_PATH']
+          assert candidate_path.is_file(), 'R8A inert release candidate is absent'
+          assert activation_path.is_file(), 'R8A active execution release is absent'
+          candidate = json.loads(candidate_path.read_text())
+          release = json.loads(activation_path.read_text())
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['reviewed_commit'] == os.environ['R8_STATIC_DESIGN_COMMIT']
+          assert approval['exact_approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(v is False for v in approval['current_runtime_authority'].values())
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert all(v is False for v in impl['current_runtime_authority'].values())
+          assert candidate['release_id'] == 'RELEASE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001'
+          assert candidate['status'] == 'RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION'
+          assert candidate['execution_ready'] is False
+          assert candidate['single_workflow_dispatch_authorized'] is False
+          assert candidate['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert candidate['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert release['release_id'] == candidate['release_id']
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R8A_RUN'
+          assert release['candidate_sha256'] == hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert re.fullmatch(r'[0-9a-f]{40}', release['canonical_implementation_merge_commit'])
+          for value in (candidate, release):
+              assert value['target_bucket'] == 'hl-mainnet-node-data'
+              assert value['signing_region'] == 'ap-northeast-1'
+              assert value['object_key'] == 'node_fills_by_block/hourly/20250727/8.lz4'
+              assert value['object_size_bytes'] == 1517603
+              assert value['object_etag'] == '"60d4c1277f76651b5f04666bbe8d7594"'
+              assert value['expected_compressed_sha256'] == '928e1cd6bd7d69ad7243c263bacee48e53e4762ae9e99ef75f45007f6c0e6105'
+              assert value['expected_decompressed_byte_count'] == 7380378
+              assert value['expected_top_level_block_record_count'] == 4345
+              assert value['maximum_one_time_budget_eur'] == 0.10
+              assert value['maximum_monthly_budget_eur'] == 0
+              assert value['maximum_get_object_requests'] == 1
+              assert value['maximum_retries_per_request'] == 0
+              assert value['wallet_address_retention_authorized'] is True
+              assert value['per_wallet_fill_count_retention_authorized'] is True
+              assert value['valid_event_pair_count_retention_authorized'] is True
+              assert value['retained_wallet_index_fields_only'] == ['wallet_address', 'fill_count']
+              assert value['raw_compressed_object_retention_authorized'] is False
+              assert value['raw_decompressed_payload_retention_authorized'] is False
+              assert value['record_payload_retention_authorized'] is False
+              assert value['fill_object_retention_authorized'] is False
+              assert value['performance_field_values_retention_authorized'] is False
+              assert all(flag is False for flag in value['downstream_authorizations'].values())
+              assert all(flag is False for flag in value['trading_authorizations'].values())
+              assert value['s3_requests_executed'] == 0
+              assert value['wallet_addresses_retained'] == 0
+              assert value['empirical_result'] is None
+          PY
+
+      - name: Enforce R8A single-use release before AWS OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "${CURRENT_RUN_ATTEMPT}" = '1'
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          url = f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-modern-wallet-index-r8a.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req = urllib.request.Request(url, headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'hl-r8a-single-use-check'})
+          with urllib.request.urlopen(req, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc) >= start]
+          assert len(eligible) == 1, 'R8A release is not single-use within its window'
+          assert int(eligible[0]['id']) == current, 'a prior R8A dispatch already consumed the release'
+          assert eligible[0]['event'] == 'workflow_dispatch'
+          assert eligible[0]['head_branch'] == 'main'
+          PY
+
+      - name: Freeze pending R8A run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
+          context = {
+            'schema_version':'1.0',
+            'pilot_id':'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001',
+            'release_id':release['release_id'],
+            'terminal_status':'PENDING_AWS_OIDC',
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+            'workflow_run_id':int(os.environ['WORKFLOW_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+            'approval_id':os.environ['APPROVAL_ID'],
+            'approval_text_sha256':os.environ['APPROVAL_TEXT_SHA256'],
+            'canonical_implementation_merge_commit':release['canonical_implementation_merge_commit'],
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R8A_ROLE_ARN'],
+            'configure_aws_outcome':None,
+            'target_bucket':'hl-mainnet-node-data',
+            'signing_region':'ap-northeast-1',
+            'object_key':'node_fills_by_block/hourly/20250727/8.lz4',
+            'maximum_get_object_requests':1,
+            'maximum_total_compressed_bytes':1517603,
+            'maximum_total_decompressed_bytes':16777216,
+            'maximum_runtime_seconds':120,
+            'maximum_retries_per_request':0,
+            'wallet_address_retention_authorized':True,
+            'per_wallet_fill_count_retention_authorized':True,
+            'valid_event_pair_count_retention_authorized':True,
+            'retained_wallet_index_fields_only':['wallet_address','fill_count'],
+            'historical_multi_hour_ingestion_authorized':False,
+            'wallet_ranking_authorized':False,
+            'copyability_analysis_authorized':False,
+            'pnl_or_alpha_analysis_authorized':False,
+          }
+          (Path(os.environ['RUNNER_TEMP'])/'r8a-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Assume unchanged dedicated AWS role with exact-one-object R8A session
+        id: configure-aws
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ env.R8A_ROLE_ARN }}
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveModernWalletIndexR8A
+          allowed-account-ids: ${{ env.EXPECTED_AWS_ACCOUNT_ID }}
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: '{"Version":"2012-10-17","Statement":[{"Sid":"R8AExactModernBoundaryObjectOnly","Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/8.lz4"}]}'
+
+      - name: Execute bounded R8A modern wallet-index collector
+        shell: bash
+        run: |
+          set +e
+          python research/archive_inventory/r8/collector.py --result-output "${RUNNER_TEMP}/r8a-result.json" --wallet-index-output "${RUNNER_TEMP}/r8a-wallet-index.ndjson"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r8a.rc"
+
+      - name: Finalize minimized R8A context and evidence ledger
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure-aws.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp/'r8a-context.json'
+          result_path = temp/'r8a-result.json'
+          index_path = temp/'r8a-wallet-index.ndjson'
+          rc_path = temp/'r8a.rc'
+          context = json.loads(context_path.read_text())
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          if not result_path.exists():
+              result_path.write_text(json.dumps({'schema_version':'1.0','pilot_id':'HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001','terminal_status':'R8A_TRANSPORT_OR_INTEGRITY_FAIL','technical_result':'PRE_COLLECTOR_AWS_FAILURE','research_conclusion':'R8A_TRANSPORT_OR_INTEGRITY_FAIL'},indent=2,sort_keys=True)+'\n')
+          if not index_path.exists(): index_path.write_bytes(b'')
+          if not rc_path.exists(): rc_path.write_text('83\n')
+          lines=[]
+          for path in (context_path,result_path,index_path,rc_path):
+              lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp/'R8A_FILES.sha256').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Upload bounded R8A evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r8a-modern-wallet-index-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r8a-context.json
+            ${{ runner.temp }}/r8a-result.json
+            ${{ runner.temp }}/r8a-wallet-index.ndjson
+            ${{ runner.temp }}/r8a.rc
+            ${{ runner.temp }}/R8A_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: false
+
+      - name: Enforce exact R8A terminal result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          temp=Path(os.environ['RUNNER_TEMP'])
+          result=json.loads((temp/'r8a-result.json').read_text())
+          index_path=temp/'r8a-wallet-index.ndjson'
+          rc=int((temp/'r8a.rc').read_text().strip())
+          if rc != 0 or result.get('terminal_status') == 'R8A_TRANSPORT_OR_INTEGRITY_FAIL':
+              raise SystemExit(1)
+          assert result.get('terminal_status') == 'R8A_MODERN_WALLET_INDEX_STUDY_COMPLETE'
+          assert result.get('research_conclusion') in {'MODERN_WALLET_INDEX_BRIDGE_COMPLETE','MODERN_WALLET_INDEX_BRIDGE_UNRESOLVED'}
+          assert result.get('request_attempt_count') == 1
+          assert result.get('s3_http_request_count') == 1
+          assert result.get('successful_request_count') == 1
+          assert result.get('failed_request_count') == 0
+          assert result.get('retries_used') == 0
+          assert result.get('http_redirects_followed') is False
+          assert result.get('compressed_bytes') == 1517603
+          assert result.get('decompressed_bytes') == 7380378
+          for key in ('raw_compressed_object_persisted','raw_decompressed_payload_retained','record_payload_retained','fill_object_retained','payload_values_retained','performance_field_values_retained','block_number_values_retained','local_time_values_retained','block_time_values_retained','coin_values_retained','price_values_retained','size_values_retained','side_values_retained','time_values_retained','dir_values_retained','closed_pnl_values_retained','fee_values_retained','fee_token_values_retained','start_position_values_retained','crossed_values_retained','liquidation_values_retained','transaction_hashes_retained','order_ids_retained','trade_ids_retained','client_order_ids_retained','historical_multi_hour_ingestion_performed','public_api_enrichment_performed','entity_clustering_performed','wallet_ranking_performed','copyability_analysis_performed','pnl_or_alpha_analysis_performed','market_data_ingested','strategy_inference_performed'):
+              assert result.get(key) is False, key
+          if result['research_conclusion'] == 'MODERN_WALLET_INDEX_BRIDGE_UNRESOLVED':
+              assert index_path.read_bytes() == b''
+              assert result.get('wallet_index_retained') is False
+              raise SystemExit(0)
+          assert result.get('wallet_index_retained') is True
+          assert result.get('wallet_addresses_retained') is True
+          assert result.get('leading_string_values_retained') is True
+          assert result.get('per_wallet_fill_counts_retained') is True
+          assert result.get('unique_wallet_count_retained') is True
+          assert result.get('valid_event_pair_count_retained') is True
+          summary=result['wallet_index_summary']
+          assert summary['top_level_block_record_count'] == 4345
+          assert summary['valid_event_pair_count'] >= 1
+          data=index_path.read_bytes()
+          assert 0 < len(data) <= 16777216
+          assert hashlib.sha256(data).hexdigest() == summary['wallet_index_sha256']
+          rows=[]
+          for raw in data.splitlines():
+              row=json.loads(raw.decode())
+              assert list(row.keys()) == ['wallet_address','fill_count']
+              assert re.fullmatch(r'^0x[0-9a-f]{40}$',row['wallet_address'])
+              assert isinstance(row['fill_count'],int) and row['fill_count'] > 0
+              rows.append(row)
+          addresses=[row['wallet_address'] for row in rows]
+          assert addresses == sorted(addresses)
+          assert len(addresses) == len(set(addresses))
+          assert sum(row['fill_count'] for row in rows) == summary['valid_event_pair_count']
+          assert summary['unique_wallet_count'] == len(rows)
+          assert summary['sum_fill_count'] == summary['valid_event_pair_count']
+          PY
