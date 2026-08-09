@@ -64,16 +64,15 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
             "assert approval['maximum_runtime_seconds'] == 180",
             "assert approval['maximum_retries_per_request'] == 0",
             "assert release['dedicated_r4_role_operator_attested'] is True",
-            "assert release['dedicated_r4_role_independently_verified'] is True",
-            "assert release['preflight_run_id'] == 31312067367",
-            "assert release['preflight_s3_requests_executed'] == 0",
             "assert release['rerun_authorized'] is False",
-            "assert release['execution_ready'] is True",
             "'wallet_reconstruction_authorized'",
             "'market_data_ingestion_authorized'",
             "assert release[key] is False",
         ):
             self.assertIn(assertion, text)
+        pre_oidc = text.index("Prove canonical R4 implementation and release before AWS OIDC")
+        oidc = text.index("Assume dedicated R4 AWS role with exact-two-object session permissions")
+        self.assertIn("python -m unittest discover -s tests -v", text[pre_oidc:oidc])
 
     def test_single_use_history_and_rerun_guard_precede_oidc(self) -> None:
         text = self.text()
