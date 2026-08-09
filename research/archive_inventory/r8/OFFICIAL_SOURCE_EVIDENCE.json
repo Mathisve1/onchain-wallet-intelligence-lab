@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "study_id": "HL-WALLET-PERFORMANCE-COPYABILITY-DATA-DESIGN-R8-001",
+  "accessed_utc_date": "2026-08-09",
+  "source_policy": "PRIMARY_OFFICIAL_SOURCES_ONLY",
+  "sources": [
+    {
+      "source_id": "HL-NODE-README",
+      "url": "https://github.com/hyperliquid-dex/node",
+      "publisher": "hyperliquid-dex",
+      "relevant_facts": [
+        "--write-fills streams fills in API fills format to node_fills/hourly/{date}/{hour}",
+        "--batch-by-block writes one block per line with local_time, block_time, block_number and events",
+        "node output can therefore provide population-wide fill history without first querying individual wallet addresses"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-HISTORICAL-DATA",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "node_fills_by_block contains fills streamed via --write-fills --batch-by-block",
+        "older node_fills is a different format and matches the API fill format",
+        "requesters pay transfer costs for S3 historical data"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-INFO-ENDPOINT",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "userFills is per address and returns at most 2000 recent fills",
+        "userFillsByTime is per address, returns at most 2000 fills per response and only the 10000 most recent fills are available",
+        "documented fill objects include closedPnl, coin, crossed, dir, hash, oid, px, side, startPosition, sz, time, fee, feeToken and tid",
+        "portfolio returns accountValueHistory, pnlHistory and volume across several horizons",
+        "userRole can distinguish User, Agent, Vault, Subaccount and Missing"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-RATE-LIMITS",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "REST requests share an aggregated 1200 weight per minute IP limit",
+        "most documented info requests have weight 20",
+        "clearinghouseState has weight 2",
+        "userRole has weight 60",
+        "userFills and userFillsByTime have additional weight based on returned items",
+        "the documentation recommends S3 for large batch historical requests"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-PORTFOLIO-GRAPHS",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/portfolio-graphs",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "portfolio graphs expose account value and PnL histories",
+        "account value includes unrealized PnL and vault balances",
+        "PnL adjusts account value for deposits and withdrawals",
+        "graphs are sampled and are not recommended for precise accounting"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-ENTRY-PRICE-PNL",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/entry-price-and-pnl",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "entry price, unrealized PnL and closed PnL are frontend convenience components",
+        "fundamental accounting is based on margin or spot balance and trades",
+        "for perps, closed PnL includes the fee plus position PnL on closing trades and only the fee on opening trades"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-NOTATION",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/notation",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "px means price and sz means size in units of coin",
+        "notional is price times size",
+        "side B means bid/buy and A means ask/short",
+        "side is the aggressing side for trades"
+      ]
+    },
+    {
+      "source_id": "HL-DOC-MAX-DRAWDOWN",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/miscellaneous-ui",
+      "publisher": "Hyperliquid Docs",
+      "relevant_facts": [
+        "the frontend max-drawdown metric is a convenience metric",
+        "users may compute their own metric from account-value and PnL histories"
+      ]
+    }
+  ],
+  "inferences_explicitly_not_direct_source_claims": [
+    "population-wide archive scanning before per-wallet API enrichment is the preferred project architecture",
+    "closedPnl is useful for candidate screening but insufficient by itself for exact account return",
+    "portfolio and role queries should be reserved for a reduced shortlist to control rate-limit cost",
+    "the modern node_fills_by_block address key should be empirically bridged before broader historical ingestion"
+  ]
+}
