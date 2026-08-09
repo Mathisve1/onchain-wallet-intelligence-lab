@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `R3_RELEASE_CANDIDATE_UNDER_REVIEW_NO_EXECUTION`
+- phase: `R3_CANONICAL_ACTIVATION_UNDER_REVIEW_NO_EXECUTION`
 - AWS identity: `ATTESTED_STS_IDENTITY_MATCH`
 - exact node-data Region: `ap-northeast-1`
 - R0 release: `CONSUMED_BY_RUN_31260043109`
@@ -28,33 +28,47 @@
   - `node_trades/hourly/`
 - approved hard envelope: max `48` LIST requests, `16` pages/family, `1000` keys/request, `48000` entries, `33554432` response bytes, `300` seconds, `0` retries
 - approved one-time / monthly budget: `EUR 0.10 / EUR 0`
-- pagination / continuation following after activation: `true / true`
+- pagination / continuation following within activated scope: `true / true`
 - continuation token values retained: `false`
 - repeated token / duplicate key: fail closed
 - redirect / StartAfter / Delimiter: `false / false / false`
 
-## R3 release candidate
+## R3 canonical release candidate
 
 - release candidate file: `research/archive_inventory/r3/R3_EXECUTION_RELEASE.json`
 - release ID: `RELEASE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001`
-- status: `RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION`
-- exact implementation bound: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`
-- separate activation required: `true`
-- activation record present: `false`
-- canonical release merge: `null` until this release PR is merged
-- single-use window start: `null` until separate activation record
-- workflow expected implementation remains: `PENDING_CANONICAL_IMPLEMENTATION_MERGE`
-- workflow therefore execution-capable after release-candidate merge alone: `false`
-- current network execution authorized: `false`
-- current paid request / Requester Pays / ListObjectsV2 runtime authorization: `false / false / false`
-- current single workflow dispatch authorized: `false`
-- rerun authorized: `false`
+- immutable candidate status: `RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION`
+- release PR / exact head: `43` / `95dd5765728d2977cdf51b3ae13d6d76af93af2d`
+- release exact-head CI run / job / tests: `31299183537` / `93209089110` / `244/244 PASS`
+- release validator / manifest / governance: `R3_RELEASE_CANDIDATE_VALID` / `BYTE_EXACT_PASS` / `PASS`
+- canonical release-candidate merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`
+- release merge independently compared with `main`: `identical`
+- release candidate content SHA-256: `c64719a8e9b8a82a361dcc7e4b03c12fba8027cd8d1e72bfc05487a2ef6ad55b`
+- candidate runtime Requester Pays / ListObjectsV2 / dispatch authority: `false / false / false`
+- candidate execution ready: `false`
+- candidate rerun authorized: `false`
+
+The canonical release candidate remains an immutable, inert snapshot. It is not rewritten to create authority. Runtime scope is represented only by the separate activation overlay below.
+
+## R3 canonical activation candidate
+
+- activation overlay: `research/archive_inventory/r3/R3_EXECUTION_RELEASE_CANONICALIZATION.json`
+- activation record present on review branch: `true`
+- activation status: `RELEASED_FOR_EXACTLY_ONE_CANONICAL_R3_RUN`
+- activation anchor commit: `4bc99701f6a24a045c84b205963685a2fe8c3122`
+- single-use window start: `2026-08-09T06:38:46Z`
+- activation is bound to canonical release merge: `6cd8ed06f311b6cda0a6e06c4d63f1cf05a9aad5`
+- activation is bound to canonical implementation: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`
+- active overlay Requester Pays / ListObjectsV2 / single dispatch scope: `true / true / true`
+- active overlay pagination / continuation-token following: `true / true`
+- active overlay rerun authorized: `false`
+- activation review branch itself network-executable: `false`; workflow requires `refs/heads/main`
+- authority becomes effective only after exact activation head is reviewed, CI-green and canonically merged to `main`
+- activation PR/CI AWS or S3 execution: `forbidden`
 - R3 S3 requests executed / entries observed: `0 / 0`
 - R3 empirical result: `null`
 
-The release candidate is deliberately inert. It records the already-human-approved envelope and exact canonical implementation but does not activate it. Even after this release-candidate PR is merged, the workflow remains fail-closed before AWS OIDC because `EXPECTED_IMPLEMENTATION_COMMIT` is still `PENDING_CANONICAL_IMPLEMENTATION_MERGE` and the canonical activation record is absent.
-
-A separate activation PR must be created from the actual release merge. That later PR must bind the exact release PR head, exact-head CI, actual canonical release merge SHA, a fresh single-use window start, and the unchanged scope. Only that later canonical activation may change the workflow gate from pending to the exact implementation commit and authorize exactly one `workflow_dispatch`.
+The workflow candidate is bound to the exact implementation commit and the separate canonicalization overlay. Before AWS OIDC it must re-run the complete tests, repository governance, implementation/release/activation lineage checks, the exact approved envelope, canonical `workflow_dispatch` + `refs/heads/main` identity and the single-use run-history gate. A re-run is forbidden. The first eligible canonical dispatch after the immutable anchor consumes the activation whether later execution passes or fails.
 
 ## Closed capabilities
 
@@ -69,4 +83,4 @@ A separate activation PR must be created from the actual release merge. That lat
 
 ## Next gate
 
-Require exact-head Research CI, `R3_RELEASE_CANDIDATE_VALID`, byte-exact repository-manifest validation and clean-context review. Merge only an exact reviewed release head. After merge, verify the actual canonical release SHA and build the separate activation PR. No AWS/S3 request is permitted during either release-candidate review or activation review.
+Complete the activation implementation without making any AWS/S3 request. Require exact-head Research CI, `R3_IMPLEMENTATION_VALID`, `R3_RELEASE_CANDIDATE_VALID`, `R3_ACTIVATION_VALID`, byte-exact repository-manifest validation and clean-context review. Merge only the exact reviewed activation head. After merge, verify the actual activation merge is canonical `main`; only then may exactly one manual R3 workflow dispatch occur within the approved envelope. The first eligible dispatch consumes the single-use activation regardless of PASS or FAIL.
