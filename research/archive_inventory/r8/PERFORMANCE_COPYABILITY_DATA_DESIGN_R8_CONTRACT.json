@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "study_id": "HL-WALLET-PERFORMANCE-COPYABILITY-DATA-DESIGN-R8-001",
+  "status": "STATIC_DESIGN_PREREGISTERED_NO_EXECUTION",
+  "parent_r7_evidence_commit": "7802d741f193671e50356c6001dcae149e0fc88a",
+  "parent_r7_run_id": 31330248235,
+  "parent_r7_terminal_result": "WALLET_INDEX_RECONSTRUCTION_COMPLETE",
+  "parent_r7_unique_wallet_count": 4637,
+  "parent_r7_sum_fill_count": 162815,
+  "research_question": "What is the smallest defensible data architecture and field set needed to progress from an activity-only Hyperliquid wallet index to historical performance and copyability research without prematurely ranking wallets or over-collecting payload data?",
+  "design_objectives": [
+    "separate global archive screening from per-wallet API enrichment",
+    "freeze a minimum archive field set before broader historical ingestion",
+    "distinguish activity and fill-derived statistics from account-return claims",
+    "identify modern node_fills_by_block parsing as the first scaling prerequisite",
+    "minimize per-wallet API calls and preserve rate-limit headroom",
+    "keep entity clustering, copyability scoring, PnL ranking and trading authority closed until separately preregistered"
+  ],
+  "source_of_truth_priority": [
+    "canonical empirical repository evidence",
+    "official Hyperliquid node repository and documentation",
+    "separately approved future empirical validation"
+  ],
+  "minimum_archive_candidate_field_set": {
+    "identity_and_time": [
+      "wallet_address",
+      "time"
+    ],
+    "instrument_and_direction": [
+      "coin",
+      "side",
+      "dir"
+    ],
+    "economic_fill_values": [
+      "px",
+      "sz",
+      "closedPnl",
+      "fee",
+      "feeToken"
+    ],
+    "position_transition": [
+      "startPosition"
+    ],
+    "deduplication": [
+      "tid"
+    ],
+    "behavioral_or_risk_flags_with_limited_semantic_use": [
+      "crossed",
+      "liquidation_presence"
+    ],
+    "explicitly_not_required_for_initial_candidate_screen": [
+      "hash",
+      "oid",
+      "cloid",
+      "builder",
+      "builderFee"
+    ]
+  },
+  "semantic_boundaries": {
+    "closed_pnl_sum_is_exact_account_return": false,
+    "closed_pnl_may_be_used_as_fill_derived_statistic": true,
+    "fee_may_be_retained_for_cost_diagnostics": true,
+    "fee_must_not_be_blindly_subtracted_from_closed_pnl_without_formula_proof": true,
+    "crossed_maker_taker_semantics_proven": false,
+    "crossed_may_be_retained_as_uninterpreted_boolean_until_separate_semantic_proof": true,
+    "one_wallet_address_equals_one_human_or_economic_entity": false,
+    "portfolio_graphs_are_precise_accounting": false,
+    "portfolio_graphs_may_support_shortlisted_wallet_performance_context": true
+  },
+  "proposed_research_pipeline": [
+    {
+      "stage": "A_GLOBAL_ARCHIVE_SCREEN",
+      "purpose": "scan historical fills population-wide and compute bounded wallet-level candidate features",
+      "data_source": "node_fills and node_fills_by_block",
+      "per_wallet_api_calls": false,
+      "ranking_authorized_by_r8": false
+    },
+    {
+      "stage": "B_CANDIDATE_REDUCTION",
+      "purpose": "apply preregistered activity, persistence, data-quality and special-role exclusion rules",
+      "data_source": "derived archive statistics",
+      "ranking_authorized_by_r8": false
+    },
+    {
+      "stage": "C_SHORTLIST_PUBLIC_API_ENRICHMENT",
+      "purpose": "query a reduced candidate set for portfolio/account context, role and other user-specific evidence",
+      "data_source": "official public info API",
+      "network_authorized_by_r8": false
+    },
+    {
+      "stage": "D_COPYABILITY_EXECUTION_RESEARCH",
+      "purpose": "evaluate latency, slippage, liquidity and follower execution after performance evidence exists",
+      "data_source": "future market and execution data",
+      "network_authorized_by_r8": false
+    }
+  ],
+  "archive_screen_feature_classes_for_future_preregistration": {
+    "activity": [
+      "fill_count",
+      "active_hour_count",
+      "active_day_count",
+      "first_fill_time",
+      "last_fill_time"
+    ],
+    "economic_fill_statistics": [
+      "sum_px_times_sz_notional_proxy",
+      "sum_closed_pnl_fill_statistic",
+      "sum_fee_by_fee_token"
+    ],
+    "behavior": [
+      "coin_count",
+      "open_close_direction_counts",
+      "side_counts",
+      "crossed_boolean_fraction_uninterpreted"
+    ],
+    "risk_and_integrity": [
+      "liquidation_associated_fill_count",
+      "duplicate_tid_count",
+      "invalid_record_count"
+    ],
+    "persistence": [
+      "fills_by_day",
+      "active_days_by_week"
+    ]
+  },
+  "shortlist_enrichment_candidates_for_future_preregistration": [
+    "portfolio",
+    "clearinghouseState",
+    "userRole",
+    "userFees",
+    "userFunding_if_required_by_accounting_design"
+  ],
+  "api_scaling_constraint": {
+    "per_address_user_fills_is_not_primary_population_scan": true,
+    "reason": "official userFills/userFillsByTime endpoints are per-user and history-limited while archive fills are population-wide",
+    "shortlist_first_required": true
+  },
+  "first_empirical_scaling_prerequisite": {
+    "gate_id": "HL-ARCHIVE-MODERN-WALLET-INDEX-BRIDGE-R8A-001",
+    "reason": "the long historical tail is in node_fills_by_block; R4 proved the modern block/container schema and fill-field structure but no concrete modern address values were retained",
+    "network_authorized_by_r8": false,
+    "separate_human_approval_required": true
+  },
+  "current_authority": {
+    "network_requests": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "new_wallet_address_retention": false,
+    "performance_field_retention": false,
+    "historical_multi_hour_ingestion": false,
+    "public_api_enrichment": false,
+    "entity_clustering": false,
+    "wallet_ranking": false,
+    "copyability_scoring": false,
+    "pnl_or_alpha_scoring": false,
+    "strategy_inference": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "network_requests_executed_by_r8": 0,
+  "wallets_ranked_by_r8": 0,
+  "empirical_result": null
+}
