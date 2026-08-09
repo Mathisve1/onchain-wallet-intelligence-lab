@@ -14,6 +14,10 @@ DERIVATION = R5 / "R4_DERIVATION.json"
 PARENT = ROOT / "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json"
 APPROVAL_TEXT = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt"
 APPROVAL_JSON = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json"
+IMPLEMENTATION = R5 / "R5_IMPLEMENTATION_CONTRACT.json"
+ROLE_REUSE = R5 / "R5_AWS_ROLE_REUSE_ANALYSIS.json"
+COLLECTOR = R5 / "collector.py"
+WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml"
 APPROVAL_SHA = "667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8"
 
 
@@ -24,11 +28,8 @@ def load(path: Path) -> dict:
 class ArchiveLegacyFormatFingerprintR5Tests(unittest.TestCase):
     def test_dedicated_preregistration_validator_passes(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(ROOT / "governance/validate_r5_preregistration.py")],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
+            [sys.executable, str(ROOT / "governance/validate_r5_preregistration.py")], cwd=ROOT,
+            check=False, capture_output=True, text=True,
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("R5_PREREGISTRATION_VALID", completed.stdout)
@@ -75,42 +76,39 @@ class ArchiveLegacyFormatFingerprintR5Tests(unittest.TestCase):
         self.assertFalse(authority["format_classification_authorized"])
 
     def test_classifier_is_structural_only_and_never_retains_payload_values(self) -> None:
-        contract = load(CONTRACT)
-        classifier = contract["proposed_format_classifier"]
+        classifier = load(CONTRACT)["proposed_format_classifier"]
         self.assertEqual(classifier["classifier_precedence"][0], "UTF8_NDJSON_PAIR_STRING_OBJECT")
         self.assertEqual(classifier["classifier_precedence"][1], "UTF8_NDJSON_PAIR_OBJECT_STRING")
-        self.assertFalse(classifier["payload_values_in_evidence_authorized"])
-        self.assertFalse(classifier["string_values_in_evidence_authorized"])
-        self.assertFalse(classifier["numeric_values_in_evidence_authorized"])
-        self.assertFalse(classifier["wallet_address_retention_from_body_authorized"])
-        self.assertFalse(classifier["record_payload_retention_authorized"])
-        self.assertFalse(classifier["raw_compressed_object_retention_authorized"])
-        self.assertFalse(classifier["raw_decompressed_payload_retention_authorized"])
+        for key in (
+            "payload_values_in_evidence_authorized", "string_values_in_evidence_authorized",
+            "numeric_values_in_evidence_authorized", "wallet_address_retention_from_body_authorized",
+            "record_payload_retention_authorized", "raw_compressed_object_retention_authorized",
+            "raw_decompressed_payload_retention_authorized",
+        ):
+            self.assertFalse(classifier[key], key)
 
-    def test_preregistration_snapshot_remains_inert_after_separate_approval(self) -> None:
+    def test_preregistration_snapshot_remains_inert_after_separate_approval_and_implementation(self) -> None:
         contract = load(CONTRACT)
         self.assertEqual(contract["status"], "PREREGISTERED_STATIC_NO_EXECUTION")
         self.assertTrue(all(
-            value is False
-            for key, value in contract["current_runtime_authority"].items()
+            value is False for key, value in contract["current_runtime_authority"].items()
             if key.endswith("authorized") or key in {"human_approval_recorded", "implementation_authorized", "execution_release_present"}
         ))
-        if APPROVAL_TEXT.exists() or APPROVAL_JSON.exists():
-            self.assertTrue(APPROVAL_TEXT.exists())
-            self.assertTrue(APPROVAL_JSON.exists())
-            approval = load(APPROVAL_JSON)
-            self.assertEqual(hashlib.sha256(APPROVAL_TEXT.read_bytes()).hexdigest(), APPROVAL_SHA)
-            self.assertEqual(approval["reviewed_commit"], "58f724d7f0208a43f7462abd80e1e69d995acff9")
-            self.assertFalse(approval["execution_authorized_by_this_record"])
-            self.assertFalse(approval["request_authorized_by_this_record"])
-        for path in (
-            ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml",
-            R5 / "collector.py",
-            R5 / "R5_IMPLEMENTATION_CONTRACT.json",
-            R5 / "R5_EXECUTION_RELEASE.json",
-            R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json",
-        ):
-            self.assertFalse(path.exists(), str(path))
+        self.assertTrue(APPROVAL_TEXT.exists() and APPROVAL_JSON.exists())
+        approval = load(APPROVAL_JSON)
+        self.assertEqual(hashlib.sha256(APPROVAL_TEXT.read_bytes()).hexdigest(), APPROVAL_SHA)
+        self.assertEqual(approval["reviewed_commit"], "58f724d7f0208a43f7462abd80e1e69d995acff9")
+        self.assertFalse(approval["execution_authorized_by_this_record"])
+        self.assertFalse(approval["request_authorized_by_this_record"])
+        for path in (IMPLEMENTATION, ROLE_REUSE, COLLECTOR, WORKFLOW):
+            self.assertTrue(path.exists(), str(path))
+        impl = load(IMPLEMENTATION)
+        self.assertEqual(impl["status"], "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION")
+        self.assertFalse(impl["execution_release_present"])
+        self.assertFalse(impl["execution_authorized"])
+        self.assertEqual(impl["s3_requests_executed"], 0)
+        self.assertFalse((R5 / "R5_EXECUTION_RELEASE.json").exists())
+        self.assertFalse((R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_semantic_wallet_and_all_trading_gates_remain_closed(self) -> None:
         contract = load(CONTRACT)
