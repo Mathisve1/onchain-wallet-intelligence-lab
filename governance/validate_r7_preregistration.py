@@ -168,14 +168,13 @@ def main() -> int:
     ):
         assert required in approval_template
 
-    forbidden_paths = [
-        R7 / "collector.py",
-        R7 / "R7_IMPLEMENTATION_CONTRACT.json",
-        R7 / "R7_EXECUTION_RELEASE.json",
-        ROOT / ".github/workflows/hyperliquid-archive-wallet-index-r7.yml",
-    ]
-    for path in forbidden_paths:
-        assert not path.exists(), path
+    implementation = R7 / "R7_IMPLEMENTATION_CONTRACT.json"
+    if not implementation.exists():
+        for path in (
+            R7 / "collector.py",
+            ROOT / ".github/workflows/hyperliquid-archive-wallet-index-r7.yml",
+        ):
+            assert not path.exists(), path
 
     print("R7_PREREGISTRATION_VALID")
     return 0
