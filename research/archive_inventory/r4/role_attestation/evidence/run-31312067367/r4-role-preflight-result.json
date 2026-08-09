@@ -1,0 +1,21 @@
+{
+  "account_id": "630956766927",
+  "aws_credentials_retained": false,
+  "body_execution_activation_authorized": false,
+  "body_release_consumed_by_preflight": false,
+  "decompression_performed": false,
+  "empirical_result": null,
+  "explicit_sts_caller_identity_calls": 1,
+  "object_body_downloaded": false,
+  "object_bytes_downloaded": 0,
+  "preflight_id": "HL-ARCHIVE-R4-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "raw_caller_identity_retained": false,
+  "raw_oidc_token_retained": false,
+  "requester_pays_requested": false,
+  "role_session_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-body-schema-r4/HLArchiveR4RolePreflight",
+  "s3_http_request_count": 0,
+  "schema_version": "1.0",
+  "session_policy": "DENY_ALL_S3_ON_ALL_RESOURCES",
+  "technical_result": "DEDICATED_R4_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN",
+  "terminal_status": "R4_ROLE_STS_PREFLIGHT_PASS"
+}

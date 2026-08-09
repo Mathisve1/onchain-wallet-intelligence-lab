@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "preflight_release_id": "RELEASE_HL_ARCHIVE_R4_ROLE_STS_PREFLIGHT_001",
+  "status": "CONSUMED_SUCCESS",
+  "run_id": 31312067367,
+  "job_id": 93241269551,
+  "artifact_id": 9037655204,
+  "dispatch_sha": "700aa435b6db2513877ef94f499cf44dddb16471",
+  "dispatch_ref": "refs/heads/main",
+  "workflow_run_attempt": 1,
+  "terminal_status": "R4_ROLE_STS_PREFLIGHT_PASS",
+  "technical_result": "DEDICATED_R4_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN",
+  "preflight_release_consumed": true,
+  "rerun_authorized": false,
+  "s3_requests_executed": 0,
+  "object_bytes_downloaded": 0,
+  "body_release_consumed_by_preflight": false,
+  "body_execution_activation_authorized_by_this_file": false,
+  "empirical_result": null
+}
