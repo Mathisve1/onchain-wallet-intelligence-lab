@@ -14,9 +14,16 @@ TEMPLATE = R5 / "HUMAN_APPROVAL_TEMPLATE.md"
 PARENT = ROOT / "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json"
 APPROVAL_TEXT = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt"
 APPROVAL_JSON = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json"
+IMPLEMENTATION = R5 / "R5_IMPLEMENTATION_CONTRACT.json"
+ROLE_REUSE = R5 / "R5_AWS_ROLE_REUSE_ANALYSIS.json"
+COLLECTOR = R5 / "collector.py"
+WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml"
+RELEASE = R5 / "R5_EXECUTION_RELEASE.json"
+ACTIVATION = R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json"
 
 EXPECTED_PARENT_MERGE = "fe06874aeeb958d375a27100378f89bd25b4741b"
 EXPECTED_PREREG_MERGE = "58f724d7f0208a43f7462abd80e1e69d995acff9"
+EXPECTED_APPROVAL_MERGE = "c22e28074ba2e95e1fe88912c364124e01eb0ff7"
 EXPECTED_APPROVAL_SHA = "667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8"
 EXPECTED_KEY = "node_fills/hourly/20250727/8.lz4"
 EXPECTED_ETAG = '"b21cdc16a4ec69d9c5b72c0c27ff148d-2"'
@@ -77,20 +84,13 @@ def main() -> int:
     assert envelope["maximum_runtime_seconds"] == 120
     assert envelope["maximum_retries_per_request"] == 0
     for key in (
-        "requester_pays_required",
-        "if_match_etag_required",
-        "exact_content_length_required",
-        "exact_compressed_sha256_required",
-        "exact_decompressed_byte_count_required",
+        "requester_pays_required", "if_match_etag_required", "exact_content_length_required",
+        "exact_compressed_sha256_required", "exact_decompressed_byte_count_required",
     ):
         assert envelope[key] is True, key
     for key in (
-        "http_redirect_following_authorized",
-        "head_object_authorized",
-        "range_get_authorized",
-        "list_objects_v2_authorized",
-        "list_object_versions_authorized",
-        "list_all_my_buckets_authorized",
+        "http_redirect_following_authorized", "head_object_authorized", "range_get_authorized",
+        "list_objects_v2_authorized", "list_object_versions_authorized", "list_all_my_buckets_authorized",
     ):
         assert envelope[key] is False, key
 
@@ -107,20 +107,15 @@ def main() -> int:
     assert classifier["maximum_unique_field_paths"] == 4096
     assert classifier["maximum_unique_structural_signatures"] == 256
     for key in (
-        "payload_values_in_evidence_authorized",
-        "string_values_in_evidence_authorized",
-        "numeric_values_in_evidence_authorized",
-        "wallet_address_retention_from_body_authorized",
-        "record_payload_retention_authorized",
-        "raw_compressed_object_retention_authorized",
+        "payload_values_in_evidence_authorized", "string_values_in_evidence_authorized",
+        "numeric_values_in_evidence_authorized", "wallet_address_retention_from_body_authorized",
+        "record_payload_retention_authorized", "raw_compressed_object_retention_authorized",
         "raw_decompressed_payload_retention_authorized",
     ):
         assert classifier[key] is False, key
 
-    semantic = contract["semantic_boundaries"]
-    assert all(value is False for value in semantic.values())
+    assert all(value is False for value in contract["semantic_boundaries"].values())
     assert all(value is False for value in contract["trading_authorizations"].values())
-
     authority = contract["current_runtime_authority"]
     assert authority["s3_requests_executed"] == 0
     assert authority["compressed_bytes_downloaded"] == 0
@@ -156,14 +151,10 @@ def main() -> int:
 
     status_text = STATUS.read_text(encoding="utf-8")
     template_text = TEMPLATE.read_text(encoding="utf-8")
-    assert (
-        "PREREGISTERED_STATIC_NO_EXECUTION" in status_text
-        or "HUMAN_APPROVED_IMPLEMENTATION_LANE_ONLY_NO_RUNTIME" in status_text
-    )
+    assert "HUMAN_APPROVED_IMPLEMENTATION_LANE_ONLY_NO_RUNTIME" in status_text or "PREREGISTERED_STATIC_NO_EXECUTION" in status_text
     assert "APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001" in template_text
     assert "reviewed_commit=<CANONICAL_R5_PREREGISTRATION_MERGE_COMMIT>" in template_text
 
-    # A later separate approval may exist; it must not mutate the preregistration snapshot.
     if APPROVAL_TEXT.exists() or APPROVAL_JSON.exists():
         assert APPROVAL_TEXT.exists() and APPROVAL_JSON.exists()
         approval = load(APPROVAL_JSON)
@@ -174,15 +165,28 @@ def main() -> int:
         assert approval["execution_authorized_by_this_record"] is False
         assert approval["request_authorized_by_this_record"] is False
 
-    forbidden_paths = [
-        ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml",
-        R5 / "collector.py",
-        R5 / "R5_IMPLEMENTATION_CONTRACT.json",
-        R5 / "R5_EXECUTION_RELEASE.json",
-        R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json",
-    ]
-    for path in forbidden_paths:
-        assert not path.exists(), path
+    # A later separately reviewed implementation may exist while this preregistration remains immutable/inert.
+    implementation_paths = (IMPLEMENTATION, ROLE_REUSE, COLLECTOR, WORKFLOW)
+    if any(path.exists() for path in implementation_paths):
+        assert all(path.exists() for path in implementation_paths)
+        impl = load(IMPLEMENTATION)
+        reuse = load(ROLE_REUSE)
+        assert impl["pilot_id"] == contract["pilot_id"]
+        assert impl["status"] == "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION"
+        assert impl["preregistration_commit"] == EXPECTED_PREREG_MERGE
+        assert impl["approval_merge_commit"] == EXPECTED_APPROVAL_MERGE
+        assert impl["approval_text_sha256"] == EXPECTED_APPROVAL_SHA
+        assert impl["execution_release_present"] is False
+        assert impl["execution_authorized"] is False
+        assert impl["expected_canonical_implementation_commit"] == "PENDING_CANONICAL_IMPLEMENTATION_MERGE"
+        assert impl["s3_requests_executed"] == 0
+        assert impl["empirical_result"] is None
+        assert reuse["aws_iam_mutation_performed"] is False
+        assert reuse["current_r5_network_authority"] is False
+
+    # Release/activation remain forbidden at this stage.
+    assert not RELEASE.exists(), RELEASE
+    assert not ACTIVATION.exists(), ACTIVATION
 
     print("R5_PREREGISTRATION_VALID")
     return 0
