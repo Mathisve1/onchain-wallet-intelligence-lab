@@ -115,7 +115,8 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r6a_successor = workflows / "hyperliquid-archive-legacy-user-key-lexical-r6a-successor.yml"
         r7 = workflows / "hyperliquid-archive-wallet-index-r7.yml"
         r8a = workflows / "hyperliquid-archive-modern-wallet-index-r8a.yml"
-        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a}
+        r9 = workflows / "hyperliquid-archive-modern-wallet-feature-r9.yml"
+        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a, r9}
         for path in allowed:
             self.assertTrue(path.is_file(), path)
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
