@@ -55,7 +55,7 @@ class ArchiveHourlyBodySchemaR4RolePreflightReleaseTests(unittest.TestCase):
         self.assertEqual(release["object_bytes_downloaded"], 0)
         self.assertIsNone(release["empirical_result"])
 
-    def test_body_release_remains_inert_and_unconsumed(self) -> None:
+    def test_body_release_snapshot_remains_inert_and_later_activation_is_separate(self) -> None:
         body = self.load(BODY_RELEASE)
         self.assertEqual(body["status"], "RELEASE_CANDIDATE_AWAITING_DEDICATED_R4_ROLE_ATTESTATION")
         self.assertFalse(body["single_workflow_dispatch_authorized"])
@@ -63,7 +63,17 @@ class ArchiveHourlyBodySchemaR4RolePreflightReleaseTests(unittest.TestCase):
         self.assertFalse(body["get_object_authorized"])
         self.assertFalse(body["decompression_authorized"])
         self.assertFalse(body["execution_ready"])
-        self.assertFalse(BODY_ACTIVATION.exists())
+        if BODY_ACTIVATION.exists():
+            activation = self.load(BODY_ACTIVATION)
+            self.assertTrue(activation["release_candidate_immutable"])
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN")
+            self.assertEqual(activation["preflight_run_id"], 31312067367)
+            self.assertTrue(activation["preflight_release_consumed"])
+            self.assertFalse(activation["preflight_rerun_authorized"])
+            self.assertEqual(activation["preflight_s3_requests_executed"], 0)
+            self.assertTrue(activation["dedicated_r4_role_independently_verified"])
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
 
     def test_workflow_is_bound_to_canonical_preflight_implementation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
