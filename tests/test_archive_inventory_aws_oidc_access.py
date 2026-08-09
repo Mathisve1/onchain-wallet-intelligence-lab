@@ -20,10 +20,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
     def test_identity_binding_is_exact_and_sts_attested(self) -> None:
         binding = self.load(ACCESS / "AWS_IDENTITY_BINDING.json")
         self.assertEqual(binding["aws_account_id"], "630956766927")
-        self.assertEqual(
-            binding["oidc_provider_arn"],
-            "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com",
-        )
+        self.assertEqual(binding["oidc_provider_arn"], "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com")
         self.assertEqual(binding["github_repository"], "Mathisve1/onchain-wallet-intelligence-lab")
         self.assertEqual(binding["github_repository_id"], "1326362646")
         self.assertEqual(binding["github_repository_owner_id"], "163474992")
@@ -33,10 +30,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertTrue(binding["github_federation_independently_proven"])
         self.assertEqual(binding["role_status"], "INDEPENDENTLY_PROVEN_ASSUMEABLE_FROM_CANONICAL_MAIN")
         self.assertEqual(binding["inline_policy_name"], "HLArchiveMetadataCanaryListOnly")
-        self.assertEqual(
-            binding["permission_policy_status"],
-            "USER_CONFIRMED_INLINE_POLICY_APPLIED_NOT_API_VERIFIED",
-        )
+        self.assertEqual(binding["permission_policy_status"], "USER_CONFIRMED_INLINE_POLICY_APPLIED_NOT_API_VERIFIED")
         self.assertEqual(binding["planned_workflow_session_duration_seconds"], 900)
         self.assertEqual(binding["role_max_session_duration_seconds"], 3600)
         self.assertTrue(binding["network_identity_check_authorized"])
@@ -62,10 +56,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         statement = policy["Statement"][0]
         self.assertEqual(statement["Effect"], "Allow")
         self.assertEqual(statement["Action"], "sts:AssumeRoleWithWebIdentity")
-        self.assertEqual(
-            statement["Principal"]["Federated"],
-            "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com",
-        )
+        self.assertEqual(statement["Principal"]["Federated"], "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com")
         self.assertEqual(
             statement["Condition"]["StringEquals"],
             {
@@ -93,10 +84,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         self.assertEqual(archive["Condition"]["NumericLessThanEquals"]["s3:max-keys"], "1000")
         self.assertEqual(by_sid["DenyNodeDataPrefixEscape"]["Effect"], "Deny")
         self.assertEqual(by_sid["DenyArchivePrefixEscape"]["Effect"], "Deny")
-        self.assertEqual(
-            by_sid["DenyOversizeListings"]["Condition"]["NumericGreaterThan"]["s3:max-keys"],
-            "1000",
-        )
+        self.assertEqual(by_sid["DenyOversizeListings"]["Condition"]["NumericGreaterThan"]["s3:max-keys"], "1000")
 
     def test_no_object_allow_exists(self) -> None:
         policy = self.load(ARCHIVE / "IAM_POLICY_TEMPLATE.json")
@@ -109,13 +97,7 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
             elif statement["Effect"] == "Deny":
                 denied_actions.update(actions)
         self.assertEqual(allowed_actions, {"s3:ListBucket"})
-        for action in (
-            "s3:GetObject",
-            "s3:GetObjectVersion",
-            "s3:GetObjectAttributes",
-            "s3:PutObject",
-            "s3:DeleteObject",
-        ):
+        for action in ("s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectAttributes", "s3:PutObject", "s3:DeleteObject"):
             self.assertIn(action, denied_actions)
         self.assertNotIn("s3:SelectObjectContent", allowed_actions | denied_actions)
 
@@ -132,24 +114,12 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r6a = workflows / "hyperliquid-archive-legacy-user-key-lexical-r6a.yml"
         r6a_successor = workflows / "hyperliquid-archive-legacy-user-key-lexical-r6a-successor.yml"
         r7 = workflows / "hyperliquid-archive-wallet-index-r7.yml"
-        self.assertTrue(identity.is_file())
-        self.assertTrue(r0.is_file())
-        self.assertTrue(region.is_file())
-        self.assertTrue(r2.is_file())
-        self.assertTrue(r3.is_file())
-        self.assertTrue(r4.is_file())
-        self.assertTrue(r4_preflight.is_file())
-        self.assertTrue(r5.is_file())
-        self.assertTrue(r6a.is_file())
-        self.assertTrue(r6a_successor.is_file())
-        self.assertTrue(r7.is_file())
+        r8a = workflows / "hyperliquid-archive-modern-wallet-index-r8a.yml"
+        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a}
+        for path in allowed:
+            self.assertTrue(path.is_file(), path)
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
-        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7}
-        other = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in sorted(workflows.glob("*.yml"))
-            if path not in allowed
-        )
+        other = "\n".join(path.read_text(encoding="utf-8") for path in sorted(workflows.glob("*.yml")) if path not in allowed)
         self.assertNotIn("id-token: write", other)
         self.assertNotIn("aws-actions/configure-aws-credentials", other)
         for path in allowed:
