@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "derivation_id": "DERIVE_R7_FROM_R6A_001",
+  "parent_commit": "6b7dcd85e6d0f82b63ab8c4dd50d56ef8dc72a57",
+  "parent_attestation_path": "research/archive_inventory/r6a/evidence/HL-ARCHIVE-LEGACY-USER-KEY-LEXICAL-R6A-001-ATTESTATION.json",
+  "parent_consumption_path": "research/archive_inventory/r6a/R6A_EXECUTION_RELEASE_002_CONSUMPTION.json",
+  "parent_research_conclusion_path": "research/archive_inventory/r6a/evidence/R6A_RESEARCH_CONCLUSION.md",
+  "parent_run_id": 31328268134,
+  "parent_job_id": 93282146403,
+  "parent_artifact_id": 9042152700,
+  "facts_carried_forward": {
+    "legacy_record_shape": "[string, object]",
+    "nonempty_record_count": 162815,
+    "leading_string_count": 162815,
+    "leading_string_length_42_count": 162815,
+    "leading_string_0x40hex_count": 162815,
+    "leading_string_lowercase_0x40hex_count": 162815,
+    "leading_string_non_0x40hex_count": 0,
+    "working_semantic_label": "HYPERLIQUID_USER_ADDRESS",
+    "working_semantic_status": "HIGH_CONFIDENCE_CONVERGENT_STATIC_AND_LEXICAL_EVIDENCE_NOT_DIRECT_SERIALIZER_PROOF"
+  },
+  "facts_not_carried_forward_as_proven": [
+    "the unpublished serializer variable/type",
+    "one address equals one human or economic entity",
+    "wallet profitability",
+    "wallet copyability",
+    "entity clustering correctness"
+  ],
+  "why_r7_is_needed": "R6A deliberately retained no address values. The next minimal empirical step is to validate deterministic address-keyed grouping while retaining only the normalized public address and its fill count, before any broader historical ingestion or performance analysis.",
+  "new_authority_required": {
+    "wallet_address_retention": true,
+    "leading_string_value_retention": true,
+    "wallet_index_reconstruction": true,
+    "new_paid_request": true,
+    "separate_human_approval": true
+  },
+  "authority_explicitly_not_requested": {
+    "entity_clustering": false,
+    "copyability_analysis": false,
+    "pnl_or_alpha_analysis": false,
+    "market_data_ingestion": false,
+    "historical_multi_hour_ingestion": false,
+    "paper_trading": false,
+    "live_trading": false
+  }
+}
