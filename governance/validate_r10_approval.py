@@ -7,11 +7,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 R10 = ROOT / "research/archive_inventory/r10"
+R10_APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 CONTRACT = R10 / "POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_CONTRACT.json"
 TEMPLATE = R10 / "HUMAN_APPROVAL_TEMPLATE_R10.md"
-STATUS = R10 / "APPROVAL_STATUS.md"
-APPROVAL_TXT = R10 / "approvals/APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.txt"
-APPROVAL_JSON = R10 / "approvals/APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.json"
+PREREG_STATUS = R10 / "APPROVAL_STATUS.md"
+APPROVAL_RECEIPT = R10_APPROVAL / "APPROVAL_RECEIPT.md"
+APPROVAL_TXT = R10_APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.txt"
+APPROVAL_JSON = R10_APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.json"
 
 APPROVAL_ID = "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001"
 PILOT_ID = "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001"
@@ -40,13 +42,16 @@ def main() -> int:
     approval = load(APPROVAL_JSON)
     approval_text = APPROVAL_TXT.read_text(encoding="utf-8")
     template = TEMPLATE.read_text(encoding="utf-8")
-    status = STATUS.read_text(encoding="utf-8")
+    prereg_status = PREREG_STATUS.read_text(encoding="utf-8")
+    receipt = APPROVAL_RECEIPT.read_text(encoding="utf-8")
 
     assert contract["pilot_id"] == PILOT_ID
     assert contract["status"] == "PREREGISTERED_NO_EXECUTION"
     assert contract["human_approval_required_before_implementation"] is True
     assert contract["network_requests_executed_by_r10_preregistration"] == 0
     assert contract["aws_iam_mutations_executed_by_r10_preregistration"] == 0
+    assert not (R10 / "approvals").exists()
+    assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in prereg_status
 
     assert approval["approval_id"] == APPROVAL_ID
     assert approval["pilot_id"] == PILOT_ID
@@ -119,10 +124,12 @@ def main() -> int:
     assert all(value is False for value in approval["downstream_authorizations"].values())
     assert all(value is False for value in approval["trading_authorizations"].values())
 
-    assert "OWNER_APPROVED_IMPLEMENTATION_AND_DEDICATED_ROLE_CREATION_NO_EXECUTION" in status
-    assert APPROVAL_SHA in status
-    assert "current STS/OIDC authority: `NONE`" in status
-    assert "current Requester Pays / GetObject authority: `NONE`" in status
+    assert APPROVAL_ID in receipt
+    assert PREREG_MERGE in receipt
+    assert APPROVAL_SHA in receipt
+    assert "implementation lane: approved" in receipt
+    assert "current execution/runtime authority: none" in receipt
+    assert "outside the immutable `research/archive_inventory/r10/` preregistration snapshot" in receipt
 
     print("R10_APPROVAL_VALID")
     return 0
