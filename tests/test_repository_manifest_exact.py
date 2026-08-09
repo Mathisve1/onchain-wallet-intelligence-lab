@@ -15,10 +15,20 @@ class RepositoryManifestExactTests(unittest.TestCase):
         observed = MANIFEST.read_text(encoding="utf-8")
         expected = render_manifest(ROOT)
         if observed != expected:
+            observed_lines = observed.splitlines(keepends=True)
+            expected_lines = expected.splitlines(keepends=True)
+            for index, (observed_line, expected_line) in enumerate(zip(observed_lines, expected_lines), start=1):
+                if observed_line != expected_line:
+                    print(f"FIRST_MANIFEST_MISMATCH_LINE={index}")
+                    print(f"OBSERVED_REPR={observed_line!r}")
+                    print(f"EXPECTED_REPR={expected_line!r}")
+                    print(f"OBSERVED_CODEPOINTS={[ord(ch) for ch in observed_line]}")
+                    print(f"EXPECTED_CODEPOINTS={[ord(ch) for ch in expected_line]}")
+                    break
             diff = "".join(
                 difflib.unified_diff(
-                    observed.splitlines(keepends=True),
-                    expected.splitlines(keepends=True),
+                    observed_lines,
+                    expected_lines,
                     fromfile="observed-manifest",
                     tofile="expected-manifest",
                 )
