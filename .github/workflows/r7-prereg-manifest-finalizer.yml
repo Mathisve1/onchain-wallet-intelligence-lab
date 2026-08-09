@@ -1,0 +1,42 @@
+name: R7 Preregistration Manifest Finalizer
+
+on:
+  push:
+    branches:
+      - research/r7-wallet-index-preregistration
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r7-prereg-manifest-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check out R7 preregistration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: research/r7-wallet-index-preregistration
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Self-delete, regenerate manifest, validate and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/research/r7-wallet-index-preregistration"
+          git rm .github/workflows/r7-prereg-manifest-finalizer.yml
+          python governance/regenerate_manifest.py --write
+          git add governance/REPOSITORY_MANIFEST.sha256
+          python governance/validate_r7_preregistration.py
+          python -m unittest tests.test_archive_inventory_r7_preregistration -v
+          python governance/regenerate_manifest.py --check
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'research: finalize exact R7 preregistration manifest'
+          git push origin HEAD:research/r7-wallet-index-preregistration
