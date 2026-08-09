@@ -13,6 +13,12 @@ sys.path.insert(0, str(R4))
 import collector  # noqa: E402
 from lz4_frame import LZ4_FRAME_MAGIC, xxh32  # noqa: E402
 
+FAKE_AWS_ENV = {
+    "AWS_ACCESS_KEY_ID": "AKIDEXAMPLE",
+    "AWS_SECRET_ACCESS_KEY": "secret",
+    "AWS_SESSION_TOKEN": "session",
+}
+
 
 class Clock:
     def __init__(self) -> None:
@@ -65,13 +71,8 @@ class ArchiveHourlyBodySchemaR4CollectorTests(unittest.TestCase):
         self.assertEqual(sum(row["expected_size_bytes"] for row in rows), 14243987)
 
     def test_sigv4_request_signs_exact_path_if_match_and_requester_pays(self) -> None:
-        env = {
-            "AWS_ACCESS_KEY_ID": "AKIDEXAMPLE",
-            "AWS_SECRET_ACCESS_KEY": "secret",
-            "AWS_SESSION_TOKEN": "session",
-        }
         spec = dict(collector.EXPECTED_OBJECTS[0])
-        host, path, headers = collector.build_signed_request(spec, fixed_now(), env)
+        host, path, headers = collector.build_signed_request(spec, fixed_now(), FAKE_AWS_ENV)
         self.assertEqual(host, "hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com")
         self.assertEqual(path, "/node_fills/hourly/20250727/8.lz4")
         self.assertEqual(headers["If-Match"], '"b21cdc16a4ec69d9c5b72c0c27ff148d-2"')
@@ -127,7 +128,10 @@ class ArchiveHourlyBodySchemaR4CollectorTests(unittest.TestCase):
                 return synthetic_analysis({"/a": ["integer"]})
             return synthetic_analysis({"/a": ["integer"], "/b": ["string"]})
 
-        with mock.patch.object(collector, "analyze_compressed_object", side_effect=analyze):
+        with (
+            mock.patch.dict(collector.os.environ, FAKE_AWS_ENV, clear=False),
+            mock.patch.object(collector, "analyze_compressed_object", side_effect=analyze),
+        ):
             result = collector.execute_pilot(transport=transport, clock=Clock(), now=fixed_now)
         self.assertEqual(result["terminal_status"], "R4_BODY_SCHEMA_PILOT_COMPLETE")
         self.assertEqual(result["technical_result"], "TWO_OBJECT_SCHEMA_COMPARISON_RESOLVED")
@@ -154,7 +158,8 @@ class ArchiveHourlyBodySchemaR4CollectorTests(unittest.TestCase):
                 del host, headers, expected_size, timeout
                 calls.append(path)
                 return status, response_headers, body
-            result = collector.execute_pilot(transport=transport, clock=Clock(), now=fixed_now)
+            with mock.patch.dict(collector.os.environ, FAKE_AWS_ENV, clear=False):
+                result = collector.execute_pilot(transport=transport, clock=Clock(), now=fixed_now)
             self.assertEqual(result["terminal_status"], "R4_BODY_SCHEMA_PILOT_FAIL")
             self.assertEqual(result["request_attempt_count"], 1)
             self.assertEqual(len(calls), 1)
@@ -166,7 +171,8 @@ class ArchiveHourlyBodySchemaR4CollectorTests(unittest.TestCase):
             del host, headers, expected_size, timeout
             calls.append(path)
             return 412, {}, b""
-        result = collector.execute_pilot(transport=transport, clock=Clock(), now=fixed_now)
+        with mock.patch.dict(collector.os.environ, FAKE_AWS_ENV, clear=False):
+            result = collector.execute_pilot(transport=transport, clock=Clock(), now=fixed_now)
         self.assertEqual(result["request_attempt_count"], 1)
         self.assertEqual(result["s3_http_request_count"], 1)
         self.assertEqual(result["retries_used"], 0)
