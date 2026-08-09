@@ -1,0 +1,474 @@
+name: Hyperliquid Archive Hourly Body Schema Pilot R4
+run-name: R5 legacy format fingerprint
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-legacy-format-fingerprint-r5
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R5_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+  PREREGISTRATION_COMMIT: 58f724d7f0208a43f7462abd80e1e69d995acff9
+  APPROVAL_MERGE_COMMIT: c22e28074ba2e95e1fe88912c364124e01eb0ff7
+  APPROVAL_ID: APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001
+  APPROVAL_TEXT_SHA256: 667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8
+  EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE
+  EXECUTION_RELEASE_PATH: research/archive_inventory/r5/R5_EXECUTION_RELEASE_CANONICALIZATION.json
+  RELEASE_CANDIDATE_PATH: research/archive_inventory/r5/R5_EXECUTION_RELEASE.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  legacy-format-fingerprint-r5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main dispatch and checked-out identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed_head="$(git rev-parse HEAD)"
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" ]]; then
+            echo "::error title=R5 identity gate 41::Expected workflow_dispatch"
+            exit 41
+          fi
+          if [[ "${DISPATCH_REF}" != "refs/heads/main" ]]; then
+            echo "::error title=R5 identity gate 42::Expected refs/heads/main"
+            exit 42
+          fi
+          if [[ ! "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=R5 identity gate 43::github.sha is not exact 40-hex"
+            exit 43
+          fi
+          if [[ "${observed_head}" != "${DISPATCH_SHA}" ]]; then
+            echo "::error title=R5 identity gate 44::Checked-out HEAD differs from github.sha"
+            exit 44
+          fi
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove canonical R5 implementation and release before AWS OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -F 'Python 3.12.13'
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          python governance/validate_r5_preregistration.py
+          python governance/validate_r5_approval.py
+          python governance/validate_r5_implementation.py
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path('.')
+          base = root / 'research/archive_inventory/r5'
+          approval_text = base / 'approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt'
+          approval = json.loads((base / 'approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json').read_text(encoding='utf-8'))
+          impl = json.loads((base / 'R5_IMPLEMENTATION_CONTRACT.json').read_text(encoding='utf-8'))
+          role_reuse = json.loads((base / 'R5_AWS_ROLE_REUSE_ANALYSIS.json').read_text(encoding='utf-8'))
+          expected = os.environ['EXPECTED_IMPLEMENTATION_COMMIT']
+          release_path = root / os.environ['EXECUTION_RELEASE_PATH']
+
+          assert hashlib.sha256(approval_text.read_bytes()).hexdigest() == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['approval_id'] == os.environ['APPROVAL_ID']
+          assert approval['reviewed_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert approval['exact_approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert approval['maximum_one_time_budget_eur'] == 0.10
+          assert approval['maximum_monthly_budget_eur'] == 0
+          assert approval['maximum_get_object_requests'] == 1
+          assert approval['maximum_requests_per_object'] == 1
+          assert approval['maximum_total_compressed_bytes'] == 12726384
+          assert approval['maximum_total_decompressed_bytes'] == 134217728
+          assert approval['maximum_runtime_seconds'] == 120
+          assert approval['maximum_retries_per_request'] == 0
+          assert approval['object_key'] == 'node_fills/hourly/20250727/8.lz4'
+          assert approval['object_size_bytes'] == 12726384
+          assert approval['object_etag'] == '"b21cdc16a4ec69d9c5b72c0c27ff148d-2"'
+          assert approval['expected_compressed_sha256'] == 'f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622'
+          assert approval['expected_decompressed_byte_count'] == 62169139
+          assert approval['requester_pays_authorized_for_later_release'] is True
+          assert approval['get_object_authorized_for_later_release'] is True
+          assert approval['decompression_authorized_for_later_release'] is True
+          assert approval['format_classification_authorized_for_later_release'] is True
+          assert all(value is False for value in approval['current_runtime_authority'].values())
+          assert all(value is False for value in approval['retention_authorizations'].values())
+          assert all(value is False for value in approval['inference_authorizations'].values())
+          assert all(value is False for value in approval['trading_authorizations'].values())
+
+          assert impl['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert impl['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert impl['target_bucket'] == 'hl-mainnet-node-data'
+          assert impl['signing_region'] == 'ap-northeast-1'
+          assert impl['regional_virtual_hosted_endpoint'] == 'hl-mainnet-node-data.s3.ap-northeast-1.amazonaws.com'
+          assert impl['reused_dedicated_role_arn'] == os.environ['R5_ROLE_ARN']
+          assert impl['aws_role_mutation_required'] is False
+          assert impl['aws_role_mutation_authorized'] is False
+          assert impl['session_s3_policy'] == 'ALLOW_GETOBJECT_EXACT_LEGACY_OBJECT_ONLY'
+          assert impl['session_policy_strict_subset_of_persistent_role'] is True
+          assert impl['execution_release_required'] is True
+          assert impl['execution_release_present'] is False
+          assert impl['execution_authorized'] is False
+          assert role_reuse['aws_iam_mutation_performed'] is False
+          assert role_reuse['new_sts_preflight_required'] is False
+
+          if expected == 'PENDING_CANONICAL_IMPLEMENTATION_MERGE':
+              print('::error title=R5 release gate 45::Implementation is not yet canonical; no AWS authentication is allowed')
+              sys.exit(45)
+          assert re.fullmatch(r'[0-9a-f]{40}', expected)
+          assert release_path.is_file(), 'R5 execution release canonicalization is absent'
+          release = json.loads(release_path.read_text(encoding='utf-8'))
+          assert release['release_id'] == 'RELEASE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001'
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R5_RUN'
+          assert release['implementation_commit'] == expected
+          assert release['preregistration_commit'] == os.environ['PREREGISTRATION_COMMIT']
+          assert release['approval_merge_commit'] == os.environ['APPROVAL_MERGE_COMMIT']
+          assert release['approval_text_sha256'] == os.environ['APPROVAL_TEXT_SHA256']
+          assert release['github_event_required'] == 'workflow_dispatch'
+          assert release['canonical_dispatch_ref_required'] == 'refs/heads/main'
+          assert release['canonical_dispatch_sha_source'] == 'github.sha'
+          assert release['dedicated_role_arn'] == os.environ['R5_ROLE_ARN']
+          assert release['aws_role_mutation_performed'] is False
+          assert release['target_bucket'] == 'hl-mainnet-node-data'
+          assert release['signing_region'] == 'ap-northeast-1'
+          assert release['object_key'] == 'node_fills/hourly/20250727/8.lz4'
+          assert release['maximum_one_time_budget_eur'] == 0.10
+          assert release['maximum_monthly_budget_eur'] == 0
+          assert release['maximum_get_object_requests'] == 1
+          assert release['maximum_requests_per_object'] == 1
+          assert release['maximum_total_compressed_bytes'] == 12726384
+          assert release['maximum_total_decompressed_bytes'] == 134217728
+          assert release['maximum_runtime_seconds'] == 120
+          assert release['maximum_retries_per_request'] == 0
+          assert release['requester_pays_authorized'] is True
+          assert release['get_object_authorized'] is True
+          assert release['decompression_authorized'] is True
+          assert release['format_classification_authorized'] is True
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          for key in (
+              'head_object_authorized', 'range_get_authorized', 'list_objects_v2_authorized',
+              'list_object_versions_authorized', 'list_all_my_buckets_authorized',
+              'raw_compressed_object_retention_authorized', 'raw_decompressed_payload_retention_authorized',
+              'record_payload_retention_authorized', 'wallet_address_retention_from_body_authorized',
+              'payload_values_in_evidence_authorized', 'string_values_in_evidence_authorized',
+              'numeric_values_in_evidence_authorized', 'string_element_semantic_wallet_or_user_label_authorized',
+              'schema_equivalence_inference_authorized', 'semantic_equivalence_inference_authorized',
+              'wallet_reconstruction_authorized', 'entity_clustering_authorized',
+              'copyability_analysis_authorized', 'pnl_or_alpha_analysis_authorized',
+              'market_data_ingestion_authorized',
+          ):
+              assert release[key] is False
+          assert all(value is False for value in release['trading_authorizations'].values())
+          assert release['s3_requests_executed'] == 0
+          assert release['compressed_bytes_downloaded'] == 0
+          assert release['decompressed_bytes_processed'] == 0
+          assert release['empirical_result'] is None
+          PY
+
+      - name: Enforce R5 single-use release before AWS OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "${CURRENT_RUN_ATTEMPT}" != '1' ]]; then
+            echo "::error title=R5 single-use gate::Run attempt must be 1; re-runs are forbidden"
+            exit 51
+          fi
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          start = datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z', '+00:00')).astimezone(timezone.utc)
+          repo = os.environ['CURRENT_REPOSITORY']
+          current_run_id = int(os.environ['CURRENT_RUN_ID'])
+          url = (
+              f'https://api.github.com/repos/{repo}/actions/workflows/'
+              'hyperliquid-archive-legacy-format-fingerprint-r5.yml/runs'
+              '?event=workflow_dispatch&branch=main&per_page=100'
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'hl-legacy-format-r5-single-use-check',
+              },
+              method='GET',
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              runs = json.load(response).get('workflow_runs')
+          assert isinstance(runs, list) and len(runs) < 100
+          eligible = [
+              row for row in runs
+              if datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(timezone.utc) >= start
+          ]
+          assert len(eligible) == 1, 'R5 release is not single-use within its release window'
+          assert int(eligible[0]['id']) == current_run_id, 'a previous dispatch already consumed the R5 release'
+          assert eligible[0]['event'] == 'workflow_dispatch'
+          assert eligible[0]['head_branch'] == 'main'
+          PY
+
+      - name: Freeze pending R5 run context before AWS authentication
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text(encoding='utf-8'))
+          context = {
+              'schema_version': '1.0',
+              'pilot_id': 'HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001',
+              'terminal_status': 'PENDING_AWS_OIDC',
+              'event_name': os.environ['EVENT_NAME'],
+              'dispatch_ref': os.environ['DISPATCH_REF'],
+              'dispatch_sha': os.environ['DISPATCH_SHA'],
+              'checked_out_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workflow_run_id': int(os.environ['WORKFLOW_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['WORKFLOW_RUN_ATTEMPT']),
+              'approval_id': os.environ['APPROVAL_ID'],
+              'approval_text_sha256': os.environ['APPROVAL_TEXT_SHA256'],
+              'execution_release_id': release['release_id'],
+              'implementation_commit': release['implementation_commit'],
+              'expected_account_id': os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+              'expected_role_arn': os.environ['R5_ROLE_ARN'],
+              'configure_aws_outcome': None,
+              'target_bucket': 'hl-mainnet-node-data',
+              'signing_region': 'ap-northeast-1',
+              'object_key': 'node_fills/hourly/20250727/8.lz4',
+              'maximum_get_object_requests': 1,
+              'maximum_total_compressed_bytes': 12726384,
+              'maximum_total_decompressed_bytes': 134217728,
+              'maximum_runtime_seconds': 120,
+              'maximum_retries_per_request': 0,
+              'payload_retention_authorized': False,
+              'wallet_analysis_authorized': False,
+              'market_data_ingestion_authorized': False,
+          }
+          (Path(os.environ['RUNNER_TEMP']) / 'r5-format-context.json').write_text(
+              json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Assume unchanged dedicated AWS role with exact-one-object R5 session permissions
+        id: configure
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveLegacyFormatR5
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R5ExactLegacyObjectOnly","Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::hl-mainnet-node-data/node_fills/hourly/20250727/8.lz4"}]}
+
+      - name: Execute bounded R5 legacy format collector
+        if: steps.configure.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          python research/archive_inventory/r5/collector.py --output "${RUNNER_TEMP}/r5-format-result.json"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r5-format.rc"
+
+      - name: Record pre-collector AWS failure without network fallback
+        if: steps.configure.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '81' > "${RUNNER_TEMP}/r5-format.rc"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          result = {
+              'schema_version': '1.0',
+              'pilot_id': 'HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001',
+              'terminal_status': 'R5_TRANSPORT_OR_INTEGRITY_FAIL',
+              'technical_result': 'R5_TRANSPORT_OR_INTEGRITY_FAIL',
+              'failure_class': 'AWS_OIDC_ROLE_ASSUMPTION_FAILED',
+              'request_attempt_count': 0,
+              's3_http_request_count': 0,
+              'successful_request_count': 0,
+              'failed_request_count': 0,
+              'compressed_bytes': 0,
+              'decompressed_bytes': 0,
+              'raw_compressed_object_persisted': False,
+              'raw_decompressed_payload_retained': False,
+              'record_payload_retained': False,
+              'wallet_addresses_retained_from_body': False,
+              'payload_values_retained': False,
+              'string_values_retained': False,
+              'numeric_values_retained': False,
+              'semantic_wallet_or_user_label_inferred': False,
+              'schema_equivalence_inferred': False,
+              'semantic_equivalence_inferred': False,
+              'wallet_reconstruction_performed': False,
+              'entity_clustering_performed': False,
+              'copyability_analysis_performed': False,
+              'pnl_or_alpha_analysis_performed': False,
+              'market_data_ingested': False,
+          }
+          Path(os.environ['RUNNER_TEMP'], 'r5-format-result.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Finalize minimized R5 context and evidence ledger
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          context_path = temp / 'r5-format-context.json'
+          result_path = temp / 'r5-format-result.json'
+          rc_path = temp / 'r5-format.rc'
+          if not context_path.exists():
+              context_path.write_text(json.dumps({
+                  'schema_version': '1.0',
+                  'pilot_id': 'HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001',
+                  'terminal_status': 'PRE_OIDC_GATE_FAILED',
+                  'event_name': os.environ['EVENT_NAME'],
+                  'dispatch_ref': os.environ['DISPATCH_REF'],
+                  'dispatch_sha': os.environ['DISPATCH_SHA'],
+              }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          context = json.loads(context_path.read_text(encoding='utf-8'))
+          context['configure_aws_outcome'] = os.environ.get('CONFIGURE_OUTCOME')
+          context_path.write_text(json.dumps(context, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          if not result_path.exists():
+              result_path.write_text(json.dumps({
+                  'schema_version': '1.0',
+                  'pilot_id': 'HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001',
+                  'terminal_status': 'R5_TRANSPORT_OR_INTEGRITY_FAIL',
+                  'technical_result': 'R5_TRANSPORT_OR_INTEGRITY_FAIL',
+                  'failure_class': 'PRE_OIDC_OR_COLLECTOR_EVIDENCE_MISSING',
+                  'request_attempt_count': 0,
+                  's3_http_request_count': 0,
+                  'successful_request_count': 0,
+                  'failed_request_count': 0,
+                  'compressed_bytes': 0,
+                  'decompressed_bytes': 0,
+                  'payload_values_retained': False,
+              }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          if not rc_path.exists():
+              rc_path.write_text('82\n', encoding='utf-8')
+          files = [context_path, result_path, rc_path]
+          lines = []
+          for path in files:
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              lines.append(f"{digest}  {path.name}")
+          (temp / 'R5_FORMAT_FILES.sha256').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Upload minimized R5 evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r5-legacy-format-fingerprint
+          path: |
+            ${{ runner.temp }}/r5-format-context.json
+            ${{ runner.temp }}/r5-format-result.json
+            ${{ runner.temp }}/r5-format.rc
+            ${{ runner.temp }}/R5_FORMAT_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce exact terminal R5 result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          rc = int((temp / 'r5-format.rc').read_text(encoding='utf-8').strip())
+          result = json.loads((temp / 'r5-format-result.json').read_text(encoding='utf-8'))
+          assert result['pilot_id'] == 'HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001'
+          allowed_complete = {
+              'LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT',
+              'LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_OBJECT_STRING',
+              'LEGACY_FORMAT_RESOLVED_AS_OTHER_DECLARED_JSON_CLASS',
+              'LEGACY_FORMAT_UNRESOLVED',
+          }
+          if result.get('terminal_status') == 'R5_LEGACY_FORMAT_FINGERPRINT_COMPLETE':
+              assert rc == 0
+              assert result.get('research_conclusion') in allowed_complete
+              assert result.get('technical_result') in allowed_complete
+              assert result.get('s3_http_request_count') == 1
+              assert result.get('successful_request_count') == 1
+              assert result.get('failed_request_count') == 0
+              assert result.get('compressed_bytes') == 12726384
+              assert result.get('decompressed_bytes') == 62169139
+              for key in (
+                  'raw_compressed_object_persisted', 'raw_decompressed_payload_retained',
+                  'record_payload_retained', 'wallet_addresses_retained_from_body',
+                  'payload_values_retained', 'string_values_retained', 'numeric_values_retained',
+                  'semantic_wallet_or_user_label_inferred', 'schema_equivalence_inferred',
+                  'semantic_equivalence_inferred', 'wallet_reconstruction_performed',
+                  'entity_clustering_performed', 'copyability_analysis_performed',
+                  'pnl_or_alpha_analysis_performed', 'market_data_ingested',
+              ):
+                  assert result.get(key) is False, key
+              sys.exit(0)
+          assert result.get('terminal_status') == 'R5_TRANSPORT_OR_INTEGRITY_FAIL'
+          assert result.get('technical_result') == 'R5_TRANSPORT_OR_INTEGRITY_FAIL'
+          assert rc != 0
+          sys.exit(rc if 0 < rc < 256 else 83)
+          PY
