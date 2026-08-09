@@ -68,7 +68,7 @@ class ArchiveHourlyMetadataR3ImplementationTests(unittest.TestCase):
             ["THREE_HOURLY_FAMILIES_COMPLETE", "THREE_HOURLY_FAMILIES_COMPLETE_OR_CENSORED"],
         )
 
-    def test_implementation_snapshot_is_not_execution_release(self) -> None:
+    def test_immutable_implementation_snapshot_remains_non_release(self) -> None:
         r = self.load()
         self.assertEqual(r["status"], "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION")
         self.assertTrue(r["execution_release_required"])
@@ -81,7 +81,12 @@ class ArchiveHourlyMetadataR3ImplementationTests(unittest.TestCase):
         self.assertEqual(r["s3_requests_executed"], 0)
         self.assertEqual(r["metadata_entries_observed"], 0)
         self.assertIsNone(r["empirical_result"])
-        self.assertFalse(RELEASE.exists())
+        if RELEASE.exists():
+            release = json.loads(RELEASE.read_text(encoding="utf-8"))
+            self.assertEqual(release["implementation_commit"], "3b1dd0df4c5194875e22c1b790e0b41961313aa8")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["requester_pays_authorized"])
+            self.assertFalse(release["list_objects_v2_authorized"])
 
     def test_forbidden_capabilities_and_trading_stay_closed(self) -> None:
         r = self.load()
@@ -95,11 +100,10 @@ class ArchiveHourlyMetadataR3ImplementationTests(unittest.TestCase):
             self.assertFalse(r[key], key)
         self.assertTrue(all(value is False for value in r["trading_authorizations"].values()))
 
-    def test_status_is_implementation_review_not_execution(self) -> None:
+    def test_current_state_preserves_canonical_implementation_and_no_execution(self) -> None:
         status = (ROOT / "research/archive_inventory/STATUS.md").read_text(encoding="utf-8")
-        self.assertIn("R3_HOURLY_METADATA_IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION", status)
+        self.assertIn("canonical implementation merge: `3b1dd0df4c5194875e22c1b790e0b41961313aa8`", status)
         self.assertIn("canonical human approval merge: `e562f3fbd8f1dac1b4d7e93eed2f5ee6b77c5da6`", status)
-        self.assertIn("execution release present: `false`", status)
         self.assertIn("current network execution authorized: `false`", status)
         self.assertIn("R3 S3 requests executed / entries observed: `0 / 0`", status)
 
