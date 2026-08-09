@@ -201,7 +201,16 @@ def main() -> int:
         assert release["s3_requests_executed"] == 0
         assert release["wallet_addresses_retained"] == 0
         assert release["empirical_result"] is None
-    assert not ACTIVATION.exists()
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["release_id"] == "RELEASE_HL_ARCHIVE_MODERN_WALLET_INDEX_BRIDGE_R8A_001"
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R8A_RUN"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["release_consumed"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_addresses_retained"] == 0
+        assert activation["empirical_result"] is None
     print("R8A_IMPLEMENTATION_VALID")
     return 0
 

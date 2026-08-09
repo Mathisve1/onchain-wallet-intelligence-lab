@@ -20,7 +20,14 @@ class ArchiveR8AReleaseTests(unittest.TestCase):
         self.assertFalse(release["execution_ready"])
         self.assertFalse(release["single_workflow_dispatch_authorized"])
         self.assertFalse(release["rerun_authorized"])
-        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        activation_path = R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json"
+        if activation_path.exists():
+            activation = self.load(activation_path)
+            self.assertEqual(activation["release_id"], release["release_id"])
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R8A_RUN")
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertFalse(activation["release_consumed"])
         self.assertEqual(release["s3_requests_executed"], 0)
         self.assertEqual(release["wallet_addresses_retained"], 0)
         self.assertIsNone(release["empirical_result"])

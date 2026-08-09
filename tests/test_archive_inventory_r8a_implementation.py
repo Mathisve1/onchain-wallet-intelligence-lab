@@ -45,7 +45,16 @@ class ArchiveR8AImplementationTests(unittest.TestCase):
             self.assertEqual(release["s3_requests_executed"], 0)
             self.assertEqual(release["wallet_addresses_retained"], 0)
             self.assertIsNone(release["empirical_result"])
-        self.assertFalse((R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        activation_path = R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json"
+        if activation_path.exists():
+            activation = self.load(activation_path)
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R8A_RUN")
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertFalse(activation["release_consumed"])
+            self.assertEqual(activation["s3_requests_executed"], 0)
+            self.assertEqual(activation["wallet_addresses_retained"], 0)
+            self.assertIsNone(activation["empirical_result"])
 
     def test_future_retention_matches_approved_minimum(self) -> None:
         impl = self.load(R8 / "R8A_IMPLEMENTATION_CONTRACT.json")

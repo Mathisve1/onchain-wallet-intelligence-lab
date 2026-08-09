@@ -181,7 +181,16 @@ def main() -> int:
         assert release["s3_requests_executed"] == 0
         assert release["wallet_addresses_retained"] == 0
         assert release["empirical_result"] is None
-    assert not (R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
+    activation_path = R8 / "R8A_EXECUTION_RELEASE_CANONICALIZATION.json"
+    if activation_path.exists():
+        activation = load(activation_path)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R8A_RUN"
+        assert activation["single_workflow_dispatch_authorized"] is True
+        assert activation["rerun_authorized"] is False
+        assert activation["release_consumed"] is False
+        assert activation["s3_requests_executed"] == 0
+        assert activation["wallet_addresses_retained"] == 0
+        assert activation["empirical_result"] is None
 
     print("R8_STATIC_DESIGN_VALID")
     return 0
