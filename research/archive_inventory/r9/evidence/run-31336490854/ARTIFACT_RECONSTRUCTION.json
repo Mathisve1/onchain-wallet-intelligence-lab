@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "workflow_run_id": 31336490854,
+  "workflow_job_id": 93303097917,
+  "artifact_id": 9044483094,
+  "artifact_name": "r9-modern-wallet-features-31336490854",
+  "artifact_size_bytes": 48334,
+  "artifact_zip_sha256": "00c049def4ef2db334067f7f6ff00abaee7761fbc3de2e07dd742019119a3459",
+  "retention_encoding": "BASE64_SPLIT_TEXT_RECONSTRUCTION",
+  "base64_character_count": 64448,
+  "parts": [
+    {"path": "artifact/r9-modern-wallet-features-31336490854.zip.b64.part00", "bytes": 16000, "sha256": "cf18a8d02e0fdbce03004e77410824e77371a50e63a7f9ab844b852b5866b4db"},
+    {"path": "artifact/r9-modern-wallet-features-31336490854.zip.b64.part01", "bytes": 16000, "sha256": "75d77a4b2cd44caa9587a45d8ac95cedcac972e97fea7a3f41bb36e3a70f2cab"},
+    {"path": "artifact/r9-modern-wallet-features-31336490854.zip.b64.part02", "bytes": 16000, "sha256": "c5c04e28ab53d3a841ba0c3823cf0346783c61a8ae13250c918ba7d2d8816c3d"},
+    {"path": "artifact/r9-modern-wallet-features-31336490854.zip.b64.part03", "bytes": 16000, "sha256": "16e612048d7942b17696505c268cb9b79013bd7ddac00296a3bb7014dae8fb12"},
+    {"path": "artifact/r9-modern-wallet-features-31336490854.zip.b64.part04", "bytes": 448, "sha256": "64f4d6dc1f8c96f24b352526f9d3e8019952dabbc1e0e07113adf799d1bb90f2"}
+  ],
+  "reconstruction_rule": "concatenate part00 through part04 as ASCII with no separator, Base64-decode once, then verify artifact_size_bytes and artifact_zip_sha256",
+  "zip_entries_exact": {
+    "r9-context.json": {"bytes": 1621, "sha256": "daa8b40bf915f3c399b6574351b5c9130e61e1bedc8b50e7c4c6e5968f7a1812"},
+    "r9-result.json": {"bytes": 3919, "sha256": "319f0830605447d290dc23d81b79ff1a0248161b050cb0e3aaeb79f89a118621"},
+    "r9-wallet-features.ndjson": {"bytes": 334216, "sha256": "e8bf51556d3d2e08d3d79c6b23a20f9d1ef76018364c701c06f6abf9d993fec5"},
+    "r9.rc": {"bytes": 2, "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"},
+    "R9_FILES.sha256": {"bytes": 327, "sha256": "7f6bca0e7cc6faeb99a52c50a6b655adc8f84bf4a3f45c31d3f64a53676014c8"}
+  },
+  "raw_archive_object_retained": false,
+  "raw_fill_payload_retained": false
+}
