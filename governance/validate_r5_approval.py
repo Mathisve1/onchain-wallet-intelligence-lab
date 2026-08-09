@@ -40,15 +40,18 @@ def main() -> int:
     assert approval["aws_role_mutation_authorized"] is False
 
     assert contract["pilot_id"] == "HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001"
-    assert contract["parent_r4_evidence_merge"] == "fe06874aeeb958d375a27100378f89bd25b4741b"
-    assert approval["target_bucket"] == contract["target_bucket"] == "hl-mainnet-node-data"
-    assert approval["signing_region"] == contract["signing_region"] == "ap-northeast-1"
-    assert approval["object_key"] == contract["object_key"] == OBJECT_KEY
-    assert approval["object_size_bytes"] == contract["object_size_bytes"] == 12726384
-    assert approval["object_etag"] == contract["object_etag"] == OBJECT_ETAG
-    assert approval["expected_compressed_sha256"] == contract["expected_compressed_sha256"] == OBJECT_SHA
-    assert approval["expected_decompressed_byte_count"] == contract["expected_decompressed_byte_count"] == 62169139
+    assert contract["parent_r4"]["evidence_merge_commit"] == "fe06874aeeb958d375a27100378f89bd25b4741b"
 
+    target = contract["exact_future_network_target"]
+    assert approval["target_bucket"] == target["bucket"] == "hl-mainnet-node-data"
+    assert approval["signing_region"] == target["signing_region"] == "ap-northeast-1"
+    assert approval["object_key"] == target["key"] == OBJECT_KEY
+    assert approval["object_size_bytes"] == target["expected_size_bytes"] == 12726384
+    assert approval["object_etag"] == target["expected_etag"] == OBJECT_ETAG
+    assert approval["expected_compressed_sha256"] == target["expected_compressed_sha256"] == OBJECT_SHA
+    assert approval["expected_decompressed_byte_count"] == target["expected_decompressed_byte_count"] == 62169139
+
+    envelope = contract["proposed_future_execution_envelope"]
     for key, expected in {
         "maximum_one_time_budget_eur": 0.10,
         "maximum_monthly_budget_eur": 0,
@@ -58,30 +61,45 @@ def main() -> int:
         "maximum_total_decompressed_bytes": 134217728,
         "maximum_runtime_seconds": 120,
         "maximum_retries_per_request": 0,
+    }.items():
+        assert approval[key] == envelope[key] == expected, key
+
+    classifier = contract["proposed_format_classifier"]
+    for key, expected in {
         "maximum_record_bytes": 16777216,
         "maximum_records_parsed": 5000000,
         "maximum_schema_nesting_depth": 16,
         "maximum_unique_field_paths": 4096,
         "maximum_unique_structural_signatures": 256,
     }.items():
-        assert approval[key] == contract[key] == expected, key
+        assert approval[key] == classifier[key] == expected, key
 
     assert approval["requester_pays_authorized_for_later_release"] is True
     assert approval["get_object_authorized_for_later_release"] is True
     assert approval["decompression_authorized_for_later_release"] is True
     assert approval["format_classification_authorized_for_later_release"] is True
+    assert envelope["requester_pays_required"] is True
 
     for key in (
         "if_match_etag_required",
         "exact_content_length_required",
         "exact_compressed_sha256_required",
         "exact_decompressed_byte_count_required",
+    ):
+        assert approval[key] is True, key
+        assert envelope[key] is True, key
+
+    for key in (
         "lz4_frame_stream_only",
         "strict_utf8_decode",
         "strict_json_duplicate_keys_rejected",
         "strict_json_nonfinite_constants_rejected",
     ):
         assert approval[key] is True, key
+        assert classifier[key] is True, key
+
+    assert approval["alternate_decompressor_fallback_authorized"] is False
+    assert classifier["alternate_decompressor_fallback_authorized"] is False
 
     for key in (
         "head_object_authorized",
@@ -90,9 +108,9 @@ def main() -> int:
         "list_object_versions_authorized",
         "list_all_my_buckets_authorized",
         "http_redirect_following_authorized",
-        "alternate_decompressor_fallback_authorized",
     ):
         assert approval[key] is False, key
+        assert envelope[key] is False, key
 
     assert all(value is False for value in approval["retention_authorizations"].values())
     assert all(value is False for value in approval["inference_authorizations"].values())
@@ -104,10 +122,20 @@ def main() -> int:
     assert approval["empirical_result"] is None
     assert approval["approval_reason_code"] == "ONE_EXACT_R4_BOUND_LEGACY_OBJECT_FOR_CONTAINER_FORMAT_FINGERPRINT_ONLY"
 
+    # Immutable preregistration remains non-self-authorizing after approval.
+    authority = contract["current_runtime_authority"]
+    assert authority["human_approval_recorded"] is False
+    assert authority["implementation_authorized"] is False
+    assert authority["execution_authorized"] is False
+    assert authority["get_object_authorized"] is False
+    assert authority["decompression_authorized"] is False
+    assert authority["format_classification_authorized"] is False
+    assert authority["s3_requests_executed"] == 0
+
     assert "HUMAN_APPROVED_IMPLEMENTATION_LANE_ONLY_NO_RUNTIME" in status
     assert APPROVAL_SHA in status
 
-    # Approval must not self-install runtime or release authority.
+    # Approval must not self-install implementation/runtime or release authority.
     for forbidden in (
         BASE / "collector.py",
         BASE / "R5_IMPLEMENTATION_CONTRACT.json",
