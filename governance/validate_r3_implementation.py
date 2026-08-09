@@ -105,9 +105,9 @@ def main() -> int:
     assert "StartAfter" not in collector
     assert "fetch-owner" not in collector
     assert "response.read(maximum_body_bytes + 1)" in collector
-    assert "request_attempt_count += 1" in collector
+    assert "attempts += 1" in collector
     assert "if next_token in seen_tokens" in collector
-    assert "if key in family_seen_keys" in collector
+    assert "object_key in seen_keys or object_key in page_keys" in collector
     assert "CENSORED_BY_LIMIT" in collector
     assert "UNRESOLVED_LAYOUT" in collector
     assert "THREE_HOURLY_FAMILIES_COMPLETE_OR_CENSORED" in collector
