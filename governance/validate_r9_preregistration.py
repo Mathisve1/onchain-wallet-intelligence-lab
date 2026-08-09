@@ -196,7 +196,16 @@ def main() -> int:
         assert not collector.exists()
         assert not workflow.exists()
 
-    assert not (R9 / "R9_EXECUTION_RELEASE.json").exists()
+    release_path = R9 / "R9_EXECUTION_RELEASE.json"
+    if release_path.exists():
+        release = load(release_path)
+        assert release["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+        assert release["execution_ready"] is False
+        assert release["single_workflow_dispatch_authorized"] is False
+        assert release["rerun_authorized"] is False
+        assert release["s3_requests_executed"] == 0
+        assert release["wallet_feature_rows_created"] == 0
+        assert release["empirical_result"] is None
     assert not (R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
 
     print("R9_PREREGISTRATION_VALID")

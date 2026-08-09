@@ -24,7 +24,16 @@ class ArchiveR9ImplementationTests(unittest.TestCase):
         self.assertEqual(impl["s3_requests_executed"], 0)
         self.assertEqual(impl["wallet_feature_rows_created"], 0)
         self.assertIsNone(impl["empirical_result"])
-        self.assertFalse((R9 / "R9_EXECUTION_RELEASE.json").exists())
+        release_path = R9 / "R9_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = self.load("R9_EXECUTION_RELEASE.json")
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertFalse(release["rerun_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
+            self.assertEqual(release["wallet_feature_rows_created"], 0)
+            self.assertIsNone(release["empirical_result"])
         self.assertFalse((R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_exact_lineage_scope_and_caps(self) -> None:

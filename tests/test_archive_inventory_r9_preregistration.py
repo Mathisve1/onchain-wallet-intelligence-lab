@@ -92,7 +92,16 @@ class ArchiveR9PreregistrationTests(unittest.TestCase):
             self.assertTrue(all(value is False for value in impl["current_runtime_authority"].values()))
             self.assertTrue((R9 / "collector.py").is_file())
             self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-modern-wallet-feature-r9.yml").is_file())
-        self.assertFalse((R9 / "R9_EXECUTION_RELEASE.json").exists())
+        release_path = R9 / "R9_EXECUTION_RELEASE.json"
+        if release_path.exists():
+            release = self.load("R9_EXECUTION_RELEASE.json")
+            self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION")
+            self.assertFalse(release["execution_ready"])
+            self.assertFalse(release["single_workflow_dispatch_authorized"])
+            self.assertFalse(release["rerun_authorized"])
+            self.assertEqual(release["s3_requests_executed"], 0)
+            self.assertEqual(release["wallet_feature_rows_created"], 0)
+            self.assertIsNone(release["empirical_result"])
         self.assertFalse((R9 / "R9_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
 
     def test_dedicated_preregistration_validator_passes(self) -> None:
