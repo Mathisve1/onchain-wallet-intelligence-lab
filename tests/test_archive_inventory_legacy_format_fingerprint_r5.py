@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -11,6 +12,9 @@ R5 = ROOT / "research/archive_inventory/r5"
 CONTRACT = R5 / "LEGACY_FORMAT_FINGERPRINT_R5_CONTRACT.json"
 DERIVATION = R5 / "R4_DERIVATION.json"
 PARENT = ROOT / "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json"
+APPROVAL_TEXT = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt"
+APPROVAL_JSON = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json"
+APPROVAL_SHA = "667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8"
 
 
 def load(path: Path) -> dict:
@@ -83,17 +87,29 @@ class ArchiveLegacyFormatFingerprintR5Tests(unittest.TestCase):
         self.assertFalse(classifier["raw_compressed_object_retention_authorized"])
         self.assertFalse(classifier["raw_decompressed_payload_retention_authorized"])
 
-    def test_no_runtime_implementation_release_or_approval_exists(self) -> None:
-        forbidden = [
+    def test_preregistration_snapshot_remains_inert_after_separate_approval(self) -> None:
+        contract = load(CONTRACT)
+        self.assertEqual(contract["status"], "PREREGISTERED_STATIC_NO_EXECUTION")
+        self.assertTrue(all(
+            value is False
+            for key, value in contract["current_runtime_authority"].items()
+            if key.endswith("authorized") or key in {"human_approval_recorded", "implementation_authorized", "execution_release_present"}
+        ))
+        if APPROVAL_TEXT.exists() or APPROVAL_JSON.exists():
+            self.assertTrue(APPROVAL_TEXT.exists())
+            self.assertTrue(APPROVAL_JSON.exists())
+            approval = load(APPROVAL_JSON)
+            self.assertEqual(hashlib.sha256(APPROVAL_TEXT.read_bytes()).hexdigest(), APPROVAL_SHA)
+            self.assertEqual(approval["reviewed_commit"], "58f724d7f0208a43f7462abd80e1e69d995acff9")
+            self.assertFalse(approval["execution_authorized_by_this_record"])
+            self.assertFalse(approval["request_authorized_by_this_record"])
+        for path in (
             ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml",
             R5 / "collector.py",
             R5 / "R5_IMPLEMENTATION_CONTRACT.json",
             R5 / "R5_EXECUTION_RELEASE.json",
             R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json",
-            R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt",
-            R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json",
-        ]
-        for path in forbidden:
+        ):
             self.assertFalse(path.exists(), str(path))
 
     def test_semantic_wallet_and_all_trading_gates_remain_closed(self) -> None:
