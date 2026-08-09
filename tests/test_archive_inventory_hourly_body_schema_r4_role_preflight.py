@@ -17,6 +17,7 @@ PREFLIGHT_RELEASE = BASE / "role_attestation/R4_ROLE_STS_PREFLIGHT_RELEASE.json"
 BODY_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml"
 PREFLIGHT_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-role-preflight-r4.yml"
 BODY_WORKFLOW_SHA256 = "2499424483179f05472d951c3f9def2c791f156cd7cf36d465e93d4ab9d19677"
+PREFLIGHT_IMPLEMENTATION = "3b0a1ae634288646f3757493d4e90258bae21421"
 
 
 class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
@@ -62,12 +63,20 @@ class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
         body = BODY_WORKFLOW.read_text(encoding="utf-8")
         preflight = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
         expected_name = "name: Hyperliquid Archive Hourly Body Schema Pilot R4\n"
+        pending_assignment = (
+            "EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: "
+            "PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE"
+        )
         self.assertTrue(body.startswith(expected_name))
         self.assertTrue(preflight.startswith(expected_name))
         self.assertIn("run-name: R4 dedicated role STS-only preflight", preflight)
         self.assertIn("workflow_dispatch:", preflight)
         self.assertIn("refs/heads/main", preflight)
-        self.assertIn("PENDING_CANONICAL_PREFLIGHT_IMPLEMENTATION_MERGE", preflight)
+        if PREFLIGHT_RELEASE.exists():
+            self.assertIn(f"EXPECTED_PREFLIGHT_IMPLEMENTATION_COMMIT: {PREFLIGHT_IMPLEMENTATION}", preflight)
+            self.assertNotIn(pending_assignment, preflight)
+        else:
+            self.assertIn(pending_assignment, preflight)
 
     def test_preflight_session_policy_explicitly_denies_all_s3_and_has_no_s3_operation(self) -> None:
         text = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
