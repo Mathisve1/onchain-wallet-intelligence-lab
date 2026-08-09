@@ -16,8 +16,9 @@ PERMISSION = IMPL / "R10_PERMISSION_POLICY.json"
 RUNBOOK = IMPL / "R10_ROLE_CREATION_RUNBOOK.md"
 ATTESTATION_TEMPLATE = IMPL / "R10_OPERATOR_ATTESTATION_TEMPLATE.txt"
 PREFLIGHT_CANDIDATE = IMPL / "workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
+DATA_CANDIDATE = IMPL / "workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
 PREFLIGHT_INSTALLED = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
-DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
+DATA_INSTALLED = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
 APPROVAL_JSON = APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.json"
 APPROVAL_TXT = APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001.txt"
 
@@ -27,10 +28,7 @@ APPROVAL_SHA = "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 WORKFLOW_NAME = "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10"
 SUBJECT = "repo:Mathisve1@163474992/onchain-wallet-intelligence-lab@1326362646:ref:refs/heads/main"
-OBJECT_ARNS = [
-    f"arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/{hour}.lz4"
-    for hour in range(9, 15)
-]
+OBJECT_ARNS = [f"arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/{hour}.lz4" for hour in range(9, 15)]
 
 
 def load(path: Path) -> dict:
@@ -41,6 +39,20 @@ def load(path: Path) -> dict:
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_workflow_candidate(path: Path) -> str:
+    assert path.is_file(), path
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(f"name: {WORKFLOW_NAME}\n")
+    assert "workflow_dispatch:" in text
+    assert "id-token: write" in text
+    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in text
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in text
+    assert "aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c" in text
+    assert "persist-credentials: false" in text
+    assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
+    return text
 
 
 def main() -> int:
@@ -56,9 +68,10 @@ def main() -> int:
     assert approval["exact_approval_text_sha256"] == APPROVAL_SHA
     assert sha(APPROVAL_TXT) == APPROVAL_SHA
     assert approval["execution_authorized_by_this_approval"] is False
-    assert approval["dedicated_role_authorization"]["new_dedicated_r10_role_creation_authorized"] is True
-    assert approval["dedicated_role_authorization"]["existing_r4_role_reuse_authorized"] is False
-    assert approval["dedicated_role_authorization"]["existing_r4_role_mutation_authorized"] is False
+    role_approval = approval["dedicated_role_authorization"]
+    assert role_approval["new_dedicated_r10_role_creation_authorized"] is True
+    assert role_approval["existing_r4_role_reuse_authorized"] is False
+    assert role_approval["existing_r4_role_mutation_authorized"] is False
 
     assert impl["status"] == "IMPLEMENTATION_CANDIDATE_UNDER_REVIEW_NO_EXECUTION"
     assert impl["r10_preregistration_merge_commit"] == PREREG_MERGE
@@ -68,12 +81,8 @@ def main() -> int:
     assert impl["dedicated_role_arn"] == ROLE_ARN
     assert impl["workflow_oidc_name"] == WORKFLOW_NAME
     assert impl["role_creation_authorized_by_owner"] is True
-    assert impl["role_creation_performed"] is False
-    assert impl["role_attestation_present"] is False
-    assert impl["sts_preflight_release_present"] is False
-    assert impl["sts_preflight_completed"] is False
-    assert impl["execution_release_present"] is False
-    assert impl["canonical_activation_present"] is False
+    for key in ("role_creation_performed", "role_attestation_present", "sts_preflight_release_present", "sts_preflight_completed", "execution_release_present", "canonical_activation_present"):
+        assert impl[key] is False, key
     assert impl["s3_requests_executed"] == 0
     assert impl["aws_iam_mutations_executed"] == 0
     assert impl["aws_sts_requests_executed"] == 0
@@ -85,24 +94,32 @@ def main() -> int:
     assert all(v is False for v in impl["forbidden_retention_authorizations"].values())
     assert all(v is False for v in impl["semantic_boundaries"].values())
 
-    assert len(impl["exact_network_targets"]) == len(approval["approved_future_objects"]) == len(prereg["exact_future_network_targets"]) == 6
+    assert len(impl["exact_network_targets"]) == 6
+    assert len(approval["approved_future_objects"]) == 6
+    assert len(prereg["exact_future_network_targets"]) == 6
     assert sum(row["expected_size_bytes"] for row in impl["exact_network_targets"]) == 120999698
     assert max(row["expected_size_bytes"] for row in impl["exact_network_targets"]) == 21672141
-    assert impl["execution_envelope"]["maximum_get_object_requests"] == 6
-    assert impl["execution_envelope"]["maximum_retries_per_request"] == 0
-    assert impl["execution_envelope"]["stop_after_first_failed_or_mismatched_object"] is True
-    assert impl["parse_and_aggregation"]["duplicate_wallet_tid_count_required_for_clean_success"] == 0
-    assert impl["parse_and_aggregation"]["blind_duplicate_deduplication_authorized"] is False
-    assert impl["parse_and_aggregation"]["fill_time_must_fall_within_source_path_hour_utc"] is True
+    env = impl["execution_envelope"]
+    assert env["maximum_get_object_requests"] == 6
+    assert env["maximum_requests_per_object"] == 1
+    assert env["maximum_retries_per_request"] == 0
+    assert env["maximum_total_compressed_bytes"] == 120999698
+    assert env["stop_after_first_failed_or_mismatched_object"] is True
+    parse = impl["parse_and_aggregation"]
+    assert parse["duplicate_wallet_tid_count_required_for_clean_success"] == 0
+    assert parse["blind_duplicate_deduplication_authorized"] is False
+    assert parse["fill_time_must_fall_within_source_path_hour_utc"] is True
+    assert parse["exact_decimal_arithmetic_required"] is True
+    assert parse["floating_point_aggregation_authorized"] is False
     assert impl["wallet_feature_output"]["fields_only"] == collector.OUTPUT_FIELDS
 
-    statement = trust["Statement"]
-    assert len(statement) == 1
-    s = statement[0]
-    assert s["Effect"] == "Allow"
-    assert s["Action"] == "sts:AssumeRoleWithWebIdentity"
-    assert s["Principal"]["Federated"] == "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com"
-    assert s["Condition"]["StringEquals"] == {
+    statements = trust["Statement"]
+    assert len(statements) == 1
+    statement = statements[0]
+    assert statement["Effect"] == "Allow"
+    assert statement["Action"] == "sts:AssumeRoleWithWebIdentity"
+    assert statement["Principal"]["Federated"] == "arn:aws:iam::630956766927:oidc-provider/token.actions.githubusercontent.com"
+    assert statement["Condition"]["StringEquals"] == {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
         "token.actions.githubusercontent.com:sub": SUBJECT,
         "token.actions.githubusercontent.com:repository_id": "1326362646",
@@ -112,12 +129,12 @@ def main() -> int:
     }
 
     by_sid = {row["Sid"]: row for row in permission["Statement"]}
-    allow = by_sid["AllowExactSixR10ObjectsOnly"]
-    deny_outside = by_sid["DenyGetObjectOutsideExactSixR10Objects"]
-    assert allow == {"Sid":"AllowExactSixR10ObjectsOnly","Effect":"Allow","Action":"s3:GetObject","Resource":OBJECT_ARNS}
-    assert deny_outside["Effect"] == "Deny"
-    assert deny_outside["Action"] == "s3:GetObject"
-    assert deny_outside["NotResource"] == OBJECT_ARNS
+    assert by_sid["AllowExactSixR10ObjectsOnly"] == {
+        "Sid": "AllowExactSixR10ObjectsOnly", "Effect": "Allow", "Action": "s3:GetObject", "Resource": OBJECT_ARNS
+    }
+    assert by_sid["DenyGetObjectOutsideExactSixR10Objects"]["Effect"] == "Deny"
+    assert by_sid["DenyGetObjectOutsideExactSixR10Objects"]["Action"] == "s3:GetObject"
+    assert by_sid["DenyGetObjectOutsideExactSixR10Objects"]["NotResource"] == OBJECT_ARNS
     assert set(by_sid["DenyOtherS3ReadCapabilities"]["Action"]) == {
         "s3:GetObjectVersion", "s3:GetObjectAttributes", "s3:SelectObjectContent",
         "s3:ListBucket", "s3:ListBucketVersions", "s3:ListAllMyBuckets",
@@ -134,21 +151,8 @@ def main() -> int:
     assert "existing_r4_role_modified=false" in attestation
     assert "s3_requests_executed_during_role_creation=0" in attestation
 
-    for path in (PREFLIGHT_CANDIDATE, PREFLIGHT_INSTALLED, DATA_WORKFLOW):
-        assert path.is_file(), path
-    assert PREFLIGHT_CANDIDATE.read_bytes() == PREFLIGHT_INSTALLED.read_bytes()
-    for path in (PREFLIGHT_INSTALLED, DATA_WORKFLOW):
-        text = path.read_text(encoding="utf-8")
-        assert text.startswith(f"name: {WORKFLOW_NAME}\n")
-        assert "workflow_dispatch:" in text
-        assert "id-token: write" in text
-        assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in text
-        assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in text
-        assert "aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c" in text
-        assert "persist-credentials: false" in text
-        assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
-    preflight_text = PREFLIGHT_INSTALLED.read_text(encoding="utf-8")
-    data_text = DATA_WORKFLOW.read_text(encoding="utf-8")
+    preflight_text = validate_workflow_candidate(PREFLIGHT_CANDIDATE)
+    data_text = validate_workflow_candidate(DATA_CANDIDATE)
     assert '"Effect":"Deny","Action":"s3:*","Resource":"*"' in preflight_text
     assert "aws sts get-caller-identity --output json" in preflight_text
     assert "aws s3" not in preflight_text
@@ -158,6 +162,9 @@ def main() -> int:
     assert "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json" in data_text
     assert "R10_STS_PREFLIGHT_ATTESTATION.json" in data_text
 
+    # Implementation freezes byte candidates but intentionally does not install either OIDC workflow yet.
+    assert not PREFLIGHT_INSTALLED.exists()
+    assert not DATA_INSTALLED.exists()
     assert not (ROOT / "research/archive_inventory/r10_role_attestation").exists()
     assert not (ROOT / "research/archive_inventory/r10_runtime").exists()
     collector.validate_static_inputs()
