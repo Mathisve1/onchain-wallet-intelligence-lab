@@ -27,16 +27,27 @@ class ArchiveLegacyFormatFingerprintR5ApprovalTests(unittest.TestCase):
         self.assertEqual(self.approval["reviewed_commit"], "58f724d7f0208a43f7462abd80e1e69d995acff9")
 
     def test_approval_exactly_matches_preregistered_one_object_envelope(self) -> None:
+        target = self.contract["exact_future_network_target"]
+        envelope = self.contract["proposed_future_execution_envelope"]
+        classifier = self.contract["proposed_format_classifier"]
+        self.assertEqual(self.approval["target_bucket"], target["bucket"])
+        self.assertEqual(self.approval["signing_region"], target["signing_region"])
+        self.assertEqual(self.approval["object_key"], target["key"])
+        self.assertEqual(self.approval["object_size_bytes"], target["expected_size_bytes"])
+        self.assertEqual(self.approval["object_etag"], target["expected_etag"])
+        self.assertEqual(self.approval["expected_compressed_sha256"], target["expected_compressed_sha256"])
+        self.assertEqual(self.approval["expected_decompressed_byte_count"], target["expected_decompressed_byte_count"])
         for key in (
-            "target_bucket", "signing_region", "object_key", "object_size_bytes", "object_etag",
-            "expected_compressed_sha256", "expected_decompressed_byte_count",
             "maximum_get_object_requests", "maximum_requests_per_object",
             "maximum_total_compressed_bytes", "maximum_total_decompressed_bytes",
-            "maximum_runtime_seconds", "maximum_retries_per_request", "maximum_record_bytes",
-            "maximum_records_parsed", "maximum_schema_nesting_depth", "maximum_unique_field_paths",
-            "maximum_unique_structural_signatures",
+            "maximum_runtime_seconds", "maximum_retries_per_request",
         ):
-            self.assertEqual(self.approval[key], self.contract[key], key)
+            self.assertEqual(self.approval[key], envelope[key], key)
+        for key in (
+            "maximum_record_bytes", "maximum_records_parsed", "maximum_schema_nesting_depth",
+            "maximum_unique_field_paths", "maximum_unique_structural_signatures",
+        ):
+            self.assertEqual(self.approval[key], classifier[key], key)
 
     def test_approval_opens_implementation_lane_but_not_runtime(self) -> None:
         self.assertEqual(self.approval["approval_scope"], "IMPLEMENTATION_AND_LATER_SEPARATE_RELEASE_PATH_ONLY")
@@ -45,6 +56,7 @@ class ArchiveLegacyFormatFingerprintR5ApprovalTests(unittest.TestCase):
         self.assertFalse(self.approval["aws_role_mutation_authorized"])
         self.assertTrue(all(value is False for value in self.approval["current_runtime_authority"].values()))
         self.assertEqual(self.approval["s3_requests_executed_under_r5"], 0)
+        self.assertFalse(self.contract["current_runtime_authority"]["execution_authorized"])
 
     def test_payload_semantics_wallet_and_trading_stay_closed(self) -> None:
         self.assertTrue(all(value is False for value in self.approval["retention_authorizations"].values()))
