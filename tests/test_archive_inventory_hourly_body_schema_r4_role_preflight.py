@@ -16,7 +16,9 @@ BODY_ACTIVATION = BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json"
 PREFLIGHT_RELEASE = BASE / "role_attestation/R4_ROLE_STS_PREFLIGHT_RELEASE.json"
 BODY_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml"
 PREFLIGHT_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-role-preflight-r4.yml"
-BODY_WORKFLOW_SHA256 = "2499424483179f05472d951c3f9def2c791f156cd7cf36d465e93d4ab9d19677"
+BODY_WORKFLOW_IMPLEMENTATION_SHA256 = "2499424483179f05472d951c3f9def2c791f156cd7cf36d465e93d4ab9d19677"
+BODY_WORKFLOW_ACTIVATED_SHA256 = "3aed28c0a9ed04d1f7a9f6de58ab57a7a2b7ff6e7d3a4b25a32f753ecb563793"
+BODY_IMPLEMENTATION = "180c89ead78f9a6f4560a1ec12575658e62586ee"
 PREFLIGHT_IMPLEMENTATION = "3b0a1ae634288646f3757493d4e90258bae21421"
 
 
@@ -37,7 +39,14 @@ class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
         self.assertFalse(release["dedicated_r4_role_independently_verified"])
         self.assertFalse(release["single_workflow_dispatch_authorized"])
         self.assertFalse(release["execution_ready"])
-        self.assertFalse(BODY_ACTIVATION.exists())
+        if BODY_ACTIVATION.exists():
+            activation = self.load(BODY_ACTIVATION)
+            self.assertTrue(activation["release_candidate_immutable"])
+            self.assertEqual(activation["preflight_run_id"], 31312067367)
+            self.assertTrue(activation["preflight_release_consumed"])
+            self.assertFalse(activation["preflight_rerun_authorized"])
+            self.assertEqual(activation["preflight_s3_requests_executed"], 0)
+            self.assertTrue(activation["dedicated_r4_role_independently_verified"])
 
     def test_implementation_snapshot_is_inert_and_future_release_is_separate(self) -> None:
         c = self.load(CONTRACT)
@@ -56,8 +65,16 @@ class ArchiveHourlyBodySchemaR4RolePreflightTests(unittest.TestCase):
             self.assertFalse(later["s3_requests_authorized"])
             self.assertFalse(later["body_release_consumed_by_preflight"])
 
-    def test_body_workflow_remains_byte_unchanged(self) -> None:
-        self.assertEqual(hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest(), BODY_WORKFLOW_SHA256)
+    def test_body_workflow_hash_matches_current_governed_stage(self) -> None:
+        observed = hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest()
+        if BODY_ACTIVATION.exists():
+            self.assertEqual(observed, BODY_WORKFLOW_ACTIVATED_SHA256)
+            self.assertIn(
+                f"EXPECTED_IMPLEMENTATION_COMMIT: {BODY_IMPLEMENTATION}",
+                BODY_WORKFLOW.read_text(encoding="utf-8"),
+            )
+        else:
+            self.assertEqual(observed, BODY_WORKFLOW_IMPLEMENTATION_SHA256)
 
     def test_preflight_workflow_has_same_oidc_name_but_separate_file_and_run_name(self) -> None:
         body = BODY_WORKFLOW.read_text(encoding="utf-8")

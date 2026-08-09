@@ -49,7 +49,7 @@ class ArchiveHourlyBodySchemaR4RoleAttestationTests(unittest.TestCase):
         self.assertFalse(a["r4_execution_activation_authorized_by_this_attestation"])
         self.assertFalse(a["r4_execution_ready"])
 
-    def test_release_candidate_remains_immutable_and_inert(self) -> None:
+    def test_release_candidate_remains_immutable_and_later_activation_is_separate(self) -> None:
         release = self.load(RELEASE)
         self.assertEqual(release["status"], "RELEASE_CANDIDATE_AWAITING_DEDICATED_R4_ROLE_ATTESTATION")
         self.assertFalse(release["dedicated_r4_role_operator_attested"])
@@ -59,7 +59,15 @@ class ArchiveHourlyBodySchemaR4RoleAttestationTests(unittest.TestCase):
         self.assertFalse(release["get_object_authorized"])
         self.assertFalse(release["decompression_authorized"])
         self.assertFalse(release["execution_ready"])
-        self.assertFalse(ACTIVATION.exists())
+        if ACTIVATION.exists():
+            activation = self.load(ACTIVATION)
+            self.assertTrue(activation["release_candidate_immutable"])
+            self.assertEqual(activation["role_attestation_merge_commit"], "c45527941dea7d152e332327ebd0593dc2413bea")
+            self.assertEqual(activation["operator_attestation_text_sha256"], "5af72489211b1ad79e35f0491502e34d518df7c14ae6f2f8d56fbd2c3a5a83c2")
+            self.assertTrue(activation["dedicated_r4_role_operator_attested"])
+            self.assertTrue(activation["dedicated_r4_role_independently_verified"])
+            self.assertEqual(activation["preflight_run_id"], 31312067367)
+            self.assertFalse(activation["rerun_authorized"])
 
     def test_dedicated_validator_passes(self) -> None:
         completed = subprocess.run(

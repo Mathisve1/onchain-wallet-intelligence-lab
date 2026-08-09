@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "anchor_id": "HL-ARCHIVE-R4-BODY-ACTIVATION-ANCHOR-001",
+  "body_release_id": "RELEASE_HL_ARCHIVE_HOURLY_BODY_SCHEMA_PILOT_R4_001",
+  "base_main_commit": "a91f0849e8cf14b6924da73ca2b72595deab5d8d",
+  "preflight_run_id": 31312067367,
+  "preflight_terminal_status": "R4_ROLE_STS_PREFLIGHT_PASS",
+  "execution_authorized_by_this_file": false,
+  "single_workflow_dispatch_authorized_by_this_file": false,
+  "requester_pays_authorized_by_this_file": false,
+  "get_object_authorized_by_this_file": false,
+  "decompression_authorized_by_this_file": false,
+  "s3_requests_executed": 0,
+  "compressed_bytes_downloaded": 0,
+  "decompressed_bytes_processed": 0,
+  "empirical_result": null
+}

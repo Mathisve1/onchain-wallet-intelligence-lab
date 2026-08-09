@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml"
+ACTIVATION = ROOT / "research/archive_inventory/r4/R4_EXECUTION_RELEASE_CANONICALIZATION.json"
+IMPLEMENTATION = "180c89ead78f9a6f4560a1ec12575658e62586ee"
 
 
 class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
@@ -25,7 +27,11 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
 
     def test_implementation_candidate_is_inert_until_separate_release(self) -> None:
         text = self.text()
-        self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        if ACTIVATION.exists():
+            self.assertIn(f"EXPECTED_IMPLEMENTATION_COMMIT: {IMPLEMENTATION}", text)
+            self.assertNotIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
+        else:
+            self.assertIn("EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE", text)
         self.assertIn("R4 release gate 45", text)
         self.assertIn("R4_EXECUTION_RELEASE_CANONICALIZATION.json", text)
         self.assertLess(
@@ -64,6 +70,9 @@ class ArchiveHourlyBodySchemaR4WorkflowTests(unittest.TestCase):
             "assert release[key] is False",
         ):
             self.assertIn(assertion, text)
+        pre_oidc = text.index("Prove canonical R4 implementation and release before AWS OIDC")
+        oidc = text.index("Assume dedicated R4 AWS role with exact-two-object session permissions")
+        self.assertIn("python -m unittest discover -s tests -v", text[pre_oidc:oidc])
 
     def test_single_use_history_and_rerun_guard_precede_oidc(self) -> None:
         text = self.text()

@@ -23,9 +23,15 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def load(path: Path) -> dict:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(value, dict), path
+    return value
+
+
 def main() -> int:
-    a = json.loads(ATTESTATION.read_text(encoding="utf-8"))
-    release = json.loads(RELEASE.read_text(encoding="utf-8"))
+    a = load(ATTESTATION)
+    release = load(RELEASE)
 
     assert sha256(TEXT) == EXPECTED_TEXT_SHA
     assert sha256(TRUST) == EXPECTED_TRUST_SHA
@@ -58,7 +64,20 @@ def main() -> int:
     assert release["single_workflow_dispatch_authorized"] is False
     assert release["get_object_authorized"] is False
     assert release["execution_ready"] is False
-    assert not ACTIVATION.exists(), "role attestation must not create R4 execution activation"
+
+    if ACTIVATION.exists():
+        activation = load(ACTIVATION)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN"
+        assert activation["release_candidate_immutable"] is True
+        assert activation["role_attestation_merge_commit"] == "c45527941dea7d152e332327ebd0593dc2413bea"
+        assert activation["operator_attestation_text_sha256"] == EXPECTED_TEXT_SHA
+        assert activation["dedicated_r4_role_arn"] == EXPECTED_ROLE_ARN
+        assert activation["dedicated_r4_role_operator_attested"] is True
+        assert activation["dedicated_r4_role_independently_verified"] is True
+        assert activation["preflight_evidence_merge_commit"] == "a91f0849e8cf14b6924da73ca2b72595deab5d8d"
+        assert activation["preflight_run_id"] == 31312067367
+        assert activation["preflight_s3_requests_executed"] == 0
+        assert activation["rerun_authorized"] is False
 
     print("R4_ROLE_OPERATOR_ATTESTATION_VALID")
     return 0

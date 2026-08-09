@@ -135,7 +135,14 @@ class ArchiveHourlyBodySchemaR4Tests(unittest.TestCase):
         self.assertFalse(release["execution_ready"])
         self.assertEqual(release["s3_requests_executed"], 0)
         self.assertIsNone(release["empirical_result"])
-        self.assertFalse((BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json").exists())
+        activation_path = BASE / "R4_EXECUTION_RELEASE_CANONICALIZATION.json"
+        if activation_path.exists():
+            activation = self.load(activation_path)
+            self.assertEqual(activation["status"], "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN")
+            self.assertTrue(activation["release_candidate_immutable"])
+            self.assertTrue(activation["single_workflow_dispatch_authorized"])
+            self.assertFalse(activation["rerun_authorized"])
+            self.assertTrue(activation["execution_ready"])
 
     def test_approval_template_repeats_exact_frozen_boundary(self) -> None:
         text = APPROVAL_TEMPLATE.read_text(encoding="utf-8")
