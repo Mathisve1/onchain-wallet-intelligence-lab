@@ -1,6 +1,6 @@
 # HL-ARCHIVE-INVENTORY-001 status
 
-- phase: `R3_HOURLY_METADATA_INVENTORY_PREREGISTRATION_UNDER_REVIEW_NO_EXECUTION`
+- phase: `R3_HOURLY_METADATA_APPROVAL_UNDER_REVIEW_NO_EXECUTION`
 - parent public probe: `ATTESTED_PUBLIC_PROBE_PASS`
 - AWS identity: `ATTESTED_STS_IDENTITY_MATCH`
 - exact node-data Region: `ap-northeast-1`
@@ -24,34 +24,38 @@
 - larger 300-request inventory authorized: `false`
 - all trading/capital authorizations: `false`
 
-## R3 static preregistration
+## R3 approval state
 
 - R3 ID: `HL-ARCHIVE-HOURLY-METADATA-INVENTORY-R3-001`
-- status: `PREREGISTERED_STATIC_AWAITING_SEPARATE_HUMAN_SCOPE_BUDGET_APPROVAL`
-- parent R2 attestation commit: `1790d6e3e2453cd96504b0f6624ca37c3847324a`
-- purpose: complete-or-censored metadata enumeration of the three hourly fill/trade keyspaces before any object-body pilot
+- canonical preregistration commit: `ab4d42be02fe49d7f90f933317ef856f0322fd85`
+- immutable preregistration status: `PREREGISTERED_STATIC_AWAITING_SEPARATE_HUMAN_SCOPE_BUDGET_APPROVAL`
+- human approval ID: `APPROVE_HL_ARCHIVE_HOURLY_METADATA_INVENTORY_R3_001`
+- human approval status on this branch: `EXACT_SCOPE_AND_BUDGET_APPROVAL_RECORDED_AWAITING_CANONICAL_MERGE`
+- approval recorded at UTC: `2026-08-09T05:35:00Z`
+- exact approval text SHA-256: `3c3931133fb8b0dd322d7a296b7b70fca65dd341401a6eda2b6372938ed6cd10`
 - target bucket / Region: `hl-mainnet-node-data` / `ap-northeast-1`
 - exact prefixes:
   - `node_fills_by_block/hourly/`
   - `node_fills/hourly/`
   - `node_trades/hourly/`
-- proposed maximum keys/request: `1000`
-- proposed maximum pages/family: `16`
-- proposed maximum total LIST requests: `48`
-- proposed maximum total entries: `48000`
-- proposed maximum aggregate response bytes: `33554432` (32 MiB)
-- proposed maximum runtime: `300 seconds`
-- proposed maximum retries/request: `0`
-- proposed pagination / continuation following: `true / true`, only after separate approval and only within the same frozen prefix
+- approved maximum keys/request: `1000`
+- approved maximum pages/family: `16`
+- approved maximum total LIST requests: `48`
+- approved maximum total entries: `48000`
+- approved maximum aggregate response bytes: `33554432` (32 MiB)
+- approved maximum runtime: `300 seconds`
+- approved maximum retries/request: `0`
+- approved pagination / continuation following: `true / true`, only within the same frozen prefix
 - continuation token values retained: `false`
-- proposed redirect following / StartAfter / Delimiter: `false / false / false`
-- proposed one-time / monthly budget: `EUR 0.10 / EUR 0`
-- current approved one-time budget: `null`
-- current implementation authorization: `false`
-- current workflow installation authorization: `false`
-- current execution release present: `false`
-- current network execution authorization: `false`
-- current paid request / Requester Pays / ListObjectsV2 authorization: `false / false / false`
+- repeated continuation token fails closed: `true`
+- redirect following / StartAfter / Delimiter: `false / false / false`
+- approved one-time / monthly budget: `EUR 0.10 / EUR 0`
+- implementation/review lane authorized by human approval: `true`
+- implementation installed: `false`
+- workflow installed: `false`
+- execution release present: `false`
+- network execution authorized: `false`
+- current paid request / Requester Pays / ListObjectsV2 runtime authorization: `false / false / false`
 - R3 S3 requests executed / entries observed: `0 / 0`
 - R3 empirical result: `null`
 - explorer-block inventory authorized: `false`
@@ -61,17 +65,10 @@
 - larger 300-request inventory authorized: `false`
 - all trading/capital authorizations: `false`
 
-## Why R3 is narrower than the old parent proposal
+## Approval boundary
 
-R2 empirically showed an hourly path shape for `node_fills_by_block`, `node_fills` and `node_trades`. R3 therefore targets only those three families and raises `MaxKeys` to the S3 maximum of 1000 while fixing a hard 16-page cap per family. The maximum request count falls from the old parent proposal of 300 to 48, an 84% reduction. Response cap falls from 256 MiB to 32 MiB, entry cap from 250,000 to 48,000, runtime from 900 to 300 seconds and retries from one to zero.
+The exact user approval is bound to canonical R3 preregistration commit `ab4d42be02fe49d7f90f933317ef856f0322fd85` and the exact 48-request / 16-page / three-prefix / EUR 0.10 envelope. On this branch it is only an approval record under review. It does not install code, install a workflow, create a release or execute AWS/S3.
 
-Sixteen pages provide capacity for at most 16,000 keys per family. At an idealized one-key-per-hour cadence this is about 666.7 days. That is only sizing logic, not an empirical archive-start or completeness claim. A family is complete only if a terminal page with `IsTruncated=false` is reached before all caps. Otherwise the result must be `CENSORED_BY_LIMIT` or another explicit incomplete state.
+After this approval record is canonically merged, the next lane is implementation/review only. A separately reviewed implementation and separately reviewed single-use execution release remain mandatory before any R3 network request. The first later dispatch must consume that release regardless of PASS/FAIL.
 
-## Next gate
-
-1. Complete exact-head CI, byte-exact manifest validation and clean-context review for the static R3 preregistration.
-2. Merge only if R3 remains non-executing and all object/body, larger-inventory and trading gates remain closed.
-3. Verify the actual canonical R3 preregistration merge SHA.
-4. Require a fresh human approval exactly bound to that canonical SHA and the proposed EUR 0.10 / 48-request envelope.
-5. Human approval would open only a later implementation/review lane. It would not itself install a workflow or execute S3.
-6. A separately reviewed implementation and separately reviewed single-use execution release remain mandatory before any R3 network request.
+The old 300-request inventory, explorer/replica inventory, object bodies, decompression, market-data ingestion, wallet analysis and all trading/capital stages remain unauthorized.
