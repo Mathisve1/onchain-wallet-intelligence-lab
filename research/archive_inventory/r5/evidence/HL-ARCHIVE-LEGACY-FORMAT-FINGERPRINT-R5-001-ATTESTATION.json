@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "attestation_id": "ATTEST_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001",
+  "pilot_id": "HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001",
+  "release_id": "RELEASE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001",
+  "activation_merge_commit": "5eb6c8fad622832bc63a6503add8026be7ebd5a0",
+  "run_id": 31321019885,
+  "job_id": 93263905889,
+  "artifact_id": 9040171908,
+  "artifact_sha256": "3cb113e6729918dc647c182bddb86a2bd42de157b3c8131746103b3166981df4",
+  "artifact_size_bytes": 2756,
+  "terminal_status": "R5_LEGACY_FORMAT_FINGERPRINT_COMPLETE",
+  "technical_result": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+  "research_conclusion": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+  "format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT",
+  "request_attempt_count": 1,
+  "s3_http_request_count": 1,
+  "successful_request_count": 1,
+  "failed_request_count": 0,
+  "compressed_bytes": 12726384,
+  "decompressed_bytes": 62169139,
+  "runtime_seconds": 28.735337,
+  "retries_used": 0,
+  "http_redirects_followed": false,
+  "requester_pays_requested": true,
+  "structural_format_evidence": {
+    "nonempty_record_count": 162815,
+    "json_root_type_counts": {
+      "array": 162815
+    },
+    "array_arity_histogram": {
+      "2": 162815
+    },
+    "array_element_type_signature_counts": {
+      "string,object": 162815
+    },
+    "maximum_observed_nesting_depth": 4,
+    "unique_object_field_path_count": 22,
+    "structural_signature_hash": "67bd92e8a68448200dee809c42bca37256b7db99ef54c5c056e36fc7f6edf27f",
+    "structural_signature_count": 162815,
+    "resolved_format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT"
+  },
+  "claims_proven": [
+    "the exact R4-bound legacy object is retrievable with one Requester Pays GetObject under exact ETag and content-length checks",
+    "the exact compressed SHA-256 and exact decompressed byte count match the R4-bound expectations",
+    "the legacy object is recognized and decompressed as an LZ4 frame within the approved caps",
+    "162815 nonempty UTF-8 line-delimited JSON records were structurally parsed",
+    "every observed top-level JSON record is an array of arity two with ordered element type signature string,object",
+    "the bounded structural format class is UTF8_NDJSON_PAIR_STRING_OBJECT"
+  ],
+  "claims_not_proven": [
+    "the semantic meaning of the leading string element",
+    "that the leading string element is a wallet address, user identifier or account identifier",
+    "schema equivalence between legacy node_fills and modern node_fills_by_block",
+    "semantic equivalence between legacy node_fills and modern node_fills_by_block",
+    "wallet reconstruction correctness",
+    "entity clustering correctness",
+    "copyability",
+    "alpha or profitability",
+    "market-data ingestion suitability",
+    "live trading suitability"
+  ],
+  "raw_compressed_object_persisted": false,
+  "raw_decompressed_payload_retained": false,
+  "record_payload_retained": false,
+  "wallet_addresses_retained_from_body": false,
+  "payload_values_retained": false,
+  "string_values_retained": false,
+  "numeric_values_retained": false,
+  "semantic_wallet_or_user_label_inferred": false,
+  "schema_equivalence_inferred": false,
+  "semantic_equivalence_inferred": false,
+  "wallet_reconstruction_performed": false,
+  "entity_clustering_performed": false,
+  "copyability_analysis_performed": false,
+  "pnl_or_alpha_analysis_performed": false,
+  "market_data_ingested": false,
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "trading_authorizations_after_run": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
