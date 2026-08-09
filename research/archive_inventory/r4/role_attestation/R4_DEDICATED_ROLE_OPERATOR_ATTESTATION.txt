@@ -1,0 +1,6 @@
+R4_DEDICATED_ROLE_OPERATOR_ATTESTATION
+role_arn=arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4
+trust_policy_sha256=2ebb60a7747a636a475a23016951265fe377fd9d68f2d9f3a63e33f3bc0189b4
+permission_policy_sha256=14d055105b80e0c41462d4934bbaa8d860b0aeda9f2f1b9529267fd0d4d3613d
+role_created_and_policies_applied=true
+existing_metadata_role_modified=false
