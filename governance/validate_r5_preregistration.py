@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,8 +12,12 @@ SOURCES = R5 / "OFFICIAL_SOURCE_EVIDENCE.json"
 STATUS = R5 / "APPROVAL_STATUS.md"
 TEMPLATE = R5 / "HUMAN_APPROVAL_TEMPLATE.md"
 PARENT = ROOT / "research/archive_inventory/r4/evidence/run-31313913525/r4-body-result.json"
+APPROVAL_TEXT = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt"
+APPROVAL_JSON = R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json"
 
 EXPECTED_PARENT_MERGE = "fe06874aeeb958d375a27100378f89bd25b4741b"
+EXPECTED_PREREG_MERGE = "58f724d7f0208a43f7462abd80e1e69d995acff9"
+EXPECTED_APPROVAL_SHA = "667f94a66ea07296162ae0627a9cf7fc5b439b3f8312c8617ece923159f5ddc8"
 EXPECTED_KEY = "node_fills/hourly/20250727/8.lz4"
 EXPECTED_ETAG = '"b21cdc16a4ec69d9c5b72c0c27ff148d-2"'
 EXPECTED_COMPRESSED_SHA = "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622"
@@ -151,9 +156,23 @@ def main() -> int:
 
     status_text = STATUS.read_text(encoding="utf-8")
     template_text = TEMPLATE.read_text(encoding="utf-8")
-    assert "PREREGISTERED_STATIC_NO_EXECUTION" in status_text
+    assert (
+        "PREREGISTERED_STATIC_NO_EXECUTION" in status_text
+        or "HUMAN_APPROVED_IMPLEMENTATION_LANE_ONLY_NO_RUNTIME" in status_text
+    )
     assert "APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001" in template_text
     assert "reviewed_commit=<CANONICAL_R5_PREREGISTRATION_MERGE_COMMIT>" in template_text
+
+    # A later separate approval may exist; it must not mutate the preregistration snapshot.
+    if APPROVAL_TEXT.exists() or APPROVAL_JSON.exists():
+        assert APPROVAL_TEXT.exists() and APPROVAL_JSON.exists()
+        approval = load(APPROVAL_JSON)
+        assert hashlib.sha256(APPROVAL_TEXT.read_bytes()).hexdigest() == EXPECTED_APPROVAL_SHA
+        assert approval["approval_id"] == "APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001"
+        assert approval["reviewed_commit"] == EXPECTED_PREREG_MERGE
+        assert approval["exact_approval_text_sha256"] == EXPECTED_APPROVAL_SHA
+        assert approval["execution_authorized_by_this_record"] is False
+        assert approval["request_authorized_by_this_record"] is False
 
     forbidden_paths = [
         ROOT / ".github/workflows/hyperliquid-archive-legacy-format-fingerprint-r5.yml",
@@ -161,8 +180,6 @@ def main() -> int:
         R5 / "R5_IMPLEMENTATION_CONTRACT.json",
         R5 / "R5_EXECUTION_RELEASE.json",
         R5 / "R5_EXECUTION_RELEASE_CANONICALIZATION.json",
-        R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.txt",
-        R5 / "approvals/APPROVE_HL_ARCHIVE_LEGACY_FORMAT_FINGERPRINT_R5_001.json",
     ]
     for path in forbidden_paths:
         assert not path.exists(), path
