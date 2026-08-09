@@ -1,0 +1,175 @@
+{
+  "compressed_bytes": 12726384,
+  "compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+  "copyability_analysis_performed": false,
+  "decompressed_bytes": 62169139,
+  "entity_clustering_performed": false,
+  "expected_compressed_sha256": "f12d33da9733dbb71f02f9910fc187b9dd4b8f9dae1102b7dfe7690094542622",
+  "expected_content_length": 12726384,
+  "expected_decompressed_byte_count": 62169139,
+  "expected_etag": "\"b21cdc16a4ec69d9c5b72c0c27ff148d-2\"",
+  "failed_request_count": 0,
+  "failure_class": null,
+  "format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT",
+  "http_redirects_followed": false,
+  "market_data_ingested": false,
+  "numeric_values_retained": false,
+  "object_key": "node_fills/hourly/20250727/8.lz4",
+  "observed_at_utc": "2026-08-09T15:24:35.594859Z",
+  "payload_values_retained": false,
+  "pilot_id": "HL-ARCHIVE-LEGACY-FORMAT-FINGERPRINT-R5-001",
+  "pnl_or_alpha_analysis_performed": false,
+  "raw_compressed_object_persisted": false,
+  "raw_decompressed_payload_retained": false,
+  "record_payload_retained": false,
+  "request_attempt_count": 1,
+  "requester_pays_requested": true,
+  "research_conclusion": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+  "retries_used": 0,
+  "runtime_seconds": 28.735337,
+  "s3_http_request_count": 1,
+  "schema_equivalence_inferred": false,
+  "schema_version": "1.0",
+  "semantic_equivalence_inferred": false,
+  "semantic_wallet_or_user_label_inferred": false,
+  "string_values_retained": false,
+  "structural_evidence": {
+    "array_arity_histogram": {
+      "2": 162815
+    },
+    "array_element_type_signature_counts": {
+      "string,object": 162815
+    },
+    "json_root_type_counts": {
+      "array": 162815
+    },
+    "maximum_observed_nesting_depth": 4,
+    "nonempty_record_count": 162815,
+    "object_field_path_names": [
+      "/*",
+      "/*/builder",
+      "/*/builderFee",
+      "/*/cloid",
+      "/*/closedPnl",
+      "/*/coin",
+      "/*/crossed",
+      "/*/dir",
+      "/*/fee",
+      "/*/feeToken",
+      "/*/hash",
+      "/*/liquidation",
+      "/*/liquidation/liquidatedUser",
+      "/*/liquidation/markPx",
+      "/*/liquidation/method",
+      "/*/oid",
+      "/*/px",
+      "/*/side",
+      "/*/startPosition",
+      "/*/sz",
+      "/*/tid",
+      "/*/time"
+    ],
+    "object_field_path_presence_counts": {
+      "/*": 325630,
+      "/*/builder": 4730,
+      "/*/builderFee": 4272,
+      "/*/cloid": 87809,
+      "/*/closedPnl": 162815,
+      "/*/coin": 162815,
+      "/*/crossed": 162815,
+      "/*/dir": 162815,
+      "/*/fee": 162815,
+      "/*/feeToken": 162815,
+      "/*/hash": 162815,
+      "/*/liquidation": 68,
+      "/*/liquidation/liquidatedUser": 68,
+      "/*/liquidation/markPx": 68,
+      "/*/liquidation/method": 68,
+      "/*/oid": 162815,
+      "/*/px": 162815,
+      "/*/side": 162815,
+      "/*/startPosition": 162815,
+      "/*/sz": 162815,
+      "/*/tid": 162815,
+      "/*/time": 162815
+    },
+    "object_field_path_type_sets": {
+      "/*": [
+        "object",
+        "string"
+      ],
+      "/*/builder": [
+        "string"
+      ],
+      "/*/builderFee": [
+        "string"
+      ],
+      "/*/cloid": [
+        "string"
+      ],
+      "/*/closedPnl": [
+        "string"
+      ],
+      "/*/coin": [
+        "string"
+      ],
+      "/*/crossed": [
+        "bool"
+      ],
+      "/*/dir": [
+        "string"
+      ],
+      "/*/fee": [
+        "string"
+      ],
+      "/*/feeToken": [
+        "string"
+      ],
+      "/*/hash": [
+        "string"
+      ],
+      "/*/liquidation": [
+        "object"
+      ],
+      "/*/liquidation/liquidatedUser": [
+        "string"
+      ],
+      "/*/liquidation/markPx": [
+        "string"
+      ],
+      "/*/liquidation/method": [
+        "string"
+      ],
+      "/*/oid": [
+        "integer"
+      ],
+      "/*/px": [
+        "string"
+      ],
+      "/*/side": [
+        "string"
+      ],
+      "/*/startPosition": [
+        "string"
+      ],
+      "/*/sz": [
+        "string"
+      ],
+      "/*/tid": [
+        "integer"
+      ],
+      "/*/time": [
+        "integer"
+      ]
+    },
+    "resolved_format_class": "UTF8_NDJSON_PAIR_STRING_OBJECT",
+    "structural_signature_hash_counts": {
+      "67bd92e8a68448200dee809c42bca37256b7db99ef54c5c056e36fc7f6edf27f": 162815
+    }
+  },
+  "successful_request_count": 1,
+  "technical_result": "LEGACY_FORMAT_RESOLVED_AS_NDJSON_PAIR_STRING_OBJECT",
+  "terminal_status": "R5_LEGACY_FORMAT_FINGERPRINT_COMPLETE",
+  "wallet_addresses_retained_from_body": false,
+  "wallet_reconstruction_performed": false
+}
