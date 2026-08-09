@@ -3,7 +3,7 @@ name: Research CI
 on:
   pull_request:
   push:
-    branches: [main, research/r5-legacy-format-activation]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ env:
 
 jobs:
   test:
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/research/r5-legacy-format-activation') }}
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'research/r5-legacy-format-activation') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -42,22 +42,22 @@ jobs:
         run: python governance/validate_repository.py
 
   repair-r5-activation:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/research/r5-legacy-format-activation' }}
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'research/r5-legacy-format-activation' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     steps:
       - name: Check out exact activation repair commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.EXACT_CI_COMMIT }}
           fetch-depth: 1
           persist-credentials: true
-      - name: Apply exact activation transformations and self-revert CI
+      - name: Apply exact activation transformations and restore canonical CI
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF}" = 'refs/heads/research/r5-legacy-format-activation'
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "${GITHUB_HEAD_REF}" = 'research/r5-legacy-format-activation'
+          test "$(git rev-parse HEAD)" = "${EXACT_CI_COMMIT}"
           git fetch origin main --depth=1
           git checkout origin/main -- .github/workflows/ci.yml
           python3 - <<'PY'
