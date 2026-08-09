@@ -1,0 +1,41 @@
+{
+  "accessed_utc_date": "2026-08-09",
+  "historical_predate_checks": {
+    "batch_by_block_documentation_predates_boundary": true,
+    "boundary_date_utc": "2025-07-27",
+    "write_fills_documentation_predates_boundary": true
+  },
+  "schema_version": "1.0",
+  "source_limitations": [
+    "No official source located in this study directly documents the exact S3 archive cutover timestamp within 2025-07-27T08.",
+    "The public node repository documents output behavior but does not expose the closed node serializer/uploader implementation needed to prove exact event-by-event cutover semantics."
+  ],
+  "source_policy": "PRIMARY_OFFICIAL_SOURCES_ONLY",
+  "sources": [
+    {
+      "commit": "c4933f2273e4dfca6915971229d22149712641e0",
+      "commit_date_utc": "2025-05-27T10:46:44Z",
+      "fact": "Before the archive boundary date, the official node documentation stated that --write-fills streams API-format fills to node_fills/hourly/{date}/{hour}.",
+      "repository": "hyperliquid-dex/node",
+      "source_id": "HL-NODE-WRITE-FILLS-COMMIT"
+    },
+    {
+      "commit": "247aea04898c23f2cd8948ad0e70a5f47d8b43bc",
+      "commit_date_utc": "2025-06-27T08:50:26Z",
+      "fact": "Before the archive boundary date, the official node documentation stated that --batch-by-block writes the same auxiliary streams one block per line with local_time, block_time, block_number and events.",
+      "repository": "hyperliquid-dex/node",
+      "source_id": "HL-NODE-BATCH-BY-BLOCK-COMMIT"
+    },
+    {
+      "fact": "Official historical-data documentation identifies node_fills_by_block as fills streamed via --write-fills --batch-by-block and describes node_fills as older data in a different format that matches the API fill format.",
+      "source_id": "HL-HISTORICAL-DATA",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/historical-data"
+    },
+    {
+      "fact": "Official documentation states that --batch-by-block waits until the end of a block to write data.",
+      "source_id": "HL-OPTIMIZING-LATENCY",
+      "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/optimizing-latency"
+    }
+  ],
+  "study_id": "HL-ARCHIVE-LEGACY-MODERN-CUTOVER-FORENSICS-R8B-001"
+}
