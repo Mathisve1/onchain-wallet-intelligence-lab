@@ -15,7 +15,9 @@ BODY_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema
 PREFLIGHT_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-hourly-body-schema-role-preflight-r4.yml"
 
 ROLE_ATTESTATION_MERGE = "c45527941dea7d152e332327ebd0593dc2413bea"
-BODY_WORKFLOW_SHA256 = "2499424483179f05472d951c3f9def2c791f156cd7cf36d465e93d4ab9d19677"
+BODY_WORKFLOW_IMPLEMENTATION_SHA256 = "2499424483179f05472d951c3f9def2c791f156cd7cf36d465e93d4ab9d19677"
+BODY_WORKFLOW_ACTIVATED_SHA256 = "3aed28c0a9ed04d1f7a9f6de58ab57a7a2b7ff6e7d3a4b25a32f753ecb563793"
+BODY_IMPLEMENTATION = "180c89ead78f9a6f4560a1ec12575658e62586ee"
 WORKFLOW_NAME = "Hyperliquid Archive Hourly Body Schema Pilot R4"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-body-schema-r4"
 
@@ -35,7 +37,7 @@ def main() -> int:
     assert contract["status"] == "IMPLEMENTED_AWAITING_SEPARATE_PREFLIGHT_RELEASE"
     assert contract["role_attestation_merge_commit"] == ROLE_ATTESTATION_MERGE
     assert contract["release_candidate_merge_commit"] == "01521d1cad209263a217dbcca98ecd74ec16857c"
-    assert contract["r4_implementation_commit"] == "180c89ead78f9a6f4560a1ec12575658e62586ee"
+    assert contract["r4_implementation_commit"] == BODY_IMPLEMENTATION
     assert contract["operator_attestation_text_sha256"] == attestation["exact_attestation_text_sha256"]
     assert contract["role_arn"] == ROLE_ARN
     assert contract["expected_account_id"] == "630956766927"
@@ -88,7 +90,6 @@ def main() -> int:
     assert body_release["single_workflow_dispatch_authorized"] is False
     assert body_release["get_object_authorized"] is False
     assert body_release["execution_ready"] is False
-    assert not BODY_ACTIVATION.exists()
 
     if PREFLIGHT_RELEASE.exists():
         later = load(PREFLIGHT_RELEASE)
@@ -100,7 +101,25 @@ def main() -> int:
         assert later["body_release_consumed_by_preflight"] is False
         assert later["body_execution_activation_authorized"] is False
 
-    assert hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest() == BODY_WORKFLOW_SHA256
+    body_text = BODY_WORKFLOW.read_text(encoding="utf-8")
+    if BODY_ACTIVATION.exists():
+        activation = load(BODY_ACTIVATION)
+        assert activation["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R4_RUN"
+        assert activation["release_candidate_immutable"] is True
+        assert activation["preflight_evidence_merge_commit"] == "a91f0849e8cf14b6924da73ca2b72595deab5d8d"
+        assert activation["preflight_run_id"] == 31312067367
+        assert activation["preflight_release_consumed"] is True
+        assert activation["preflight_rerun_authorized"] is False
+        assert activation["preflight_s3_requests_executed"] == 0
+        assert activation["dedicated_r4_role_independently_verified"] is True
+        assert activation["implementation_commit"] == BODY_IMPLEMENTATION
+        assert activation["rerun_authorized"] is False
+        assert hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest() == BODY_WORKFLOW_ACTIVATED_SHA256
+        assert f"EXPECTED_IMPLEMENTATION_COMMIT: {BODY_IMPLEMENTATION}" in body_text
+    else:
+        assert hashlib.sha256(BODY_WORKFLOW.read_bytes()).hexdigest() == BODY_WORKFLOW_IMPLEMENTATION_SHA256
+        assert "EXPECTED_IMPLEMENTATION_COMMIT: PENDING_CANONICAL_IMPLEMENTATION_MERGE" in body_text
+
     text = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
     assert text.startswith(f"name: {WORKFLOW_NAME}\n")
     assert "run-name: R4 dedicated role STS-only preflight" in text
