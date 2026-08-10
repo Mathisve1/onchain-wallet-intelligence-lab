@@ -1,4 +1,4 @@
-f36dd488cd8028bda46810504d8c0b20f9d14ed7181ddaf6f95c0de6c3b01017  .github/workflows/ci.yml
+0e6a93ccc22dbf475cc459ebe6f28e8709182a985163c02d61a015c1bea79e7a  .github/workflows/ci.yml
 3aed28c0a9ed04d1f7a9f6de58ab57a7a2b7ff6e7d3a4b25a32f753ecb563793  .github/workflows/hyperliquid-archive-hourly-body-schema-pilot-r4.yml
 fdba4feaf847ba889a0baacc9173f84480f9a85be5a57d3b5916e37c11575b23  .github/workflows/hyperliquid-archive-hourly-body-schema-role-preflight-r4.yml
 b3f3c2fc725482998ccf6e32b3d1353e92072b9e3a51d63bd23b964028388f3a  .github/workflows/hyperliquid-archive-hourly-metadata-inventory-r3.yml
