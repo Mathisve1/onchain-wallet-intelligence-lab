@@ -39,8 +39,9 @@ def main() -> int:
         observed[name] = digest
     assert observed == LEDGER
     for name, digest in LEDGER.items():
-        assert hashlib.sha256((RUN / name).read_bytes()).hexdigest() == digest
-        assert verification["internal_ledger"][name] == digest
+        computed = hashlib.sha256((RUN / name).read_bytes()).hexdigest()
+        assert computed == digest, (name, computed, digest)
+        assert verification["internal_ledger"][name] == digest, (name, verification["internal_ledger"][name], digest)
 
     assert (RUN / "r10a.rc").read_text(encoding="utf-8") == "0\n"
     assert context["workflow_run_id"] == 31386230522
