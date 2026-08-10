@@ -13,12 +13,13 @@ class R10CWorkflowCandidateTests(unittest.TestCase):
     def text(cls) -> str:
         return CANDIDATE.read_text(encoding="utf-8")
 
-    def test_candidate_is_manual_and_uninstalled(self) -> None:
+    def test_candidate_is_manual_and_installed_only_byte_exact_if_present(self) -> None:
         text = self.text()
         self.assertIn("on:\n  workflow_dispatch:\n", text)
         self.assertNotIn("schedule:", text)
         self.assertNotIn("push:", text)
-        self.assertFalse(INSTALLED.exists())
+        if INSTALLED.exists():
+            self.assertEqual(INSTALLED.read_bytes(), CANDIDATE.read_bytes())
 
     def test_trust_compatible_name_and_distinct_run_name(self) -> None:
         text = self.text()
