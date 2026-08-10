@@ -15,6 +15,7 @@ R10 = ROOT / "research/archive_inventory/r10"
 APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 IMPL = ROOT / "research/archive_inventory/r10_implementation"
 ROLE_ATTESTATION_DIR = ROOT / "research/archive_inventory/r10_role_attestation"
+PREFLIGHT_CONTRACT = ROOT / "research/archive_inventory/r10_role_preflight/R10_STS_PREFLIGHT_CONTRACT.json"
 CONTRACT = IMPL / "R10_IMPLEMENTATION_CONTRACT.json"
 TRUST = IMPL / "R10_OIDC_TRUST_POLICY.json"
 PERMISSION = IMPL / "R10_PERMISSION_POLICY.json"
@@ -31,6 +32,8 @@ PREREG_MERGE = "37e4486a7f68982feafcb361bd40dffd546def05"
 APPROVAL_MERGE = "92761986d8dc6bf818eebf7dc0411d24649a27df"
 IMPLEMENTATION_MERGE = "820d0cbbb0f49f800f36025da27a06754d3fc08d"
 ROLE_ATTESTATION_BASE_MAIN = "c2e4e262d74bcf9feebb531d507590d5f9e62c85"
+ROLE_ATTESTATION_MERGE = "ba7835c8e8ecb1cdc6a1c44c9b679d8f43e7a40e"
+PREFLIGHT_WORKFLOW_SHA = "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d"
 APPROVAL_SHA = "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 WORKFLOW_NAME = "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10"
@@ -86,6 +89,29 @@ def validate_later_role_attestation_if_present() -> None:
     assert evidence["r10_sts_preflight_executed"] is False
     assert evidence["r10_execution_release_present"] is False
     assert evidence["r10_canonical_activation_present"] is False
+
+
+def validate_later_preflight_implementation_if_present() -> None:
+    if not PREFLIGHT_CONTRACT.exists():
+        assert not PREFLIGHT_INSTALLED.exists()
+        return
+
+    preflight = load(PREFLIGHT_CONTRACT)
+    assert preflight["status"] == "IMPLEMENTED_AWAITING_SEPARATE_PREFLIGHT_RELEASE"
+    assert preflight["role_attestation_merge_commit"] == ROLE_ATTESTATION_MERGE
+    assert preflight["r10_implementation_merge_commit"] == IMPLEMENTATION_MERGE
+    assert preflight["role_arn"] == ROLE_ARN
+    assert preflight["installed_workflow_sha256"] == PREFLIGHT_WORKFLOW_SHA
+    assert preflight["preflight_release_present"] is False
+    assert preflight["preflight_execution_authorized"] is False
+    assert preflight["sts_get_caller_identity_authorized"] is False
+    assert preflight["single_workflow_dispatch_authorized"] is False
+    assert preflight["s3_requests_executed"] == 0
+    assert preflight["aws_sts_requests_executed"] == 0
+    assert PREFLIGHT_INSTALLED.is_file()
+    assert sha(PREFLIGHT_CANDIDATE) == PREFLIGHT_WORKFLOW_SHA
+    assert sha(PREFLIGHT_INSTALLED) == PREFLIGHT_WORKFLOW_SHA
+    assert PREFLIGHT_CANDIDATE.read_bytes() == PREFLIGHT_INSTALLED.read_bytes()
 
 
 def main() -> int:
@@ -200,7 +226,7 @@ def main() -> int:
     assert "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json" in data_text
     assert "R10_STS_PREFLIGHT_ATTESTATION.json" in data_text
 
-    assert not PREFLIGHT_INSTALLED.exists()
+    validate_later_preflight_implementation_if_present()
     assert not DATA_INSTALLED.exists()
     validate_later_role_attestation_if_present()
     assert not (ROOT / "research/archive_inventory/r10_runtime").exists()
