@@ -18,6 +18,8 @@ PREFLIGHT = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-role-pr
 DATA = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
 RUNBOOK = BASE / "r11_implementation/R11_ROLE_CREATION_RUNBOOK.md"
 ATTEST = BASE / "r11_implementation/R11_OPERATOR_ATTESTATION_TEMPLATE.txt"
+INSTALLED_PREFLIGHT = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
+INSTALLED_DATA = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
 
 PREREG_MERGE = "dc63f2846652e50755369aa95d0f01ec2e174b02"
 APPROVAL_MERGE = "86333a6759a492e5452bc565802fefce55a9fd6f"
@@ -144,8 +146,9 @@ def main() -> int:
     assert "research.archive_inventory.r11_implementation.collector" in data
     assert "r11-wallet-features.ndjson" in data
 
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml").exists()
+    if INSTALLED_PREFLIGHT.exists():
+        assert INSTALLED_PREFLIGHT.read_bytes() == PREFLIGHT.read_bytes()
+    assert not INSTALLED_DATA.exists(), "R11 data workflow must remain uninstalled before STS preflight evidence"
     assert "aws s3 " not in RUNBOOK.read_text(encoding="utf-8").lower().replace("`aws s3`", "")
     attest = ATTEST.read_text(encoding="utf-8")
     assert "persistent_permission_resource_count=72" in attest
