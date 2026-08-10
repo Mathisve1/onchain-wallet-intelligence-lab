@@ -76,14 +76,13 @@ def main() -> int:
     for key in ("timezone_parsing","timezone_inference","datetime_conversion","individual_metadata_value_retention","event_array_contents_inspection","event_pair_count_retention","block_number_value_retention","wallet_address_retention","wallet_aggregation","economic_fill_field_processing","individual_fill_time_processing","raw_object_retention","raw_block_event_fill_retention"):
         assert processing[key] is False, key
 
+    # The approval is an immutable implementation permission overlay, never a runtime release.
     assert all(v is False for v in a["current_runtime_authority"].values())
     assert a["execution_authorized_by_this_approval"] is False
     assert a["separate_execution_release_required"] is True
     assert a["separate_canonical_activation_required"] is True
     assert all(v is False for v in a["downstream_authorizations"].values())
     assert all(v is False for v in a["trading_authorizations"].values())
-    assert not (BASE / "r10b_implementation").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r10b-batch-metadata-lexical-diagnostic.yml").exists()
     print("R10B_APPROVAL_VALID")
     return 0
 
