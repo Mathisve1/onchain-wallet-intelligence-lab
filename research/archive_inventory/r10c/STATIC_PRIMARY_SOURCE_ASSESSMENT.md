@@ -24,7 +24,7 @@ The reviewed official sources do **not** define the timezone semantics of the se
 
 They do **not** state that the S3 hourly path partition for `node_fills_by_block` is defined by `local_time`, `block_time`, or the fill payload's integer `time` field.
 
-They do **not** define a safe timestamp tolerance for fills that fall just outside a path-hour boundary, and they do **not** justify treating the R10A observed `-51 ms` boundary offset as a general rule.
+They do **not** define a safe timestamp tolerance for fills that fall just outside a path-hour boundary. The R10A observation of an earliest `-51 ms` offset therefore does not justify a 51 ms tolerance or any other general boundary rule.
 
 They also do not establish whether the single R10B record whose raw `block_time` prefix is `2025-07-27T08:` is the same record that contains the two R10A fill timestamps below the frozen path-hour lower bound.
 
