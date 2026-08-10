@@ -51,13 +51,16 @@ class R11ImplementationTests(unittest.TestCase):
         self.assertEqual(rows[0]["active_day_count"], 2)
         self.assertEqual(rows[0]["fill_count"], 2)
 
-    def test_workflow_candidates_are_inert_and_uninstalled(self) -> None:
+    def test_workflow_candidates_remain_frozen_and_data_route_is_uninstalled(self) -> None:
         preflight = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-role-preflight.yml"
         data = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        installed_preflight = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
+        installed_data = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
         self.assertTrue(preflight.exists())
         self.assertTrue(data.exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml").exists())
+        if installed_preflight.exists():
+            self.assertEqual(installed_preflight.read_bytes(), preflight.read_bytes())
+        self.assertFalse(installed_data.exists())
         self.assertIn("workflow_dispatch:", preflight.read_text(encoding="utf-8"))
         self.assertIn("workflow_dispatch:", data.read_text(encoding="utf-8"))
 
