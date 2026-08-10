@@ -56,9 +56,19 @@ def main() -> int:
     assert i["new_role_created"] is False
     assert i["role_attestation_reused"] is True
     assert i["sts_preflight_evidence_reused"] is True
-    assert role["status"] == "ATTESTED_EXACT_R10_ROLE"
+    # The operator attestation is an immutable pre-preflight snapshot. The
+    # later STS attestation below supplies independent verification.
+    assert role["attestation_id"] == "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION"
     assert role["role_arn"] == ROLE
+    assert role["role_created_and_policies_applied"] is True
+    assert role["installed_trust_policy_matches_canonical"] is True
+    assert role["installed_permission_policy_matches_canonical"] is True
+    assert role["additional_managed_policies_attached"] is False
+    assert role["additional_inline_policies_attached"] is False
     assert role["existing_r4_role_modified"] is False
+    assert role["operator_attested"] is True
+    assert role["independently_verified_via_r10_sts_preflight"] is False
+    assert role["sts_only_preflight_completed"] is False
     assert sts["terminal_status"] == "R10_STS_PREFLIGHT_PASS"
     assert sts["technical_result"] == "DEDICATED_R10_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN"
     assert sts["expected_role_arn"] == ROLE
