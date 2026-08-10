@@ -197,10 +197,14 @@ def main() -> int:
     assert "execution_authorized_by_this_approval=false" in template
     assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in status
 
-    assert not (BASE / "r10b_approval").exists()
-    assert not (BASE / "r10b_implementation").exists()
-    assert not (BASE / "r10b_runtime").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r10b-batch-metadata-lexical-diagnostic.yml").exists()
+    # This validator proves the immutable preregistration snapshot remains inert.
+    # Later approval, implementation, release, or evidence must be separate overlays
+    # and must never rewrite these preregistered zero-authority fields.
+    assert c["status"] == "PREREGISTERED_NO_EXECUTION"
+    assert all(value is False for value in c["current_runtime_authority"].values())
+    assert c["network_requests_executed_by_preregistration"] == 0
+    assert c["aws_iam_mutations_executed_by_preregistration"] == 0
+    assert c["empirical_result"] is None
 
     print("R10B_BATCH_METADATA_LEXICAL_PREREGISTRATION_VALID")
     return 0
