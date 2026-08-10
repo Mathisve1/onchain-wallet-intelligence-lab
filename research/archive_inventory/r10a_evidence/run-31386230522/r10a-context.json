@@ -1,0 +1,21 @@
+{
+  "checked_out_commit": "429fe209b03e00516759995c50c6461ec901714b",
+  "configure_aws_outcome": "success",
+  "diagnostic_id": "HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "429fe209b03e00516759995c50c6461ec901714b",
+  "economic_fill_field_processing_authorized": false,
+  "event_name": "workflow_dispatch",
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "maximum_get_object_requests": 1,
+  "maximum_retries_per_request": 0,
+  "object_key": "node_fills_by_block/hourly/20250727/9.lz4",
+  "schema_version": "1.0",
+  "signing_region": "ap-northeast-1",
+  "target_bucket": "hl-mainnet-node-data",
+  "terminal_status": "PENDING_AWS_OIDC",
+  "wallet_address_retention_authorized": false,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31386230522
+}
