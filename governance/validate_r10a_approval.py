@@ -16,6 +16,8 @@ RELEASE = BASE / "r10a_runtime/R10A_EXECUTION_RELEASE.json"
 EXPECTED_SHA = "c990a1636b745908d9f58c4b119998dfa91b4e8740764081bbb19cb8ad8904f1"
 REVIEWED = "7db55db0be5efeeadb569abb5faaadf3bc78254a"
 APPROVAL_MERGE = "b67e4a0ca91a411230f3c1b8cebac047d6c69261"
+IMPLEMENTATION_MERGE = "91eca6f1c93ef58d889b9d8b78fcee81731dd2cc"
+CANDIDATE_MERGE = "e67b42ca6b605d3762604c46830df27d9d9574ec"
 ROLE = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 KEY = "node_fills_by_block/hourly/20250727/9.lz4"
 ETAG = '"5a9941a240118a57f77a4c3ee95b8430-3"'
@@ -25,6 +27,30 @@ def load(path: Path) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
+
+
+def validate_later_release_if_present() -> None:
+    if not RELEASE.exists():
+        return
+    r = load(RELEASE)
+    assert r["diagnostic_id"] == "HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001"
+    assert r["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10A_RUN"
+    assert r["r10a_approval_merge_commit"] == APPROVAL_MERGE
+    assert r["r10a_implementation_merge_commit"] == IMPLEMENTATION_MERGE
+    assert r["release_candidate_merge_commit"] == CANDIDATE_MERGE
+    assert r["approval_text_sha256"] == EXPECTED_SHA
+    assert r["role_arn"] == ROLE and r["role_reuse_without_mutation"] is True
+    assert r["maximum_get_object_requests"] == 1 and r["maximum_retries_per_request"] == 0
+    assert r["object_key"] == KEY and r["object_expected_etag"] == ETAG
+    assert r["single_workflow_dispatch_authorized"] is True
+    assert r["release_consumed"] is False and r["rerun_authorized"] is False
+    assert r["wallet_address_retention_authorized"] is False
+    assert r["wallet_aggregation_authorized"] is False
+    assert r["economic_fill_field_processing_authorized"] is False
+    assert all(v is False for v in r["downstream_authorizations"].values())
+    assert all(v is False for v in r["trading_authorizations"].values())
+    assert r["network_requests_executed_by_release_creation"] == 0
+    assert r["aws_iam_mutations_executed_by_release_creation"] == 0
 
 
 def validate_later_implementation_if_present() -> None:
@@ -52,7 +78,7 @@ def validate_later_implementation_if_present() -> None:
     assert all(v is False for v in i["downstream_authorizations"].values())
     assert all(v is False for v in i["trading_authorizations"].values())
     assert WORKFLOW.is_file()
-    assert not RELEASE.exists()
+    validate_later_release_if_present()
 
 
 def main() -> int:
