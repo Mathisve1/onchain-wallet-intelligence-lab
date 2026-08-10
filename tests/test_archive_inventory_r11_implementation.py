@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
 PERMISSION = BASE / "r11_implementation/R11_PERMISSION_POLICY.json"
 SELECTION = BASE / "r11/R11_72H_SELECTION.json"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 
 class R11ImplementationTests(unittest.TestCase):
@@ -51,7 +52,7 @@ class R11ImplementationTests(unittest.TestCase):
         self.assertEqual(rows[0]["active_day_count"], 2)
         self.assertEqual(rows[0]["fill_count"], 2)
 
-    def test_workflow_candidates_remain_frozen_and_data_route_is_uninstalled(self) -> None:
+    def test_workflow_candidates_remain_frozen_and_later_installation_is_byte_exact(self) -> None:
         preflight = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-role-preflight.yml"
         data = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
         installed_preflight = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
@@ -60,7 +61,14 @@ class R11ImplementationTests(unittest.TestCase):
         self.assertTrue(data.exists())
         if installed_preflight.exists():
             self.assertEqual(installed_preflight.read_bytes(), preflight.read_bytes())
-        self.assertFalse(installed_data.exists())
+        if DATA_CONTRACT.exists():
+            contract = json.loads(DATA_CONTRACT.read_text(encoding="utf-8"))
+            self.assertEqual(contract["status"], "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE")
+            self.assertTrue(installed_data.exists())
+            self.assertEqual(installed_data.read_bytes(), data.read_bytes())
+            self.assertFalse(contract["single_workflow_dispatch_authorized"])
+        else:
+            self.assertFalse(installed_data.exists())
         self.assertIn("workflow_dispatch:", preflight.read_text(encoding="utf-8"))
         self.assertIn("workflow_dispatch:", data.read_text(encoding="utf-8"))
 
