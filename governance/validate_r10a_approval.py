@@ -10,8 +10,12 @@ PREREG = BASE / "r10a/R10A_TIMESTAMP_PARTITION_PREREGISTRATION.json"
 APPROVAL_DIR = BASE / "r10a_approval"
 TEXT = APPROVAL_DIR / "APPROVE_HL_ARCHIVE_R10A_TIMESTAMP_PARTITION_DIAGNOSTIC_001.txt"
 RECEIPT = APPROVAL_DIR / "APPROVE_HL_ARCHIVE_R10A_TIMESTAMP_PARTITION_DIAGNOSTIC_001.json"
+IMPLEMENTATION = BASE / "r10a_implementation/R10A_IMPLEMENTATION_CONTRACT.json"
+WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r10a-timestamp-partition-diagnostic.yml"
+RELEASE = BASE / "r10a_runtime/R10A_EXECUTION_RELEASE.json"
 EXPECTED_SHA = "c990a1636b745908d9f58c4b119998dfa91b4e8740764081bbb19cb8ad8904f1"
 REVIEWED = "7db55db0be5efeeadb569abb5faaadf3bc78254a"
+APPROVAL_MERGE = "b67e4a0ca91a411230f3c1b8cebac047d6c69261"
 ROLE = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 KEY = "node_fills_by_block/hourly/20250727/9.lz4"
 ETAG = '"5a9941a240118a57f77a4c3ee95b8430-3"'
@@ -21,6 +25,34 @@ def load(path: Path) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
+
+
+def validate_later_implementation_if_present() -> None:
+    if not IMPLEMENTATION.exists():
+        assert not WORKFLOW.exists()
+        assert not RELEASE.exists()
+        return
+    i = load(IMPLEMENTATION)
+    assert i["diagnostic_id"] == "HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001"
+    assert i["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
+    assert i["r10a_preregistration_merge_commit"] == REVIEWED
+    assert i["r10a_approval_merge_commit"] == APPROVAL_MERGE
+    assert i["approval_text_sha256"] == EXPECTED_SHA
+    assert i["role_arn"] == ROLE
+    assert i["role_reused_without_mutation"] is True
+    assert i["new_role_created"] is False
+    assert i["execution_release_required"] is True
+    assert i["execution_release_present"] is False
+    assert i["single_workflow_dispatch_authorized"] is False
+    assert i["aws_oidc_authorized_now"] is False
+    assert i["get_object_authorized_now"] is False
+    assert i["network_requests_executed"] == 0
+    assert i["aws_iam_mutations_executed"] == 0
+    assert i["empirical_result"] is None
+    assert all(v is False for v in i["downstream_authorizations"].values())
+    assert all(v is False for v in i["trading_authorizations"].values())
+    assert WORKFLOW.is_file()
+    assert not RELEASE.exists()
 
 
 def main() -> int:
@@ -70,8 +102,7 @@ def main() -> int:
     assert a["separate_canonical_activation_required"] is True
     assert all(v is False for v in a["downstream_authorizations"].values())
     assert all(v is False for v in a["trading_authorizations"].values())
-    assert not (BASE / "r10a_implementation").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r10a-timestamp-partition-diagnostic.yml").exists()
+    validate_later_implementation_if_present()
     print("R10A_APPROVAL_VALID")
     return 0
 
