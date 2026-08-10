@@ -86,7 +86,7 @@
     ]
   },
   "single_workflow_dispatch_authorized": false,
-  "source_frozen_data_workflow_candidate_sha256": "41614876888f27525c73461cd273e312c4dd40c8",
+  "source_frozen_data_workflow_candidate_sha256": "89d44c623cb2352d691bccbed1932107050f4a66606e9a23146c492bbf65e0f6",
   "stage_id": "HL-ARCHIVE-R10-DATA-WORKFLOW-IMPLEMENTATION-001",
   "status": "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE",
   "trading_authorizations": {
