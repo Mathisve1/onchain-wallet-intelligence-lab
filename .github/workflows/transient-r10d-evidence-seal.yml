@@ -1,0 +1,53 @@
+name: Transient R10D Evidence Seal
+
+on:
+  push:
+    branches:
+      - release/r10d-canonical-activation
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    if: github.repository == 'Mathisve1/onchain-wallet-intelligence-lab'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out exact evidence branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: release/r10d-canonical-activation
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Verify triggering head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "${GITHUB_REF}" = 'refs/heads/release/r10d-canonical-activation'
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+      - name: Remove transient workflow and seal evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -- .github/workflows/transient-r10d-evidence-seal.yml
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          python governance/validate_r10d_execution_evidence.py
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          git add -A
+          git diff --cached --check
+      - name: Commit sealed R10D evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: seal exact R10D execution evidence'
+          git push origin HEAD:release/r10d-canonical-activation
