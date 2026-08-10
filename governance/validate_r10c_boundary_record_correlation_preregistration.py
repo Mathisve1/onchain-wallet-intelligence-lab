@@ -217,7 +217,6 @@ def main() -> int:
     assert "does not justify a 51 ms tolerance" in assessment
 
     template = TEMPLATE.read_text(encoding="utf-8")
-    status = STATUS.read_text(encoding="utf-8")
     assert "APPROVE_HL_ARCHIVE_R10C_BOUNDARY_RECORD_CORRELATION_001" in template
     assert "maximum_get_object_requests=1" in template
     assert "event_array_contents_inspection_authorized=true" in template
@@ -228,8 +227,12 @@ def main() -> int:
     assert "wallet_address_retention_authorized=false" in template
     assert "execution_authorized_by_this_approval=false" in template
     assert "separate_execution_release_required=true" in template
-    assert "AWAITING_SEPARATE_HUMAN_APPROVAL" in status
-    assert "zero remaining request budget" in status
+
+    # APPROVAL_STATUS.md is a mutable lifecycle overlay. The preregistration
+    # validator intentionally does not bind it to a pre-approval state; the
+    # immutable preregistration contract above must remain valid after later,
+    # separately reviewed approval, implementation, release and activation.
+    assert STATUS.exists()
 
     print("R10C_BOUNDARY_RECORD_CORRELATION_PREREGISTRATION_VALID")
     return 0
