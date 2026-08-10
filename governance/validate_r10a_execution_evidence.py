@@ -15,7 +15,7 @@ ARTIFACT_SHA = "c52344b911b439db08a9a369f9016bde87f2925091ce83b97c0ee00744fb1e68
 LEDGER = {
     "r10a-context.json": "d6eab95f9771ed043a098be35e1f4db50aa567168870e0e2a04e3572b3c2d9d3",
     "r10a-result.json": "e1ca787e6b9225db4c69a0b541bccbb518f6d61a1e41bd3439d77e35656edf90",
-    "r10a.rc": "9a271f2a916b0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "r10a.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
 }
 
 
