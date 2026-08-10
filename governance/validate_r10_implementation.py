@@ -14,6 +14,7 @@ from research.archive_inventory.r10_implementation import collector
 R10 = ROOT / "research/archive_inventory/r10"
 APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 IMPL = ROOT / "research/archive_inventory/r10_implementation"
+ROLE_ATTESTATION_DIR = ROOT / "research/archive_inventory/r10_role_attestation"
 CONTRACT = IMPL / "R10_IMPLEMENTATION_CONTRACT.json"
 TRUST = IMPL / "R10_OIDC_TRUST_POLICY.json"
 PERMISSION = IMPL / "R10_PERMISSION_POLICY.json"
@@ -28,6 +29,8 @@ APPROVAL_TXT = APPROVAL / "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R
 
 PREREG_MERGE = "37e4486a7f68982feafcb361bd40dffd546def05"
 APPROVAL_MERGE = "92761986d8dc6bf818eebf7dc0411d24649a27df"
+IMPLEMENTATION_MERGE = "820d0cbbb0f49f800f36025da27a06754d3fc08d"
+ROLE_ATTESTATION_BASE_MAIN = "c2e4e262d74bcf9feebb531d507590d5f9e62c85"
 APPROVAL_SHA = "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 WORKFLOW_NAME = "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10"
@@ -58,6 +61,31 @@ def validate_workflow_candidate(path: Path) -> str:
     assert "role-duration-seconds: 900" in text
     assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
     return text
+
+
+def validate_later_role_attestation_if_present() -> None:
+    if not ROLE_ATTESTATION_DIR.exists():
+        return
+
+    attestation_path = ROLE_ATTESTATION_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
+    evidence_path = ROLE_ATTESTATION_DIR / "R10_ROLE_CREATION_EVIDENCE_MINIMIZED.json"
+    assert attestation_path.is_file()
+    assert evidence_path.is_file()
+
+    attestation = load(attestation_path)
+    evidence = load(evidence_path)
+    assert attestation["canonical_implementation_merge_commit"] == IMPLEMENTATION_MERGE
+    assert attestation["recorded_against_main_commit"] == ROLE_ATTESTATION_BASE_MAIN
+    assert attestation["role_arn"] == ROLE_ARN
+    assert attestation["role_created_and_policies_applied"] is True
+    assert attestation["sts_only_preflight_completed"] is False
+    assert attestation["execution_release_present"] is False
+    assert attestation["canonical_activation_present"] is False
+    assert evidence["role_arn"] == ROLE_ARN
+    assert evidence["s3_requests_observed_during_role_creation"] == 0
+    assert evidence["r10_sts_preflight_executed"] is False
+    assert evidence["r10_execution_release_present"] is False
+    assert evidence["r10_canonical_activation_present"] is False
 
 
 def main() -> int:
@@ -174,7 +202,7 @@ def main() -> int:
 
     assert not PREFLIGHT_INSTALLED.exists()
     assert not DATA_INSTALLED.exists()
-    assert not (ROOT / "research/archive_inventory/r10_role_attestation").exists()
+    validate_later_role_attestation_if_present()
     assert not (ROOT / "research/archive_inventory/r10_runtime").exists()
     collector.validate_static_inputs()
 

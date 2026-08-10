@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "R10_ROLE_CREATION_EVIDENCE_MINIMIZED",
+  "recorded_against_main_commit": "c2e4e262d74bcf9feebb531d507590d5f9e62c85",
+  "evidence_source": "operator-provided AWS CLI output",
+  "aws_account_id": "630956766927",
+  "role_absent_before_creation": true,
+  "role_name": "onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "role_id_observed": "AROAZFZ7UG3HRCQNETP2E",
+  "role_create_date_utc": "2026-08-10T07:24:42+00:00",
+  "role_max_session_duration_seconds": 3600,
+  "trust_policy_sha256_verified_before_creation": "2709fe66f6361d6498e07bdd2f292576c73485772af6d3cabb89a211e46bdcb9",
+  "permission_policy_sha256_verified_before_application": "caab807fb0fbc2f1d2132921a99692f5d3533db8449d9a55e4da0714147177fe",
+  "trust_policy_readback_semantically_matches_canonical": true,
+  "permission_policy_readback_semantically_matches_canonical": true,
+  "inline_policy_names_observed": [
+    "HLArchivePostBoundaryMultiHourR10ExactSixOnly"
+  ],
+  "managed_policies_observed": [],
+  "additional_inline_policies_observed": [],
+  "s3_requests_observed_during_role_creation": 0,
+  "administrative_sts_identity_check_is_not_r10_preflight": true,
+  "r10_sts_preflight_executed": false,
+  "r10_execution_release_present": false,
+  "r10_canonical_activation_present": false,
+  "raw_cli_transcript_retained": false,
+  "aws_credentials_or_session_tokens_retained": false,
+  "evidence_minimization_reason": "Retain only the fields required to bind the operator-created role to the canonical R10 trust and permission policies; do not retain credentials, session tokens or unrelated shell output."
+}
