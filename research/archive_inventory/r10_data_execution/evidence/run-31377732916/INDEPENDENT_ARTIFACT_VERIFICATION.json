@@ -20,7 +20,7 @@
     "r10-context.json": "292c8eb879611370c1d94d1d0eb640d2d785b0da2687c1bb4f2d53b98134e3a6",
     "r10-result.json": "21758e0fc3f6f39398afe9d0de10507ba0c9c96ed612c2423527c5842a973ff4",
     "r10-wallet-features.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "r10.rc": "9a271f2a916b0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    "r10.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
   },
   "internal_ledger_matches_all_retained_files": true,
   "return_code_value": 0,
