@@ -1,0 +1,118 @@
+{
+  "approval_id": "APPROVE_HL_ARCHIVE_POST_BOUNDARY_MULTI_HOUR_FEATURE_R10_001",
+  "approval_text_sha256": "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882",
+  "aws_oidc_authorized": true,
+  "canonical_activation_present": true,
+  "data_workflow_implementation_merge_commit": "791c1c289976346d1fcb2bb6ca8196cebf1a50c7",
+  "data_workflow_sha256": "4d3b85c01a5f529e16e8516a47e83931521438e978a17fdabdf8397b0f0c275e",
+  "decompression_authorized": true,
+  "downstream_authorizations": {
+    "candidate_shortlisting": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "full_population_historical_ingestion": false,
+    "historical_window_beyond_six_hours": false,
+    "legacy_modern_merged_history": false,
+    "market_data_ingestion": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "empirical_result": null,
+  "exact_objects": [
+    {
+      "expected_etag": "\"5a9941a240118a57f77a4c3ee95b8430-3\"",
+      "expected_size_bytes": 18147822,
+      "key": "node_fills_by_block/hourly/20250727/9.lz4",
+      "path_hour_utc": "2025-07-27T09:00:00Z"
+    },
+    {
+      "expected_etag": "\"cb25fba5dc3be80fd8c46dde03144655-3\"",
+      "expected_size_bytes": 21349239,
+      "key": "node_fills_by_block/hourly/20250727/10.lz4",
+      "path_hour_utc": "2025-07-27T10:00:00Z"
+    },
+    {
+      "expected_etag": "\"758da733bb2d3913d0fdd8088b6fb63d-3\"",
+      "expected_size_bytes": 17582600,
+      "key": "node_fills_by_block/hourly/20250727/11.lz4",
+      "path_hour_utc": "2025-07-27T11:00:00Z"
+    },
+    {
+      "expected_etag": "\"d6ee46b1bdfad4026e21d4285ed0cbc5-3\"",
+      "expected_size_bytes": 21672141,
+      "key": "node_fills_by_block/hourly/20250727/12.lz4",
+      "path_hour_utc": "2025-07-27T12:00:00Z"
+    },
+    {
+      "expected_etag": "\"c3c9db0101ff278b5ced13ab278a2b85-3\"",
+      "expected_size_bytes": 20840630,
+      "key": "node_fills_by_block/hourly/20250727/13.lz4",
+      "path_hour_utc": "2025-07-27T13:00:00Z"
+    },
+    {
+      "expected_etag": "\"3c6ab944be1ed8bd12932eb390267a21-3\"",
+      "expected_size_bytes": 21407266,
+      "key": "node_fills_by_block/hourly/20250727/14.lz4",
+      "path_hour_utc": "2025-07-27T14:00:00Z"
+    }
+  ],
+  "execution_release_id": "RELEASE_HL_ARCHIVE_R10_MULTI_HOUR_FEATURE_001",
+  "get_object_authorized": true,
+  "head_object_authorized": false,
+  "list_all_my_buckets_authorized": false,
+  "list_object_versions_authorized": false,
+  "list_objects_v2_authorized": false,
+  "maximum_get_object_requests": 6,
+  "maximum_individual_compressed_bytes": 21672141,
+  "maximum_individual_decompressed_bytes": 268435456,
+  "maximum_monthly_budget_eur": 0,
+  "maximum_one_time_budget_eur": 0.1,
+  "maximum_requests_per_object": 1,
+  "maximum_retries_per_request": 0,
+  "maximum_runtime_seconds": 300,
+  "maximum_total_compressed_bytes": 120999698,
+  "maximum_total_decompressed_bytes": 1073741824,
+  "object_body_download_authorized": true,
+  "pilot_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001",
+  "r10_approval_merge_commit": "92761986d8dc6bf818eebf7dc0411d24649a27df",
+  "r10_implementation_merge_commit": "820d0cbbb0f49f800f36025da27a06754d3fc08d",
+  "r10_role_attestation_merge_commit": "ba7835c8e8ecb1cdc6a1c44c9b679d8f43e7a40e",
+  "r10_sts_preflight_evidence_merge_commit": "5e54d346653f2153c21a50c3d25c755b596a651b",
+  "range_get_authorized": false,
+  "release_candidate_merge_commit": "9b4862ac8ea5499da81d5e4ab40090b077dd9357",
+  "release_consumed": false,
+  "request_order": "PATH_HOUR_ASCENDING",
+  "requester_pays_authorized": true,
+  "rerun_authorized": false,
+  "role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "schema_version": "1.0",
+  "selected_fill_field_processing_authorized": true,
+  "semantic_boundaries": {
+    "active_hour_count_is_wallet_quality_score": false,
+    "six_hour_window_is_sufficient_wallet_performance_history": false,
+    "sum_abs_px_times_sz_notional_proxy_is_copyable_notional": false,
+    "sum_closed_pnl_fill_statistic_is_exact_account_return": false,
+    "sum_closed_pnl_fill_statistic_is_wallet_ranking_score": false
+  },
+  "signing_region": "ap-northeast-1",
+  "single_use_window_start_utc": "2026-08-10T10:00:00Z",
+  "single_workflow_dispatch_authorized": true,
+  "status": "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10_RUN",
+  "stop_after_first_failed_or_mismatched_object": true,
+  "target_bucket": "hl-mainnet-node-data",
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  },
+  "wallet_feature_retention_authorized": true,
+  "window_end_exclusive_utc": "2025-07-27T15:00:00Z",
+  "window_start_utc": "2025-07-27T09:00:00Z",
+  "workflow_name": "Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10",
+  "workflow_path": ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
+}

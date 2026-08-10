@@ -111,7 +111,16 @@ def main() -> int:
     assert consumption["rerun_authorized"] is False
     assert consumption["s3_requests_executed"] == 0
     assert hashlib.sha256(WORKFLOW.read_bytes()).hexdigest() == WORKFLOW_SHA
-    assert not RUNTIME_RELEASE.exists()
+    if RUNTIME_RELEASE.exists():
+        later = load(RUNTIME_RELEASE)
+        assert later["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10_RUN"
+        assert later["release_candidate_merge_commit"] == "9b4862ac8ea5499da81d5e4ab40090b077dd9357"
+        assert later["role_arn"] == ROLE_ARN
+        assert later["single_workflow_dispatch_authorized"] is True
+        assert later["rerun_authorized"] is False
+        assert later["release_consumed"] is False
+        assert all(value is False for value in later["downstream_authorizations"].values())
+        assert all(value is False for value in later["trading_authorizations"].values())
 
     print("R10_DATA_EXECUTION_RELEASE_CANDIDATE_VALID")
     return 0
