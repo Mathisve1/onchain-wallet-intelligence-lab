@@ -55,6 +55,8 @@ def main() -> int:
     assert '"Action":"s3:GetObject"' in text and text.count(OBJECT_ARN)==1
     assert "R10A_EXECUTION_RELEASE.json" in text
     assert text.index('test -f "${RELEASE_PATH}"') < text.index("aws-actions/configure-aws-credentials")
+    assert "python -m research.archive_inventory.r10a_implementation.collector" in text
+    assert "python research/archive_inventory/r10a_implementation/collector.py" not in text
     assert "aws s3" not in text and "aws s3api" not in text
     source=COLLECTOR.read_text(encoding="utf-8")
     for forbidden in ("closedPnl", "feeToken", "startPosition", "sum_abs_px", "wallet_feature"):
