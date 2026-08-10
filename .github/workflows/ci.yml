@@ -7,49 +7,35 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  EXACT_CI_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  finalize-r10b-implementation:
-    if: github.event_name == 'pull_request' && github.head_ref == 'research/r10b-implementation'
+  test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Check out exact source branch
+      - name: Check out exact CI commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: research/r10b-implementation
+          ref: ${{ env.EXACT_CI_COMMIT }}
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: false
+      - name: Verify exact CI commit identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXACT_CI_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+          observed="$(git rev-parse HEAD)"
+          test "${observed}" = "${EXACT_CI_COMMIT}"
       - name: Set up pinned Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12.13'
           check-latest: false
-      - name: Restore canonical read-only Research CI
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --no-tags --depth=1 origin main
-          git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
-      - name: Regenerate exact repository manifest
-        run: python governance/regenerate_manifest.py --write
-      - name: Validate immutable R10B lineage
-        run: |
-          python governance/validate_r10b_batch_metadata_lexical_preregistration.py
-          python governance/validate_r10b_approval.py
-          python governance/validate_r10b_implementation.py
-      - name: Run full test suite
+      - name: Run unit and mutation tests
         run: python -m unittest discover -s tests -v
       - name: Validate repository governance
         run: python governance/validate_repository.py
-      - name: Commit finalized snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --check
-          git commit -m "governance: freeze exact R10B implementation"
-          git push origin HEAD:research/r10b-implementation
