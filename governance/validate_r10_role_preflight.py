@@ -139,7 +139,7 @@ def main() -> int:
     assert "R10_STS_PREFLIGHT_RELEASE.json" in text
     assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
 
-    assert not DATA_WORKFLOW.exists()
+    assert DATA_WORKFLOW.is_file()
     if RUNTIME.exists():
         assert RELEASE_CANDIDATE.is_file()
         release_candidate = load(RELEASE_CANDIDATE)

@@ -115,7 +115,7 @@ def main() -> int:
     assert '"Effect":"Deny","Action":"s3:*","Resource":"*"' in text
     assert "aws s3" not in text
     assert "aws s3api" not in text
-    assert not DATA_WORKFLOW.exists()
+    assert DATA_WORKFLOW.is_file()
     runtime_files = sorted(path.name for path in RELEASE.parent.iterdir() if path.is_file())
     assert runtime_files == ["R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"]
 

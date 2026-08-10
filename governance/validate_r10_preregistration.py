@@ -268,7 +268,7 @@ def main() -> int:
     assert not (R10 / "R10_PERMISSION_POLICY.json").exists()
     assert not (R10 / "R10_EXECUTION_RELEASE.json").exists()
     assert not (R10 / "R10_EXECUTION_RELEASE_CANONICALIZATION.json").exists()
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists()
+    assert (ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").is_file()
 
     print("R10_PREREGISTRATION_VALID")
     return 0

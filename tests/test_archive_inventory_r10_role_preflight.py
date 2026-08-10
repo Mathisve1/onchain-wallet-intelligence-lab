@@ -82,7 +82,7 @@ class R10RolePreflightTests(unittest.TestCase):
         self.assertFalse(release["s3_access_authorized_during_preflight"])
         self.assertEqual(release["aws_sts_requests_executed"], 0)
         self.assertEqual(release["s3_requests_executed"], 0)
-        self.assertFalse(DATA_WORKFLOW.exists())
+        self.assertTrue(DATA_WORKFLOW.is_file())
 
     def test_all_downstream_and_trading_authority_remains_closed(self) -> None:
         c = self.load(CONTRACT)

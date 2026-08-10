@@ -73,7 +73,7 @@ class R10STSPreflightReleaseCandidateTests(unittest.TestCase):
             ):
                 self.assertFalse(document[key], key)
             self.assertTrue(all(value is False for value in document["trading_authorizations"].values()))
-        self.assertFalse(DATA_WORKFLOW.exists())
+        self.assertTrue(DATA_WORKFLOW.is_file())
 
     def test_dedicated_validator_passes(self) -> None:
         completed = subprocess.run(

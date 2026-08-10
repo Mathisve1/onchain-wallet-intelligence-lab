@@ -100,7 +100,7 @@ class ArchiveR10PreregistrationTests(unittest.TestCase):
         self.assertFalse((R10 / "approvals").exists())
         self.assertFalse((R10 / "collector.py").exists())
         self.assertFalse((R10 / "R10_IMPLEMENTATION_CONTRACT.json").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").is_file())
 
     def test_dedicated_validator_passes(self) -> None:
         completed = subprocess.run(

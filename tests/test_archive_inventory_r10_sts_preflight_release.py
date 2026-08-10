@@ -55,7 +55,7 @@ class R10STSPreflightReleaseTests(unittest.TestCase):
         ):
             self.assertFalse(r[key], key)
         self.assertTrue(all(value is False for value in r["trading_authorizations"].values()))
-        self.assertFalse(DATA_WORKFLOW.exists())
+        self.assertTrue(DATA_WORKFLOW.is_file())
 
     def test_inert_release_candidate_remains_immutable(self) -> None:
         c = self.load(CANDIDATE)
