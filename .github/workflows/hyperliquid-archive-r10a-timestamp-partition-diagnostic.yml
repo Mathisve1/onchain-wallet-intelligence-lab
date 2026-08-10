@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python research/archive_inventory/r10a_implementation/collector.py --result-output "${RUNNER_TEMP}/r10a-result.json"
+          python -m research.archive_inventory.r10a_implementation.collector --result-output "${RUNNER_TEMP}/r10a-result.json"
           rc=$?
           set -e
           printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r10a.rc"
