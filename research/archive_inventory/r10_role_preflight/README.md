@@ -6,4 +6,4 @@ The workflow is deliberately fail-closed before AWS OIDC: a separate single-use 
 
 The only explicit AWS CLI call in the preflight is `aws sts get-caller-identity --output json`. No S3 command, Requester Pays request, object access, decompression, data workflow installation, wallet ranking, PnL/alpha interpretation, copyability analysis or trading/capital authority is opened by this stage.
 
-The next gate is a separate inert preflight release candidate followed by a canonical single-use release. Until that release exists, the installed workflow cannot pass its pre-OIDC release gate.
+`R10_STS_PREFLIGHT_RELEASE_CANDIDATE.json` is deliberately inert: it records the exact future single-use envelope but keeps dispatch and STS authorization false, with no activation timestamp or anchor commit. A later canonical activation must create the separate runtime release. Until that release exists, the installed workflow cannot pass its pre-OIDC release gate.
