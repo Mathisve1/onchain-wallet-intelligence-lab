@@ -1,0 +1,12 @@
+{
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-scaling-r11",
+  "object_bytes_downloaded": 0,
+  "observed_account_id": "630956766927",
+  "observed_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-scaling-r11/HLArchiveR11STSPreflight",
+  "preflight_id": "HL-ARCHIVE-R11-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "s3_http_request_count": 0,
+  "schema_version": "1.0",
+  "technical_result": "DEDICATED_R11_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN",
+  "terminal_status": "R11_STS_PREFLIGHT_PASS"
+}
