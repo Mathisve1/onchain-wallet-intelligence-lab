@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
 ATTEST_DIR = BASE / "r10_role_attestation"
 IMPL_DIR = BASE / "r10_implementation"
+PREFLIGHT_DIR = BASE / "r10_role_preflight"
 
 TEXT = ATTEST_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.txt"
 ATTESTATION = ATTEST_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
@@ -15,6 +16,7 @@ EVIDENCE = ATTEST_DIR / "R10_ROLE_CREATION_EVIDENCE_MINIMIZED.json"
 TRUST = IMPL_DIR / "R10_OIDC_TRUST_POLICY.json"
 PERMISSION = IMPL_DIR / "R10_PERMISSION_POLICY.json"
 IMPLEMENTATION = IMPL_DIR / "R10_IMPLEMENTATION_CONTRACT.json"
+PREFLIGHT_CONTRACT = PREFLIGHT_DIR / "R10_STS_PREFLIGHT_CONTRACT.json"
 PREFLIGHT_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
 
@@ -24,6 +26,7 @@ EXPECTED_PERMISSION_SHA = "caab807fb0fbc2f1d2132921a99692f5d3533db8449d9a55e4da0
 EXPECTED_ROLE_NAME = "onchain-wallet-intelligence-hl-archive-multihour-r10"
 EXPECTED_ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 EXPECTED_INLINE_POLICY = "HLArchivePostBoundaryMultiHourR10ExactSixOnly"
+ROLE_ATTESTATION_MERGE = "ba7835c8e8ecb1cdc6a1c44c9b679d8f43e7a40e"
 
 
 def sha256(path: Path) -> str:
@@ -99,8 +102,7 @@ def main() -> int:
     assert e["raw_cli_transcript_retained"] is False
     assert e["aws_credentials_or_session_tokens_retained"] is False
 
-    # The implementation snapshot remains immutable/inert; the separate attestation
-    # records the real-world role creation without rewriting prior authority state.
+    # The immutable implementation snapshot keeps its original zero-runtime fields.
     assert impl["role_creation_performed"] is False
     assert impl["role_attestation_present"] is False
     assert impl["sts_preflight_release_present"] is False
@@ -115,8 +117,20 @@ def main() -> int:
     assert impl["wallet_feature_rows_created"] == 0
     assert impl["empirical_result"] is None
 
-    # Role attestation alone must not install either OIDC workflow.
-    assert not PREFLIGHT_WORKFLOW.exists()
+    # A later, separately reviewed STS-only preflight implementation may install
+    # only the preflight workflow. The attestation itself remains unchanged/inert.
+    if PREFLIGHT_CONTRACT.exists():
+        preflight = json.loads(PREFLIGHT_CONTRACT.read_text(encoding="utf-8"))
+        assert preflight["status"] == "IMPLEMENTED_AWAITING_SEPARATE_PREFLIGHT_RELEASE"
+        assert preflight["role_attestation_merge_commit"] == ROLE_ATTESTATION_MERGE
+        assert preflight["role_arn"] == EXPECTED_ROLE_ARN
+        assert preflight["preflight_release_present"] is False
+        assert preflight["preflight_execution_authorized"] is False
+        assert preflight["sts_get_caller_identity_authorized"] is False
+        assert preflight["s3_requests_executed"] == 0
+        assert PREFLIGHT_WORKFLOW.is_file()
+    else:
+        assert not PREFLIGHT_WORKFLOW.exists()
     assert not DATA_WORKFLOW.exists()
 
     print("R10_ROLE_OPERATOR_ATTESTATION_VALID")
