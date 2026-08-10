@@ -16,10 +16,36 @@ RELEASE = BASE / "r10a_runtime/R10A_EXECUTION_RELEASE.json"
 APPROVAL_SHA = "c990a1636b745908d9f58c4b119998dfa91b4e8740764081bbb19cb8ad8904f1"
 ROLE = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 OBJECT_ARN = "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/9.lz4"
+CANDIDATE_MERGE = "e67b42ca6b605d3762604c46830df27d9d9574ec"
 
 
 def load(path: Path) -> dict:
     value=json.loads(path.read_text(encoding="utf-8")); assert isinstance(value,dict); return value
+
+
+def validate_later_release_if_present() -> None:
+    if not RELEASE.exists():
+        return
+    r=load(RELEASE)
+    assert r["diagnostic_id"]=="HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001"
+    assert r["status"]=="RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10A_RUN"
+    assert r["r10a_implementation_merge_commit"]=="91eca6f1c93ef58d889b9d8b78fcee81731dd2cc"
+    assert r["release_candidate_merge_commit"]==CANDIDATE_MERGE
+    assert r["approval_text_sha256"]==APPROVAL_SHA
+    assert r["role_arn"]==ROLE and r["role_reuse_without_mutation"] is True
+    assert r["single_workflow_dispatch_authorized"] is True
+    assert r["rerun_authorized"] is False and r["release_consumed"] is False
+    assert r["maximum_get_object_requests"]==1 and r["maximum_requests_per_object"]==1 and r["maximum_retries_per_request"]==0
+    assert r["requester_pays_authorized"] is True and r["get_object_authorized"] is True
+    assert r["decompression_authorized"] is True and r["timestamp_processing_authorized"] is True and r["aggregate_alignment_retention_authorized"] is True
+    assert r["wallet_address_retention_authorized"] is False
+    assert r["wallet_aggregation_authorized"] is False
+    assert r["economic_fill_field_processing_authorized"] is False
+    assert r["timezone_inference_for_local_time_authorized"] is False
+    assert all(v is False for v in r["downstream_authorizations"].values())
+    assert all(v is False for v in r["trading_authorizations"].values())
+    assert r["network_requests_executed_by_release_creation"]==0
+    assert r["aws_iam_mutations_executed_by_release_creation"]==0
 
 
 def main() -> int:
@@ -45,7 +71,7 @@ def main() -> int:
     assert i["single_workflow_dispatch_authorized"] is False and i["aws_oidc_authorized_now"] is False and i["get_object_authorized_now"] is False
     assert i["network_requests_executed"]==0 and i["aws_iam_mutations_executed"]==0 and i["empirical_result"] is None
     assert all(v is False for v in i["downstream_authorizations"].values()) and all(v is False for v in i["trading_authorizations"].values())
-    assert COLLECTOR.is_file() and WORKFLOW.is_file() and not RELEASE.exists()
+    assert COLLECTOR.is_file() and WORKFLOW.is_file()
     text=WORKFLOW.read_text(encoding="utf-8")
     assert text.startswith("name: Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10\n")
     assert "run-name: R10A timestamp partition diagnostic" in text
@@ -62,6 +88,7 @@ def main() -> int:
     for forbidden in ("closedPnl", "feeToken", "startPosition", "sum_abs_px", "wallet_feature"):
         assert forbidden not in source
     assert "pair[0]" in source and "wallet_address_retained\": False" in source
+    validate_later_release_if_present()
     print("R10A_IMPLEMENTATION_VALID")
     return 0
 
