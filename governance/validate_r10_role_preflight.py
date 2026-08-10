@@ -157,7 +157,7 @@ def main() -> int:
         assert release["s3_access_authorized_during_preflight"] is False
         assert release["aws_sts_requests_executed"] == 0
         assert release["s3_requests_executed"] == 0
-        assert sorted(path.name for path in RUNTIME.iterdir() if path.is_file()) == ["R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"]
+        assert sorted(path.name for path in RUNTIME.iterdir() if path.is_file()) == ["R10_EXECUTION_RELEASE_CANONICALIZATION.json", "R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"]
 
     print("R10_ROLE_STS_PREFLIGHT_IMPLEMENTATION_VALID")
     return 0

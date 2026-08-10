@@ -31,7 +31,7 @@ class R10DataExecutionReleaseCandidateTests(unittest.TestCase):
         self.assertFalse(c["get_object_authorized"])
         self.assertFalse(c["wallet_feature_retention_authorized"])
         self.assertIsNone(c["empirical_result"])
-        self.assertFalse(RUNTIME_RELEASE.exists())
+        self.assertTrue(RUNTIME_RELEASE.is_file())
 
     def test_candidate_preserves_exact_six_object_budget_and_transport_envelope(self) -> None:
         c = self.load()
