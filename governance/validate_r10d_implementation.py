@@ -14,7 +14,7 @@ COLLECTOR = BASE / "r10d_implementation/collector.py"
 WORKFLOW = BASE / "r10d_implementation/workflows/hyperliquid-archive-r10d-record-anchored-multihour-feature.yml"
 INSTALLED = ROOT / ".github/workflows/hyperliquid-archive-r10d-record-anchored-multihour-feature.yml"
 ROLE_ATTESTATION = BASE / "r10_role_attestation/R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
-STS_ATTESTATION = BASE / "r10_role_attestation/evidence/R10_STS_PREFLIGHT_ATTESTATION.json"
+STS_ATTESTATION = BASE / "r10_role_preflight/HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001-ATTESTATION.json"
 
 PREREG_MERGE = "b8e8d1080be27ff9db3fb639804b4040fdc7c2a0"
 APPROVAL_MERGE = "95bc1a8c2f929e9266f0ae8c43e7cc2b38b40f11"
@@ -59,9 +59,14 @@ def main() -> int:
     assert role["status"] == "ATTESTED_EXACT_R10_ROLE"
     assert role["role_arn"] == ROLE
     assert role["existing_r4_role_modified"] is False
-    assert sts["status"] == "ATTESTED_R10_STS_PREFLIGHT_PASS"
-    assert sts["technical_result"] == "STS_IDENTITY_MATCH"
-    assert sts["s3_requests_executed"] == 0
+    assert sts["terminal_status"] == "R10_STS_PREFLIGHT_PASS"
+    assert sts["technical_result"] == "DEDICATED_R10_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN"
+    assert sts["expected_role_arn"] == ROLE
+    assert sts["operator_attestation_independently_verified_by_preflight"] is True
+    assert sts["preflight_release_consumed"] is True
+    assert sts["rerun_authorized"] is False
+    assert sts["s3_http_request_count"] == 0
+    assert sts["object_bytes_downloaded"] == 0
 
     targets = i["exact_network_targets"]
     assert [row["key"] for row in targets] == EXPECTED_KEYS
@@ -156,6 +161,7 @@ def main() -> int:
     assert '"Action":"s3:GetObject"' in workflow
     assert "RAW_LOCAL_PREFIX_PLUS_BLOCK_PREFIX_NO_NUMERIC_TOLERANCE_V1" in workflow
     assert "R10D_EXECUTION_RELEASE.json" in workflow
+    assert "r10_role_preflight/HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001-ATTESTATION.json" in workflow
     assert workflow.index("Prove exact single-use R10D release before OIDC") < workflow.index("Assume exact existing R10 role with exact-six session scope")
     if INSTALLED.exists():
         assert INSTALLED.read_bytes() == WORKFLOW.read_bytes()
