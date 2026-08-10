@@ -1,0 +1,20 @@
+{
+  "derivation_id": "HL-ARCHIVE-R11-72H-SELECTION-DERIVATION-001",
+  "derived_at": "2026-08-10",
+  "independently_downloaded_artifact_sha256": "1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88",
+  "network_requests_to_aws_during_derivation": 0,
+  "object_bodies_read_during_derivation": false,
+  "provider_artifact_digest": "sha256:1049509ef12f1ef2a312f6ded1d443b434e2ed860503a264f103a73c2a70cf88",
+  "provider_digest_matches_independent_download": true,
+  "schema_version": "1.0",
+  "selection_entry_count": 72,
+  "selection_method": "FILTER_CANONICAL_R3_COMPLETE_NODE_FILLS_BY_BLOCK_INVENTORY_BY_PARSED_PATH_HOUR_THEN_SORT_ASCENDING",
+  "selection_only_uses_retained_metadata_fields": ["key","size_bytes","etag","storage_class"],
+  "selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+  "selection_window_end_exclusive_utc": "2025-07-31T00:00:00Z",
+  "selection_window_start_utc": "2025-07-28T00:00:00Z",
+  "source_r3_artifact_id": 9034170863,
+  "source_r3_run_id": 31299905850,
+  "source_raw_result_bytes": 3667237,
+  "source_raw_result_sha256": "94c3e77a05de2363b95abdce718dfd61f1b440f3d9c3972a0d03ce28a9edc479"
+}
