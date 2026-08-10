@@ -20,7 +20,7 @@ env:
   EXPECTED_AWS_ACCOUNT_ID: '630956766927'
   R10D_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
   ROLE_ATTESTATION_PATH: research/archive_inventory/r10_role_attestation/R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json
-  STS_EVIDENCE_PATH: research/archive_inventory/r10_role_attestation/evidence/R10_STS_PREFLIGHT_ATTESTATION.json
+  STS_EVIDENCE_PATH: research/archive_inventory/r10_role_preflight/HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001-ATTESTATION.json
   EXECUTION_RELEASE_PATH: research/archive_inventory/r10d_runtime/R10D_EXECUTION_RELEASE.json
   AWS_EC2_METADATA_DISABLED: 'true'
   AWS_PAGER: ''
@@ -80,9 +80,14 @@ jobs:
           assert role['status']=='ATTESTED_EXACT_R10_ROLE'
           assert role['role_arn']==expected_role
           assert role['existing_r4_role_modified'] is False
-          assert sts['status']=='ATTESTED_R10_STS_PREFLIGHT_PASS'
-          assert sts['technical_result']=='STS_IDENTITY_MATCH'
-          assert sts['s3_requests_executed']==0
+          assert sts['terminal_status']=='R10_STS_PREFLIGHT_PASS'
+          assert sts['technical_result']=='DEDICATED_R10_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN'
+          assert sts['expected_role_arn']==expected_role
+          assert sts['operator_attestation_independently_verified_by_preflight'] is True
+          assert sts['preflight_release_consumed'] is True
+          assert sts['rerun_authorized'] is False
+          assert sts['s3_http_request_count']==0
+          assert sts['object_bytes_downloaded']==0
           assert release['status']=='RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10D_RUN'
           assert release['role_arn']==expected_role
           assert release['single_workflow_dispatch_authorized'] is True
