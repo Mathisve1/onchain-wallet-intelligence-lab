@@ -12,6 +12,7 @@ APPROVAL_TEXT = BASE / "r10c_approval/APPROVE_HL_ARCHIVE_R10C_BOUNDARY_RECORD_CO
 IMPLEMENTATION = BASE / "r10c_implementation/R10C_IMPLEMENTATION_CONTRACT.json"
 COLLECTOR = BASE / "r10c_implementation/collector.py"
 WORKFLOW = BASE / "r10c_implementation/workflows/hyperliquid-archive-r10c-boundary-record-correlation.yml"
+INSTALLED_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r10c-boundary-record-correlation.yml"
 
 PREREG_MERGE = "a812f7d5b67203c801f856c85b046af8e136c8f3"
 APPROVAL_MERGE = "00dbe69b5c17df8ef42a9b573589add290e559d8"
@@ -132,7 +133,18 @@ def main() -> int:
     assert "PAIR_SHAPE_AND_FILL_TIME_ONLY" in workflow
     assert "BOUNDARY_RECORD_CORRELATION_UNRESOLVED" in workflow
     assert ".github/workflows/hyperliquid-archive-r10c-boundary-record-correlation.yml" not in impl["workflow_candidate_path"]
-    assert not (ROOT / ".github/workflows/hyperliquid-archive-r10c-boundary-record-correlation.yml").exists()
+
+    # The immutable implementation snapshot remains inert even if a later,
+    # separately reviewed release-candidate stage installs the frozen workflow.
+    # If that later stage is present, it may only install byte-identical bytes.
+    if INSTALLED_WORKFLOW.exists():
+        assert INSTALLED_WORKFLOW.read_bytes() == WORKFLOW.read_bytes()
+
+    # Prior preregistration and approval snapshots never gain runtime authority
+    # merely because a later lifecycle overlay exists.
+    assert all(v is False for v in prereg["current_runtime_authority"].values())
+    assert all(v is False for v in approval["current_runtime_authority"].values())
+    assert approval["execution_authorized_by_this_approval"] is False
 
     print("R10C_IMPLEMENTATION_VALID")
     return 0
