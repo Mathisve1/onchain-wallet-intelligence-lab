@@ -12,6 +12,7 @@ BASE = ROOT / "research/archive_inventory"
 PREFLIGHT = BASE / "r11_role_preflight"
 RUN = PREFLIGHT / "evidence/run-31433889087"
 RUNTIME = BASE / "r11_runtime"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 
 class R11RolePreflightEvidenceTests(unittest.TestCase):
@@ -60,7 +61,7 @@ class R11RolePreflightEvidenceTests(unittest.TestCase):
         self.assertEqual(r["object_bytes_downloaded"], 0)
         self.assertEqual((RUN / "r11-sts.rc").read_text(encoding="utf-8"), "0\n")
 
-    def test_release_is_consumed_once_without_opening_data_or_trading(self) -> None:
+    def test_release_is_consumed_once_without_rewriting_evidence_time_state(self) -> None:
         a = self.load(PREFLIGHT / "HL-ARCHIVE-R11-DEDICATED-ROLE-STS-PREFLIGHT-001-ATTESTATION.json")
         c = self.load(RUNTIME / "R11_STS_PREFLIGHT_RELEASE_CONSUMPTION.json")
         release = self.load(RUNTIME / "R11_STS_PREFLIGHT_RELEASE.json")
@@ -81,9 +82,21 @@ class R11RolePreflightEvidenceTests(unittest.TestCase):
         self.assertFalse(release["release_consumed"])
         self.assertFalse(release["rerun_authorized"])
         self.assertFalse(release["s3_access_authorized_during_preflight"])
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml").exists())
 
-    def test_independent_verification_is_all_pass_and_no_data_authority(self) -> None:
+        installed = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        frozen = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        if DATA_CONTRACT.exists():
+            later = self.load(DATA_CONTRACT)
+            self.assertEqual(later["status"], "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE")
+            self.assertTrue(later["preflight_release_consumed"])
+            self.assertFalse(later["single_workflow_dispatch_authorized"])
+            self.assertFalse(later["get_object_authorized_now"])
+            self.assertTrue(installed.exists())
+            self.assertEqual(installed.read_bytes(), frozen.read_bytes())
+        else:
+            self.assertFalse(installed.exists())
+
+    def test_independent_verification_is_all_pass_and_no_data_authority_at_preflight(self) -> None:
         v = self.load(RUN / "INDEPENDENT_ARTIFACT_VERIFICATION.json")
         self.assertEqual(v["verification_result"], "ALL_CHECKS_PASS")
         self.assertTrue(v["operator_attestation_independently_verified"])
