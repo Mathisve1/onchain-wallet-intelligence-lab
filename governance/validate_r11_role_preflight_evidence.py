@@ -10,6 +10,8 @@ PREFLIGHT = BASE / "r11_role_preflight"
 RUN = PREFLIGHT / "evidence/run-31433889087"
 RUNTIME = BASE / "r11_runtime"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+FROZEN_DATA_WORKFLOW = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 RUN_ID = 31433889087
 JOB_ID = 93603513466
@@ -155,7 +157,7 @@ def main() -> int:
     assert consumption["data_execution_release_present"] is False
     assert consumption["data_execution_activation_authorized_by_this_file"] is False
 
-    # Historical operator attestation and the release remain immutable pre-run snapshots.
+    # Historical operator attestation and release are immutable pre-run snapshots.
     assert operator["operator_attested"] is True
     assert operator["independently_verified_via_r11_sts_preflight"] is False
     assert operator["sts_only_preflight_completed"] is False
@@ -164,7 +166,20 @@ def main() -> int:
     assert release["rerun_authorized"] is False
     assert release["s3_access_authorized_during_preflight"] is False
     assert release["s3_requests_executed"] == 0
-    assert not DATA_WORKFLOW.exists()
+
+    # Later installation does not rewrite the evidence-time statements above.
+    if DATA_CONTRACT.exists():
+        data_contract = load(DATA_CONTRACT)
+        assert data_contract["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
+        assert data_contract["r11_sts_preflight_evidence_merge_commit"] == "db935f6c44639ba2a2fa66d8c1b4d0d1d26b254a"
+        assert data_contract["preflight_release_consumed"] is True
+        assert data_contract["single_workflow_dispatch_authorized"] is False
+        assert data_contract["aws_oidc_authorized_now"] is False
+        assert data_contract["get_object_authorized_now"] is False
+        assert DATA_WORKFLOW.is_file()
+        assert DATA_WORKFLOW.read_bytes() == FROZEN_DATA_WORKFLOW.read_bytes()
+    else:
+        assert not DATA_WORKFLOW.exists()
 
     print("R11_ROLE_STS_PREFLIGHT_EVIDENCE_VALID")
     return 0
