@@ -13,6 +13,7 @@ WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r10a-timestamp-partitio
 RELEASE = BASE / "r10a_runtime/R10A_EXECUTION_RELEASE.json"
 ROLE = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 WORKFLOW_BLOB_SHA = "1aeec8b4fe09a3ddffb85171ca62da94e56cc2ba"
+CANDIDATE_MERGE = "e67b42ca6b605d3762604c46830df27d9d9574ec"
 
 
 def load(path: Path) -> dict:
@@ -23,6 +24,33 @@ def load(path: Path) -> dict:
 
 def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+
+def validate_later_release_if_present() -> None:
+    if not RELEASE.exists():
+        return
+    r = load(RELEASE)
+    assert r["execution_release_id"] == "RELEASE_HL_ARCHIVE_R10A_TIMESTAMP_PARTITION_001"
+    assert r["release_candidate_id"] == "CANDIDATE_RELEASE_HL_ARCHIVE_R10A_TIMESTAMP_PARTITION_001"
+    assert r["diagnostic_id"] == "HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001"
+    assert r["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10A_RUN"
+    assert r["release_candidate_merge_commit"] == CANDIDATE_MERGE
+    assert r["r10a_implementation_merge_commit"] == "91eca6f1c93ef58d889b9d8b78fcee81731dd2cc"
+    assert r["workflow_git_blob_sha"] == WORKFLOW_BLOB_SHA
+    assert r["role_arn"] == ROLE and r["role_reuse_without_mutation"] is True
+    assert r["single_workflow_dispatch_authorized"] is True
+    assert r["rerun_authorized"] is False and r["release_consumed"] is False
+    assert r["maximum_get_object_requests"] == 1 and r["maximum_requests_per_object"] == 1 and r["maximum_retries_per_request"] == 0
+    assert r["object_key"] == "node_fills_by_block/hourly/20250727/9.lz4"
+    assert r["requester_pays_authorized"] is True and r["get_object_authorized"] is True
+    assert r["timestamp_processing_authorized"] is True and r["aggregate_alignment_retention_authorized"] is True
+    assert r["wallet_address_retention_authorized"] is False
+    assert r["wallet_aggregation_authorized"] is False
+    assert r["economic_fill_field_processing_authorized"] is False
+    assert all(v is False for v in r["downstream_authorizations"].values())
+    assert all(v is False for v in r["trading_authorizations"].values())
+    assert r["network_requests_executed_by_release_creation"] == 0
+    assert r["aws_iam_mutations_executed_by_release_creation"] == 0
 
 
 def main() -> int:
@@ -69,7 +97,7 @@ def main() -> int:
     assert i["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
     assert i["execution_release_present"] is False and i["single_workflow_dispatch_authorized"] is False
     assert a["execution_authorized_by_this_approval"] is False
-    assert not RELEASE.exists()
+    validate_later_release_if_present()
     print("R10A_EXECUTION_RELEASE_CANDIDATE_VALID")
     return 0
 
