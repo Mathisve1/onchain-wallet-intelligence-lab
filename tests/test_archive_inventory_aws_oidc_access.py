@@ -116,12 +116,13 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r7 = workflows / "hyperliquid-archive-wallet-index-r7.yml"
         r8a = workflows / "hyperliquid-archive-modern-wallet-index-r8a.yml"
         r9 = workflows / "hyperliquid-archive-modern-wallet-feature-r9.yml"
+        r10_data = workflows / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
         r10_preflight = workflows / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
-        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a, r9, r10_preflight}
+        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a, r9, r10_data}
         for path in allowed:
             self.assertTrue(path.is_file(), path)
+        self.assertFalse(r10_preflight.exists())
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
-        self.assertFalse((workflows / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
         other = "\n".join(path.read_text(encoding="utf-8") for path in sorted(workflows.glob("*.yml")) if path not in allowed)
         self.assertNotIn("id-token: write", other)
         self.assertNotIn("aws-actions/configure-aws-credentials", other)
