@@ -63,12 +63,17 @@ class ArchiveR10ImplementationTests(unittest.TestCase):
         for path in (IMPL / "workflows").glob("*.yml"):
             self.assertIn("role-duration-seconds: 900", path.read_text(encoding="utf-8"))
 
-    def test_workflows_are_frozen_candidates_not_installed_actions(self) -> None:
+    def test_frozen_preflight_candidate_is_installed_byte_exact_but_data_candidate_is_not(self) -> None:
         candidates = IMPL / "workflows"
-        self.assertTrue((candidates / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml").is_file())
-        self.assertTrue((candidates / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml").is_file())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml").exists())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
+        preflight_candidate = candidates / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
+        data_candidate = candidates / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
+        preflight_installed = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
+        data_installed = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
+        self.assertTrue(preflight_candidate.is_file())
+        self.assertTrue(data_candidate.is_file())
+        self.assertTrue(preflight_installed.is_file())
+        self.assertEqual(preflight_candidate.read_bytes(), preflight_installed.read_bytes())
+        self.assertFalse(data_installed.exists())
         for path in candidates.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
             self.assertIn("workflow_dispatch:", text)
