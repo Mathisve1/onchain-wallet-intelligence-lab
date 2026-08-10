@@ -1,0 +1,63 @@
+name: Transient R10D Implementation Manifest Seal
+
+on:
+  push:
+    branches:
+      - research/r10d-implementation
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    if: github.repository == 'Mathisve1/onchain-wallet-intelligence-lab'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: research/r10d-implementation
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Verify triggering head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "${GITHUB_REF}" = 'refs/heads/research/r10d-implementation'
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Validate R10D implementation and focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/validate_r10d_record_anchored_boundary_repair_preregistration.py
+          python governance/validate_r10d_approval.py
+          python governance/validate_r10d_implementation.py
+          python -m unittest discover -s tests -p 'test_archive_inventory_r10d*.py' -v
+
+      - name: Remove transient workflow and regenerate exact manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -- .github/workflows/transient-r10d-implementation-manifest.yml
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          git add -A
+          git diff --cached --check
+
+      - name: Commit sealed implementation manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: seal R10D implementation manifest'
+          git push origin HEAD:research/r10d-implementation
