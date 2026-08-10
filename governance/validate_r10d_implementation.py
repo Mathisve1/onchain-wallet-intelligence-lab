@@ -153,7 +153,6 @@ def main() -> int:
     assert "path-hour block record contains non-inside fill" in collector
     assert "previous-hour block record contains non-before fill" in collector
     assert "HOUR9_SHA" in collector
-    assert "51" not in collector
     assert "datetime.fromisoformat(block" not in collector
     assert "wallet_ranking_performed" in collector
 

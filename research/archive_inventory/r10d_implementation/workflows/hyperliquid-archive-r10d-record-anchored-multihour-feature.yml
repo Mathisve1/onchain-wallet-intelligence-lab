@@ -77,9 +77,15 @@ jobs:
           sts=json.loads(Path(os.environ['STS_EVIDENCE_PATH']).read_text())
           release=json.loads(Path(os.environ['EXECUTION_RELEASE_PATH']).read_text())
           expected_role=os.environ['R10D_ROLE_ARN']
-          assert role['status']=='ATTESTED_EXACT_R10_ROLE'
+          assert role['attestation_id']=='R10_DEDICATED_ROLE_OPERATOR_ATTESTATION'
           assert role['role_arn']==expected_role
+          assert role['role_created_and_policies_applied'] is True
+          assert role['installed_trust_policy_matches_canonical'] is True
+          assert role['installed_permission_policy_matches_canonical'] is True
+          assert role['additional_managed_policies_attached'] is False
+          assert role['additional_inline_policies_attached'] is False
           assert role['existing_r4_role_modified'] is False
+          assert role['operator_attested'] is True
           assert sts['terminal_status']=='R10_STS_PREFLIGHT_PASS'
           assert sts['technical_result']=='DEDICATED_R10_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN'
           assert sts['expected_role_arn']==expected_role
