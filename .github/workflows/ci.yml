@@ -30,49 +30,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > .github/workflows/ci.yml <<'YAML'
-          name: Research CI
-
-          on:
-            pull_request:
-            push:
-              branches: [main]
-            workflow_dispatch:
-
-          permissions:
-            contents: read
-
-          env:
-            EXACT_CI_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-
-          jobs:
-            test:
-              runs-on: ubuntu-24.04
-              timeout-minutes: 10
-              steps:
-                - name: Check out exact CI commit
-                  uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-                  with:
-                    ref: ${{ env.EXACT_CI_COMMIT }}
-                    fetch-depth: 1
-                    persist-credentials: false
-                - name: Verify exact CI commit identity
-                  shell: bash
-                  run: |
-                    set -euo pipefail
-                    [[ "${EXACT_CI_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
-                    observed="$(git rev-parse HEAD)"
-                    test "${observed}" = "${EXACT_CI_COMMIT}"
-                - name: Set up pinned Python
-                  uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-                  with:
-                    python-version: '3.12.13'
-                    check-latest: false
-                - name: Run unit and mutation tests
-                  run: python -m unittest discover -s tests -v
-                - name: Validate repository governance
-                  run: python governance/validate_repository.py
-          YAML
+          git fetch --no-tags --depth=1 origin main
+          git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
           git rm -f .r10b-approval-ci-trigger || true
       - name: Regenerate exact repository manifest
         run: python governance/regenerate_manifest.py --write
