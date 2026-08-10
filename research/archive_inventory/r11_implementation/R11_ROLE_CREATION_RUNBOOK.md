@@ -1,6 +1,6 @@
 # R11 dedicated-role creation runbook
 
-This is an operator gate. It does **not** authorize the 72-object R11 data execution. Do not run any S3 command during this step.
+This is an operator gate. It does **not** authorize the 72-object R11 data execution. Do not issue any S3 command during this step.
 
 ## Frozen identity
 
@@ -63,7 +63,7 @@ aws iam list-role-policies \
 
 Expected state: no managed policies, exactly one inline policy named `HLArchiveR11Exact72Only`, exact canonical trust policy, exact canonical permission policy, and `MaxSessionDuration=7200`.
 
-Do **not** run `aws s3`, `aws s3api`, the R11 preflight workflow or the R11 data workflow during this operator step.
+Do **not** issue S3 CLI commands, trigger the R11 preflight workflow, or trigger the R11 data workflow during this operator step.
 
 ## Required attestation
 
