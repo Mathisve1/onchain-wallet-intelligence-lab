@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0",
+  "diagnostic_id": "HL-ARCHIVE-R10B-BATCH-METADATA-LEXICAL-DIAGNOSTIC-001",
+  "status": "ATTESTED_COMPLETE_BATCH_METADATA_LEXICALLY_CROSSES_PATH_HOUR",
+  "execution_release_id": "RELEASE_HL_ARCHIVE_R10B_BATCH_METADATA_LEXICAL_001",
+  "canonical_dispatch_sha": "de5f6ff5aabcb40650fa8c1f9b94dd305e9ff556",
+  "workflow_run_id": 31395720147,
+  "workflow_run_attempt": 1,
+  "workflow_job_id": 93478017396,
+  "artifact_id": 9065535303,
+  "artifact_name": "r10b-batch-metadata-lexical-31395720147",
+  "artifact_zip_sha256": "6fe553710846794176bc040c87937a719ab83c0cb10101892b3f23749cefc789",
+  "terminal_status": "R10B_BATCH_METADATA_LEXICAL_DIAGNOSTIC_COMPLETE",
+  "technical_result": "BATCH_METADATA_LEXICALLY_CROSSES_PATH_HOUR",
+  "research_conclusion": "BATCH_METADATA_LEXICALLY_CROSSES_PATH_HOUR",
+  "exact_network_observation": {
+    "object_key": "node_fills_by_block/hourly/20250727/9.lz4",
+    "expected_etag": "\"5a9941a240118a57f77a4c3ee95b8430-3\"",
+    "observed_etag": "\"5a9941a240118a57f77a4c3ee95b8430-3\"",
+    "compressed_bytes": 18147822,
+    "compressed_sha256": "42fa96f9d693eb93d184c24a830483cea2e4aa526fc2ffb999619d24e41cc339",
+    "decompressed_bytes": 90089570,
+    "block_record_count": 36029,
+    "local_time_lexical_class_counts": {
+      "DECIMAL_INTEGER_STRING": 0,
+      "ISO8601_NAIVE_FRACTION": 36029,
+      "ISO8601_NAIVE_SECONDS": 0,
+      "ISO8601_OFFSET_FRACTION": 0,
+      "ISO8601_OFFSET_SECONDS": 0,
+      "ISO8601_Z_FRACTION": 0,
+      "ISO8601_Z_SECONDS": 0,
+      "OTHER": 0
+    },
+    "block_time_lexical_class_counts": {
+      "DECIMAL_INTEGER_STRING": 0,
+      "ISO8601_NAIVE_FRACTION": 36029,
+      "ISO8601_NAIVE_SECONDS": 0,
+      "ISO8601_OFFSET_FRACTION": 0,
+      "ISO8601_OFFSET_SECONDS": 0,
+      "ISO8601_Z_FRACTION": 0,
+      "ISO8601_Z_SECONDS": 0,
+      "OTHER": 0
+    },
+    "local_time_prefix_bucket_counts": {
+      "MATCHES_NEXT_DATE_HOUR_PREFIX": 0,
+      "MATCHES_PATH_DATE_HOUR_PREFIX": 36029,
+      "MATCHES_PREVIOUS_DATE_HOUR_PREFIX": 0,
+      "OTHER_PREFIX": 0
+    },
+    "block_time_prefix_bucket_counts": {
+      "MATCHES_NEXT_DATE_HOUR_PREFIX": 0,
+      "MATCHES_PATH_DATE_HOUR_PREFIX": 36028,
+      "MATCHES_PREVIOUS_DATE_HOUR_PREFIX": 1,
+      "OTHER_PREFIX": 0
+    },
+    "local_time_equals_block_time_count": 0,
+    "local_time_differs_from_block_time_count": 36029,
+    "metadata_string_length_min_local_time": 26,
+    "metadata_string_length_max_local_time": 29,
+    "metadata_string_length_min_block_time": 26,
+    "metadata_string_length_max_block_time": 29
+  },
+  "claims_proven": {
+    "exact_one_authorized_getobject_completed": true,
+    "compressed_object_matches_parent_r10a_sha256": true,
+    "all_local_time_values_match_iso8601_naive_fraction_lexical_class": true,
+    "all_block_time_values_match_iso8601_naive_fraction_lexical_class": true,
+    "all_local_time_values_match_path_date_hour_prefix": true,
+    "exactly_one_block_time_value_matches_previous_date_hour_prefix": true,
+    "remaining_36028_block_time_values_match_path_date_hour_prefix": true,
+    "local_time_and_block_time_strings_differ_on_all_36029_records": true,
+    "no_event_wallet_fill_or_economic_processing_was_performed": true
+  },
+  "claims_not_proven": {
+    "local_time_timezone_semantics": false,
+    "block_time_timezone_semantics": false,
+    "local_time_defines_s3_path_hour_partition": false,
+    "block_time_defines_s3_path_hour_partition": false,
+    "fill_time_defines_s3_path_hour_partition": false,
+    "previous_hour_block_time_is_the_record_containing_either_pre_hour_fill": false,
+    "a_51ms_fill_time_tolerance_is_safe_for_general_history": false,
+    "r10_rule_should_be_amended": false,
+    "six_hour_pipeline_would_succeed_after_any_specific_rule_change": false,
+    "wallet_performance_or_quality": false,
+    "copyability": false
+  },
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "new_network_request_requires_new_preregistration_approval_and_release": true,
+  "r10_rule_amendment_authorized": false,
+  "six_hour_execution_authorized": false,
+  "downstream_authorizations": {
+    "historical_window_expansion": false,
+    "wallet_aggregation": false,
+    "wallet_ranking": false,
+    "candidate_shortlisting": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "market_data_ingestion": false,
+    "strategy_inference": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
