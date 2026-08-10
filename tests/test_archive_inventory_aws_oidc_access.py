@@ -123,7 +123,12 @@ class ArchiveAwsOidcAccessTests(unittest.TestCase):
         r10c = workflows / "hyperliquid-archive-r10c-boundary-record-correlation.yml"
         r10d = workflows / "hyperliquid-archive-r10d-record-anchored-multihour-feature.yml"
         r11_preflight = workflows / "hyperliquid-archive-r11-role-preflight.yml"
-        allowed = {identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor, r7, r8a, r9, r10_preflight, r10_data, r10a, r10b, r10c, r10d, r11_preflight}
+        r11_data = workflows / "hyperliquid-archive-r11-72h-persistence.yml"
+        allowed = {
+            identity, r0, region, r2, r3, r4, r4_preflight, r5, r6a, r6a_successor,
+            r7, r8a, r9, r10_preflight, r10_data, r10a, r10b, r10c, r10d,
+            r11_preflight, r11_data,
+        }
         for path in allowed:
             self.assertTrue(path.is_file(), path)
         self.assertFalse((workflows / "hyperliquid-archive-metadata-canary.yml").exists())
