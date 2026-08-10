@@ -121,7 +121,7 @@ def validate_later_preflight_release_if_present() -> None:
         return
     assert PREFLIGHT_RELEASE_CANDIDATE.is_file()
     assert PREFLIGHT_RELEASE.is_file()
-    assert sorted(path.name for path in PREFLIGHT_RUNTIME_DIR.iterdir() if path.is_file()) == ["R10_STS_PREFLIGHT_RELEASE.json"]
+    assert sorted(path.name for path in PREFLIGHT_RUNTIME_DIR.iterdir() if path.is_file()) == ["R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"]
     candidate = load(PREFLIGHT_RELEASE_CANDIDATE)
     release = load(PREFLIGHT_RELEASE)
     assert candidate["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"

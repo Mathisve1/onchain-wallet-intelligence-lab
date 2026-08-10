@@ -48,7 +48,7 @@ class R10STSPreflightReleaseCandidateTests(unittest.TestCase):
         self.assertFalse(r["data_workflow_installation_authorized"])
         self.assertEqual(r["aws_sts_requests_executed"], 0)
         self.assertEqual(r["s3_requests_executed"], 0)
-        self.assertEqual(sorted(path.name for path in RUNTIME.iterdir() if path.is_file()), ["R10_STS_PREFLIGHT_RELEASE.json"])
+        self.assertEqual(sorted(path.name for path in RUNTIME.iterdir() if path.is_file()), ["R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"])
 
     def test_candidate_and_release_open_no_s3_data_or_trading_authority(self) -> None:
         c = self.load(CANDIDATE)

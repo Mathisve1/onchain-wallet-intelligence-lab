@@ -1,0 +1,17 @@
+{
+  "checked_out_commit": "8316f05f8fdfd444073e69e292cb89766ac89d7b",
+  "configure_aws_outcome": "success",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "8316f05f8fdfd444073e69e292cb89766ac89d7b",
+  "event_name": "workflow_dispatch",
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "pilot_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001",
+  "preflight_id": "HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "s3_requests_authorized": false,
+  "s3_requests_executed": 0,
+  "schema_version": "1.0",
+  "terminal_status": "PENDING_AWS_OIDC",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31372438333
+}

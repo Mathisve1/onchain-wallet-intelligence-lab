@@ -1,0 +1,11 @@
+{
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "observed_account_id": "630956766927",
+  "observed_arn": "arn:aws:sts::630956766927:assumed-role/onchain-wallet-intelligence-hl-archive-multihour-r10/HLArchiveR10STSPreflight",
+  "preflight_id": "HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "s3_requests_executed": 0,
+  "schema_version": "1.0",
+  "technical_result": "STS_IDENTITY_MATCH",
+  "terminal_status": "R10_STS_PREFLIGHT_PASS"
+}
