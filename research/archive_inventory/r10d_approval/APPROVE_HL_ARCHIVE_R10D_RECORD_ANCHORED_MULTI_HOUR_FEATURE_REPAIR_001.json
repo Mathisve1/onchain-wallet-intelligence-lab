@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "approval_id": "APPROVE_HL_ARCHIVE_R10D_RECORD_ANCHORED_MULTI_HOUR_FEATURE_REPAIR_001",
+  "pilot_id": "HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001",
+  "status": "OWNER_APPROVED_IMPLEMENTATION_NO_EXECUTION",
+  "reviewed_commit": "b8e8d1080be27ff9db3fb639804b4040fdc7c2a0",
+  "exact_approval_text_sha256": "d8d1466a5da40c4fe32523ba81bfa165e0b88221cc70534f0f0a118870c1275f",
+  "approval_source": "EXPLICIT_CHAT_APPROVAL_EXACT_BLOCK",
+  "approval_source_user_text_first_line": "APPROVE_HL_ARCHIVE_R10D_RECORD_ANCHORED_MULTI_HOUR_FEATURE_REPAIR_001",
+  "approval_received_at_utc": "2026-08-10T17:12:00Z",
+  "approved_future_scope": {
+    "maximum_one_time_budget_eur": 0.10,
+    "maximum_monthly_budget_eur": 0,
+    "maximum_get_object_requests": 6,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "maximum_total_compressed_bytes": 120999698,
+    "maximum_individual_compressed_bytes": 21672141,
+    "maximum_total_decompressed_bytes": 1073741824,
+    "maximum_individual_decompressed_bytes": 268435456,
+    "maximum_runtime_seconds": 300,
+    "request_order": "PATH_HOUR_ASCENDING",
+    "stop_after_first_failed_or_mismatched_object": true,
+    "exact_target_set_inherited_from_reviewed_preregistration": true
+  },
+  "approved_future_transport": {
+    "requester_pays": true,
+    "get_object": true,
+    "head_object": false,
+    "range_get": false,
+    "list_objects_v2": false,
+    "list_object_versions": false,
+    "list_all_my_buckets": false,
+    "get_object_attributes": false,
+    "get_object_version": false,
+    "http_redirect_following": false
+  },
+  "approved_role_reuse": {
+    "existing_dedicated_r10_role_reuse": true,
+    "existing_dedicated_r10_role_mutation": false,
+    "new_role_creation": false,
+    "bound_existing_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
+  },
+  "approved_record_anchored_alignment_rule": {
+    "metadata_timezone_parsing": false,
+    "metadata_timezone_inference": false,
+    "metadata_datetime_conversion": false,
+    "local_time_raw_prefix_must_match_source_path_hour_for_every_record": true,
+    "block_time_raw_prefix_allowed_buckets": [
+      "MATCHES_PATH_DATE_HOUR_PREFIX",
+      "MATCHES_PREVIOUS_DATE_HOUR_PREFIX"
+    ],
+    "block_time_next_or_other_prefix_is_fail_closed": true,
+    "fill_time_integer_milliseconds_processing": true,
+    "numeric_tolerance_authorized": false,
+    "path_block_record_allowed_fill_partitions": [
+      "INSIDE_PATH_HOUR"
+    ],
+    "previous_block_record_allowed_fill_partitions": [
+      "BEFORE_PATH_HOUR"
+    ],
+    "previous_block_record_before_fill_must_be_within_immediately_previous_epoch_hour": true,
+    "after_path_hour_fill_count_required_for_success": 0
+  },
+  "selected_fill_fields_for_transient_processing": [
+    "coin",
+    "side",
+    "time",
+    "px",
+    "sz",
+    "closedPnl",
+    "tid",
+    "crossed",
+    "liquidation"
+  ],
+  "wallet_feature_retention_authorized_for_future_separate_execution_release": true,
+  "current_runtime_authority": {
+    "workflow_dispatch": false,
+    "aws_oidc": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "metadata_prefix_processing": false,
+    "selected_fill_field_processing": false,
+    "wallet_feature_retention": false
+  },
+  "downstream_authorizations": {
+    "historical_window_beyond_six_hours": false,
+    "full_population_historical_ingestion": false,
+    "legacy_modern_merged_history": false,
+    "public_api_enrichment": false,
+    "entity_clustering": false,
+    "wallet_ranking": false,
+    "candidate_shortlisting": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "market_data_ingestion": false,
+    "strategy_inference": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "execution_authorized_by_this_approval": false,
+  "separate_execution_release_required": true,
+  "separate_canonical_activation_required": true,
+  "reason": "REPAIR_R10_PATH_HOUR_ALIGNMENT_WITH_RECORD_ANCHORED_RAW_PREFIX_RULE_AND_NO_NUMERIC_TOLERANCE"
+}
