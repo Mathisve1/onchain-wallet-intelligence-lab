@@ -19,6 +19,8 @@ RELEASE = BASE / "r10a_runtime/R10A_EXECUTION_RELEASE.json"
 PARENT_MERGE = "18dbd816bbc33979261247825a5133ee48874d51"
 PREREG_MERGE = "7db55db0be5efeeadb569abb5faaadf3bc78254a"
 APPROVAL_MERGE = "b67e4a0ca91a411230f3c1b8cebac047d6c69261"
+IMPLEMENTATION_MERGE = "91eca6f1c93ef58d889b9d8b78fcee81731dd2cc"
+CANDIDATE_MERGE = "e67b42ca6b605d3762604c46830df27d9d9574ec"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
 OBJECT_KEY = "node_fills_by_block/hourly/20250727/9.lz4"
 OBJECT_ARN = f"arn:aws:s3:::hl-mainnet-node-data/{OBJECT_KEY}"
@@ -30,6 +32,32 @@ def load(path: Path) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict), path
     return value
+
+
+def validate_later_release_if_present() -> None:
+    if not RELEASE.exists():
+        return
+    r = load(RELEASE)
+    assert r["diagnostic_id"] == "HL-ARCHIVE-R10A-TIMESTAMP-PARTITION-DIAGNOSTIC-001"
+    assert r["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10A_RUN"
+    assert r["r10a_preregistration_merge_commit"] == PREREG_MERGE
+    assert r["r10a_approval_merge_commit"] == APPROVAL_MERGE
+    assert r["r10a_implementation_merge_commit"] == IMPLEMENTATION_MERGE
+    assert r["release_candidate_merge_commit"] == CANDIDATE_MERGE
+    assert r["role_arn"] == ROLE_ARN
+    assert r["maximum_get_object_requests"] == 1
+    assert r["maximum_requests_per_object"] == 1
+    assert r["maximum_retries_per_request"] == 0
+    assert r["object_key"] == OBJECT_KEY
+    assert r["object_expected_size_bytes"] == OBJECT_SIZE
+    assert r["object_expected_etag"] == OBJECT_ETAG
+    assert r["single_workflow_dispatch_authorized"] is True
+    assert r["release_consumed"] is False and r["rerun_authorized"] is False
+    assert r["wallet_address_retention_authorized"] is False
+    assert r["wallet_aggregation_authorized"] is False
+    assert r["economic_fill_field_processing_authorized"] is False
+    assert all(v is False for v in r["downstream_authorizations"].values())
+    assert all(v is False for v in r["trading_authorizations"].values())
 
 
 def validate_later_implementation_if_present() -> None:
@@ -56,7 +84,7 @@ def validate_later_implementation_if_present() -> None:
     assert all(v is False for v in i["downstream_authorizations"].values())
     assert all(v is False for v in i["trading_authorizations"].values())
     assert WORKFLOW.is_file()
-    assert not RELEASE.exists()
+    validate_later_release_if_present()
 
 
 def main() -> int:
