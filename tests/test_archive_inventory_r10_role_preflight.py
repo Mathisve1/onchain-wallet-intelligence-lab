@@ -15,6 +15,7 @@ CANDIDATE = BASE / "r10_implementation/workflows/hyperliquid-archive-post-bounda
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
 RUNTIME = BASE / "r10_runtime"
+RELEASE = RUNTIME / "R10_STS_PREFLIGHT_RELEASE.json"
 
 EXPECTED_WORKFLOW_SHA = "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d"
 EXPECTED_ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
@@ -64,16 +65,28 @@ class R10RolePreflightTests(unittest.TestCase):
         self.assertIn("retry-max-attempts: 1", text)
         self.assertIn("action-timeout-s: 60", text)
 
-    def test_single_use_release_gate_precedes_oidc_but_release_is_absent(self) -> None:
+    def test_single_use_release_gate_precedes_oidc_and_exact_release_is_active(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertLess(text.index("test -f"), text.index("aws-actions/configure-aws-credentials"))
         self.assertIn("CURRENT_RUN_ATTEMPT", text)
         self.assertIn("R10 STS preflight rerun forbidden", text)
-        self.assertFalse(RUNTIME.exists())
+        self.assertTrue(RELEASE.is_file())
+        release = self.load(RELEASE)
+        self.assertEqual(release["status"], "RELEASED_FOR_EXACTLY_ONE_R10_STS_ONLY_PREFLIGHT")
+        self.assertEqual(release["release_candidate_merge_commit"], "fdefa27955202f4592c9441665f3c40336c501d1")
+        self.assertEqual(release["role_arn"], EXPECTED_ROLE_ARN)
+        self.assertTrue(release["single_workflow_dispatch_authorized"])
+        self.assertFalse(release["rerun_authorized"])
+        self.assertFalse(release["release_consumed"])
+        self.assertTrue(release["sts_get_caller_identity_authorized"])
+        self.assertFalse(release["s3_access_authorized_during_preflight"])
+        self.assertEqual(release["aws_sts_requests_executed"], 0)
+        self.assertEqual(release["s3_requests_executed"], 0)
         self.assertFalse(DATA_WORKFLOW.exists())
 
     def test_all_downstream_and_trading_authority_remains_closed(self) -> None:
         c = self.load(CONTRACT)
+        release = self.load(RELEASE)
         for key in (
             "preflight_s3_requests_authorized",
             "preflight_requester_pays_authorized",
@@ -92,7 +105,19 @@ class R10RolePreflightTests(unittest.TestCase):
             "market_data_ingestion_authorized",
         ):
             self.assertFalse(c[key], key)
+        for key in (
+            "s3_access_authorized_during_preflight",
+            "data_workflow_installation_authorized",
+            "historical_window_expansion_authorized",
+            "wallet_ranking_authorized",
+            "shortlisting_authorized",
+            "pnl_or_alpha_analysis_authorized",
+            "copyability_analysis_authorized",
+            "market_data_ingestion_authorized",
+        ):
+            self.assertFalse(release[key], key)
         self.assertTrue(all(value is False for value in c["trading_authorizations"].values()))
+        self.assertTrue(all(value is False for value in release["trading_authorizations"].values()))
 
     def test_dedicated_validator_passes(self) -> None:
         completed = subprocess.run(

@@ -15,7 +15,11 @@ R10 = ROOT / "research/archive_inventory/r10"
 APPROVAL = ROOT / "research/archive_inventory/r10_approval"
 IMPL = ROOT / "research/archive_inventory/r10_implementation"
 ROLE_ATTESTATION_DIR = ROOT / "research/archive_inventory/r10_role_attestation"
-PREFLIGHT_CONTRACT = ROOT / "research/archive_inventory/r10_role_preflight/R10_STS_PREFLIGHT_CONTRACT.json"
+PREFLIGHT_DIR = ROOT / "research/archive_inventory/r10_role_preflight"
+PREFLIGHT_CONTRACT = PREFLIGHT_DIR / "R10_STS_PREFLIGHT_CONTRACT.json"
+PREFLIGHT_RELEASE_CANDIDATE = PREFLIGHT_DIR / "R10_STS_PREFLIGHT_RELEASE_CANDIDATE.json"
+PREFLIGHT_RUNTIME_DIR = ROOT / "research/archive_inventory/r10_runtime"
+PREFLIGHT_RELEASE = PREFLIGHT_RUNTIME_DIR / "R10_STS_PREFLIGHT_RELEASE.json"
 CONTRACT = IMPL / "R10_IMPLEMENTATION_CONTRACT.json"
 TRUST = IMPL / "R10_OIDC_TRUST_POLICY.json"
 PERMISSION = IMPL / "R10_PERMISSION_POLICY.json"
@@ -33,6 +37,7 @@ APPROVAL_MERGE = "92761986d8dc6bf818eebf7dc0411d24649a27df"
 IMPLEMENTATION_MERGE = "820d0cbbb0f49f800f36025da27a06754d3fc08d"
 ROLE_ATTESTATION_BASE_MAIN = "c2e4e262d74bcf9feebb531d507590d5f9e62c85"
 ROLE_ATTESTATION_MERGE = "ba7835c8e8ecb1cdc6a1c44c9b679d8f43e7a40e"
+PREFLIGHT_RELEASE_CANDIDATE_MERGE = "fdefa27955202f4592c9441665f3c40336c501d1"
 PREFLIGHT_WORKFLOW_SHA = "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d"
 APPROVAL_SHA = "ec631e7e6d40cb63383afd012a989419f97cd603ff144e4c5dfb90c18ff90882"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
@@ -69,12 +74,10 @@ def validate_workflow_candidate(path: Path) -> str:
 def validate_later_role_attestation_if_present() -> None:
     if not ROLE_ATTESTATION_DIR.exists():
         return
-
     attestation_path = ROLE_ATTESTATION_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
     evidence_path = ROLE_ATTESTATION_DIR / "R10_ROLE_CREATION_EVIDENCE_MINIMIZED.json"
     assert attestation_path.is_file()
     assert evidence_path.is_file()
-
     attestation = load(attestation_path)
     evidence = load(evidence_path)
     assert attestation["canonical_implementation_merge_commit"] == IMPLEMENTATION_MERGE
@@ -95,7 +98,6 @@ def validate_later_preflight_implementation_if_present() -> None:
     if not PREFLIGHT_CONTRACT.exists():
         assert not PREFLIGHT_INSTALLED.exists()
         return
-
     preflight = load(PREFLIGHT_CONTRACT)
     assert preflight["status"] == "IMPLEMENTED_AWAITING_SEPARATE_PREFLIGHT_RELEASE"
     assert preflight["role_attestation_merge_commit"] == ROLE_ATTESTATION_MERGE
@@ -112,6 +114,43 @@ def validate_later_preflight_implementation_if_present() -> None:
     assert sha(PREFLIGHT_CANDIDATE) == PREFLIGHT_WORKFLOW_SHA
     assert sha(PREFLIGHT_INSTALLED) == PREFLIGHT_WORKFLOW_SHA
     assert PREFLIGHT_CANDIDATE.read_bytes() == PREFLIGHT_INSTALLED.read_bytes()
+
+
+def validate_later_preflight_release_if_present() -> None:
+    if not PREFLIGHT_RUNTIME_DIR.exists():
+        return
+    assert PREFLIGHT_RELEASE_CANDIDATE.is_file()
+    assert PREFLIGHT_RELEASE.is_file()
+    assert sorted(path.name for path in PREFLIGHT_RUNTIME_DIR.iterdir() if path.is_file()) == ["R10_STS_PREFLIGHT_RELEASE.json"]
+    candidate = load(PREFLIGHT_RELEASE_CANDIDATE)
+    release = load(PREFLIGHT_RELEASE)
+    assert candidate["status"] == "RELEASE_CANDIDATE_AWAITING_CANONICAL_ACTIVATION"
+    assert candidate["canonical_activation_present"] is False
+    assert candidate["single_workflow_dispatch_authorized"] is False
+    assert candidate["sts_get_caller_identity_authorized"] is False
+    assert candidate["s3_access_authorized_during_preflight"] is False
+    assert candidate["aws_sts_requests_executed"] == 0
+    assert candidate["s3_requests_executed"] == 0
+    assert release["status"] == "RELEASED_FOR_EXACTLY_ONE_R10_STS_ONLY_PREFLIGHT"
+    assert release["release_candidate_merge_commit"] == PREFLIGHT_RELEASE_CANDIDATE_MERGE
+    assert release["role_arn"] == ROLE_ARN
+    assert release["workflow_sha256"] == PREFLIGHT_WORKFLOW_SHA
+    assert release["single_workflow_dispatch_authorized"] is True
+    assert release["rerun_authorized"] is False
+    assert release["release_consumed"] is False
+    assert release["operator_attestation_reviewed"] is True
+    assert release["sts_get_caller_identity_authorized"] is True
+    assert release["maximum_explicit_aws_cli_calls"] == 1
+    assert release["s3_access_authorized_during_preflight"] is False
+    assert release["data_workflow_installation_authorized"] is False
+    assert release["wallet_ranking_authorized"] is False
+    assert release["pnl_or_alpha_analysis_authorized"] is False
+    assert release["copyability_analysis_authorized"] is False
+    assert all(value is False for value in release["trading_authorizations"].values())
+    assert release["aws_sts_requests_executed"] == 0
+    assert release["s3_requests_executed"] == 0
+    assert release["object_bytes_downloaded"] == 0
+    assert release["empirical_result"] is None
 
 
 def main() -> int:
@@ -227,9 +266,9 @@ def main() -> int:
     assert "R10_STS_PREFLIGHT_ATTESTATION.json" in data_text
 
     validate_later_preflight_implementation_if_present()
+    validate_later_preflight_release_if_present()
     assert not DATA_INSTALLED.exists()
     validate_later_role_attestation_if_present()
-    assert not (ROOT / "research/archive_inventory/r10_runtime").exists()
     collector.validate_static_inputs()
 
     print("R10_IMPLEMENTATION_VALID")

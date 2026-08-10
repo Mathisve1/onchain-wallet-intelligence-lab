@@ -12,12 +12,14 @@ CONTRACT = PREFLIGHT_DIR / "R10_STS_PREFLIGHT_CONTRACT.json"
 ATTESTATION = BASE / "r10_role_attestation/R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
-RUNTIME_RELEASE = BASE / "r10_runtime/R10_STS_PREFLIGHT_RELEASE.json"
+RUNTIME_DIR = BASE / "r10_runtime"
+RUNTIME_RELEASE = RUNTIME_DIR / "R10_STS_PREFLIGHT_RELEASE.json"
 
 PREFLIGHT_IMPLEMENTATION_MERGE = "57583e70f0067d045dc8d51d9e8c67c27fa8b818"
 ROLE_ATTESTATION_MERGE = "ba7835c8e8ecb1cdc6a1c44c9b679d8f43e7a40e"
 R10_IMPLEMENTATION_MERGE = "820d0cbbb0f49f800f36025da27a06754d3fc08d"
 R10_APPROVAL_MERGE = "92761986d8dc6bf818eebf7dc0411d24649a27df"
+RELEASE_CANDIDATE_MERGE = "fdefa27955202f4592c9441665f3c40336c501d1"
 ATTESTATION_TEXT_SHA = "aa6547983d197941b7ffe90811a77665a7924a8a29fb89955d2f31456cd9c8cd"
 WORKFLOW_SHA = "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d"
 ROLE_ARN = "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10"
@@ -98,6 +100,7 @@ def main() -> int:
     assert contract["preflight_release_present"] is False
     assert contract["preflight_execution_authorized"] is False
     assert contract["sts_get_caller_identity_authorized"] is False
+    assert contract["aws_sts_requests_executed"] == 0
     assert contract["s3_requests_executed"] == 0
     assert attestation["operator_attested"] is True
     assert attestation["sts_only_preflight_completed"] is False
@@ -106,8 +109,23 @@ def main() -> int:
     assert WORKFLOW.is_file()
     assert hashlib.sha256(WORKFLOW.read_bytes()).hexdigest() == WORKFLOW_SHA
     assert not DATA_WORKFLOW.exists()
-    assert not RUNTIME_RELEASE.exists()
-    assert not (BASE / "r10_runtime").exists()
+
+    if RUNTIME_DIR.exists():
+        assert RUNTIME_RELEASE.is_file()
+        release = load(RUNTIME_RELEASE)
+        assert release["status"] == "RELEASED_FOR_EXACTLY_ONE_R10_STS_ONLY_PREFLIGHT"
+        assert release["release_candidate_merge_commit"] == RELEASE_CANDIDATE_MERGE
+        assert release["role_arn"] == ROLE_ARN
+        assert release["workflow_sha256"] == WORKFLOW_SHA
+        assert release["single_workflow_dispatch_authorized"] is True
+        assert release["rerun_authorized"] is False
+        assert release["release_consumed"] is False
+        assert release["sts_get_caller_identity_authorized"] is True
+        assert release["s3_access_authorized_during_preflight"] is False
+        assert release["data_workflow_installation_authorized"] is False
+        assert release["aws_sts_requests_executed"] == 0
+        assert release["s3_requests_executed"] == 0
+        assert sorted(path.name for path in RUNTIME_DIR.iterdir() if path.is_file()) == ["R10_STS_PREFLIGHT_RELEASE.json"]
 
     print("R10_STS_PREFLIGHT_RELEASE_CANDIDATE_VALID")
     return 0

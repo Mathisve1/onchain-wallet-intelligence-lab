@@ -12,6 +12,7 @@ BASE = ROOT / "research/archive_inventory"
 ATTEST_DIR = BASE / "r10_role_attestation"
 IMPL_DIR = BASE / "r10_implementation"
 PREFLIGHT_DIR = BASE / "r10_role_preflight"
+RUNTIME = BASE / "r10_runtime"
 TEXT = ATTEST_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.txt"
 ATTESTATION = ATTEST_DIR / "R10_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
 EVIDENCE = ATTEST_DIR / "R10_ROLE_CREATION_EVIDENCE_MINIMIZED.json"
@@ -19,6 +20,7 @@ TRUST = IMPL_DIR / "R10_OIDC_TRUST_POLICY.json"
 PERMISSION = IMPL_DIR / "R10_PERMISSION_POLICY.json"
 IMPLEMENTATION = IMPL_DIR / "R10_IMPLEMENTATION_CONTRACT.json"
 PREFLIGHT_CONTRACT = PREFLIGHT_DIR / "R10_STS_PREFLIGHT_CONTRACT.json"
+PREFLIGHT_RELEASE = RUNTIME / "R10_STS_PREFLIGHT_RELEASE.json"
 
 EXPECTED_TEXT_SHA = "aa6547983d197941b7ffe90811a77665a7924a8a29fb89955d2f31456cd9c8cd"
 EXPECTED_TRUST_SHA = "2709fe66f6361d6498e07bdd2f292576c73485772af6d3cabb89a211e46bdcb9"
@@ -54,10 +56,11 @@ class R10RoleAttestationTests(unittest.TestCase):
         self.assertFalse(e["raw_cli_transcript_retained"])
         self.assertFalse(e["aws_credentials_or_session_tokens_retained"])
 
-    def test_attestation_remains_inert_while_separate_preflight_is_installed(self) -> None:
+    def test_attestation_remains_inert_while_separate_preflight_release_exists(self) -> None:
         a = self.load(ATTESTATION)
         impl = self.load(IMPLEMENTATION)
         preflight = self.load(PREFLIGHT_CONTRACT)
+        release = self.load(PREFLIGHT_RELEASE)
         self.assertTrue(a["operator_attested"])
         self.assertFalse(a["independently_verified_via_r10_sts_preflight"])
         self.assertTrue(a["sts_only_preflight_required"])
@@ -73,9 +76,17 @@ class R10RoleAttestationTests(unittest.TestCase):
         self.assertFalse(preflight["preflight_execution_authorized"])
         self.assertFalse(preflight["sts_get_caller_identity_authorized"])
         self.assertEqual(preflight["s3_requests_executed"], 0)
+        self.assertEqual(release["status"], "RELEASED_FOR_EXACTLY_ONE_R10_STS_ONLY_PREFLIGHT")
+        self.assertTrue(release["single_workflow_dispatch_authorized"])
+        self.assertFalse(release["rerun_authorized"])
+        self.assertFalse(release["release_consumed"])
+        self.assertTrue(release["sts_get_caller_identity_authorized"])
+        self.assertFalse(release["s3_access_authorized_during_preflight"])
+        self.assertEqual(release["aws_sts_requests_executed"], 0)
+        self.assertEqual(release["s3_requests_executed"], 0)
         self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml").is_file())
         self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
-        self.assertFalse((BASE / "r10_runtime").exists())
+        self.assertEqual(sorted(path.name for path in RUNTIME.iterdir() if path.is_file()), ["R10_STS_PREFLIGHT_RELEASE.json"])
 
     def test_governance_validator_accepts_exact_snapshot(self) -> None:
         result = subprocess.run(
