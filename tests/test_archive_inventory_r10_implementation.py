@@ -63,7 +63,7 @@ class ArchiveR10ImplementationTests(unittest.TestCase):
         for path in (IMPL / "workflows").glob("*.yml"):
             self.assertIn("role-duration-seconds: 900", path.read_text(encoding="utf-8"))
 
-    def test_frozen_preflight_candidate_is_installed_byte_exact_but_data_candidate_is_not(self) -> None:
+    def test_frozen_preflight_candidate_remains_installed_and_later_data_workflow_is_present(self) -> None:
         candidates = IMPL / "workflows"
         preflight_candidate = candidates / "hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml"
         data_candidate = candidates / "hyperliquid-archive-post-boundary-multihour-feature-r10.yml"
@@ -73,7 +73,7 @@ class ArchiveR10ImplementationTests(unittest.TestCase):
         self.assertTrue(data_candidate.is_file())
         self.assertTrue(preflight_installed.is_file())
         self.assertEqual(preflight_candidate.read_bytes(), preflight_installed.read_bytes())
-        self.assertFalse(data_installed.exists())
+        self.assertTrue(data_installed.is_file())
         for path in candidates.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
             self.assertIn("workflow_dispatch:", text)

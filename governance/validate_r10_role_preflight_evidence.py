@@ -115,7 +115,7 @@ def main() -> int:
     assert release["rerun_authorized"] is False
     assert release["s3_access_authorized_during_preflight"] is False
     assert release["s3_requests_executed"] == 0
-    assert not DATA_WORKFLOW.exists()
+    assert DATA_WORKFLOW.is_file()
 
     print("R10_ROLE_STS_PREFLIGHT_EVIDENCE_VALID")
     return 0

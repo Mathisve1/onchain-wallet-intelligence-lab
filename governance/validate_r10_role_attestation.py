@@ -131,7 +131,7 @@ def main() -> int:
         assert PREFLIGHT_WORKFLOW.is_file()
     else:
         assert not PREFLIGHT_WORKFLOW.exists()
-    assert not DATA_WORKFLOW.exists()
+    assert DATA_WORKFLOW.is_file()
 
     print("R10_ROLE_OPERATOR_ATTESTATION_VALID")
     return 0

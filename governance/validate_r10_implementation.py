@@ -267,7 +267,7 @@ def main() -> int:
 
     validate_later_preflight_implementation_if_present()
     validate_later_preflight_release_if_present()
-    assert not DATA_INSTALLED.exists()
+    assert DATA_INSTALLED.is_file()
     validate_later_role_attestation_if_present()
     collector.validate_static_inputs()
 

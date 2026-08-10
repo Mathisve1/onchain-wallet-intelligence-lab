@@ -49,8 +49,9 @@ class R10DataWorkflowImplementationTests(unittest.TestCase):
         self.assertFalse(c["candidate_binding_adjustment"]["scope_expanding"])
         self.assertTrue(c["candidate_binding_adjustment"]["source_candidate_immutable"])
 
-    def test_consumed_preflight_route_is_retired_and_data_route_is_single_exact_oidc_lane(self) -> None:
-        self.assertFalse(PREFLIGHT.exists())
+    def test_consumed_preflight_route_is_retained_fail_closed_and_data_route_is_installed(self) -> None:
+        self.assertTrue(PREFLIGHT.is_file())
+        self.assertEqual(hashlib.sha256(PREFLIGHT.read_bytes()).hexdigest(), "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d")
         self.assertTrue(WORKFLOW.is_file())
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", text)

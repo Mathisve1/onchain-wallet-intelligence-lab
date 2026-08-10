@@ -54,7 +54,8 @@ def main() -> int:
     assert c["installed_data_workflow_sha256"] == INSTALLED_WORKFLOW_SHA
     assert c["dedicated_role_arn"] == ROLE_ARN
     assert c["workflow_name"] == WORKFLOW_NAME
-    assert c["consumed_preflight_workflow_retired"] is True
+    assert c["consumed_preflight_workflow_retired"] is False
+    assert c["consumed_preflight_workflow_retained_fail_closed"] is True
     assert c["candidate_binding_adjustment"]["required"] is True
     assert c["candidate_binding_adjustment"]["scope_expanding"] is False
     assert c["candidate_binding_adjustment"]["source_candidate_immutable"] is True
@@ -123,7 +124,8 @@ def main() -> int:
 
     assert sha256(SOURCE_CANDIDATE) == SOURCE_CANDIDATE_SHA
     assert sha256(WORKFLOW) == INSTALLED_WORKFLOW_SHA
-    assert not PREFLIGHT_WORKFLOW.exists()
+    assert PREFLIGHT_WORKFLOW.is_file()
+    assert sha256(PREFLIGHT_WORKFLOW) == "fefef8a7bb40e965c9ed77e9892057ac8e0a64dcfa60d7f3e7dba8f1651b5f4d"
     text = WORKFLOW.read_text(encoding="utf-8")
     assert text.startswith(f"name: {WORKFLOW_NAME}\n")
     assert "run-name: R10 bounded six-hour multi-wallet feature pilot" in text

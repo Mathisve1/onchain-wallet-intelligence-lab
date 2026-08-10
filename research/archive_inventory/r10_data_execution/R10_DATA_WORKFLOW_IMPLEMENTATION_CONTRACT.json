@@ -15,7 +15,8 @@
   "canonical_activation_required": true,
   "configure_aws_action_timeout_seconds": 60,
   "configure_aws_retry_max_attempts": 1,
-  "consumed_preflight_workflow_retired": true,
+  "consumed_preflight_workflow_retained_fail_closed": true,
+  "consumed_preflight_workflow_retired": false,
   "dedicated_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
   "downstream_authorizations": {
     "candidate_shortlisting": false,
@@ -65,7 +66,7 @@
   "r10_sts_preflight_evidence_merge_commit": "5e54d346653f2153c21a50c3d25c755b596a651b",
   "r10_sts_preflight_release_merge_commit": "8316f05f8fdfd444073e69e292cb89766ac89d7b",
   "rerun_authorized": false,
-  "retired_consumed_preflight_workflow_path": ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml",
+  "retained_consumed_preflight_workflow_path": ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml",
   "role_attestation_text_sha256": "aa6547983d197941b7ffe90811a77665a7924a8a29fb89955d2f31456cd9c8cd",
   "role_duration_seconds": 900,
   "run_name": "R10 bounded six-hour multi-wallet feature pilot",

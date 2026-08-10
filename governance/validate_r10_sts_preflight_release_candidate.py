@@ -108,7 +108,7 @@ def main() -> int:
 
     assert WORKFLOW.is_file()
     assert hashlib.sha256(WORKFLOW.read_bytes()).hexdigest() == WORKFLOW_SHA
-    assert not DATA_WORKFLOW.exists()
+    assert DATA_WORKFLOW.is_file()
 
     if RUNTIME_DIR.exists():
         assert RUNTIME_RELEASE.is_file()

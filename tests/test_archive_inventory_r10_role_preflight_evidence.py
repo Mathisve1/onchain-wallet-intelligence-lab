@@ -76,7 +76,7 @@ class R10RolePreflightEvidenceTests(unittest.TestCase):
         self.assertFalse(release["release_consumed"])
         self.assertFalse(release["rerun_authorized"])
         self.assertFalse(release["s3_access_authorized_during_preflight"])
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").is_file())
 
     def test_dedicated_evidence_validator_passes(self) -> None:
         completed = subprocess.run(

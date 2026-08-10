@@ -85,7 +85,7 @@ class R10RoleAttestationTests(unittest.TestCase):
         self.assertEqual(release["aws_sts_requests_executed"], 0)
         self.assertEqual(release["s3_requests_executed"], 0)
         self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-role-preflight-r10.yml").is_file())
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").exists())
+        self.assertTrue((ROOT / ".github/workflows/hyperliquid-archive-post-boundary-multihour-feature-r10.yml").is_file())
         self.assertEqual(sorted(path.name for path in RUNTIME.iterdir() if path.is_file()), ["R10_STS_PREFLIGHT_RELEASE.json", "R10_STS_PREFLIGHT_RELEASE_CONSUMPTION.json"])
 
     def test_governance_validator_accepts_exact_snapshot(self) -> None:
