@@ -1,0 +1,32 @@
+{
+  "aggregate_boundary_correlation_retention_authorized": true,
+  "checked_out_commit": "07f988af8db67addf5d551b5b402186c0abafadb",
+  "configure_aws_outcome": "success",
+  "diagnostic_id": "HL-ARCHIVE-R10C-BOUNDARY-RECORD-CORRELATION-001",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "07f988af8db67addf5d551b5b402186c0abafadb",
+  "economic_fill_field_processing_authorized": false,
+  "event_array_contents_inspection_authorized": true,
+  "event_array_contents_inspection_scope": "PAIR_SHAPE_AND_FILL_TIME_ONLY",
+  "event_name": "workflow_dispatch",
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10",
+  "fill_object_field_allowlist": [
+    "time"
+  ],
+  "fill_time_integer_milliseconds_processing_authorized": true,
+  "maximum_get_object_requests": 1,
+  "maximum_retries_per_request": 0,
+  "metadata_prefix_processing_authorized": true,
+  "metadata_timezone_inference_authorized": false,
+  "metadata_timezone_parsing_authorized": false,
+  "object_expected_compressed_sha256": "42fa96f9d693eb93d184c24a830483cea2e4aa526fc2ffb999619d24e41cc339",
+  "object_key": "node_fills_by_block/hourly/20250727/9.lz4",
+  "schema_version": "1.0",
+  "signing_region": "ap-northeast-1",
+  "target_bucket": "hl-mainnet-node-data",
+  "terminal_status": "PENDING_AWS_OIDC",
+  "wallet_address_retention_authorized": false,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31410638224
+}

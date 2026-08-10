@@ -1,0 +1,22 @@
+{
+  "artifact_id": 9071422220,
+  "artifact_name": "r10c-boundary-record-correlation-31410638224",
+  "artifact_size_bytes": 2912,
+  "diagnostic_id": "HL-ARCHIVE-R10C-BOUNDARY-RECORD-CORRELATION-001",
+  "independently_downloaded_zip_sha256": "60602f1e5b4e5456504af9bbd65b64826cdf2b86a47bc1b2e690507dbf0a0f48",
+  "internal_ledger": {
+    "r10c-context.json": "b4f0b96aedafa92ecd188ec06fc5c93be6006b84b76bd8a893ae4d32e7bedc42",
+    "r10c-result.json": "c86f606c18f26274b3fed1ba985c53ce7e88681cabf052c101574f7c776973fe",
+    "r10c.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "internal_ledger_matches_all_retained_files": true,
+  "job_conclusion": "success",
+  "provider_digest": "sha256:60602f1e5b4e5456504af9bbd65b64826cdf2b86a47bc1b2e690507dbf0a0f48",
+  "provider_digest_matches_independent_download": true,
+  "provider_zip_sha256": "60602f1e5b4e5456504af9bbd65b64826cdf2b86a47bc1b2e690507dbf0a0f48",
+  "schema_version": "1.0",
+  "verification_result": "ALL_RETAINED_EVIDENCE_CHECKS_PASS_EXACT_TWO_PRE_HOUR_FILLS_COLOCATE_WITH_SINGLE_PREVIOUS_BLOCK_TIME_RECORD",
+  "workflow_job_id": 93527564608,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31410638224
+}
