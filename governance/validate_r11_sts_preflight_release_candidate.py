@@ -12,6 +12,8 @@ CONTRACT = PREFLIGHT / "R11_STS_PREFLIGHT_CONTRACT.json"
 ATTESTATION = BASE / "r11_role_attestation/R11_DEDICATED_ROLE_OPERATOR_ATTESTATION.json"
 WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+FROZEN_DATA_WORKFLOW = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 RUNTIME_RELEASE = BASE / "r11_runtime/R11_STS_PREFLIGHT_RELEASE.json"
 
 PREFLIGHT_IMPLEMENTATION_MERGE = "910efc2045cb5f8231c16d4d879a8baf00a08952"
@@ -109,7 +111,22 @@ def main() -> int:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '"Effect":"Deny","Action":"s3:*","Resource":"*"' in text
     assert text.count("aws sts get-caller-identity --output json") == 1
-    assert not DATA_WORKFLOW.exists()
+
+    # The candidate is an immutable STS-only snapshot. A later data route is valid
+    # only through a separate post-preflight implementation contract and stays inert.
+    if DATA_CONTRACT.exists():
+        data_contract = load(DATA_CONTRACT)
+        assert data_contract["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
+        assert data_contract["r11_sts_preflight_evidence_merge_commit"] == "db935f6c44639ba2a2fa66d8c1b4d0d1d26b254a"
+        assert data_contract["preflight_release_consumed"] is True
+        assert data_contract["single_workflow_dispatch_authorized"] is False
+        assert data_contract["aws_oidc_authorized_now"] is False
+        assert data_contract["get_object_authorized_now"] is False
+        assert DATA_WORKFLOW.is_file()
+        assert FROZEN_DATA_WORKFLOW.is_file()
+        assert DATA_WORKFLOW.read_bytes() == FROZEN_DATA_WORKFLOW.read_bytes()
+    else:
+        assert not DATA_WORKFLOW.exists()
 
     if RUNTIME_RELEASE.exists():
         release = load(RUNTIME_RELEASE)
