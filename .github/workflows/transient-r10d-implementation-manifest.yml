@@ -34,6 +34,24 @@ jobs:
           python-version: '3.12.13'
           check-latest: false
 
+      - name: Repair canonical STS evidence binding in frozen workflow candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('research/archive_inventory/r10d_implementation/workflows/hyperliquid-archive-r10d-record-anchored-multihour-feature.yml')
+          text = path.read_text(encoding='utf-8')
+          old_path = 'STS_EVIDENCE_PATH: research/archive_inventory/r10_role_attestation/evidence/R10_STS_PREFLIGHT_ATTESTATION.json'
+          new_path = 'STS_EVIDENCE_PATH: research/archive_inventory/r10_role_preflight/HL-ARCHIVE-R10-DEDICATED-ROLE-STS-PREFLIGHT-001-ATTESTATION.json'
+          old_checks = """          assert sts['status']=='ATTESTED_R10_STS_PREFLIGHT_PASS'\n          assert sts['technical_result']=='STS_IDENTITY_MATCH'\n          assert sts['s3_requests_executed']==0"""
+          new_checks = """          assert sts['terminal_status']=='R10_STS_PREFLIGHT_PASS'\n          assert sts['technical_result']=='DEDICATED_R10_ROLE_ASSUMEABLE_FROM_CANONICAL_MAIN'\n          assert sts['expected_role_arn']==expected_role\n          assert sts['operator_attestation_independently_verified_by_preflight'] is True\n          assert sts['preflight_release_consumed'] is True\n          assert sts['rerun_authorized'] is False\n          assert sts['s3_http_request_count']==0\n          assert sts['object_bytes_downloaded']==0"""
+          assert old_path in text
+          assert old_checks in text
+          text = text.replace(old_path, new_path, 1).replace(old_checks, new_checks, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Validate R10D implementation and focused tests
         shell: bash
         run: |
