@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
 RUN = BASE / "r10_data_execution/evidence/run-31377732916"
 ATTEST = BASE / "r10_data_execution/HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001-ATTESTATION.json"
-CONSUMPTION = BASE / "r10_runtime/R10_EXECUTION_RELEASE_CONSUMPTION.json"
+CONSUMPTION = BASE / "r10_data_execution/R10_EXECUTION_RELEASE_CONSUMPTION.json"
 
 
 class R10DataExecutionEvidenceTests(unittest.TestCase):
