@@ -1,0 +1,262 @@
+{
+  "aws_iam_mutations_executed_by_preregistration": 0,
+  "current_runtime_authority": {
+    "aws_iam_mutation": false,
+    "aws_oidc": false,
+    "decompression": false,
+    "get_object": false,
+    "metadata_prefix_processing": false,
+    "object_body_download": false,
+    "requester_pays": false,
+    "selected_fill_field_processing": false,
+    "wallet_feature_retention": false,
+    "workflow_dispatch": false
+  },
+  "decompression_and_parse_rules": {
+    "alternate_decompressor_fallback_authorized": false,
+    "lz4_frame_stream_only": true,
+    "maximum_record_bytes": 16777216,
+    "maximum_total_block_records_parsed": 500000,
+    "maximum_total_event_pairs_parsed": 2000000,
+    "required_block_fields": {
+      "block_number": "integer",
+      "block_time": "string",
+      "events": "array",
+      "local_time": "string"
+    },
+    "required_event_pair_arity": 2,
+    "required_event_pair_ordered_element_types": [
+      "string",
+      "object"
+    ],
+    "required_event_pair_type": "array",
+    "required_leading_string_regex": "^0x[0-9a-f]{40}$",
+    "required_top_level_record_type": "object",
+    "strict_json_duplicate_keys_rejected": true,
+    "strict_json_nonfinite_constants_rejected": true,
+    "strict_utf8_decode": true
+  },
+  "downstream_authorizations": {
+    "candidate_shortlisting": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "full_population_historical_ingestion": false,
+    "historical_window_beyond_six_hours": false,
+    "legacy_modern_merged_history": false,
+    "market_data_ingestion": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "empirical_result": null,
+  "exact_future_network_targets": [
+    {
+      "expected_etag": "\"5a9941a240118a57f77a4c3ee95b8430-3\"",
+      "expected_size_bytes": 18147822,
+      "key": "node_fills_by_block/hourly/20250727/9.lz4",
+      "known_compressed_sha256": "42fa96f9d693eb93d184c24a830483cea2e4aa526fc2ffb999619d24e41cc339",
+      "path_hour_utc": "2025-07-27T09:00:00Z"
+    },
+    {
+      "expected_etag": "\"cb25fba5dc3be80fd8c46dde03144655-3\"",
+      "expected_size_bytes": 21349239,
+      "key": "node_fills_by_block/hourly/20250727/10.lz4",
+      "known_compressed_sha256": null,
+      "path_hour_utc": "2025-07-27T10:00:00Z"
+    },
+    {
+      "expected_etag": "\"758da733bb2d3913d0fdd8088b6fb63d-3\"",
+      "expected_size_bytes": 17582600,
+      "key": "node_fills_by_block/hourly/20250727/11.lz4",
+      "known_compressed_sha256": null,
+      "path_hour_utc": "2025-07-27T11:00:00Z"
+    },
+    {
+      "expected_etag": "\"d6ee46b1bdfad4026e21d4285ed0cbc5-3\"",
+      "expected_size_bytes": 21672141,
+      "key": "node_fills_by_block/hourly/20250727/12.lz4",
+      "known_compressed_sha256": null,
+      "path_hour_utc": "2025-07-27T12:00:00Z"
+    },
+    {
+      "expected_etag": "\"c3c9db0101ff278b5ced13ab278a2b85-3\"",
+      "expected_size_bytes": 20840630,
+      "key": "node_fills_by_block/hourly/20250727/13.lz4",
+      "known_compressed_sha256": null,
+      "path_hour_utc": "2025-07-27T13:00:00Z"
+    },
+    {
+      "expected_etag": "\"3c6ab944be1ed8bd12932eb390267a21-3\"",
+      "expected_size_bytes": 21407266,
+      "key": "node_fills_by_block/hourly/20250727/14.lz4",
+      "known_compressed_sha256": null,
+      "path_hour_utc": "2025-07-27T14:00:00Z"
+    }
+  ],
+  "human_approval_required_before_implementation": true,
+  "network_requests_executed_by_preregistration": 0,
+  "parent_r10_failure_class": "fill time lies outside source path hour",
+  "parent_r10_pilot_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001",
+  "parent_r10_release_consumed": true,
+  "parent_r10_rerun_authorized": false,
+  "parent_r10_result": "MULTI_HOUR_FEATURE_PIPELINE_UNRESOLVED",
+  "parent_r10_run_id": 31377732916,
+  "parent_r10c_artifact_id": 9071422220,
+  "parent_r10c_artifact_sha256": "60602f1e5b4e5456504af9bbd65b64826cdf2b86a47bc1b2e690507dbf0a0f48",
+  "parent_r10c_evidence_merge_commit": "83842a3947e8eec518fa4a05ca71a2b81079976b",
+  "parent_r10c_job_id": 93527564608,
+  "parent_r10c_result": "EXACT_TWO_PRE_HOUR_FILLS_COLOCATE_WITH_SINGLE_PREVIOUS_BLOCK_TIME_RECORD",
+  "parent_r10c_run_id": 31410638224,
+  "pilot_id": "HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001",
+  "proposed_request_envelope": {
+    "compressed_sha256_computed_and_retained_per_object": true,
+    "exact_content_length_required": true,
+    "exact_response_etag_required": true,
+    "get_object_attributes_authorized": false,
+    "get_object_version_authorized": false,
+    "head_object_authorized": false,
+    "hour9_preknown_compressed_sha256_required": true,
+    "http_redirect_following_authorized": false,
+    "if_match_etag_required": true,
+    "list_all_my_buckets_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_objects_v2_authorized": false,
+    "maximum_get_object_requests": 6,
+    "maximum_individual_compressed_bytes": 21672141,
+    "maximum_individual_decompressed_bytes": 268435456,
+    "maximum_monthly_budget_eur": 0,
+    "maximum_one_time_budget_eur": 0.1,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "maximum_runtime_seconds": 300,
+    "maximum_total_compressed_bytes": 120999698,
+    "maximum_total_decompressed_bytes": 1073741824,
+    "preknown_compressed_sha256_required_for_all_six_objects": false,
+    "range_get_authorized": false,
+    "request_order": "PATH_HOUR_ASCENDING",
+    "requester_pays_required": true,
+    "stop_after_first_failed_or_mismatched_object": true
+  },
+  "raw_or_disallowed_retention": {
+    "client_order_ids": false,
+    "coin_values": false,
+    "crossed_values": false,
+    "fee_token_values": false,
+    "fee_values": false,
+    "individual_closed_pnl_values": false,
+    "individual_px_values": false,
+    "individual_sz_values": false,
+    "liquidation_payload_values": false,
+    "order_ids": false,
+    "raw_block_records": false,
+    "raw_compressed_objects": false,
+    "raw_decompressed_payloads": false,
+    "raw_event_pairs": false,
+    "raw_fill_objects": false,
+    "side_values": false,
+    "tid_values": false,
+    "transaction_hashes": false
+  },
+  "record_anchored_alignment_rule": {
+    "after_path_hour_fill_count_required_for_success": 0,
+    "any_fill_partition_or_prefix_rule_violation_causes_research_unresolved_and_stops_before_next_object": true,
+    "block_time_next_or_other_prefix_is_fail_closed": true,
+    "block_time_raw_prefix_allowed_buckets": [
+      "MATCHES_PATH_DATE_HOUR_PREFIX",
+      "MATCHES_PREVIOUS_DATE_HOUR_PREFIX"
+    ],
+    "fill_time_integer_milliseconds_processing_authorized": true,
+    "fill_time_numeric_tolerance_milliseconds": null,
+    "hour9_parent_fixture_required": {
+      "before_fills_in_local_path_block_previous_records": 2,
+      "block_record_count": 36029,
+      "fill_time_after_path_hour_count": 0,
+      "fill_time_before_path_hour_count": 2,
+      "fill_time_count": 223950,
+      "fill_time_inside_path_hour_count": 223948,
+      "local_path_block_path_record_count": 36028,
+      "local_path_block_previous_record_count": 1
+    },
+    "hours10_to14_boundary_pattern_predeclared": false,
+    "local_time_raw_prefix_must_match_source_path_hour_for_every_record": true,
+    "metadata_datetime_conversion_authorized": false,
+    "metadata_timezone_inference_authorized": false,
+    "metadata_timezone_parsing_authorized": false,
+    "numeric_tolerance_authorized": false,
+    "path_block_record_allowed_fill_partitions": [
+      "INSIDE_PATH_HOUR"
+    ],
+    "previous_block_record_allowed_fill_partitions": [
+      "BEFORE_PATH_HOUR"
+    ],
+    "previous_block_record_before_fill_must_be_within_immediately_previous_epoch_hour": true,
+    "rule_id": "RAW_LOCAL_PREFIX_PLUS_BLOCK_PREFIX_NO_NUMERIC_TOLERANCE_V1",
+    "rule_is_operational_validation_not_partition_semantics_claim": true
+  },
+  "research_question": "Can the original R10 six-hour deterministic wallet-feature reducer be repaired without a numeric timestamp tolerance by replacing strict per-fill path-hour membership with a fail-closed record-anchored raw-prefix rule derived from R10C, while leaving all other feature, conservation, retention and no-ranking boundaries unchanged?",
+  "schema_version": "1.0",
+  "selected_fill_fields_for_transient_processing": [
+    "coin",
+    "side",
+    "time",
+    "px",
+    "sz",
+    "closedPnl",
+    "tid",
+    "crossed",
+    "liquidation"
+  ],
+  "semantic_boundaries": {
+    "51ms_tolerance_is_generalized": false,
+    "active_hour_count_is_wallet_quality_score": false,
+    "block_time_defines_s3_path_hour_partition": false,
+    "fill_time_defines_s3_path_hour_partition": false,
+    "local_time_defines_s3_path_hour_partition": false,
+    "one_wallet_address_equals_one_human_or_economic_entity": false,
+    "six_hour_window_is_sufficient_wallet_performance_history": false,
+    "sum_abs_px_times_sz_notional_proxy_is_copyable_notional": false,
+    "sum_closed_pnl_fill_statistic_is_exact_account_return": false,
+    "sum_closed_pnl_fill_statistic_is_wallet_ranking_score": false
+  },
+  "separate_canonical_activation_required": true,
+  "separate_execution_release_required": true,
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "study_role": "R10_PATH_HOUR_ALIGNMENT_RULE_REPAIR_PREREGISTRATION_ONLY",
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  },
+  "unchanged_r10_feature_contract": {
+    "blind_duplicate_deduplication_authorized": false,
+    "cross_object_aggregation_rules_unchanged_from_r10_except_alignment_rule": true,
+    "duplicate_wallet_tid_count_required_for_clean_success": 0,
+    "exact_decimal_arithmetic_required": true,
+    "fill_count_conservation_required": true,
+    "floating_point_aggregation_authorized": false,
+    "proposed_per_wallet_output_fields_only": [
+      "wallet_address",
+      "fill_count",
+      "active_hour_count",
+      "first_fill_time",
+      "last_fill_time",
+      "distinct_coin_count",
+      "side_a_count",
+      "side_b_count",
+      "crossed_true_count",
+      "liquidation_associated_fill_count",
+      "duplicate_tid_count",
+      "sum_abs_px_times_sz_notional_proxy",
+      "sum_closed_pnl_fill_statistic"
+    ],
+    "selected_fill_field_processing_unchanged_from_r10": true,
+    "side_count_conservation_required": true,
+    "wallet_feature_entry_cap": 1000000,
+    "wallet_feature_output_byte_cap": 67108864
+  },
+  "wallet_feature_rows_created_by_preregistration": 0
+}
