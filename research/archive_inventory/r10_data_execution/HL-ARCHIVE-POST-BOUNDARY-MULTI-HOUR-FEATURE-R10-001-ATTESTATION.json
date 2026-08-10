@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "attestation_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001-ATTESTATION",
+  "pilot_id": "HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001",
+  "status": "ATTESTED_RESEARCH_UNRESOLVED",
+  "canonical_dispatch_commit": "64a04363e2c885f3a419f5cc4a789dd157fed229",
+  "workflow_run_id": 31377732916,
+  "workflow_run_attempt": 1,
+  "workflow_job_id": 93420701174,
+  "artifact_id": 9058595361,
+  "artifact_zip_sha256": "e6aebcbc0c73aecbea994fb4bd095c56f6c86b9ba5aa0dc152bee125b08f33bb",
+  "terminal_status": "R10_MULTI_HOUR_FEATURE_STUDY_COMPLETE",
+  "technical_result": "MULTI_HOUR_FEATURE_PIPELINE_UNRESOLVED",
+  "research_conclusion": "MULTI_HOUR_FEATURE_PIPELINE_UNRESOLVED",
+  "failure_class": "fill time lies outside source path hour",
+  "network_result": {
+    "request_attempt_count": 1,
+    "successful_get_object_requests": 1,
+    "failed_get_object_requests": 0,
+    "retries_used": 0,
+    "redirects_followed": 0,
+    "compressed_bytes": 18147822,
+    "first_requested_key": "node_fills_by_block/hourly/20250727/9.lz4",
+    "first_requested_path_hour_utc": "2025-07-27T09:00:00Z",
+    "stopped_before_second_object": true
+  },
+  "retained_feature_result": {
+    "wallet_feature_retained": false,
+    "wallet_feature_row_count": 0,
+    "wallet_feature_bytes": 0,
+    "aggregate_wallet_feature_summary": null
+  },
+  "claims_proven": {
+    "canonical_single_use_r10_dispatch_executed": true,
+    "dedicated_r10_role_was_assumed": true,
+    "first_exact_authorized_object_was_retrieved_once": true,
+    "strict_fill_time_within_source_path_hour_rule_was_not_satisfied": true,
+    "collector_stopped_fail_closed_before_second_object": true,
+    "no_wallet_feature_output_was_retained": true,
+    "no_ranking_shortlisting_pnl_alpha_or_copyability_analysis_was_performed": true
+  },
+  "claims_not_proven": {
+    "direction_or_magnitude_of_path_hour_time_misalignment": false,
+    "count_of_out_of_hour_fills": false,
+    "whether_block_time_or_local_time_explains_the_misalignment": false,
+    "whether_all_six_objects_share_the_same_time_partition_semantics": false,
+    "multi_hour_wallet_feature_pipeline_complete": false,
+    "six_hour_wallet_population_reconstructed": false,
+    "wallet_ranking_is_authorized": false,
+    "candidate_shortlisting_is_authorized": false,
+    "pnl_or_alpha_analysis_is_authorized": false,
+    "copyability_analysis_is_authorized": false
+  },
+  "static_context_from_prior_r9_evidence": {
+    "r9_run_id": 31336490854,
+    "r9_global_first_fill_time_utc": "2025-07-27T08:50:10.273Z",
+    "r9_global_last_fill_time_utc": "2025-07-27T08:59:59.895Z",
+    "r9_context_resolves_r10_misalignment": false
+  },
+  "release_consumed": true,
+  "rerun_authorized": false,
+  "new_network_request_requires_new_preregistration_approval_and_release": true,
+  "all_downstream_and_trading_authorizations_remain_false": true
+}
