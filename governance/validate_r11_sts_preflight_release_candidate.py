@@ -18,6 +18,7 @@ PREFLIGHT_IMPLEMENTATION_MERGE = "910efc2045cb5f8231c16d4d879a8baf00a08952"
 ROLE_ATTESTATION_MERGE = "38156c94a15aaef277a9bd8cf31c3a4808be1147"
 R11_IMPLEMENTATION_MERGE = "9568424524a2a9f78e75bf0f68b4de6146f6f2b7"
 R11_APPROVAL_MERGE = "86333a6759a492e5452bc565802fefce55a9fd6f"
+RELEASE_CANDIDATE_MERGE = "3d41425c5c1663b1730fb960948e4971b9c1be8a"
 ATTESTATION_TEXT_SHA = "b064e73e0368e4159bb08591893c8bb37340f662e0cdaad778d8684acb977810"
 TRUST_SHA = "2df95bdfe662596334c46c641cc6e973b4fb4ef9361f122e53c23f129669b4ae"
 PERMISSION_SHA = "2b64ad33c6ed6348af110117a24c0c834fe8b08b26aecba6e32384b09628abee"
@@ -109,7 +110,21 @@ def main() -> int:
     assert '"Effect":"Deny","Action":"s3:*","Resource":"*"' in text
     assert text.count("aws sts get-caller-identity --output json") == 1
     assert not DATA_WORKFLOW.exists()
-    assert not RUNTIME_RELEASE.exists()
+
+    if RUNTIME_RELEASE.exists():
+        release = load(RUNTIME_RELEASE)
+        assert release["status"] == "RELEASED_FOR_EXACTLY_ONE_R11_STS_ONLY_PREFLIGHT"
+        assert release["release_candidate_merge_commit"] == RELEASE_CANDIDATE_MERGE
+        assert release["role_arn"] == ROLE_ARN
+        assert release["workflow_git_blob_sha"] == WORKFLOW_BLOB_SHA
+        assert release["single_workflow_dispatch_authorized"] is True
+        assert release["rerun_authorized"] is False
+        assert release["release_consumed"] is False
+        assert release["sts_get_caller_identity_authorized"] is True
+        assert release["s3_access_authorized_during_preflight"] is False
+        assert release["data_workflow_installation_authorized"] is False
+        assert release["aws_sts_requests_executed"] == 0
+        assert release["s3_requests_executed"] == 0
 
     print("R11_STS_PREFLIGHT_RELEASE_CANDIDATE_VALID")
     return 0
