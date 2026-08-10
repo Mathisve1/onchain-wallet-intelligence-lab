@@ -1,0 +1,16 @@
+{
+  "checked_out_commit": "efad3f278e458a5c35fbfcc11de2b97bbe7cb388",
+  "configure_aws_outcome": "success",
+  "dispatch_ref": "refs/heads/main",
+  "dispatch_sha": "efad3f278e458a5c35fbfcc11de2b97bbe7cb388",
+  "expected_account_id": "630956766927",
+  "expected_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-scaling-r11",
+  "object_bytes_downloaded": 0,
+  "preflight_id": "HL-ARCHIVE-R11-DEDICATED-ROLE-STS-PREFLIGHT-001",
+  "s3_requests_authorized": false,
+  "s3_requests_executed": 0,
+  "schema_version": "1.0",
+  "terminal_status": "PENDING_AWS_OIDC",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31433889087
+}
