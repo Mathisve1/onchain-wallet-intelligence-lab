@@ -1,0 +1,122 @@
+{
+  "artifact_id": 9075129362,
+  "artifact_name": "r10d-record-anchored-wallet-features-31420197671",
+  "artifact_size_bytes": 918968,
+  "artifact_zip_sha256": "4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+  "base64_character_count": 1225292,
+  "base64_parts": [
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part00",
+      "sha256": "ee39fb37c0bbf6ac56f6883caf2c7fbdb29a39adf407a827cb1fce9b8d729652"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part01",
+      "sha256": "c525b1dc918a92534ca80c4e4aa8550fe17958539ab4ea132fabf179d54df771"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part02",
+      "sha256": "0d55e26423a2b5aea6b7b61387cb1f1602cdcd31c2288dbcb2fc69042984b1a5"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part03",
+      "sha256": "05900970cfd10d0bb5f72bb29bcfa0d85fb460d2076807e96185853a886f08f8"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part04",
+      "sha256": "a5c9627be61be59c7111dc7a4d341efe4ea33a904f3e40b2fc5e73fcf9350221"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part05",
+      "sha256": "8ec341e753cda616460b139eb34385b10b35c41eafcdabbce2eb1da83d242409"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part06",
+      "sha256": "f308624ba33e5decd9293971b66215ae063d46de37701f856e74a7e479660dd6"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part07",
+      "sha256": "912f91f35b9bab92be6f58f0ee0847fa4db848f5c77314b6a04dc1c3bbed2cb0"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part08",
+      "sha256": "0d22de1f8c35e154cde7d856f7e88027534cfb56e1fe51cd0897f6cbcd74b9b8"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part09",
+      "sha256": "da1e6c7e0d6504f6f9237fae3333492625c6c6b38067e4df142a2f35eaa95d36"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part10",
+      "sha256": "aac2c15ea102763bf48fde4a36fd747402cf2174907694acbfef3e4017fa8cbf"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part11",
+      "sha256": "c45a0b7c2f926239f0cab7f5d5bc927fd472cd6fe996bea894982f3b042dbd7b"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part12",
+      "sha256": "f31ae949ff3fe1b125d942109571d2898c308626d0aedb4fb461cc93d0fc7666"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part13",
+      "sha256": "be652afee943e2b16fa306c29c468431f04a6e1f0b33774d526a9331a2489d3b"
+    },
+    {
+      "character_count": 80000,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part14",
+      "sha256": "658b84c2c0ff55f4edac82ba0c8d2fdfc9a88b522b8fcdb52ab90faab36a5213"
+    },
+    {
+      "character_count": 25292,
+      "path": "artifact/r10d-record-anchored-wallet-features-31420197671.zip.b64.part15",
+      "sha256": "c80a29c9e4286c671a620d9d6f2cea460e5feea51e7e6c9ca86512f1f66f7940"
+    }
+  ],
+  "pilot_id": "HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001",
+  "reconstruction_method": "CONCATENATE_BASE64_PARTS_IN_LISTED_ORDER_THEN_STRICT_BASE64_DECODE",
+  "schema_version": "1.0",
+  "workflow_job_id": 93558813495,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31420197671,
+  "zip_entries": [
+    {
+      "name": "r10d-context.json",
+      "sha256": "19c555e1b3f8bb9efc30e849a077cfd13e3ac0498b8c8776a86fe719bc442300",
+      "size_bytes": 1243
+    },
+    {
+      "name": "r10d-result.json",
+      "sha256": "2780a2ccead6f4efa6aa83a50818f506e9728a15f80e68499d81a8032710b9f3",
+      "size_bytes": 8227
+    },
+    {
+      "name": "r10d-wallet-features.ndjson",
+      "sha256": "ea83c15398ed7b3c76d0be52aed0d9472ace3c975ac416fcd4a6d95760c4c991",
+      "size_bytes": 6557323
+    },
+    {
+      "name": "r10d.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "size_bytes": 2
+    },
+    {
+      "name": "R10D_FILES.sha256",
+      "sha256": "839ad6490b93ce2299628068d4e12c4636ab1a6977c69f947338358e196aa8e5",
+      "size_bytes": 335
+    }
+  ]
+}

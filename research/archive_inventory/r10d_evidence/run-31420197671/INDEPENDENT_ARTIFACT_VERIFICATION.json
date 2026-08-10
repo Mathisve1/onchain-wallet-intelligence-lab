@@ -1,0 +1,24 @@
+{
+  "artifact_id": 9075129362,
+  "artifact_name": "r10d-record-anchored-wallet-features-31420197671",
+  "artifact_reconstructable_from_repository_parts": true,
+  "artifact_size_bytes": 918968,
+  "independently_downloaded_zip_sha256": "4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+  "internal_ledger": {
+    "r10d-context.json": "19c555e1b3f8bb9efc30e849a077cfd13e3ac0498b8c8776a86fe719bc442300",
+    "r10d-result.json": "2780a2ccead6f4efa6aa83a50818f506e9728a15f80e68499d81a8032710b9f3",
+    "r10d-wallet-features.ndjson": "ea83c15398ed7b3c76d0be52aed0d9472ace3c975ac416fcd4a6d95760c4c991",
+    "r10d.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "internal_ledger_matches_all_retained_files": true,
+  "job_conclusion": "success",
+  "pilot_id": "HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001",
+  "provider_digest": "sha256:4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+  "provider_digest_matches_independent_download": true,
+  "provider_zip_sha256": "4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+  "schema_version": "1.0",
+  "verification_result": "ALL_RETAINED_R10D_EVIDENCE_CHECKS_PASS_MULTI_HOUR_FEATURE_PIPELINE_COMPLETE",
+  "workflow_job_id": 93558813495,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31420197671
+}

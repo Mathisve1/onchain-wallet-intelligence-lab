@@ -1,0 +1,43 @@
+{
+  "active_hour_count_distribution": {
+    "1": 8388,
+    "2": 3305,
+    "3": 1508,
+    "4": 981,
+    "5": 639,
+    "6": 1589
+  },
+  "crossed_true_count_total": 743271,
+  "diagnostic_role": "AGGREGATE_MECHANICS_EVIDENCE_NOT_WALLET_RANKING",
+  "downstream_actions_performed": {
+    "candidate_shortlisting": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "market_data_ingestion": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "duplicate_tid_count_total": 0,
+  "global_first_retained_fill_time_ms": 1753606799949,
+  "global_last_retained_fill_time_ms": 1753628399848,
+  "interpretation_boundaries": {
+    "active_hour_count_is_wallet_quality_score": false,
+    "one_wallet_address_equals_one_human_or_economic_entity": false,
+    "six_hour_window_is_sufficient_wallet_performance_history": false,
+    "sum_abs_px_times_sz_notional_proxy_is_copyable_notional": false,
+    "sum_closed_pnl_fill_statistic_is_exact_account_return": false,
+    "sum_closed_pnl_fill_statistic_is_wallet_ranking_score": false
+  },
+  "liquidation_associated_fill_count_total": 1330,
+  "pilot_id": "HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001",
+  "schema_version": "1.0",
+  "sum_abs_px_times_sz_notional_proxy_total": "3670148918.05560308",
+  "sum_closed_pnl_fill_statistic_total": "308059.4394867907",
+  "sum_fill_count": 1486542,
+  "sum_side_count": 1486542,
+  "wallet_feature_bytes": 6557323,
+  "wallet_feature_row_count": 16410,
+  "wallet_feature_sha256": "ea83c15398ed7b3c76d0be52aed0d9472ace3c975ac416fcd4a6d95760c4c991"
+}
