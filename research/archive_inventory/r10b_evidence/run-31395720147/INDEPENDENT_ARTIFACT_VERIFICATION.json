@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "diagnostic_id": "HL-ARCHIVE-R10B-BATCH-METADATA-LEXICAL-DIAGNOSTIC-001",
+  "workflow_run_id": 31395720147,
+  "workflow_run_attempt": 1,
+  "workflow_job_id": 93478017396,
+  "artifact_id": 9065535303,
+  "artifact_name": "r10b-batch-metadata-lexical-31395720147",
+  "artifact_size_bytes": 2459,
+  "provider_digest": "sha256:6fe553710846794176bc040c87937a719ab83c0cb10101892b3f23749cefc789",
+  "provider_zip_sha256": "6fe553710846794176bc040c87937a719ab83c0cb10101892b3f23749cefc789",
+  "independently_downloaded_zip_sha256": "6fe553710846794176bc040c87937a719ab83c0cb10101892b3f23749cefc789",
+  "provider_digest_matches_independent_download": true,
+  "job_conclusion": "success",
+  "internal_ledger": {
+    "r10b-context.json": "40d80eae46a2619346b60b3b7ccb2cba874a2deb33e73235a5e1a9a2718d3bb9",
+    "r10b-result.json": "2cd8a282453481c567ae58996e6c8131b5bd485bf8e3c2678f1333a588dda7d9",
+    "r10b.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "internal_ledger_matches_all_retained_files": true,
+  "verification_result": "ALL_RETAINED_EVIDENCE_CHECKS_PASS_BATCH_METADATA_LEXICALLY_CROSSES_PATH_HOUR"
+}
