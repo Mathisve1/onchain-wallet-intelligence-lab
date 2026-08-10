@@ -12,8 +12,10 @@ ATTESTATION_TEXT = BASE / "r11_role_attestation/R11_DEDICATED_ROLE_OPERATOR_ATTE
 TRUST = BASE / "r11_implementation/R11_OIDC_TRUST_POLICY.json"
 PERMISSION = BASE / "r11_implementation/R11_PERMISSION_POLICY.json"
 CANDIDATE = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-role-preflight.yml"
+FROZEN_DATA = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
 PREFLIGHT_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
 DATA_WORKFLOW = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 RUNTIME = BASE / "r11_runtime"
 RUNTIME_RELEASE = RUNTIME / "R11_STS_PREFLIGHT_RELEASE.json"
 RELEASE_CANDIDATE = BASE / "r11_role_preflight/R11_STS_PREFLIGHT_RELEASE_CANDIDATE.json"
@@ -114,7 +116,8 @@ def main() -> int:
     assert len(resources) == len(set(resources)) == 72
     assert all("*" not in arn for arn in resources)
 
-    assert CANDIDATE.is_file() and PREFLIGHT_WORKFLOW.is_file()
+    assert CANDIDATE.is_file()
+    assert PREFLIGHT_WORKFLOW.is_file()
     assert CANDIDATE.read_bytes() == PREFLIGHT_WORKFLOW.read_bytes()
     text = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
     assert text.startswith(f"name: {WORKFLOW_NAME}\n")
@@ -133,8 +136,6 @@ def main() -> int:
     assert "R11_STS_PREFLIGHT_RELEASE.json" in text
     assert text.index("test -f") < text.index("aws-actions/configure-aws-credentials")
 
-    assert not DATA_WORKFLOW.exists(), "R11 data workflow must remain uninstalled before successful STS preflight evidence"
-
     if RUNTIME_RELEASE.exists():
         release = load(RUNTIME_RELEASE)
         assert RELEASE_CANDIDATE.is_file()
@@ -151,6 +152,19 @@ def main() -> int:
         assert release["s3_access_authorized_during_preflight"] is False
         assert release["aws_sts_requests_executed"] == 0
         assert release["s3_requests_executed"] == 0
+
+    if DATA_CONTRACT.exists():
+        data_contract = load(DATA_CONTRACT)
+        assert data_contract["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
+        assert data_contract["r11_sts_preflight_evidence_merge_commit"] == "db935f6c44639ba2a2fa66d8c1b4d0d1d26b254a"
+        assert data_contract["preflight_release_consumed"] is True
+        assert data_contract["single_workflow_dispatch_authorized"] is False
+        assert data_contract["aws_oidc_authorized_now"] is False
+        assert data_contract["get_object_authorized_now"] is False
+        assert DATA_WORKFLOW.is_file()
+        assert DATA_WORKFLOW.read_bytes() == FROZEN_DATA.read_bytes()
+    else:
+        assert not DATA_WORKFLOW.exists(), "R11 data workflow requires separately attested STS evidence and an inert data-workflow stage"
 
     print("R11_ROLE_STS_PREFLIGHT_IMPLEMENTATION_VALID")
     return 0

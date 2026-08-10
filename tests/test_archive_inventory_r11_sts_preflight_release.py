@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 
 class R11STSPreflightReleaseTests(unittest.TestCase):
@@ -46,11 +47,24 @@ class R11STSPreflightReleaseTests(unittest.TestCase):
         self.assertEqual(r["s3_requests_executed"], 0)
         self.assertEqual(r["object_bytes_downloaded"], 0)
 
-    def test_data_workflow_is_still_uninstalled(self) -> None:
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml").exists())
+    def test_historical_sts_release_stays_data_closed_if_later_route_is_installed(self) -> None:
         text = (ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml").read_text()
         self.assertIn('"Effect":"Deny","Action":"s3:*","Resource":"*"', text)
         self.assertEqual(text.count("aws sts get-caller-identity --output json"), 1)
+
+        installed = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        frozen = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        if DATA_CONTRACT.exists():
+            later = json.loads(DATA_CONTRACT.read_text())
+            self.assertEqual(later["status"], "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE")
+            self.assertTrue(later["preflight_release_consumed"])
+            self.assertFalse(later["single_workflow_dispatch_authorized"])
+            self.assertFalse(later["aws_oidc_authorized_now"])
+            self.assertFalse(later["get_object_authorized_now"])
+            self.assertTrue(installed.exists())
+            self.assertEqual(installed.read_bytes(), frozen.read_bytes())
+        else:
+            self.assertFalse(installed.exists())
 
 
 if __name__ == "__main__":

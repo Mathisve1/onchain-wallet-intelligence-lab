@@ -20,6 +20,7 @@ RUNBOOK = BASE / "r11_implementation/R11_ROLE_CREATION_RUNBOOK.md"
 ATTEST = BASE / "r11_implementation/R11_OPERATOR_ATTESTATION_TEMPLATE.txt"
 INSTALLED_PREFLIGHT = ROOT / ".github/workflows/hyperliquid-archive-r11-role-preflight.yml"
 INSTALLED_DATA = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 PREREG_MERGE = "dc63f2846652e50755369aa95d0f01ec2e174b02"
 APPROVAL_MERGE = "86333a6759a492e5452bc565802fefce55a9fd6f"
@@ -148,7 +149,19 @@ def main() -> int:
 
     if INSTALLED_PREFLIGHT.exists():
         assert INSTALLED_PREFLIGHT.read_bytes() == PREFLIGHT.read_bytes()
-    assert not INSTALLED_DATA.exists(), "R11 data workflow must remain uninstalled before STS preflight evidence"
+    if DATA_CONTRACT.exists():
+        data_contract = load(DATA_CONTRACT)
+        assert data_contract["status"] == "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE"
+        assert data_contract["r11_sts_preflight_evidence_merge_commit"] == "db935f6c44639ba2a2fa66d8c1b4d0d1d26b254a"
+        assert data_contract["single_workflow_dispatch_authorized"] is False
+        assert data_contract["aws_oidc_authorized_now"] is False
+        assert data_contract["get_object_authorized_now"] is False
+        assert data_contract["s3_requests_executed_by_this_stage"] == 0
+        assert data_contract["object_bytes_downloaded_by_this_stage"] == 0
+        assert INSTALLED_DATA.is_file()
+        assert INSTALLED_DATA.read_bytes() == DATA.read_bytes()
+    else:
+        assert not INSTALLED_DATA.exists(), "R11 data workflow requires a separately governed post-preflight implementation stage"
     assert "aws s3 " not in RUNBOOK.read_text(encoding="utf-8").lower().replace("`aws s3`", "")
     attest = ATTEST.read_text(encoding="utf-8")
     assert "persistent_permission_resource_count=72" in attest

@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
+DATA_CONTRACT = BASE / "r11_data_execution/R11_DATA_WORKFLOW_IMPLEMENTATION_CONTRACT.json"
 
 
 class R11RolePreflightTests(unittest.TestCase):
@@ -34,16 +35,26 @@ class R11RolePreflightTests(unittest.TestCase):
         self.assertNotIn("aws s3api ", text.lower())
         self.assertNotIn("research.archive_inventory.r11_implementation.collector", text)
 
-    def test_contract_is_inert_and_data_route_absent(self) -> None:
+    def test_preflight_contract_remains_inert_while_later_data_route_is_separately_governed(self) -> None:
         contract = json.loads((BASE / "r11_role_preflight/R11_STS_PREFLIGHT_CONTRACT.json").read_text())
+        installed_data = ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml"
+        frozen_data = BASE / "r11_implementation/workflows/hyperliquid-archive-r11-72h-persistence.yml"
         self.assertEqual(contract["status"], "IMPLEMENTED_AWAITING_SEPARATE_PREFLIGHT_RELEASE")
         self.assertFalse(contract["preflight_execution_authorized"])
         self.assertFalse(contract["sts_get_caller_identity_authorized"])
         self.assertFalse(contract["single_workflow_dispatch_authorized"])
         self.assertFalse(contract["preflight_s3_requests_authorized"])
         self.assertFalse(contract["data_workflow_installation_authorized"])
-        self.assertFalse((ROOT / ".github/workflows/hyperliquid-archive-r11-72h-persistence.yml").exists())
         self.assertTrue(all(v is False for v in contract["trading_authorizations"].values()))
+        if DATA_CONTRACT.exists():
+            later = json.loads(DATA_CONTRACT.read_text())
+            self.assertEqual(later["status"], "IMPLEMENTED_AWAITING_SEPARATE_EXECUTION_RELEASE")
+            self.assertTrue(later["preflight_release_consumed"])
+            self.assertFalse(later["single_workflow_dispatch_authorized"])
+            self.assertTrue(installed_data.exists())
+            self.assertEqual(installed_data.read_bytes(), frozen_data.read_bytes())
+        else:
+            self.assertFalse(installed_data.exists())
 
 
 if __name__ == "__main__":
