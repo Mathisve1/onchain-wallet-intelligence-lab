@@ -1,0 +1,47 @@
+name: Transient R11 Approval Manifest Seal
+
+on:
+  push:
+    branches:
+      - research/r11-approval
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    if: github.repository == 'Mathisve1/onchain-wallet-intelligence-lab'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Check out exact approval branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: research/r11-approval
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+      - name: Remove transient workflow and seal exact approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -- .github/workflows/transient-r11-approval-manifest.yml
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          python governance/validate_r11_approval.py
+          python -m unittest tests.test_archive_inventory_r11_approval -v
+          python governance/validate_repository.py
+          git add -A
+          git diff --cached --check
+      - name: Commit sealed approval manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: seal exact R11 approval manifest'
+          git push origin HEAD:research/r11-approval
