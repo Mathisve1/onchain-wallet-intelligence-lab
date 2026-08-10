@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/archive_inventory"
 RUN = BASE / "r10_data_execution/evidence/run-31377732916"
 ATTEST = BASE / "r10_data_execution/HL-ARCHIVE-POST-BOUNDARY-MULTI-HOUR-FEATURE-R10-001-ATTESTATION.json"
-CONSUMPTION = BASE / "r10_runtime/R10_EXECUTION_RELEASE_CONSUMPTION.json"
+CONSUMPTION = BASE / "r10_data_execution/R10_EXECUTION_RELEASE_CONSUMPTION.json"
 RELEASE = BASE / "r10_runtime/R10_EXECUTION_RELEASE_CANONICALIZATION.json"
 R9 = BASE / "r9/evidence/HL-ARCHIVE-MODERN-WALLET-FEATURE-PILOT-R9-001-ATTESTATION.json"
 
@@ -17,7 +17,7 @@ LEDGER = {
     "r10-context.json": "292c8eb879611370c1d94d1d0eb640d2d785b0da2687c1bb4f2d53b98134e3a6",
     "r10-result.json": "21758e0fc3f6f39398afe9d0de10507ba0c9c96ed612c2423527c5842a973ff4",
     "r10-wallet-features.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "r10.rc": "9a271f2a916b0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "r10.rc": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
 }
 
 
