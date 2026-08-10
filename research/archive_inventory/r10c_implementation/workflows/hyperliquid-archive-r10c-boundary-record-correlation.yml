@@ -1,0 +1,218 @@
+name: Hyperliquid Archive Post-Boundary Multi-Hour Feature Pilot R10
+run-name: R10C boundary record correlation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-r10c-boundary-record-correlation
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  EXPECTED_AWS_ACCOUNT_ID: '630956766927'
+  R10C_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+  RELEASE_PATH: research/archive_inventory/r10c_runtime/R10C_EXECUTION_RELEASE.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r10c-boundary-record-correlation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify canonical manual main identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove exact single-use R10C release before OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python governance/validate_repository.py
+          python governance/validate_r10c_boundary_record_correlation_preregistration.py
+          python governance/validate_r10c_approval.py
+          python governance/validate_r10c_implementation.py
+          test -f "${RELEASE_PATH}"
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          release=json.loads(Path(os.environ['RELEASE_PATH']).read_text())
+          assert release['status']=='RELEASED_FOR_EXACTLY_ONE_CANONICAL_R10C_RUN'
+          assert release['role_arn']==os.environ['R10C_ROLE_ARN']
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert release['maximum_get_object_requests']==1
+          assert release['maximum_retries_per_request']==0
+          assert release['object_key']=='node_fills_by_block/hourly/20250727/9.lz4'
+          assert release['object_expected_compressed_sha256']=='42fa96f9d693eb93d184c24a830483cea2e4aa526fc2ffb999619d24e41cc339'
+          assert release['metadata_prefix_processing_authorized'] is True
+          assert release['event_array_contents_inspection_authorized'] is True
+          assert release['event_array_contents_inspection_scope']=='PAIR_SHAPE_AND_FILL_TIME_ONLY'
+          assert release['fill_object_field_allowlist']==['time']
+          assert release['fill_time_integer_milliseconds_processing_authorized'] is True
+          assert release['aggregate_boundary_correlation_retention_authorized'] is True
+          assert release['metadata_timezone_parsing_authorized'] is False
+          assert release['metadata_timezone_inference_authorized'] is False
+          assert release['individual_fill_time_retention_authorized'] is False
+          assert release['wallet_address_retention_authorized'] is False
+          assert release['economic_fill_field_processing_authorized'] is False
+          assert all(v is False for v in release['downstream_authorizations'].values())
+          assert all(v is False for v in release['trading_authorizations'].values())
+          start=datetime.fromisoformat(release['single_use_window_start_utc'].replace('Z','+00:00')).astimezone(timezone.utc)
+          repo=os.environ['CURRENT_REPOSITORY']; current=int(os.environ['CURRENT_RUN_ID'])
+          url=f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-r10c-boundary-record-correlation.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req=urllib.request.Request(url,headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'r10c-single-use-check'})
+          with urllib.request.urlopen(req,timeout=10) as response: runs=json.load(response).get('workflow_runs')
+          assert isinstance(runs,list) and len(runs)<100
+          eligible=[row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc)>=start]
+          assert len(eligible)==1, 'R10C release is not single-use'
+          assert int(eligible[0]['id'])==current, 'a prior R10C dispatch already consumed the release'
+          assert int(os.environ['CURRENT_RUN_ATTEMPT'])==1, 'R10C rerun forbidden'
+          PY
+
+      - name: Create minimized pending execution context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          context={
+            'schema_version':'1.0',
+            'diagnostic_id':'HL-ARCHIVE-R10C-BOUNDARY-RECORD-CORRELATION-001',
+            'terminal_status':'PENDING_AWS_OIDC',
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+            'expected_account_id':os.environ['EXPECTED_AWS_ACCOUNT_ID'],
+            'expected_role_arn':os.environ['R10C_ROLE_ARN'],
+            'configure_aws_outcome':None,
+            'target_bucket':'hl-mainnet-node-data',
+            'signing_region':'ap-northeast-1',
+            'object_key':'node_fills_by_block/hourly/20250727/9.lz4',
+            'object_expected_compressed_sha256':'42fa96f9d693eb93d184c24a830483cea2e4aa526fc2ffb999619d24e41cc339',
+            'maximum_get_object_requests':1,
+            'maximum_retries_per_request':0,
+            'metadata_prefix_processing_authorized':True,
+            'event_array_contents_inspection_authorized':True,
+            'event_array_contents_inspection_scope':'PAIR_SHAPE_AND_FILL_TIME_ONLY',
+            'fill_object_field_allowlist':['time'],
+            'fill_time_integer_milliseconds_processing_authorized':True,
+            'aggregate_boundary_correlation_retention_authorized':True,
+            'metadata_timezone_parsing_authorized':False,
+            'metadata_timezone_inference_authorized':False,
+            'wallet_address_retention_authorized':False,
+            'economic_fill_field_processing_authorized':False,
+          }
+          (Path(os.environ['RUNNER_TEMP'])/'r10c-context.json').write_text(json.dumps(context,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Assume existing R10 role with exact one-object session scope
+        id: configure
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-multihour-r10
+          aws-region: ap-northeast-1
+          role-duration-seconds: 900
+          role-session-name: HLArchiveR10CBoundaryCorrelation
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R10CExactOneOnly","Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250727/9.lz4"}]}
+
+      - name: Execute bounded R10C diagnostic once
+        shell: bash
+        run: |
+          set +e
+          python -m research.archive_inventory.r10c_implementation.collector --result-output "${RUNNER_TEMP}/r10c-result.json"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r10c.rc"
+
+      - name: Finalize minimized artifact ledger
+        shell: bash
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          temp=Path(os.environ['RUNNER_TEMP'])
+          context=temp/'r10c-context.json'; result=temp/'r10c-result.json'; rc=temp/'r10c.rc'
+          c=json.loads(context.read_text()); c['configure_aws_outcome']=os.environ.get('CONFIGURE_OUTCOME'); context.write_text(json.dumps(c,indent=2,sort_keys=True)+'\n')
+          if not result.exists(): result.write_text(json.dumps({'schema_version':'1.0','diagnostic_id':'HL-ARCHIVE-R10C-BOUNDARY-RECORD-CORRELATION-001','terminal_status':'R10C_TRANSPORT_OR_INTEGRITY_FAIL','technical_result':'PRE_COLLECTOR_AWS_FAILURE','research_conclusion':'R10C_TRANSPORT_OR_INTEGRITY_FAIL'},indent=2,sort_keys=True)+'\n')
+          if not rc.exists(): rc.write_text('85\n')
+          lines=[]
+          for path in (context,result,rc): lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (temp/'R10C_FILES.sha256').write_text('\n'.join(lines)+'\n')
+          PY
+
+      - name: Upload minimized R10C evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r10c-boundary-record-correlation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r10c-context.json
+            ${{ runner.temp }}/r10c-result.json
+            ${{ runner.temp }}/r10c.rc
+            ${{ runner.temp }}/R10C_FILES.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Enforce terminal research result and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          temp=Path(os.environ['RUNNER_TEMP']); result=json.loads((temp/'r10c-result.json').read_text()); rc=int((temp/'r10c.rc').read_text().strip())
+          if rc!=0 or result.get('terminal_status')=='R10C_TRANSPORT_OR_INTEGRITY_FAIL': raise SystemExit(1)
+          assert result['terminal_status']=='R10C_BOUNDARY_RECORD_CORRELATION_COMPLETE'
+          assert result['technical_result'] in {'EXACT_TWO_PRE_HOUR_FILLS_COLOCATE_WITH_SINGLE_PREVIOUS_BLOCK_TIME_RECORD','PRE_HOUR_FILLS_DO_NOT_EXACTLY_COLOCATE_WITH_SINGLE_PREVIOUS_BLOCK_TIME_RECORD','BOUNDARY_RECORD_CORRELATION_UNRESOLVED'}
+          assert result['request_attempt_count']==1 and result['s3_http_request_count']==1
+          assert result['successful_request_count']==1 and result['failed_request_count']==0
+          assert result['retries_used']==0 and result['http_redirects_followed'] is False
+          for key in ('metadata_timezone_parsing_performed','metadata_timezone_inference_performed','metadata_datetime_conversion_performed','individual_metadata_value_retained','individual_fill_time_retained','leading_event_string_value_retained','leading_event_string_wallet_semantics_performed','wallet_address_retained','wallet_aggregation_performed','economic_fill_field_processing_performed','block_number_value_retained','per_block_identity_retained','raw_compressed_object_retained','raw_decompressed_object_retained','raw_block_record_retained','raw_event_pair_retained','r10_rule_amendment_performed','r10_rerun_performed','six_hour_execution_performed','wallet_ranking_performed','candidate_shortlisting_performed','pnl_or_alpha_analysis_performed','copyability_analysis_performed','market_data_ingested','strategy_inference_performed'):
+              assert result[key] is False,key
+          PY
