@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -69,14 +68,14 @@ class R11AStorageTests(unittest.TestCase):
     def test_workspace_cap_is_checked_after_mutating_boundary(self) -> None:
         tiny = dataclasses.replace(
             limits.DEFAULT_LIMITS,
-            maximum_ephemeral_workspace_bytes=1,
-            minimum_free_workspace_bytes_before_oidc=2,
+            maximum_ephemeral_workspace_bytes=8_192,
+            minimum_free_workspace_bytes_before_oidc=16_384,
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "workspace"
             meter = storage.WorkspaceMeter(root, tiny)
             meter.bootstrap()
-            (root / "data").write_bytes(b"x" * 4096)
+            (root / "data").write_bytes(b"x" * 65_536)
             with self.assertRaises(storage.R11AStorageError):
                 meter.checkpoint("synthetic cap overflow")
 
@@ -102,11 +101,14 @@ class R11AStorageTests(unittest.TestCase):
 
 
 class R11ASchemaTests(unittest.TestCase):
-    def test_deterministic_json_rejects_binary_float_and_orders_mapping(self) -> None:
-        first = schema.deterministic_json_document({"b": 2, "a": 1})
-        second = schema.deterministic_json_document({"a": 1, "b": 2})
-        self.assertEqual(first, second)
-        self.assertEqual(first, b'{"a":1,"b":2}\n')
+    def test_deterministic_json_preserves_declared_order_and_can_sort_arbitrary_mappings(self) -> None:
+        declared = schema.deterministic_json_document({"b": 2, "a": 1})
+        sorted_keys = schema.deterministic_json_document(
+            {"b": 2, "a": 1},
+            sort_mapping_keys=True,
+        )
+        self.assertEqual(declared, b'{"b":2,"a":1}\n')
+        self.assertEqual(sorted_keys, b'{"a":1,"b":2}\n')
         with self.assertRaises(schema.R11ASchemaError):
             schema.deterministic_json_document({"x": 1.5})
 
@@ -115,15 +117,27 @@ class R11ASchemaTests(unittest.TestCase):
         rendered = schema.deterministic_ndjson([{"x": 1}, {"x": 2}])
         self.assertEqual(rendered, b'{"x":1}\n{"x":2}\n')
 
-    def test_hash_manifest_covers_every_preboundary_file_once(self) -> None:
-        files = {"a.json": b"a", "b.ndjson": b"b\n", "empty": b""}
+    def test_hash_manifest_covers_every_registered_preboundary_file_once(self) -> None:
+        eligible = [
+            path
+            for path in schema.ALL_CONTAINER_PATHS
+            if path not in {"R11A_FILES.sha256", "r11a-package-boundary.txt"}
+        ]
+        files = {
+            eligible[0]: b"a",
+            eligible[1]: b"b\n",
+            eligible[2]: b"",
+        }
         manifest = schema.render_hash_manifest(files)
         schema.verify_hash_manifest(manifest, files)
         rows = manifest.decode().splitlines()
         self.assertEqual(len(rows), 3)
         self.assertEqual([row.split("  ", 1)[1] for row in rows], sorted(files))
         with self.assertRaises(schema.R11ASchemaError):
-            schema.verify_hash_manifest(manifest + manifest.splitlines(keepends=True)[0], files)
+            schema.verify_hash_manifest(
+                manifest + manifest.splitlines(keepends=True)[0],
+                files,
+            )
 
     def test_package_boundary_is_exactly_1024_bytes_and_self_consistent(self) -> None:
         boundary = schema.render_package_boundary(
@@ -148,10 +162,16 @@ class R11ASchemaTests(unittest.TestCase):
             schema.verify_package_boundary(bytes(mutated))
 
     def test_artifact_registry_has_unique_safe_paths_and_empty_wallet_output(self) -> None:
-        paths = [path for _, path in schema.ALL_CONTAINERS]
+        paths = list(schema.ALL_CONTAINER_PATHS)
         self.assertEqual(len(paths), len(set(paths)))
         self.assertTrue(all("/" not in path and ".." not in path for path in paths))
-        self.assertIn(("empty_forbidden_wallet_feature_output", "r11a-wallet-features.ndjson"), schema.METADATA_CONTAINERS)
+        self.assertIn(
+            (
+                "empty_forbidden_wallet_feature_output",
+                "r11a-wallet-features.ndjson",
+            ),
+            schema.METADATA_CONTAINERS,
+        )
 
 
 if __name__ == "__main__":
