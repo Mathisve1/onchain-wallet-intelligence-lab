@@ -146,12 +146,29 @@ def repair_validator() -> None:
             "validator repository import path",
         )
 
-    old_dependency_check = '''    require(
+    old_loop_check = (
+        '        require("requests" not in source and "boto3" not in source, '
+        'f"unexpected dependency in {name}")\n'
+    )
+    new_loop_check = '''        for forbidden_import in (
+            "import boto3",
+            "from boto3",
+            "import botocore",
+            "from botocore",
+            "import requests",
+            "from requests",
+        ):
+            require(
+                forbidden_import not in source,
+                f"unexpected dependency import in {name}: {forbidden_import}",
+            )
+'''
+    old_collector_check = '''    require(
         all(name not in collector_text for name in ("boto3", "botocore", "requests")),
         "unfrozen dependency introduced",
     )
 '''
-    new_dependency_check = '''    for forbidden_import in (
+    new_collector_check = '''    for forbidden_import in (
         "import boto3",
         "from boto3",
         "import botocore",
@@ -164,10 +181,12 @@ def repair_validator() -> None:
             f"unfrozen dependency introduced: {forbidden_import}",
         )
 '''
-    if old_dependency_check in text:
-        text = text.replace(old_dependency_check, new_dependency_check, 1)
-    # A newer validator may already use AST/import-specific validation and need
-    # no textual rewrite. Absence of both historical forms is therefore valid.
+    if old_loop_check in text:
+        text = text.replace(old_loop_check, new_loop_check, 1)
+    elif old_collector_check in text:
+        text = text.replace(old_collector_check, new_collector_check, 1)
+    elif "for forbidden_import in (" not in text:
+        raise RepairError("validator dependency import check target absent")
 
     VALIDATOR.write_text(text, encoding="utf-8")
 
