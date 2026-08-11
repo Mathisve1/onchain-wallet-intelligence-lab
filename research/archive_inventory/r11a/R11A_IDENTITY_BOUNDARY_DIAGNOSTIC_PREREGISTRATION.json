@@ -1,0 +1,513 @@
+{
+  "schema_version": "1.0",
+  "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-001",
+  "pilot_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-001",
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "study_role": "EXACT_72_OBJECT_IDENTITY_BLOCK_OVERLAP_AND_DUPLICATE_PROVENANCE_DIAGNOSTIC_ONLY",
+  "research_question": "Across the exact 72 already selected R11 objects, which complete and conserving combination of TID scope false positives, expected counterparty pairs, exact block replay across objects, exact user-fill reobservation from proven block replay, conflicts, intra-block repeats, strict TID schema violations or unclassifiable evidence explains every repeated legacy wallet-plus-TID observation?",
+  "parent_r11_run": {
+    "run_id": 31436753081,
+    "job_id": 93612467250,
+    "artifact_id": 9082810554,
+    "dispatch_sha": "baca1925c23ef6b0136aa3d96d6d479ac7717bdf",
+    "artifact_zip_sha256": "45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5",
+    "research_conclusion": "R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED",
+    "release_consumed": true,
+    "rerun_authorized": false
+  },
+  "canonical_r11_evidence_closure_binding": {
+    "pull_request_number": 139,
+    "canonical_merge_commit_sha": "f7aa612d2a5638cce0fd197f57efea4b787f87f1",
+    "attestation_path": "research/archive_inventory/r11_evidence/HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json",
+    "release_consumption_path": "research/archive_inventory/r11_runtime/R11_EXECUTION_RELEASE_CONSUMPTION.json",
+    "validator_path": "governance/validate_r11_execution_evidence.py",
+    "required_validator_terminal_status": "R11_EXECUTION_EVIDENCE_VALID_UNRESOLVED",
+    "binding_complete": true,
+    "binding_is_owner_approval": false
+  },
+  "identity_contract": {
+    "decision_id": "R11A-CANONICAL-IDENTITY-MODEL-001",
+    "decision_path": "research/archive_inventory/r11a/R11A_IDENTITY_DECISION_DOSSIER.json",
+    "raw_observation_key": [
+      "object_key",
+      "verified_compressed_sha256",
+      "decompressed_record_ordinal",
+      "event_ordinal"
+    ],
+    "emitted_raw_observation_locator": {
+      "container_field": "raw_observation_locator",
+      "exact_fields": [
+        "source_object_key",
+        "compressed_object_sha256",
+        "record_ordinal_zero_based",
+        "event_ordinal_zero_based"
+      ],
+      "source_object_key_and_verified_compressed_sha256_both_required": true
+    },
+    "archive_block_locator": "block_number",
+    "archive_block_equality_invariants": [
+      "exact_raw_block_time",
+      "ordered_event_count",
+      "ordered_event_fingerprint"
+    ],
+    "protocol_matched_trade_key": [
+      "exact_raw_block_time",
+      "canonical_schema_validated_coin",
+      "validated_json_integer_tid"
+    ],
+    "wallet_user_fill_key": [
+      "canonical_lowercase_wallet_address",
+      "exact_raw_block_time",
+      "canonical_schema_validated_coin",
+      "validated_json_integer_tid"
+    ],
+    "legacy_weak_key_retained_for_diagnosis_only": [
+      "canonical_lowercase_wallet_address",
+      "normalized_typed_tid"
+    ],
+    "tid_schema_contract": {
+      "required_raw_json_type": "INTEGER",
+      "minimum_inclusive": 0,
+      "maximum_exclusive": 1125899906842624,
+      "string_decimal_float_or_boolean_tid_coercion_authorized": false,
+      "schema_violation_taxon": "TID_SCHEMA_VIOLATION"
+    },
+    "canonical_serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1"
+  },
+  "exact_input_scope": {
+    "selection_id": "HL-ARCHIVE-R11-72H-MODERN-PERSISTENCE-SELECTION-001",
+    "canonical_selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+    "selection_path": "research/archive_inventory/r11/R11_72H_SELECTION.json",
+    "selection_file_sha256": "57ed7476401ed50ce2008177b2accf58e99de81184661ebc05d74308138f74d6",
+    "prior_result_path": "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json",
+    "prior_result_sha256": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
+    "selected_object_count": 72,
+    "selected_hour_count": 72,
+    "complete_utc_day_count": 3,
+    "window_start_utc": "2025-07-28T00:00:00Z",
+    "window_end_exclusive_utc": "2025-07-31T00:00:00Z",
+    "target_bucket": "hl-mainnet-node-data",
+    "signing_region": "ap-northeast-1",
+    "exact_keys_etags_lengths_inherited_without_change": true,
+    "all_72_prior_compressed_sha256_values_required_as_post_download_integrity_anchors": true,
+    "seventy_third_object_authorized": false,
+    "other_historical_window_authorized": false
+  },
+  "proposed_request_envelope": {
+    "maximum_one_time_budget_eur": 0.5,
+    "maximum_monthly_budget_eur": 0,
+    "maximum_get_object_requests": 72,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "maximum_total_compressed_bytes": 2107738436,
+    "maximum_individual_compressed_bytes": 76616104,
+    "maximum_total_decompressed_bytes_processed_across_two_local_passes": 21079958490,
+    "maximum_individual_decompressed_bytes_per_pass": 536870912,
+    "maximum_ephemeral_workspace_bytes": 5368709120,
+    "minimum_free_workspace_bytes_before_oidc": 6442450944,
+    "maximum_retained_artifact_bytes": 134217728,
+    "maximum_runtime_seconds": 21600,
+    "request_order": "PATH_HOUR_ASCENDING",
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_content_length_required": true,
+    "exact_response_etag_required": true,
+    "preknown_compressed_sha256_required_for_every_object": true,
+    "stop_after_first_transport_or_identity_mismatch": true,
+    "head_object_authorized": false,
+    "range_get_authorized": false,
+    "list_objects_v2_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_all_my_buckets_authorized": false,
+    "get_object_attributes_authorized": false,
+    "get_object_version_authorized": false,
+    "http_redirect_following_authorized": false
+  },
+  "implementation_values_bound_before_owner_approval": [
+    "collector_sha256",
+    "schema_sha256",
+    "validator_sha256",
+    "workflow_git_blob_sha",
+    "stdlib_dependency_declaration",
+    "dedicated_role_reuse_or_successor_decision"
+  ],
+  "diagnostic_passes": [
+    {
+      "pass_id": "BLOCK_OVERLAP_PASS",
+      "method": "256_FIXED_WIDTH_BLOCK_NUMBER_PARTITIONS_THEN_DETERMINISTIC_SORT_AND_SECOND_LOCAL_PARSE",
+      "sort_key": [
+        "block_number",
+        "object_key",
+        "decompressed_record_ordinal"
+      ],
+      "classification_invariants": [
+        "exact_raw_block_time",
+        "ordered_event_count",
+        "ordered_event_fingerprint"
+      ],
+      "supplemental_exact_byte_and_writer_metadata_evidence": [
+        "raw_record_sha256",
+        "local_time"
+      ],
+      "required_output": "COMPLETE_ADJACENT_AND_NON_ADJACENT_BLOCK_OVERLAP_LEDGER"
+    },
+    {
+      "pass_id": "FILL_IDENTITY_PASS",
+      "method": "256_FIXED_WIDTH_VALID_WALLET_UINT50_TID_PARTITIONS_PLUS_LOSSLESS_INVALID_TID_LEDGER_THEN_DETERMINISTIC_SORT_AND_SECOND_LOCAL_PARSE",
+      "sort_keys": [
+        "legacy_weak_key",
+        "protocol_matched_trade_key",
+        "canonical_wallet_user_fill_key",
+        "raw_observation_locator"
+      ],
+      "required_outputs": [
+        "ALL_COMPLETE_REPEAT_GROUPS_WITH_RAW_BLOCK_AND_EVENT_PROVENANCE",
+        "ALL_EXPECTED_COUNTERPARTY_PAIR_PROOFS_IN_RETAINED_TRADE_GROUPS",
+        "ALL_TID_SCHEMA_VIOLATIONS_WITHOUT_COERCION"
+      ]
+    }
+  ],
+  "required_occurrence_fields": [
+    "record_type",
+    "primary_taxon",
+    "supporting_taxa",
+    "taxonomy_unit",
+    "taxonomy_unit_id",
+    "weak_key_group_id",
+    "block_replay_group_id",
+    "protocol_trade_group_id",
+    "wallet_fill_group_id",
+    "legacy_weak_key",
+    "raw_wallet_address",
+    "raw_tid_json_type",
+    "raw_tid_token",
+    "tid_validation_status",
+    "tid_schema_violation_reason",
+    "validated_integer_tid",
+    "weak_key_group_multiplicity",
+    "block_replay_group_multiplicity",
+    "protocol_trade_group_multiplicity",
+    "wallet_fill_group_multiplicity",
+    "protocol_trade_identity",
+    "wallet_fill_identity",
+    "raw_observation_locator",
+    "source",
+    "block_number",
+    "block_time_exact",
+    "local_time_exact",
+    "side_exact",
+    "fill_time_exact",
+    "selected_fill_sha256",
+    "full_fill_sha256",
+    "full_event_sha256",
+    "block_fingerprints",
+    "full_lossless_validated_fill_payload",
+    "first_versus_occurrence_field_diffmask",
+    "boundary_relationship_to_group_first",
+    "exact_block_replay_proof",
+    "expected_counterparty_pair_proof",
+    "deduplication_authorized"
+  ],
+  "required_global_outputs": [
+    "raw_event_observation_count",
+    "repeat_occurrence_count_sum_n_minus_one",
+    "affected_weak_key_group_count",
+    "affected_wallet_count",
+    "affected_tid_count",
+    "affected_canonical_key_count",
+    "affected_block_count",
+    "affected_object_count",
+    "affected_path_hour_count",
+    "affected_utc_day_count",
+    "repeat_relationship_counts",
+    "taxonomy_group_counts_by_class",
+    "taxonomy_occurrence_counts_by_class",
+    "complete_block_overlap_matrix",
+    "taxonomy_conservation_ledger",
+    "block_reducer_sorted_output_sha256",
+    "fill_reducer_sorted_output_sha256",
+    "taxonomy_conservation_passed",
+    "unclassifiable_group_count",
+    "duplicate_observation_output_sha256",
+    "duplicate_observation_output_bytes",
+    "block_replay_output_sha256",
+    "block_replay_output_bytes",
+    "retention_caps_exceeded",
+    "fill_time_versus_block_time_evidence_status",
+    "terminal_class",
+    "root_cause_claim_status"
+  ],
+  "duplicate_taxonomy": [
+    "TID_SCOPE_FALSE_POSITIVE",
+    "EXPECTED_COUNTERPARTY_PAIR",
+    "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+    "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY",
+    "CONFLICTING_BLOCK_REPLAY",
+    "CONFLICTING_USER_FILL",
+    "INTRA_BLOCK_REPEAT",
+    "TID_SCHEMA_VIOLATION",
+    "UNCLASSIFIABLE"
+  ],
+  "taxonomy_decision_contract": {
+    "exactly_one_primary_taxon_per_taxonomy_unit": true,
+    "supporting_taxa_do_not_count_as_additional_primary_classifications": true,
+    "payload_hash_only_replay_classification_authorized": false,
+    "taxonomy_units_by_class": {
+      "TID_SCOPE_FALSE_POSITIVE": "LEGACY_WALLET_PLUS_TYPED_TID_GROUP",
+      "EXPECTED_COUNTERPARTY_PAIR": "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+      "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": "ARCHIVE_BLOCK_NUMBER_GROUP",
+      "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY": "CANONICAL_WALLET_USER_FILL_GROUP",
+      "CONFLICTING_BLOCK_REPLAY": "ARCHIVE_BLOCK_NUMBER_GROUP",
+      "CONFLICTING_USER_FILL": "CANONICAL_WALLET_USER_FILL_GROUP",
+      "INTRA_BLOCK_REPEAT": "CANONICAL_WALLET_USER_FILL_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+      "TID_SCHEMA_VIOLATION": "RAW_TID_OBSERVATION",
+      "UNCLASSIFIABLE": "ANY_REQUIRED_TAXONOMY_UNIT"
+    },
+    "exact_block_replay_across_objects_requires": [
+      "same_block_number",
+      "distinct_raw_block_locators",
+      "distinct_source_object_keys",
+      "same_exact_raw_block_time",
+      "same_ordered_event_count",
+      "same_ordered_event_fingerprint"
+    ],
+    "raw_record_sha256_role_for_block_replay": "SUPPLEMENTAL_EXACT_BYTE_EVIDENCE_NOT_A_REQUIRED_ARCHIVE_BLOCK_EQUALITY_INVARIANT",
+    "exact_user_fill_reobservation_requires": [
+      "same_canonical_wallet_user_fill_key",
+      "same_full_fill_sha256",
+      "same_full_event_sha256",
+      "distinct_raw_observation_locators",
+      "every_reobservation_resolves_to_one_proven_exact_block_replay_group",
+      "no_two_reobservations_share_one_raw_block_locator"
+    ],
+    "expected_counterparty_pair_requires": [
+      "same_protocol_matched_trade_key",
+      "same_raw_block_locator",
+      "exactly_two_distinct_validated_wallets",
+      "exact_side_set_A_and_B",
+      "each_wallet_fill_occurs_once_in_that_raw_block"
+    ],
+    "tid_scope_false_positive_requires": [
+      "same_legacy_wallet_plus_typed_tid_key",
+      "at_least_two_distinct_protocol_matched_trade_keys",
+      "no_conflicting_user_fill",
+      "no_unresolved_or_missing_proof"
+    ],
+    "conflicting_block_replay_requires_any_difference_in": [
+      "exact_raw_block_time",
+      "ordered_event_count",
+      "ordered_event_fingerprint"
+    ],
+    "conflicting_user_fill_requires_same_canonical_key_and_any_payload_difference": true,
+    "intra_block_repeat_requires_same_wallet_fill_key_and_distinct_event_ordinals_in_one_raw_block_locator": true,
+    "tid_schema_violation_requires_validated_integer_tid_null": true,
+    "unclassifiable_required_for_missing_conflicting_or_multiple_non_supporting_proofs": true
+  },
+  "occurrence_record_contract": {
+    "all_required_occurrence_fields_present_on_every_row_with_explicit_null_when_inapplicable": true,
+    "raw_observation_locator_exact_fields": [
+      "source_object_key",
+      "compressed_object_sha256",
+      "record_ordinal_zero_based",
+      "event_ordinal_zero_based"
+    ],
+    "source_exact_fields": [
+      "object_key",
+      "compressed_sha256",
+      "path_hour_utc",
+      "object_ordinal_zero_based",
+      "record_ordinal_zero_based"
+    ],
+    "boundary_relationship_exact_fields": [
+      "same_object",
+      "same_block_number",
+      "same_raw_block_locator",
+      "same_path_hour",
+      "same_utc_day",
+      "path_hour_distance",
+      "adjacent_hour_boundary"
+    ],
+    "valid_tid_row": {
+      "tid_validation_status": "VALID_UINT50",
+      "validated_integer_tid_required": true,
+      "protocol_trade_identity_required": true,
+      "wallet_fill_identity_required": true
+    },
+    "tid_schema_violation_row": {
+      "tid_validation_status": "TID_SCHEMA_VIOLATION",
+      "raw_tid_json_type_and_token_required": true,
+      "validated_integer_tid_must_be_null": true,
+      "protocol_trade_identity_must_be_null": true,
+      "wallet_fill_identity_must_be_null": true,
+      "coercion_authorized": false
+    },
+    "exact_user_fill_reobservation_requires_nonnull_exact_block_replay_proof": true,
+    "expected_counterparty_pair_requires_nonnull_counterparty_pair_proof": true,
+    "deduplication_authorized_must_be_false": true
+  },
+  "global_output_contract": {
+    "taxonomy_count_fields_must_have_exact_zero_filled_keys": [
+      "TID_SCOPE_FALSE_POSITIVE",
+      "EXPECTED_COUNTERPARTY_PAIR",
+      "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+      "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY",
+      "CONFLICTING_BLOCK_REPLAY",
+      "CONFLICTING_USER_FILL",
+      "INTRA_BLOCK_REPEAT",
+      "TID_SCHEMA_VIOLATION",
+      "UNCLASSIFIABLE"
+    ],
+    "taxonomy_counts_are_nonnegative_json_integers": true,
+    "taxonomy_counts_conserve_separately_by_declared_taxonomy_unit": true,
+    "cross_layer_taxonomy_counts_must_not_be_summed_as_one_partition": true,
+    "repeat_relationship_count_exact_fields": [
+      "intra_object",
+      "inter_object",
+      "intra_block",
+      "inter_block",
+      "same_path_hour",
+      "cross_path_hour",
+      "same_utc_day",
+      "cross_utc_day",
+      "adjacent_hour_boundary",
+      "non_adjacent_hour_boundary",
+      "exact_identical_payload",
+      "conflicting_payload"
+    ],
+    "taxonomy_conservation_ledger_exact_fields": [
+      "raw_event_observation_count",
+      "valid_tid_observation_count",
+      "tid_schema_violation_observation_count",
+      "legacy_repeat_group_count",
+      "legacy_repeat_observation_count",
+      "repeat_occurrence_count_sum_n_minus_one",
+      "protocol_trade_group_count_in_retained_evidence",
+      "wallet_fill_group_count_in_retained_evidence",
+      "repeated_block_group_count",
+      "repeated_block_observation_count",
+      "unclassifiable_unit_count",
+      "all_required_units_classified",
+      "all_occurrences_have_one_unique_raw_locator",
+      "all_proof_references_resolve",
+      "counts_conserve"
+    ],
+    "complete_terminal_class_requires_all_72_hours_3_days_caps_and_conservation": true,
+    "root_cause_proven_requires_zero_unclassifiable_units_and_no_cap_overflow": true
+  },
+  "conservation_invariants": {
+    "raw_observations_equal_singletons_plus_all_occurrences_in_emitted_repeat_groups": true,
+    "each_weak_group_observations_equal_one_plus_repeat_occurrences": true,
+    "each_replayed_block_is_exactly_equal_or_conflict": true,
+    "every_future_reduction_candidate_has_all_raw_provenance": true,
+    "fixed_width_indices_second_parse_and_emitted_taxonomy_must_conserve_counts": true,
+    "all_72_hours_and_3_days_must_complete_before_any_complete_terminal_class": true,
+    "sampling_authorized": false,
+    "partial_cause_claim_authorized": false
+  },
+  "allowed_terminal_classes": [
+    "R11A_ROOT_CAUSE_TAXONOMY_COMPLETE",
+    "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED",
+    "R11A_DIAGNOSTIC_INCOMPLETE"
+  ],
+  "retention_and_privacy": {
+    "retain_all_complete_repeat_groups": true,
+    "retain_all_occurrences_and_provenance_for_each_repeat_group": true,
+    "retain_complete_repeated_block_number_overlap_ledger": true,
+    "retain_singleton_raw_fill_payloads": false,
+    "retain_singleton_aggregate_counts_and_deterministic_hashes": true,
+    "lossy_or_sampled_repeat_group_representation_authorized": false,
+    "wallet_feature_output_required_empty": true,
+    "ranking_or_economic_output_fields_authorized": false,
+    "maximum_repeated_legacy_key_groups_retained": 100000,
+    "maximum_repeated_observations_retained": 250000,
+    "maximum_repeated_block_groups_retained": 100000,
+    "artifact_cap_exceeded_behavior": "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED"
+  },
+  "iam_and_session_boundary": {
+    "dedicated_r11_role_name": "onchain-wallet-intelligence-hl-archive-scaling-r11",
+    "dedicated_r11_role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-scaling-r11",
+    "role_reuse_requires_new_exact_owner_approval": true,
+    "proposed_role_decision": "REUSE_EXISTING_DEDICATED_R11_ROLE_WITHOUT_ANY_POLICY_OR_TRUST_MUTATION_ONLY_IF_NEW_OWNER_APPROVAL_EXPLICITLY_AUTHORIZES_REUSE",
+    "role_or_policy_mutation_authorized": false,
+    "persistent_allowlist_must_remain_exact_same_72_objects": true,
+    "session_policy_allowed_action_only": [
+      "s3:GetObject"
+    ],
+    "session_policy_date_prefix_intersection": [
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250728/*",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250729/*",
+      "arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250730/*"
+    ],
+    "role_session_duration_seconds": 7200,
+    "fresh_sts_preflight_required": false,
+    "existing_role_attestation_and_successful_r11_assumption_must_be_revalidated_offline": true
+  },
+  "stop_conditions": [
+    "NONCANONICAL_MAIN_OR_NONFIRST_ATTEMPT",
+    "RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED",
+    "INSUFFICIENT_EPHEMERAL_DISK_BEFORE_OIDC",
+    "AWS_IDENTITY_MISMATCH",
+    "REQUEST_CAP_REACHED",
+    "HTTP_OR_REQUESTER_PAYS_FAILURE",
+    "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH",
+    "DECOMPRESSION_OR_NON_TID_STRUCTURAL_SCHEMA_FAILURE",
+    "FIXED_INDEX_OR_ARTIFACT_CAP_EXCEEDED",
+    "TAXONOMY_OR_CONSERVATION_INCOMPLETE",
+    "RUNTIME_CAP_REACHED"
+  ],
+  "future_implementation_contract_requirements": {
+    "implementation_contract_path": "research/archive_inventory/r11a_implementation/R11A_IMPLEMENTATION_CONTRACT.json",
+    "collector_path": "research/archive_inventory/r11a_implementation/collector.py",
+    "identity_path": "research/archive_inventory/r11a_implementation/identity.py",
+    "diagnostic_classifier_path": "research/archive_inventory/r11a_implementation/diagnostic.py",
+    "activity_tracker_path": "research/archive_inventory/r11a_implementation/activity.py",
+    "immutable_limits_path": "research/archive_inventory/r11a_implementation/limits.py",
+    "workflow_candidate_path": "research/archive_inventory/r11a_implementation/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
+    "exact_collector_schema_validator_and_workflow_hashes_required_before_owner_approval": true,
+    "stdlib_only_or_exact_dependency_lock_required": true,
+    "workflow_candidate_must_remain_outside_dot_github_until_separate_post_approval_installation": true,
+    "implementation_merge_is_not_execution_release": true
+  },
+  "current_runtime_authority": {
+    "workflow_dispatch": false,
+    "aws_iam_mutation": false,
+    "aws_oidc": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "diagnostic_processing": false,
+    "diagnostic_artifact_retention": false
+  },
+  "governance_gates": {
+    "canonical_r11_evidence_closure_required": true,
+    "clean_context_identity_review_required": true,
+    "explicit_owner_approval_required": true,
+    "separate_inert_implementation_review_required": true,
+    "separate_execution_release_candidate_required": true,
+    "separate_single_use_activation_required": true,
+    "separate_execution_evidence_pr_required": true,
+    "execution_authorized_by_this_preregistration": false,
+    "r11b_repair_authorized_by_r11a": false
+  },
+  "downstream_authorizations": {
+    "blind_deduplication": false,
+    "historical_expansion": false,
+    "wallet_feature_publication": false,
+    "wallet_ranking": false,
+    "candidate_shortlisting": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "strategy_inference": false,
+    "paper_trading": false,
+    "live_trading": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "network_requests_executed_by_preregistration": 0,
+  "object_bytes_read_by_preregistration": 0,
+  "diagnostic_rows_created_by_preregistration": 0,
+  "owner_approval_status": "NOT_PRESENT",
+  "execution_authorized_now": false
+}
