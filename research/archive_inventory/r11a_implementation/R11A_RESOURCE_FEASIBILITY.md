@@ -26,6 +26,8 @@ The 96-byte weak-index estimate describes the expected integer-`tid` path, not a
 
 This is deliberate. A cap terminal is evidence that the preregistered retention design was insufficient; it is not permission to sample, truncate a group or silently raise a limit.
 
+No sampling or silent cap increase is permitted.
+
 ## Atomicity and cleanup
 
 The implementation uses append-only framed partitions, deterministic external sorting and an atomic staging directory. No scientific container is exposed until all required rows are sealed. A retention or artifact cap produces seven exact zero-byte scientific containers and a cap terminal. Other incomplete terminals also publish no partial scientific prefix. The forbidden wallet-feature file is always zero bytes.
