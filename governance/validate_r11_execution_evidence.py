@@ -40,6 +40,33 @@ def require(condition: bool, message: str) -> None:
         raise R11EvidenceError(message)
 
 
+def exact_json_equal(actual: object, expected: object) -> bool:
+    """Compare JSON values without Python's bool/int equality shortcut."""
+
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict)
+        return set(actual) == set(expected) and all(
+            exact_json_equal(actual[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        assert isinstance(actual, list)
+        return len(actual) == len(expected) and all(
+            exact_json_equal(left, right) for left, right in zip(actual, expected, strict=True)
+        )
+    return actual == expected
+
+
+def require_exact_mapping(actual: object, expected: dict, label: str) -> None:
+    require(isinstance(actual, dict), f"{label} must be an object")
+    assert isinstance(actual, dict)
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    require(not missing and not extra, f"{label} schema drift: missing={missing}, extra={extra}")
+    require(exact_json_equal(actual, expected), f"{label} exact value or type drift")
+
+
 def load_json(path: Path) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     require(isinstance(value, dict), f"JSON root must be an object: {path}")
@@ -84,7 +111,7 @@ def parse_ledger(data: bytes) -> dict[str, str]:
 
 
 def validate(root: Path = ROOT) -> None:
-    _, entries = decode_retained_zip(root)
+    archive, entries = decode_retained_zip(root)
     ledger = parse_ledger(entries["R11_FILES.sha256"])
     for name in HASHED_ENTRIES:
         require(sha256(entries[name]) == ledger[name], f"internal ledger hash mismatch: {name}")
@@ -93,6 +120,8 @@ def validate(root: Path = ROOT) -> None:
 
     context = json.loads(entries["r11-context.json"])
     result = json.loads(entries["r11-result.json"])
+    require(isinstance(context, dict), "retained context root must be an object")
+    require(isinstance(result, dict), "retained result root must be an object")
     verification = load_json(root / RUN / "INDEPENDENT_ARTIFACT_VERIFICATION.json")
     attestation = load_json(root / EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json")
     diagnostics = load_json(root / EVIDENCE / "R11_AGGREGATE_DIAGNOSTICS.json")
@@ -147,6 +176,7 @@ def validate(root: Path = ROOT) -> None:
     require(verification["provider_sha256"] == verification["independently_supplied_zip_sha256"] == ARTIFACT_SHA256, "provider artifact binding drift")
     require(verification["artifact_id"] == ARTIFACT_ID and verification["run_id"] == RUN_ID and verification["job_id"] == JOB_ID, "verification identity drift")
     require(verification["internal_ledger"] == ledger and verification["internal_ledger_matches_all_retained_raw_files"] is True, "verification ledger drift")
+    require(verification["duplicate_wallet_tid_observation_exists"] is True, "retained failure-path duplicate observation drift")
     require(verification["duplicate_wallet_tid_count_known_from_retained_evidence"] is False, "duplicate count overclaim")
     require(verification["duplicate_wallet_tid_locations_known_from_retained_evidence"] is False, "duplicate location overclaim")
 
@@ -159,14 +189,146 @@ def validate(root: Path = ROOT) -> None:
     require(diagnostics["duplicate_wallet_tid_locations_known_from_retained_evidence"] is False, "diagnostics overclaim duplicate locations")
     require(diagnostics["event_pair_count"] == sums["event_pair_count"] and diagnostics["block_record_count"] == sums["block_record_count"], "diagnostic totals drift")
 
+    expected_claims_proven = {
+        "all_72_exact_objects_completed_under_single_use_release": (
+            context["selected_hour_count"] == result["completed_hour_count"] == len(hours) == 72
+        ),
+        "all_72_getobject_requests_succeeded": (
+            result["request_attempt_count"]
+            == result["successful_request_count"]
+            == result["s3_http_request_count"]
+            == context["maximum_get_object_requests"]
+            == 72
+            and result["failed_request_count"] == 0
+        ),
+        "at_least_one_repeated_normalized_tid_within_one_wallet_state_was_observed": verification[
+            "duplicate_wallet_tid_observation_exists"
+        ],
+        "blind_deduplication_was_not_performed": (
+            result["aggregate_wallet_feature_summary"] is None
+            and result["wallet_feature_retained"] is False
+            and entries["r11-wallet-features.ndjson"] == b""
+        ),
+        "wallet_feature_output_was_not_retained_after_unresolved_duplicate_condition": (
+            result["aggregate_wallet_feature_summary"] is None
+            and result["wallet_feature_retained"] is False
+            and len(entries["r11-wallet-features.ndjson"]) == 0
+            and ledger["r11-wallet-features.ndjson"] == EMPTY_SHA256
+        ),
+        "zero_after_path_hour_fills": sums["fill_time_after_path_hour_count"] == 0,
+        "zero_failed_requests": result["failed_request_count"] == 0,
+        "zero_record_anchored_alignment_violations": sums["record_anchored_alignment_violation_count"] == 0,
+        "zero_retries": result["retries_used"] == 0,
+    }
+    require(all(value is True for value in expected_claims_proven.values()), "raw evidence does not prove every attested claim")
+    require_exact_mapping(attestation.get("claims_proven"), expected_claims_proven, "attestation claims_proven")
+
+    expected_execution_summary = {
+        "aggregate_wallet_feature_summary": result["aggregate_wallet_feature_summary"],
+        "block_record_count": sums["block_record_count"],
+        "completed_day_count": result["completed_day_count"],
+        "completed_hour_count": result["completed_hour_count"],
+        "event_pair_count": sums["event_pair_count"],
+        "failed_get_object_requests": result["failed_request_count"],
+        "fill_time_after_path_hour_count": sums["fill_time_after_path_hour_count"],
+        "fill_time_before_path_hour_count": sums["fill_time_before_path_hour_count"],
+        "fill_time_inside_path_hour_count": sums["fill_time_inside_path_hour_count"],
+        "http_redirects_followed": result["http_redirects_followed"],
+        "record_anchored_alignment_violation_count": sums["record_anchored_alignment_violation_count"],
+        "request_attempt_count": result["request_attempt_count"],
+        "retries_used": result["retries_used"],
+        "selected_hour_count": context["selected_hour_count"],
+        "successful_get_object_requests": result["successful_request_count"],
+        "total_compressed_bytes": result["total_compressed_bytes"],
+        "total_decompressed_bytes": result["total_decompressed_bytes"],
+        "wallet_feature_bytes": len(entries["r11-wallet-features.ndjson"]),
+        "wallet_feature_retained": result["wallet_feature_retained"],
+    }
+    require_exact_mapping(
+        attestation.get("exact_execution_summary"),
+        expected_execution_summary,
+        "attestation exact_execution_summary",
+    )
+    require(exact_json_equal(attestation.get("per_day_summaries"), days), "attestation per-day summaries drift from raw result")
+
     require(release["release_consumed"] is False, "immutable pre-run release snapshot was rewritten")
     require(release["rerun_authorized"] is False, "immutable release permits rerun")
-    require(consumption["release_consumed"] is True and consumption["remaining_get_object_budget_from_consumed_release"] == 0, "consumption not fail-closed")
-    require(consumption["future_r11_dispatch_authorized"] is False and consumption["rerun_authorized"] is False, "consumption reopens R11")
-    require(consumption["workflow_run_id"] == RUN_ID and consumption["workflow_job_id"] == JOB_ID and consumption["artifact_id"] == ARTIFACT_ID, "consumption identity drift")
-    require(consumption["canonical_dispatch_sha"] == DISPATCH_SHA and consumption["artifact_zip_sha256"] == ARTIFACT_SHA256, "consumption provenance drift")
-    require(consumption["preregistered_duplicate_wallet_tid_count_retention_met"] is False, "consumption hides evidence failure")
-    require(consumption["duplicate_wallet_tid_count_known"] is False and consumption["duplicate_root_cause_known"] is False, "consumption overclaims root cause")
+    expected_consumption = {
+        "schema_version": "1.0",
+        "execution_release_id": release["execution_release_id"],
+        "pilot_id": result["pilot_id"],
+        "status": "CONSUMED_UNRESOLVED_DUPLICATE_WALLET_TID",
+        "release_consumed": True,
+        "canonical_dispatch_sha": context["dispatch_sha"],
+        "workflow_run_id": context["workflow_run_id"],
+        "workflow_job_id": verification["job_id"],
+        "workflow_run_attempt": context["workflow_run_attempt"],
+        "artifact_id": verification["artifact_id"],
+        "artifact_name": verification["artifact_name"],
+        "artifact_size_bytes": len(archive),
+        "artifact_zip_sha256": sha256(archive),
+        "terminal_status": result["terminal_status"],
+        "technical_result": result["technical_result"],
+        "research_conclusion": result["research_conclusion"],
+        "failure_class": result["failure_class"],
+        "request_attempt_count": result["request_attempt_count"],
+        "successful_get_object_requests": result["successful_request_count"],
+        "failed_get_object_requests": result["failed_request_count"],
+        "retries_used": result["retries_used"],
+        "http_redirects_followed": result["http_redirects_followed"],
+        "compressed_bytes_downloaded": result["total_compressed_bytes"],
+        "decompressed_bytes": result["total_decompressed_bytes"],
+        "completed_hour_count": result["completed_hour_count"],
+        "completed_day_count": result["completed_day_count"],
+        "wallet_feature_retained": result["wallet_feature_retained"],
+        "wallet_feature_bytes": len(entries["r11-wallet-features.ndjson"]),
+        "wallet_feature_sha256": ledger["r11-wallet-features.ndjson"],
+        "preregistered_duplicate_wallet_tid_count_retention_met": diagnostics[
+            "duplicate_wallet_tid_count_retention_met"
+        ],
+        "duplicate_wallet_tid_count_known": verification[
+            "duplicate_wallet_tid_count_known_from_retained_evidence"
+        ],
+        "duplicate_wallet_tid_locations_known": verification[
+            "duplicate_wallet_tid_locations_known_from_retained_evidence"
+        ],
+        "duplicate_root_cause_known": False,
+        "future_r11_dispatch_authorized": False,
+        "rerun_authorized": False,
+        "remaining_get_object_budget_from_consumed_release": (
+            release["maximum_get_object_requests"] - result["request_attempt_count"]
+        ),
+        "new_network_request_requires_new_preregistration_owner_approval_and_release": True,
+        "downstream_authorizations": release["downstream_authorizations"],
+        "trading_authorizations": release["trading_authorizations"],
+    }
+    require_exact_mapping(consumption, expected_consumption, "R11 release consumption")
+
+    expected_attestation_bindings = {
+        "artifact_id": verification["artifact_id"],
+        "artifact_name": verification["artifact_name"],
+        "artifact_zip_sha256": sha256(archive),
+        "canonical_dispatch_sha": context["dispatch_sha"],
+        "failure_class": result["failure_class"],
+        "pilot_id": result["pilot_id"],
+        "record_anchored_rule_id": result["record_anchored_rule_id"],
+        "release_consumed": consumption["release_consumed"],
+        "remaining_get_object_budget_from_consumed_release": consumption[
+            "remaining_get_object_budget_from_consumed_release"
+        ],
+        "rerun_authorized": consumption["rerun_authorized"],
+        "preregistered_duplicate_wallet_tid_count_retention_met": diagnostics[
+            "duplicate_wallet_tid_count_retention_met"
+        ],
+        "research_conclusion": result["research_conclusion"],
+        "technical_result": result["technical_result"],
+        "terminal_status": result["terminal_status"],
+        "workflow_job_id": verification["job_id"],
+        "workflow_run_attempt": context["workflow_run_attempt"],
+        "workflow_run_id": context["workflow_run_id"],
+    }
+    for key, expected in expected_attestation_bindings.items():
+        require(key in attestation and exact_json_equal(attestation[key], expected), f"attestation {key} drift")
 
     require(all(value is False for value in attestation["claims_not_proven"].values()), "attestation marks an unproven claim true")
     require(all(value is False for value in attestation["downstream_authorizations"].values()), "attestation opens downstream authority")
