@@ -4,6 +4,7 @@ import base64
 import hashlib
 import io
 import json
+import math
 import zipfile
 from pathlib import Path
 
@@ -67,9 +68,53 @@ def require_exact_mapping(actual: object, expected: dict, label: str) -> None:
     require(exact_json_equal(actual, expected), f"{label} exact value or type drift")
 
 
+def strict_json_loads(data: bytes | str, label: str) -> object:
+    """Decode standards-compliant JSON with no duplicate or non-finite values."""
+
+    if isinstance(data, bytes):
+        try:
+            text = data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise R11EvidenceError(f"{label} is not strict UTF-8") from exc
+    elif isinstance(data, str):
+        text = data
+    else:  # pragma: no cover - internal callers are statically bytes or str
+        raise R11EvidenceError(f"{label} JSON input must be bytes or text")
+
+    def strict_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        value: dict[str, object] = {}
+        for key, item in pairs:
+            if key in value:
+                raise R11EvidenceError(f"{label} contains duplicate JSON key: {key}")
+            value[key] = item
+        return value
+
+    def reject_constant(token: str) -> object:
+        raise R11EvidenceError(f"{label} contains forbidden non-finite JSON constant: {token}")
+
+    def finite_float(token: str) -> float:
+        value = float(token)
+        if not math.isfinite(value):
+            raise R11EvidenceError(f"{label} contains non-finite JSON number: {token}")
+        return value
+
+    try:
+        return json.loads(
+            text,
+            object_pairs_hook=strict_object,
+            parse_constant=reject_constant,
+            parse_float=finite_float,
+        )
+    except R11EvidenceError:
+        raise
+    except (json.JSONDecodeError, ValueError, OverflowError) as exc:
+        raise R11EvidenceError(f"{label} is not strict JSON") from exc
+
+
 def load_json(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8"))
+    value = strict_json_loads(path.read_bytes(), str(path))
     require(isinstance(value, dict), f"JSON root must be an object: {path}")
+    assert isinstance(value, dict)
     return value
 
 
@@ -134,8 +179,8 @@ def validate(root: Path = ROOT) -> None:
     require(entries["r11-wallet-features.ndjson"] == b"", "unresolved R11 feature output must be empty")
     require(entries["r11.rc"] == b"0\n", "R11 return-code evidence drift")
 
-    context = json.loads(entries["r11-context.json"])
-    result = json.loads(entries["r11-result.json"])
+    context = strict_json_loads(entries["r11-context.json"], "retained r11-context.json")
+    result = strict_json_loads(entries["r11-result.json"], "retained r11-result.json")
     require(isinstance(context, dict), "retained context root must be an object")
     require(isinstance(result, dict), "retained result root must be an object")
     verification = load_json(root / RUN / "INDEPENDENT_ARTIFACT_VERIFICATION.json")
