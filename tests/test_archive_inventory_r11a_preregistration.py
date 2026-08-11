@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -20,461 +21,310 @@ class R11APreregistrationTests(unittest.TestCase):
         cls.result = validator.load(validator.R11_RESULT)
         cls.consumption = validator.load(validator.R11_CONSUMPTION)
 
-    def validate(self, prereg: dict | None = None, dossier: dict | None = None, root_cause: dict | None = None) -> None:
+    def validate(
+        self,
+        *,
+        prereg: dict | None = None,
+        dossier: dict | None = None,
+        root_cause: dict | None = None,
+        selection: dict | None = None,
+        result: dict | None = None,
+        consumption: dict | None = None,
+    ) -> None:
         validator.validate(
             self.prereg if prereg is None else prereg,
             self.dossier if dossier is None else dossier,
             self.root_cause if root_cause is None else root_cause,
-            self.selection,
-            self.result,
-            self.consumption,
+            self.selection if selection is None else selection,
+            self.result if result is None else result,
+            self.consumption if consumption is None else consumption,
         )
 
-    def test_dedicated_validator_passes(self) -> None:
-        completed = subprocess.run(
-            [sys.executable, "governance/validate_r11a_preregistration.py"],
-            cwd=validator.ROOT,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-        self.assertIn("R11A_PREREGISTRATION_VALID_NO_EXECUTION", completed.stdout)
-
-    def assert_prereg_rejected(self, mutated: dict) -> None:
+    def reject_prereg(self, mutate) -> None:
+        value = copy.deepcopy(self.prereg)
+        mutate(value)
         with self.assertRaises(validator.R11APreregistrationError):
-            self.validate(prereg=mutated)
+            self.validate(prereg=value)
 
-    def test_request_and_retry_caps_fail_independently(self) -> None:
-        for field, value in (("maximum_get_object_requests", 73), ("maximum_retries_per_request", 1)):
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.prereg)
-                mutated["proposed_request_envelope"][field] = value
-                self.assert_prereg_rejected(mutated)
+    def reject_prereg_structurally(self, mutate) -> None:
+        value = copy.deepcopy(self.prereg)
+        mutate(value)
+        original = validator.PREREG_SEMANTIC_SHA256
+        validator.PREREG_SEMANTIC_SHA256 = validator.semantic_digest(value)
+        try:
+            with self.assertRaises(validator.R11APreregistrationError):
+                self.validate(prereg=value)
+        finally:
+            validator.PREREG_SEMANTIC_SHA256 = original
 
-    def test_additional_object_or_window_fails(self) -> None:
+    def reject_dossier(self, mutate) -> None:
+        value = copy.deepcopy(self.dossier)
+        mutate(value)
+        with self.assertRaises(validator.R11APreregistrationError):
+            self.validate(dossier=value)
+
+    def reject_root(self, mutate) -> None:
+        value = copy.deepcopy(self.root_cause)
+        mutate(value)
+        with self.assertRaises(validator.R11APreregistrationError):
+            self.validate(root_cause=value)
+
+    def test_dedicated_validator_passes_normal_and_optimized(self) -> None:
+        for flags in ([], ["-O"]):
+            with self.subTest(flags=flags):
+                completed = subprocess.run(
+                    [sys.executable, *flags, "governance/validate_r11a_preregistration.py"],
+                    cwd=validator.ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                self.assertIn("R11A_PREREGISTRATION_VALID_NO_EXECUTION", completed.stdout)
+
+    def test_validator_has_no_optimization_sensitive_checks(self) -> None:
+        source = Path(validator.__file__).read_text(encoding="utf-8")
+        forbidden = "as" + "sert"
+        self.assertNotIn(forbidden, source)
+
+    def test_current_full_semantic_bindings_are_exact(self) -> None:
+        self.assertEqual(validator.semantic_digest(self.prereg), validator.PREREG_SEMANTIC_SHA256)
+        self.assertEqual(validator.semantic_digest(self.dossier), validator.DOSSIER_SEMANTIC_SHA256)
+        self.assertEqual(validator.semantic_digest(self.root_cause), validator.ROOT_CAUSE_SEMANTIC_SHA256)
+        self.assertEqual(validator.semantic_digest(self.selection), validator.SELECTION_SEMANTIC_SHA256)
+        self.assertEqual(validator.semantic_digest(self.result), validator.RESULT_SEMANTIC_SHA256)
+        self.assertEqual(validator.semantic_digest(self.consumption), validator.CONSUMPTION_SEMANTIC_SHA256)
+
+    def test_contract_significant_mapping_order_changes_semantic_digest(self) -> None:
         mutated = copy.deepcopy(self.prereg)
-        mutated["exact_input_scope"]["seventy_third_object_authorized"] = True
+        containers = mutated["global_output_contract"]["artifact_layout_contract"]["scientific_output_containers"]
+        first = containers.pop("taxonomy_unit_ledger")
+        containers["taxonomy_unit_ledger"] = first
+        self.assertNotEqual(validator.semantic_digest(mutated), validator.PREREG_SEMANTIC_SHA256)
         with self.assertRaises(validator.R11APreregistrationError):
             self.validate(prereg=mutated)
 
-    def test_weak_key_promotion_fails(self) -> None:
-        mutated = copy.deepcopy(self.prereg)
-        mutated["identity_contract"]["protocol_matched_trade_key"] = ["wallet", "tid"]
+    def test_exact_decimal_token_alias_changes_semantic_and_byte_digest(self) -> None:
+        original = validator.PREREG.read_text(encoding="utf-8")
+        needle = '"maximum_one_time_budget_eur": 0.5'
+        self.assertEqual(original.count(needle), 1)
+        mutated_text = original.replace(needle, '"maximum_one_time_budget_eur": 0.50000000000000001')
+        mutated = validator.strict_json_loads(mutated_text, "decimal alias mutation")
+        self.assertIsInstance(mutated, dict)
+        self.assertNotEqual(validator.semantic_digest(mutated), validator.PREREG_SEMANTIC_SHA256)
         with self.assertRaises(validator.R11APreregistrationError):
             self.validate(prereg=mutated)
 
-    def test_tid_coercion_and_coin_rewrite_fail_independently(self) -> None:
-        for field in (
-            "string_decimal_float_or_boolean_tid_coercion_authorized",
-            "coin_rewriting_without_versioned_schema_authorized",
-        ):
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.dossier)
-                mutated["schema_boundaries"][field] = True
-                with self.assertRaises(validator.R11APreregistrationError):
-                    self.validate(dossier=mutated)
-
-    def test_blind_dedup_and_repair_authority_fail_independently(self) -> None:
-        for field in ("blind_drop_duplicates_authorized", "repair_selected_by_this_dossier"):
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.dossier)
-                mutated["decision_boundaries"][field] = True
-                with self.assertRaises(validator.R11APreregistrationError):
-                    self.validate(dossier=mutated)
-
-    def test_role_mutation_and_runtime_authority_fail_independently(self) -> None:
-        mutations = (
-            ("iam", lambda value: value["iam_and_session_boundary"].__setitem__("role_or_policy_mutation_authorized", True)),
-            ("runtime", lambda value: value["current_runtime_authority"].__setitem__("get_object", True)),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_root_cause_and_r12_overclaims_fail_independently(self) -> None:
-        for field in ("root_cause_claim_authorized_now", "r12_ready"):
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.root_cause)
-                mutated[field] = True
-                with self.assertRaises(validator.R11APreregistrationError):
-                    self.validate(root_cause=mutated)
-
-    def test_preregistration_top_level_schema_is_exact(self) -> None:
-        mutations = (
-            ("extra", lambda value: value.__setitem__("unreviewed_extra", False)),
-            ("missing", lambda value: value.pop("study_role")),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_frozen_taxonomy_rejects_alias_missing_extra_and_order_drift(self) -> None:
-        mutations = (
-            ("legacy_alias", lambda values: values.__setitem__(0, "LEGITIMATE_TID_REUSE")),
-            ("missing", lambda values: values.pop()),
-            ("extra", lambda values: values.append("UNKNOWN")),
-            ("reordered", lambda values: values.reverse()),
-        )
-        for source in ("preregistration", "dossier"):
-            for label, mutate in mutations:
-                with self.subTest(source=source, mutation=label):
-                    prereg = copy.deepcopy(self.prereg)
-                    dossier = copy.deepcopy(self.dossier)
-                    target = prereg if source == "preregistration" else dossier
-                    mutate(target["duplicate_taxonomy"])
-                    with self.assertRaises(validator.R11APreregistrationError):
-                        self.validate(prereg=prereg, dossier=dossier)
-
-    def test_required_occurrence_and_global_output_fields_are_exact(self) -> None:
-        for field in ("required_occurrence_fields", "required_global_outputs"):
-            mutations = (
-                ("missing", lambda values: values.pop()),
-                ("extra", lambda values: values.append("ambiguous_legacy_field")),
-                ("reordered", lambda values: values.reverse()),
-                ("wrong_type", lambda values: values.__setitem__(0, False)),
-            )
-            for label, mutate in mutations:
-                with self.subTest(field=field, mutation=label):
-                    mutated = copy.deepcopy(self.prereg)
-                    mutate(mutated[field])
-                    self.assert_prereg_rejected(mutated)
-
-    def test_raw_locator_requires_object_key_sha_record_and_event(self) -> None:
-        paths = (
-            ("identity", ["identity_contract", "emitted_raw_observation_locator", "exact_fields"]),
-            ("occurrence", ["occurrence_record_contract", "raw_observation_locator_exact_fields"]),
-        )
-        for source, path in paths:
-            for component in validator.EXPECTED_RAW_OBSERVATION_LOCATOR["exact_fields"]:
-                with self.subTest(source=source, missing=component):
-                    mutated = copy.deepcopy(self.prereg)
-                    values: object = mutated
-                    for key in path:
-                        values = values[key]  # type: ignore[index]
-                    self.assertIsInstance(values, list)
-                    values.remove(component)  # type: ignore[union-attr]
-                    self.assert_prereg_rejected(mutated)
-
-    def test_locator_schema_rejects_alias_extra_order_and_key_without_sha(self) -> None:
-        mutations = (
-            (
-                "alias",
-                lambda value: value["identity_contract"]["emitted_raw_observation_locator"]["exact_fields"].__setitem__(
-                    1, "verified_object_sha256"
-                ),
-            ),
-            (
-                "extra",
-                lambda value: value["identity_contract"]["emitted_raw_observation_locator"]["exact_fields"].append(
-                    "path_hour_utc"
-                ),
-            ),
-            (
-                "order",
-                lambda value: value["identity_contract"]["emitted_raw_observation_locator"]["exact_fields"].reverse(),
-            ),
-            (
-                "key_without_sha",
-                lambda value: value["identity_contract"]["emitted_raw_observation_locator"].__setitem__(
-                    "source_object_key_and_verified_compressed_sha256_both_required", False
-                ),
-            ),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_uint50_contract_is_type_strict_and_exact(self) -> None:
-        mutations = (
-            ("raw_type", "required_raw_json_type", "NUMBER"),
-            ("minimum", "minimum_inclusive", -1),
-            ("maximum", "maximum_exclusive", 2**50 + 1),
-            ("minimum_bool", "minimum_inclusive", False),
-            ("maximum_float", "maximum_exclusive", float(2**50)),
-            ("coercion", "string_decimal_float_or_boolean_tid_coercion_authorized", True),
-            ("violation_taxon", "schema_violation_taxon", "UNKNOWN"),
-        )
-        for label, field, value in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutated["identity_contract"]["tid_schema_contract"][field] = value
-                self.assert_prereg_rejected(mutated)
-
-    def test_schema_violation_rows_cannot_fabricate_a_valid_tid_or_identity(self) -> None:
-        for field in (
-            "validated_integer_tid_must_be_null",
-            "protocol_trade_identity_must_be_null",
-            "wallet_fill_identity_must_be_null",
-            "coercion_authorized",
-        ):
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.prereg)
-                current = mutated["occurrence_record_contract"]["tid_schema_violation_row"][field]
-                mutated["occurrence_record_contract"]["tid_schema_violation_row"][field] = not current
-                self.assert_prereg_rejected(mutated)
-
-    def test_replay_and_counterparty_classifications_require_proof_joins(self) -> None:
-        fields = (
-            "exact_user_fill_reobservation_requires_nonnull_exact_block_replay_proof",
-            "expected_counterparty_pair_requires_nonnull_counterparty_pair_proof",
-        )
-        for field in fields:
-            with self.subTest(field=field):
-                mutated = copy.deepcopy(self.prereg)
-                mutated["occurrence_record_contract"][field] = False
-                self.assert_prereg_rejected(mutated)
-
-    def test_taxonomy_predicates_and_count_units_are_exact(self) -> None:
-        mutations = (
-            (
-                "payload_only_replay",
-                lambda value: value["taxonomy_decision_contract"].__setitem__(
-                    "payload_hash_only_replay_classification_authorized", True
-                ),
-            ),
-            (
-                "missing_replay_proof",
-                lambda value: value["taxonomy_decision_contract"]["exact_user_fill_reobservation_requires"].pop(),
-            ),
-            (
-                "counterparty_pair_weakened",
-                lambda value: value["taxonomy_decision_contract"]["expected_counterparty_pair_requires"].pop(),
-            ),
-            (
-                "taxonomy_unit_alias",
-                lambda value: value["taxonomy_decision_contract"]["taxonomy_units_by_class"].__setitem__(
-                    "EXPECTED_COUNTERPARTY_PAIR", "DUPLICATE_GROUP"
-                ),
-            ),
-            (
-                "count_key_missing",
-                lambda value: value["global_output_contract"]["taxonomy_count_fields_must_have_exact_zero_filled_keys"].pop(),
-            ),
-            (
-                "cross_layer_sum",
-                lambda value: value["global_output_contract"].__setitem__(
-                    "cross_layer_taxonomy_counts_must_not_be_summed_as_one_partition", False
-                ),
-            ),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_block_replay_uses_dossier_invariants_not_raw_record_identity(self) -> None:
-        mutations = (
-            (
-                "raw_record_promoted",
-                lambda value: value["diagnostic_passes"][0]["classification_invariants"].append("raw_record_sha256"),
-            ),
-            (
-                "event_fingerprint_removed",
-                lambda value: value["diagnostic_passes"][0]["classification_invariants"].remove(
-                    "ordered_event_fingerprint"
-                ),
-            ),
-            (
-                "raw_record_role_rewritten",
-                lambda value: value["taxonomy_decision_contract"].__setitem__(
-                    "raw_record_sha256_role_for_block_replay", "PRIMARY_IDENTITY"
-                ),
-            ),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_canonical_evidence_merge_binding_is_exact_and_non_authorizing(self) -> None:
-        mutations = (
-            (
-                "wrong_sha",
-                lambda value: value["canonical_r11_evidence_closure_binding"].__setitem__(
-                    "canonical_merge_commit_sha", "0" * 40
-                ),
-            ),
-            (
-                "short_sha",
-                lambda value: value["canonical_r11_evidence_closure_binding"].__setitem__(
-                    "canonical_merge_commit_sha", "f7aa612d"
-                ),
-            ),
-            (
-                "binding_incomplete",
-                lambda value: value["canonical_r11_evidence_closure_binding"].__setitem__("binding_complete", False),
-            ),
-            (
-                "approval_overclaim",
-                lambda value: value["canonical_r11_evidence_closure_binding"].__setitem__(
-                    "binding_is_owner_approval", True
-                ),
-            ),
-            ("extra", lambda value: value["canonical_r11_evidence_closure_binding"].__setitem__("extra", False)),
-            ("missing", lambda value: value["canonical_r11_evidence_closure_binding"].pop("validator_path")),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-        self.assertNotIn("TODO", validator.PREREG.read_text(encoding="utf-8"))
-
-    def test_every_frozen_cap_is_required_with_exact_schema(self) -> None:
-        for field in validator.EXPECTED_ENVELOPE:
-            with self.subTest(missing=field):
-                mutated = copy.deepcopy(self.prereg)
-                mutated["proposed_request_envelope"].pop(field)
-                self.assert_prereg_rejected(mutated)
-        for label, mutate in (
-            ("extra", lambda value: value["proposed_request_envelope"].__setitem__("extra_false_cap", False)),
-            (
-                "bool_for_integer",
-                lambda value: value["proposed_request_envelope"].__setitem__("maximum_get_object_requests", True),
-            ),
-        ):
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_input_and_future_implementation_bindings_are_exact(self) -> None:
-        sections = (
-            ("exact_input_scope", validator.EXPECTED_INPUT_SCOPE),
-            ("future_implementation_contract_requirements", validator.EXPECTED_FUTURE_IMPLEMENTATION_REQUIREMENTS),
-        )
-        for section, expected in sections:
-            for field in expected:
-                with self.subTest(section=section, missing=field):
-                    mutated = copy.deepcopy(self.prereg)
-                    mutated[section].pop(field)
-                    self.assert_prereg_rejected(mutated)
-            with self.subTest(section=section, mutation="extra"):
-                mutated = copy.deepcopy(self.prereg)
-                mutated[section]["unreviewed_extra"] = False
-                self.assert_prereg_rejected(mutated)
-        for label, mutate in (
-            (
-                "binding_missing",
-                lambda value: value["implementation_values_bound_before_owner_approval"].pop(),
-            ),
-            (
-                "binding_extra",
-                lambda value: value["implementation_values_bound_before_owner_approval"].append(
-                    "unreviewed_dependency"
-                ),
-            ),
-        ):
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_every_authority_and_retention_map_is_exact(self) -> None:
-        sections = (
-            ("current_runtime_authority", validator.EXPECTED_RUNTIME_AUTHORITY),
-            ("downstream_authorizations", validator.EXPECTED_DOWNSTREAM_AUTHORIZATIONS),
-            ("governance_gates", validator.EXPECTED_GOVERNANCE_GATES),
-            ("iam_and_session_boundary", validator.EXPECTED_IAM_BOUNDARY),
-            ("retention_and_privacy", validator.EXPECTED_RETENTION),
-        )
-        for section, expected in sections:
-            for field in expected:
-                with self.subTest(section=section, missing=field):
-                    mutated = copy.deepcopy(self.prereg)
-                    mutated[section].pop(field)
-                    self.assert_prereg_rejected(mutated)
-            with self.subTest(section=section, mutation="extra"):
-                mutated = copy.deepcopy(self.prereg)
-                mutated[section]["unreviewed_false_key"] = False
-                self.assert_prereg_rejected(mutated)
-
-    def test_every_closed_runtime_and_downstream_authority_rejects_true(self) -> None:
-        for section, expected in (
-            ("current_runtime_authority", validator.EXPECTED_RUNTIME_AUTHORITY),
-            ("downstream_authorizations", validator.EXPECTED_DOWNSTREAM_AUTHORIZATIONS),
-        ):
-            for field, frozen in expected.items():
-                self.assertIs(frozen, False)
-                with self.subTest(section=section, authority=field):
-                    mutated = copy.deepcopy(self.prereg)
-                    mutated[section][field] = True
-                    self.assert_prereg_rejected(mutated)
-
-    def test_terminal_and_artifact_cap_status_cannot_diverge(self) -> None:
-        mutations = (
-            (
-                "terminal_alias",
-                lambda value: value["allowed_terminal_classes"].__setitem__(
-                    1, "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_WITH_NO_CAUSE_OR_REPAIR_CONCLUSION"
-                ),
-            ),
-            (
-                "cap_behavior_alias",
-                lambda value: value["retention_and_privacy"].__setitem__(
-                    "artifact_cap_exceeded_behavior",
-                    "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_WITH_NO_CAUSE_OR_REPAIR_CONCLUSION",
-                ),
-            ),
-        )
-        for label, mutate in mutations:
-            with self.subTest(mutation=label):
-                mutated = copy.deepcopy(self.prereg)
-                mutate(mutated)
-                self.assert_prereg_rejected(mutated)
-
-    def test_json_loader_rejects_duplicates_nonfinite_and_nonobject_roots(self) -> None:
-        invalid = (
-            '{"outer":{"key":1,"key":2}}',
-            '{"value":NaN}',
-            '{"value":Infinity}',
-            '{"value":-Infinity}',
-            '{"value":1e9999}',
-        )
-        for text in invalid:
-            with self.subTest(text=text), self.assertRaises(validator.R11APreregistrationError):
-                validator.strict_json_loads(text, "synthetic preregistration")
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "root.json"
-            path.write_text("[]", encoding="utf-8")
+            path = Path(directory) / "mutated-prereg.json"
+            path.write_text(mutated_text, encoding="utf-8")
+            code = (
+                "import sys; from pathlib import Path; "
+                "from governance import validate_r11a_preregistration as v; "
+                "v.require(v.digest(Path(sys.argv[1])) == v.PREREG_BYTE_SHA256, 'preregistration byte drift')"
+            )
+            for flags in ([], ["-O"]):
+                with self.subTest(flags=flags):
+                    completed = subprocess.run(
+                        [sys.executable, *flags, "-c", code, str(path)],
+                        cwd=validator.ROOT,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertIn("preregistration byte drift", completed.stderr)
+
+    def test_prereg_top_level_extra_missing_and_type_drift_fail(self) -> None:
+        mutations = (
+            lambda value: value.__setitem__("unreviewed_extra", False),
+            lambda value: value.pop("research_question"),
+            lambda value: value.__setitem__("network_requests_executed_by_preregistration", False),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_execution_owner_and_runtime_authority_fail(self) -> None:
+        mutations = (
+            lambda value: value.__setitem__("execution_authorized_now", True),
+            lambda value: value.__setitem__("owner_approval_status", "APPROVED"),
+            lambda value: value["current_runtime_authority"].__setitem__("get_object", True),
+            lambda value: value["governance_gates"].__setitem__("r11b_repair_authorized_by_r11a", True),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_scope_expansion_or_release_reuse_fails(self) -> None:
+        mutations = (
+            lambda value: value["exact_input_scope"].__setitem__("seventy_third_object_authorized", True),
+            lambda value: value["exact_input_scope"].__setitem__("other_historical_window_authorized", True),
+            lambda value: value["parent_r11_run"].__setitem__("rerun_authorized", True),
+            lambda value: value["exact_input_scope"].__setitem__("canonical_selection_sha256", "0" * 64),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_identity_coin_tid_and_locator_mutations_fail(self) -> None:
+        mutations = (
+            lambda value: value["identity_contract"].__setitem__("protocol_matched_trade_key", ["wallet", "tid"]),
+            lambda value: value["identity_contract"]["coin_identity_contract"].__setitem__("canonical_identity_value", "NORMALIZED_COIN"),
+            lambda value: value["identity_contract"]["tid_schema_contract"].__setitem__("maximum_exclusive", 2**53),
+            lambda value: value["proof_and_classification_contract"]["raw_block_locator_contract"]["exact_fields"].append("block_number"),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_taxonomy_proof_and_wallet_unit_mutations_fail(self) -> None:
+        mutations = (
+            lambda value: value["duplicate_taxonomy"].__setitem__(0, "LEGITIMATE_TID_REUSE"),
+            lambda value: value["proof_and_classification_contract"]["taxonomy_unit_ledger_record_contract"]["taxonomy_unit_type_exact_values"].remove("RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"),
+            lambda value: value["proof_and_classification_contract"]["proof_id_contract"].__setitem__("generated_primary_key_is_excluded_from_its_own_preimage", False),
+            lambda value: value["taxonomy_decision_contract"].__setitem__("payload_hash_only_replay_classification_authorized", True),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_transport_reducer_and_cap_contract_mutations_fail(self) -> None:
+        mutations = (
+            lambda value: value["proof_and_classification_contract"]["object_transport_and_two_pass_conservation_ledger_record_contract"]["processing_status_exact_values"].remove("BODY_READ_FAILED_AFTER_RESPONSE_METADATA"),
+            lambda value: value["proof_and_classification_contract"]["reducer_partition_conservation_ledger_record_contract"].__setitem__("reducer_processing_order", ["HISTORICAL_LEGACY_WEAK_KEY", "BLOCK_NUMBER"]),
+            lambda value: value["proposed_request_envelope"].__setitem__("maximum_retained_scientific_output_bytes", 130023424),
+            lambda value: value["global_output_contract"]["resource_and_cap_conservation_ledger_contract"].__setitem__("post_measurement_packaging_reservation_milliseconds_exact", 0),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_repaired_stop_cap_and_empty_output_rules_are_structurally_guarded(self) -> None:
+        mutations = (
+            lambda value: value["global_output_contract"]["resource_and_cap_conservation_ledger_contract"].__setitem__(
+                "metadata_projection_mode_exact_values", ["ONE_FABRICATED_MODE"]
+            ),
+            lambda value: value["global_output_contract"]["preflight_and_stop_evidence_ledger_contract"].__setitem__(
+                "phase_check_order", "WORKSPACE_WITHOUT_RUNTIME_ENDPOINT"
+            ),
+            lambda value: value["global_output_contract"]["preflight_and_stop_evidence_ledger_contract"][
+                "parse_failure_record_ordinal_nullability_by_failure_code"
+            ]["record_ordinal_must_be_null"].remove("LZ4_DECOMPRESSION_FAILURE"),
+            lambda value: value["global_output_contract"]["block_reducer_aggregate_derivation_contract"].__setitem__(
+                "applicability", "ALL_FIELDS_NULL_UNLESS_REDUCER_COMPLETE"
+            ),
+            lambda value: value["proof_and_classification_contract"][
+                "complete_block_overlap_matrix_record_contract"
+            ].__setitem__("record_scope", "COMPLETE_ONLY_WITH_NO_EMPTY_STATUS_RULE"),
+            lambda value: value["global_output_contract"]["package_boundary_record_contract"].__setitem__(
+                "exact_byte_count", 512
+            ),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg_structurally(mutate)
+
+    def test_result_self_reference_and_projected_evidence_mutations_fail(self) -> None:
+        mutations = (
+            lambda value: value["global_output_contract"]["artifact_layout_contract"].__setitem__("result_file_container_reference_shape", "REFERENCES_EVERY_FILE_INCLUDING_ITSELF"),
+            lambda value: value["global_output_contract"]["artifact_layout_contract"]["acyclic_sealing_order"].reverse(),
+            lambda value: value["global_output_contract"]["resource_and_cap_conservation_ledger_contract"]["exact_fields"].remove("projected_scientific_output_entry_ledger"),
+            lambda value: value["global_output_contract"]["incomplete_and_cap_output_applicability_contract"].__setitem__("all_required_global_output_keys_are_present_for_every_terminal_even_when_the_exact_value_is_null_by_this_contract", False),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_prereg(mutate)
+
+    def test_dossier_full_mapping_and_authority_mutations_fail(self) -> None:
+        mutations = (
+            lambda value: value.__setitem__("execution_authorized_now", True),
+            lambda value: value.__setitem__("schema_version", 999),
+            lambda value: value["identity_layers"]["protocol_matched_trade"].__setitem__("canonical_key", ["wallet", "tid"]),
+            lambda value: value["decision_boundaries"].__setitem__("blind_drop_duplicates_authorized", True),
+            lambda value: value["fingerprints"].__setitem__("raw_record_sha256", "NORMALIZED_JSON"),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_dossier(mutate)
+
+    def test_root_cause_full_mapping_and_overclaims_fail(self) -> None:
+        mutations = (
+            lambda value: value.__setitem__("execution_authorized_now", True),
+            lambda value: value.__setitem__("required_empirical_gate", "NONE"),
+            lambda value: value.__setitem__("root_cause_claim_authorized_now", True),
+            lambda value: value.__setitem__("repair_selection_authorized_now", True),
+            lambda value: value.__setitem__("r12_ready", True),
+            lambda value: value.__setitem__("invented_repeat_count", 1),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.reject_root(mutate)
+
+    def test_duplicate_root_finding_identifier_fails(self) -> None:
+        self.reject_root(
+            lambda value: value["finding_register"][1].__setitem__(
+                "finding", value["finding_register"][0]["finding"]
+            )
+        )
+
+    def test_selection_result_and_consumption_mutations_fail(self) -> None:
+        mutated_selection = copy.deepcopy(self.selection)
+        mutated_selection["exact_targets"].pop()
+        with self.assertRaises(validator.R11APreregistrationError):
+            self.validate(selection=mutated_selection)
+
+        mutated_result = copy.deepcopy(self.result)
+        mutated_result["research_conclusion"] = "R11_CLOSED"
+        with self.assertRaises(validator.R11APreregistrationError):
+            self.validate(result=mutated_result)
+
+        consumption_mutations = (
+            lambda value: value.__setitem__("remaining_get_object_budget_from_consumed_release", 72),
+            lambda value: value.__setitem__("duplicate_root_cause_known", True),
+            lambda value: value.__setitem__("future_r11_dispatch_authorized", True),
+            lambda value: value["trading_authorizations"].__setitem__("live", True),
+            lambda value: value.__setitem__("status", "CONSUMED_COMPLETE"),
+            lambda value: value.__setitem__("workflow_run_id", 0),
+            lambda value: value.__setitem__("artifact_zip_sha256", "0" * 64),
+            lambda value: value.__setitem__("new_execution_authorized", True),
+        )
+        for mutate in consumption_mutations:
+            value = copy.deepcopy(self.consumption)
+            mutate(value)
+            with self.assertRaises(validator.R11APreregistrationError):
+                self.validate(consumption=value)
+
+    def test_strict_json_rejects_duplicate_keys_at_any_depth(self) -> None:
+        for text in ('{"a":1,"a":1}', '{"a":{"b":1,"b":2}}'):
+            with self.subTest(text=text):
+                with self.assertRaises(validator.R11APreregistrationError):
+                    validator.strict_json_loads(text, "mutation")
+
+    def test_strict_json_rejects_nonfinite_and_overflow(self) -> None:
+        for token in ("NaN", "Infinity", "-Infinity", "1e1000000"):
+            with self.subTest(token=token):
+                with self.assertRaises(validator.R11APreregistrationError):
+                    validator.strict_json_loads('{"value":' + token + '}', "mutation")
+
+    def test_strict_load_rejects_invalid_utf8(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.json"
+            path.write_bytes(b'{"x":"\xff"}')
             with self.assertRaises(validator.R11APreregistrationError):
                 validator.load(path)
 
-    def test_validation_stays_active_under_python_optimized_mode(self) -> None:
-        code = """
-import copy
-from governance import validate_r11a_preregistration as v
-p = v.load(v.PREREG)
-p["duplicate_taxonomy"][0] = "LEGITIMATE_TID_REUSE"
-try:
-    v.validate(p, v.load(v.DOSSIER), v.load(v.ROOT_CAUSE), v.load(v.SELECTION), v.load(v.R11_RESULT), v.load(v.R11_CONSUMPTION))
-except v.R11APreregistrationError:
-    raise SystemExit(0)
-raise SystemExit(1)
-"""
-        completed = subprocess.run(
-            [sys.executable, "-O", "-c", code],
-            cwd=validator.ROOT,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-
-    def test_readme_records_frozen_nonexecuting_status_and_exact_merge(self) -> None:
-        readme = (validator.BASE / "r11a/README.md").read_text(encoding="utf-8")
-        self.assertIn("PREREGISTERED_NO_EXECUTION", readme)
-        self.assertIn("frozen resource ceilings", readme)
-        self.assertIn("f7aa612d2a5638cce0fd197f57efea4b787f87f1", readme)
-        self.assertIn("Owner approval remains absent", readme)
-        self.assertNotIn("draft preregistration skeleton", readme)
+    def test_every_prose_artifact_is_byte_bound(self) -> None:
+        validator.validate_prose_hashes()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "normative.md"
+            original = b"R11 remains unresolved.\n"
+            path.write_bytes(original)
+            expected = hashlib.sha256(original).hexdigest()
+            validator.validate_prose_hashes({path: expected})
+            path.write_bytes(b"R11 is closed.\n")
+            with self.assertRaises(validator.R11APreregistrationError):
+                validator.validate_prose_hashes({path: expected})
 
 
 if __name__ == "__main__":
