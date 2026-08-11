@@ -1,0 +1,219 @@
+name: Hyperliquid Archive R11A Identity Boundary Diagnostic R2
+run-name: R11A identity-boundary diagnostic R2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-r11a-identity-boundary-r2
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  R11A_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a
+  R11A_RELEASE_PATH: research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r11a-identity-boundary-r2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Prove exact canonical single-use release before OIDC
+        id: static_gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = 'workflow_dispatch'
+          test "${DISPATCH_REF}" = 'refs/heads/main'
+          test "${GITHUB_RUN_ATTEMPT}" = '1'
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+          python governance/validate_repository.py
+          python governance/validate_r11a_preregistration.py
+          python governance/validate_r11a_implementation.py
+          python governance/validate_r11a_d1_closure.py
+          test -f "${R11A_RELEASE_PATH}"
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+
+          release = json.loads(Path(os.environ['R11A_RELEASE_PATH']).read_text())
+          assert release['status'] == 'RELEASED_FOR_EXACTLY_ONE_CANONICAL_R11A_RUN'
+          assert release['single_workflow_dispatch_authorized'] is True
+          assert release['rerun_authorized'] is False
+          assert release['release_consumed'] is False
+          assert release['role_arn'] == os.environ['R11A_ROLE_ARN']
+          assert release['maximum_get_object_requests'] == 72
+          assert release['maximum_requests_per_object'] == 1
+          assert release['maximum_retries_per_request'] == 0
+          assert release['maximum_total_compressed_bytes'] == 2107738436
+          assert release['maximum_total_decompressed_bytes_across_two_passes'] == 21079958490
+          assert release['maximum_ephemeral_workspace_bytes'] == 5368709120
+          assert release['minimum_free_workspace_bytes_before_oidc'] == 6442450944
+          assert release['maximum_retained_artifact_bytes'] == 134217728
+          assert release['maximum_runtime_seconds'] == 21600
+          assert release['deduplication_authorized'] is False
+          assert release['wallet_feature_output_authorized'] is False
+          assert release['r11b_repair_authorized'] is False
+          assert all(value is False for value in release['downstream_authorizations'].values())
+          assert all(value is False for value in release['trading_authorizations'].values())
+
+          url = (
+              f"https://api.github.com/repos/{os.environ['CURRENT_REPOSITORY']}"
+              "/actions/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r2.yml"
+              "/runs?event=workflow_dispatch&branch=main&per_page=100"
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'r11a-r2-single-use-check',
+              },
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              runs = json.load(response)['workflow_runs']
+          eligible = [row for row in runs if row['head_sha'] == os.environ['DISPATCH_SHA']]
+          assert len(eligible) == 1
+          assert int(eligible[0]['id']) == int(os.environ['CURRENT_RUN_ID'])
+          PY
+
+      - name: Verify pre-OIDC free workspace
+        id: workspace_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from research.archive_inventory.r11a_implementation import runtime
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'r11a-workspace'
+          guard = runtime.RuntimeGuard()
+          meter = runtime.GuardedWorkspaceMeter(root, runtime_guard=guard)
+          observed = meter.require_pre_oidc_free_space()
+          print(f'pre_oidc_free_workspace_bytes={observed}')
+          PY
+
+      - name: Assume exact successor R11A role
+        id: configure
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a
+          aws-region: ap-northeast-1
+          role-duration-seconds: 21600
+          role-session-name: HLArchiveR11AIdentity
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R11AApprovedThreeDateIntersection","Effect":"Allow","Action":"s3:GetObject","Resource":["arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250728/*","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250729/*","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250730/*"]}]}
+
+      - name: Execute bounded R11A diagnostic once
+        id: collector
+        shell: bash
+        run: |
+          set +e
+          python -m research.archive_inventory.r11a_implementation.entrypoint \
+            --workspace "${RUNNER_TEMP}/r11a-workspace" \
+            --artifact-directory "${RUNNER_TEMP}/r11a-artifact"
+          rc=$?
+          set -e
+          echo "return_code=${rc}" >> "${GITHUB_OUTPUT}"
+          case "${rc}" in 0|20|21) ;; *) exit "${rc}" ;; esac
+
+      - name: Seal failure evidence when execution did not create an artifact
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "${RUNNER_TEMP}/r11a-artifact/r11a-result.json"; then
+            exit 0
+          fi
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from research.archive_inventory.r11a_implementation import collector, failure, runtime, storage
+
+          targets = collector.frozen_targets()
+          state = runtime.ExecutionEvidenceState(runtime.runtime_targets(targets))
+          state.trigger(
+              'RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED',
+              phase='PRE_OIDC_OR_OIDC_FAILURE',
+              inputs={'static_gate_outcome': '${{ steps.static_gate.outcome }}', 'configure_outcome': '${{ steps.configure.outcome }}'},
+          )
+          workspace = Path(os.environ['RUNNER_TEMP']) / 'r11a-failure-workspace'
+          meter = storage.WorkspaceMeter(workspace)
+          meter.bootstrap()
+          failure.seal_minimal_failure_artifact(
+              artifact_directory=Path(os.environ['RUNNER_TEMP']) / 'r11a-artifact',
+              meter=meter,
+              state=state,
+              context=collector._network_context(),
+              failure_class='PRECOLLECTOR_WORKFLOW_FAILURE',
+              failure_message='precollector workflow gate failed; inspect GitHub logs',
+              elapsed_runtime_milliseconds=0,
+          )
+          PY
+
+      - name: Upload bounded R11A evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r11a-identity-boundary-r2-${{ github.run_id }}
+          path: ${{ runner.temp }}/r11a-artifact
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Enforce exact terminal and closed downstream authority
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'r11a-artifact'
+          result = json.loads((root / 'r11a-result.json').read_text())
+          rc = int((root / 'r11a.rc').read_text().strip())
+          exact = {
+              'R11A_ROOT_CAUSE_TAXONOMY_COMPLETE': 0,
+              'R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED': 20,
+              'R11A_DIAGNOSTIC_INCOMPLETE': 21,
+          }
+          assert result['terminal_class'] in exact
+          assert exact[result['terminal_class']] == rc
+          assert (root / 'r11a-wallet-features.ndjson').read_bytes() == b''
+          if rc != 0:
+              assert result['root_cause_claim_status'] == 'NOT_PROVEN'
+          PY
