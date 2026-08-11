@@ -1,0 +1,385 @@
+{
+  "schema_version": "1.0",
+  "amendment_id": "R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002",
+  "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "canonical_parent_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+  "original_preregistration_merge_commit": "5103c846be8a53732d8559a281ac8b57ce4d7aac",
+  "original_inert_implementation_merge_commit": "8e778fdf6e7b5ef5475791bd4292b2d04055afcd",
+  "failed_closure_attempt_merge_commit": "4bb3eaf4cbcfea7771261ade73d618912496585a",
+  "containment_merge_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+  "original_r11_run_id": 31436753081,
+  "original_r11_artifact_id": 9082810554,
+  "original_r11_artifact_sha256": "45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5",
+  "independent_review_verdict": "RED",
+  "owner_approval_eligible_now": false,
+  "amendment_scope": {
+    "supersedes_original_runtime_and_retention_design": true,
+    "preserves_original_scientific_question": true,
+    "preserves_original_four_layer_identity_model": true,
+    "preserves_original_nine_taxon_vocabulary": true,
+    "preserves_exact_72_object_input_scope": true,
+    "preserves_request_budget_and_historical_window": true,
+    "does_not_reinterpret_original_r11_or_r10d_evidence": true,
+    "does_not_authorize_execution": true
+  },
+  "reason_for_amendment": {
+    "original_contract_is_not_approval_ready": true,
+    "original_contract_requires_exhaustive_detailed_schema_evidence_that_is_not_necessary_to_resolve_the_duplicate_root_cause": true,
+    "original_contract_combines_root_cause_evidence_with_repository_wide_schema_census": true,
+    "original_contracts_5_gib_workspace_cap_is_not_safely_compatible_with_the_unbounded_detailed_schema_and_group_materialization_design": true,
+    "silent_weakening_forbidden": true,
+    "formal_amendment_required_before_new_implementation": true
+  },
+  "scientific_question": "CLASSIFY_EVERY_REOBSERVATION_IMPLICATED_BY_THE_ORIGINAL_R11_LEGACY_WALLET_PLUS_TYPED_TID_TRIGGER_AND_DETERMINE_WHETHER_IT_IS_SCOPE_REUSE_EXPECTED_COUNTERPARTY_STRUCTURE_EXACT_BLOCK_REPLAY_EXACT_WALLET_FILL_REOBSERVATION_CONFLICT_OR_UNCLASSIFIABLE",
+  "exact_input_scope": {
+    "selection_id": "HL-ARCHIVE-R11-72H-MODERN-PERSISTENCE-SELECTION-001",
+    "selection_path": "research/archive_inventory/r11/R11_72H_SELECTION.json",
+    "selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+    "prior_result_path": "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json",
+    "prior_result_sha256": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
+    "selected_object_count": 72,
+    "selected_hour_count": 72,
+    "complete_utc_day_count": 3,
+    "window_start_utc": "2025-07-28T00:00:00Z",
+    "window_end_exclusive_utc": "2025-07-31T00:00:00Z",
+    "target_bucket": "hl-mainnet-node-data",
+    "signing_region": "ap-northeast-1",
+    "seventy_third_object_authorized": false,
+    "other_historical_window_authorized": false
+  },
+  "request_and_resource_envelope": {
+    "maximum_one_time_budget_eur_micros": 500000,
+    "maximum_monthly_budget_eur_micros": 0,
+    "maximum_get_object_requests": 72,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "maximum_total_compressed_bytes": 2107738436,
+    "maximum_individual_compressed_bytes": 76616104,
+    "maximum_total_decompressed_bytes_across_two_local_passes": 21079958490,
+    "maximum_individual_decompressed_bytes_per_pass": 536870912,
+    "maximum_ephemeral_workspace_bytes": 5368709120,
+    "minimum_free_workspace_bytes_before_oidc": 6442450944,
+    "maximum_retained_artifact_bytes": 134217728,
+    "reserved_non_scientific_package_metadata_bytes": 4194304,
+    "maximum_retained_scientific_output_bytes": 130023424,
+    "maximum_runtime_seconds": 21600,
+    "post_measurement_packaging_reservation_seconds": 300,
+    "minimum_upload_window_seconds": 60,
+    "partition_count": 256,
+    "external_sort_memory_bytes": 67108864,
+    "maximum_retained_repeated_legacy_groups": 100000,
+    "maximum_retained_repeated_legacy_observations": 250000,
+    "maximum_retained_repeated_block_groups": 100000,
+    "maximum_single_group_spool_bytes": 67108864,
+    "request_order": "PATH_HOUR_ASCENDING",
+    "stop_after_first_transport_integrity_or_parse_failure": true,
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_response_etag_required": true,
+    "exact_content_length_required": true,
+    "preknown_compressed_sha256_required": true,
+    "http_redirect_following_authorized": false,
+    "head_object_authorized": false,
+    "range_get_authorized": false,
+    "list_objects_v2_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_all_my_buckets_authorized": false,
+    "get_object_attributes_authorized": false,
+    "get_object_version_authorized": false
+  },
+  "identity_model": {
+    "raw_observation_key": [
+      "source_object_key",
+      "verified_compressed_object_sha256",
+      "record_ordinal_zero_based",
+      "event_ordinal_zero_based"
+    ],
+    "archive_block_group_key": [
+      "block_number"
+    ],
+    "archive_block_equality_invariants": [
+      "exact_raw_block_time",
+      "ordered_event_count",
+      "ordered_event_fingerprint_sha256"
+    ],
+    "protocol_matched_trade_key": [
+      "exact_raw_block_time",
+      "exact_raw_coin_string",
+      "validated_json_integer_tid"
+    ],
+    "wallet_user_fill_key": [
+      "canonical_lowercase_wallet_address",
+      "exact_raw_block_time",
+      "exact_raw_coin_string",
+      "validated_json_integer_tid"
+    ],
+    "historical_wallet_plus_typed_tid_key_role": "DIAGNOSTIC_TRIGGER_ONLY_NOT_CANONICAL_IDENTITY",
+    "payload_hash_only_identity_authorized": false,
+    "deduplication_authorized": false,
+    "first_seen_wins_authorized": false,
+    "last_seen_wins_authorized": false
+  },
+  "duplicate_taxonomy": [
+    "TID_SCOPE_FALSE_POSITIVE",
+    "EXPECTED_COUNTERPARTY_PAIR",
+    "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+    "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY",
+    "CONFLICTING_BLOCK_REPLAY",
+    "CONFLICTING_USER_FILL",
+    "INTRA_BLOCK_REPEAT",
+    "TID_SCHEMA_VIOLATION",
+    "UNCLASSIFIABLE"
+  ],
+  "authoritative_unit_universes": {
+    "LEGACY_REPEAT_OCCURRENCE": "EVERY_NONFIRST_MEMBER_OF_EVERY_COMPLETE_MULTIPLICITY_GREATER_THAN_ONE_HISTORICAL_WALLET_PLUS_TYPED_TID_GROUP_IN_RAW_LOCATOR_ORDER",
+    "ARCHIVE_BLOCK_NUMBER_GROUP": "EVERY_BLOCK_NUMBER_WITH_AT_LEAST_TWO_DISTINCT_RAW_BLOCK_LOCATORS",
+    "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "EVERY_VALID_PROTOCOL_TRADE_GROUP_INTERSECTING_A_RETAINED_LEGACY_REPEAT_GROUP_WITHIN_ONE_RAW_BLOCK_LOCATOR",
+    "REPEAT_INTERSECTING_TID_SCHEMA_VIOLATION": "EVERY_TID_SCHEMA_VIOLATION_OBSERVATION_RETAINED_AS_A_MEMBER_OF_A_LEGACY_REPEAT_GROUP",
+    "REPEAT_INTERSECTING_COIN_SCHEMA_VIOLATION": "EVERY_COIN_SCHEMA_VIOLATION_OBSERVATION_RETAINED_AS_A_MEMBER_OF_A_LEGACY_REPEAT_GROUP",
+    "REPEAT_INTERSECTING_WALLET_SCHEMA_VIOLATION": "EVERY_WALLET_SCHEMA_VIOLATION_OBSERVATION_RETAINED_AS_A_MEMBER_OF_A_LEGACY_REPEAT_GROUP"
+  },
+  "global_schema_census_contract": {
+    "all_raw_events_are_counted": true,
+    "valid_tid_plus_tid_violation_equals_raw_events": true,
+    "valid_coin_plus_coin_violation_equals_raw_events": true,
+    "valid_wallet_plus_wallet_violation_equals_raw_events": true,
+    "counts_retained_per_object_and_parse_pass": true,
+    "canonical_commitment_retained_per_object_and_parse_pass": true,
+    "first_and_second_pass_counts_and_commitments_must_match": true,
+    "detailed_rows_for_nonrepeat_singleton_schema_violations_required": false,
+    "reason": "NONREPEAT_SINGLETON_SCHEMA_VIOLATIONS_CANNOT_EXPLAIN_THE_ORIGINAL_REPEAT_TRIGGER_AND_ARE_CONSERVED_BY_COUNTS_AND_COMMITMENTS"
+  },
+  "group_wide_classification_precedence": [
+    {
+      "priority": 1,
+      "taxon": "TID_SCHEMA_VIOLATION",
+      "predicate": "THE_OCCURRENCE_TID_IS_NOT_A_STRICT_JSON_UINT50_INTEGER"
+    },
+    {
+      "priority": 2,
+      "taxon": "UNCLASSIFIABLE",
+      "predicate": "THE_OCCURRENCE_WALLET_OR_COIN_IS_INVALID_OR_ANY_REQUIRED_IDENTITY_OR_PROOF_IS_MISSING_OR_CONFLICTING"
+    },
+    {
+      "priority": 3,
+      "taxon": "CONFLICTING_USER_FILL",
+      "predicate": "THE_COMPLETE_CANONICAL_WALLET_FILL_GROUP_CONTAINS_MORE_THAN_ONE_DISTINCT_FULL_EVENT_FINGERPRINT"
+    },
+    {
+      "priority": 4,
+      "taxon": "INTRA_BLOCK_REPEAT",
+      "predicate": "THE_COMPLETE_CANONICAL_WALLET_FILL_SUBGROUP_CONTAINS_MULTIPLE_DISTINCT_EVENT_ORDINALS_IN_ONE_RAW_BLOCK_LOCATOR_WITH_IDENTICAL_FULL_EVENT_FINGERPRINT"
+    },
+    {
+      "priority": 5,
+      "taxon": "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY",
+      "predicate": "ALL_MEMBERS_OF_THE_COMPLETE_CANONICAL_WALLET_FILL_SUBGROUP_HAVE_IDENTICAL_FULL_EVENT_FINGERPRINT_DISTINCT_RAW_BLOCK_LOCATORS_AND_EVERY_LOCATOR_RESOLVES_TO_THE_SAME_EXACT_BLOCK_REPLAY_PROOF"
+    },
+    {
+      "priority": 6,
+      "taxon": "TID_SCOPE_FALSE_POSITIVE",
+      "predicate": "THE_COMPLETE_LEGACY_WEAK_KEY_GROUP_CONTAINS_AT_LEAST_TWO_DISTINCT_VALID_PROTOCOL_TRADE_KEYS_AND_HAS_NO_MISSING_CONFLICTING_OR_UNRESOLVED_IDENTITY_OR_PROOF"
+    },
+    {
+      "priority": 7,
+      "taxon": "UNCLASSIFIABLE",
+      "predicate": "NO_EARLIER_EXACT_GROUP_WIDE_PREDICATE_MATCHES"
+    }
+  ],
+  "block_group_precedence": [
+    {
+      "priority": 1,
+      "taxon": "CONFLICTING_BLOCK_REPLAY",
+      "predicate": "ANY_MEMBER_DIFFERS_IN_BLOCK_TIME_EVENT_COUNT_OR_ORDERED_EVENT_FINGERPRINT"
+    },
+    {
+      "priority": 2,
+      "taxon": "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+      "predicate": "ALL_EQUALITY_INVARIANTS_MATCH_AND_AT_LEAST_TWO_DISTINCT_SOURCE_OBJECT_KEYS_EXIST"
+    },
+    {
+      "priority": 3,
+      "taxon": "UNCLASSIFIABLE",
+      "predicate": "A_REPEATED_BLOCK_NUMBER_GROUP_MATCHES_NEITHER_EARLIER_PREDICATE"
+    }
+  ],
+  "expected_counterparty_pair_predicate": {
+    "same_protocol_trade_key": true,
+    "same_raw_block_locator": true,
+    "exact_member_count": 2,
+    "exact_distinct_validated_wallet_count": 2,
+    "exact_side_set": [
+      "A",
+      "B"
+    ],
+    "adjacent_event_ordinals": true,
+    "each_wallet_fill_occurs_once_in_raw_block": true
+  },
+  "two_pass_and_reducer_architecture": {
+    "single_network_download_per_object": true,
+    "compressed_objects_retained_until_second_local_pass": true,
+    "first_local_pass_writes_fixed_256_way_block_and_legacy_weak_key_indexes": true,
+    "all_workspace_files_live_under_one_metered_root": true,
+    "every_workspace_mutation_requires_pre_reservation_and_post_write_checkpoint": true,
+    "external_sort_multiset_verification": "EXACT_SQLITE_BLOB_MULTIPLICITY_LEDGER_PER_PARTITION_THEN_DELETE",
+    "group_processing": "BOUNDED_SPOOL_FILES_WITH_NO_UNBOUNDED_PAYLOAD_LIST",
+    "second_local_pass_materializes_ONLY_complete_repeated_legacy_groups_repeated_block_groups_and_their_required_provenance": true,
+    "complete_source_counts_and_commitments_are_recomputed_on_both_passes": true,
+    "compressed_object_deleted_only_after_second_pass_and_commitment_equality": true
+  },
+  "artifact_contract": {
+    "scientific_containers": [
+      "r11a-v2-taxonomy-units.ndjson",
+      "r11a-v2-block-overlap-matrix.ndjson",
+      "r11a-v2-duplicate-observations.ndjson",
+      "r11a-v2-exact-block-replay-proofs.ndjson",
+      "r11a-v2-expected-counterparty-pair-proofs.ndjson",
+      "r11a-v2-protocol-trade-group-members.ndjson",
+      "r11a-v2-repeat-intersecting-schema-evidence.ndjson"
+    ],
+    "metadata_containers": [
+      "r11a-v2-context.json",
+      "r11a-v2-result.json",
+      "r11a-v2-object-ledger.ndjson",
+      "r11a-v2-reducer-ledger.ndjson",
+      "r11a-v2-conservation.json",
+      "r11a-v2-resource-ledger.json",
+      "r11a-v2-stop-ledger.json",
+      "r11a-v2-wallet-features.ndjson",
+      "r11a-v2.rc",
+      "R11A_V2_FILES.sha256",
+      "r11a-v2-package-boundary.txt"
+    ],
+    "wallet_feature_file_must_be_exact_zero_bytes": true,
+    "scientific_output_is_streamed_to_staging_files": true,
+    "all_scientific_files_are_exact_zero_bytes_on_early_stop_or_cap_fallback": true,
+    "partial_scientific_prefix_authorized": false,
+    "upload_before_local_artifact_validation_authorized": false,
+    "atomic_commit_occurs_only_after_all_local_validations_pass": true,
+    "post_commit_failure_must_remove_final_directory_or_fail_the_job_before_upload": true
+  },
+  "required_conservation_and_proof_gates": {
+    "exact_72_object_scope_complete": true,
+    "exact_three_complete_utc_days": true,
+    "all_object_identity_etag_length_and_compressed_sha_checks_pass": true,
+    "all_objects_parsed_twice_with_equal_counts_and_commitments": true,
+    "raw_block_count_conserves_to_singleton_plus_repeated_observations": true,
+    "raw_event_count_conserves_separately_for_tid_coin_and_wallet_validation": true,
+    "legacy_repeat_occurrence_count_conserves_to_valid_plus_invalid_tid_repeat_occurrences": true,
+    "every_authoritative_unit_receives_exactly_one_primary_taxon": true,
+    "supporting_taxa_do_not_increment_primary_counts": true,
+    "all_nonnull_proof_and_provenance_foreign_keys_resolve_exactly_once": true,
+    "all_referenced_projections_are_byte_equal": true,
+    "all_taxonomy_counts_are_recomputed_from_retained_rows": true,
+    "every_unit_universe_has_separate_unclassifiable_group_and_occurrence_counts": true,
+    "all_proof_references_resolve_must_be_computed_not_constant": true,
+    "all_caps_respected": true
+  },
+  "terminal_decision_table": [
+    {
+      "priority": 1,
+      "terminal_class": "R11A_V2_ARTIFACT_CAP_EXCEEDED",
+      "predicate": "A_FROZEN_RETENTION_OR_PROJECTED_FINAL_ARTIFACT_CAP_IS_EXCEEDED_AFTER_COMPLETE_DISCOVERY_WITH_NO_EARLIER_INTEGRITY_FAILURE",
+      "scientific_output_status": "EMPTY",
+      "root_cause_claim_status": "NOT_PROVEN"
+    },
+    {
+      "priority": 2,
+      "terminal_class": "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+      "predicate": "EXACT_SCOPE_COMPLETE_ALL_CONSERVATION_AND_FOREIGN_KEY_GATES_TRUE_ALL_CAPS_RESPECTED_AND_EVERY_AUTHORITATIVE_UNIT_UNIVERSE_HAS_ZERO_UNCLASSIFIABLE_GROUPS_AND_OCCURRENCES",
+      "scientific_output_status": "COMPLETE",
+      "root_cause_claim_status": "PROVEN_COMPLETE_TAXONOMY_ONLY"
+    },
+    {
+      "priority": 3,
+      "terminal_class": "R11A_V2_DIAGNOSTIC_INCOMPLETE",
+      "predicate": "THE_FULL_SCOPE_WAS_PROCESSED_BUT_ONE_OR_MORE_CLASSIFICATION_CONSERVATION_OR_PROOF_GATES_IS_FALSE",
+      "scientific_output_status": "COMPLETE",
+      "root_cause_claim_status": "NOT_PROVEN"
+    },
+    {
+      "priority": 4,
+      "terminal_class": "R11A_V2_FAIL_CLOSED_EARLY_STOP",
+      "predicate": "ANY_PRE_SCOPE_TRANSPORT_INTEGRITY_PARSE_RUNTIME_WORKSPACE_OR_INTERNAL_VALIDATION_FAILURE",
+      "scientific_output_status": "EMPTY",
+      "root_cause_claim_status": "NOT_PROVEN"
+    }
+  ],
+  "failure_and_runtime_contract": {
+    "every_terminal_path_produces_a_locally_valid_minimal_artifact": true,
+    "object_ledger_always_contains_exactly_72_rows": true,
+    "reducer_ledger_always_contains_exactly_512_rows": true,
+    "stop_ledger_always_contains_every_declared_stop_condition_in_schema_order": true,
+    "runtime_checked_before_and_after_every_network_parse_sort_group_serialization_hash_cleanup_and_commit_operation": true,
+    "workspace_reserved_before_every_write_and_checked_after_every_mutation": true,
+    "cleanup_errors_are_fatal": true,
+    "all_artifact_staging_is_inside_the_metered_workspace_root": true,
+    "scientific_files_validated_before_upload": true,
+    "package_boundary_boolean_values_must_all_be_true_and_formulas_recomputed": true
+  },
+  "stage_separation": {
+    "inert_preregistration_validator": "validate_r11a_v2_preregistration.py",
+    "inert_implementation_validator": "validate_r11a_v2_implementation.py",
+    "approval_validator": "validate_r11a_v2_approval.py",
+    "role_attestation_validator": "validate_r11a_v2_role_attestation.py",
+    "sts_preflight_validator": "validate_r11a_v2_sts_preflight.py",
+    "workflow_installation_validator": "validate_r11a_v2_workflow.py",
+    "release_validator": "validate_r11a_v2_release.py",
+    "activation_validator": "validate_r11a_v2_activation.py",
+    "execution_evidence_validator": "validate_r11a_v2_evidence.py",
+    "inert_validator_must_not_be_called_by_post_approval_runtime_workflow": true
+  },
+  "values_required_before_owner_approval": [
+    "corrective_collector_sha256",
+    "corrective_identity_sha256",
+    "corrective_taxonomy_sha256",
+    "corrective_storage_sha256",
+    "corrective_schema_sha256",
+    "corrective_artifact_validator_sha256",
+    "corrective_workflow_git_blob_sha",
+    "exact_dependency_declaration_sha256",
+    "provider_pricing_and_eur_conversion_snapshot_sha256",
+    "successor_role_decision_sha256",
+    "resource_feasibility_report_sha256"
+  ],
+  "current_runtime_authority": {
+    "aws_iam_mutation": false,
+    "aws_oidc": false,
+    "sts": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "diagnostic_processing": false,
+    "artifact_retention": false
+  },
+  "downstream_authorizations": {
+    "deduplication": false,
+    "block_replay_suppression": false,
+    "wallet_feature_publication": false,
+    "r11b_repair": false,
+    "historical_expansion": false,
+    "wallet_ranking": false,
+    "candidate_shortlisting": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "strategy_inference": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  },
+  "network_requests_executed_by_this_amendment": 0,
+  "aws_iam_mutations_executed_by_this_amendment": 0,
+  "diagnostic_rows_created_by_this_amendment": 0,
+  "wallet_feature_rows_created_by_this_amendment": 0,
+  "r11_closed": false,
+  "r12_ready": false,
+  "empirical_result": null
+}
