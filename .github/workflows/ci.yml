@@ -71,9 +71,11 @@ jobs:
           git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
 
           # Apply the reviewed, self-deleting branch repair before hashing any
-          # implementation byte. This fixes only exact D1 pre-seal defects and
-          # cannot survive into the canonical repository.
-          python governance/repair_r11a_d1_before_seal.py
+          # implementation byte. On the bot-sealed successor head the script is
+          # already absent, so the job remains idempotent.
+          if test -f governance/repair_r11a_d1_before_seal.py; then
+            python governance/repair_r11a_d1_before_seal.py
+          fi
           test ! -e governance/repair_r11a_d1_before_seal.py
 
           # The validator is both directly executable and importable. Make its
