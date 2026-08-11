@@ -1,0 +1,120 @@
+name: R11A Corrective Draft Finalizer V2
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+env:
+  EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+
+concurrency:
+  group: r11a-corrective-draft-finalizer-v2
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.number == 144 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'research/r11a-corrective-r3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact corrective draft head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Verify exact draft head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXACT_HEAD}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Generate final corrective R4 files and exact inert policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/generate_r11a_corrective_final_files_v2.py
+          python governance/generate_r11a_corrective_policies.py --write
+
+      - name: Remove superseded drafts and all transient write workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            research/archive_inventory/r11a_corrective/artifact.py \
+            research/archive_inventory/r11a_corrective/entrypoint.py \
+            research/archive_inventory/r11a_corrective/entrypoint_r3.py \
+            research/archive_inventory/r11a_corrective/entrypoint_r4.py \
+            research/archive_inventory/r11a_corrective/index.py \
+            research/archive_inventory/r11a_corrective/lz4frame.py \
+            research/archive_inventory/r11a_corrective/materialize.py \
+            research/archive_inventory/r11a_corrective/runner.py \
+            research/archive_inventory/r11a_corrective/runner_r3.py \
+            research/archive_inventory/r11a_corrective/taxonomy.py \
+            research/archive_inventory/r11a_corrective/taxonomy_r3.py \
+            research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml \
+            research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r3.yml \
+            governance/validate_r11a_corrective_implementation.py \
+            governance/validate_r11a_corrective_implementation_r3.py \
+            governance/validate_r11a_execution_artifact.py \
+            governance/validate_r11a_execution_artifact_r3.py \
+            governance/validate_r11a_execution_release.py \
+            governance/validate_r11a_activation.py \
+            governance/generate_r11a_corrective_final_files.py \
+            governance/generate_r11a_corrective_final_files_v2.py \
+            .github/workflows/r11a-corrective-finalize-dev.yml \
+            .github/workflows/r11a-corrective-finalize-dev-v2.yml
+
+      - name: Restore canonical read-only Research CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin main
+          git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
+
+      - name: Compile and run focused corrective tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q research/archive_inventory/r11a_corrective governance
+          python -m unittest -v \
+            tests.test_archive_inventory_r11a_corrective_r3 \
+            tests.test_archive_inventory_r11a_corrective_artifacts
+          python governance/validate_r11a_corrective_implementation_r4.py --current-inert-stage
+          python governance/generate_r11a_corrective_policies.py
+
+      - name: Seal manifest and run the complete repository test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          git add -A
+          git diff --cached --check
+
+      - name: Commit generated corrective draft only after all checks pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then
+            echo 'Corrective draft already generated and validated'
+            exit 0
+          fi
+          git commit -m 'ci: generate and validate R11A corrective R4 draft'
+          git push origin HEAD:research/r11a-corrective-r3
