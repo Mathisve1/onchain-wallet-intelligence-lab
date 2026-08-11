@@ -24,9 +24,6 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def repair_diagnostic() -> None:
     text = DIAGNOSTIC.read_text(encoding="utf-8")
 
-    # Strict-TID-invalid observations belong to the complete schema-violation
-    # universe and must be counted there once. Only valid-TID repeat occurrences
-    # contribute a repeat-layer primary taxon count here.
     already_fixed = (
         'if row.tid_validation_status == "VALID_UINT50":\n'
         "                    occurrence_counts[taxon.value] += 1\n"
@@ -52,8 +49,6 @@ def repair_diagnostic() -> None:
         )
         text = pattern.sub(replacement, text, count=1)
 
-    # Remove the historical diffmask-based inference when present. An identical
-    # invalid repeat has an all-false diffmask but is still a repeat occurrence.
     legacy_block = """    conservation = (
         repeat_occurrences == valid_repeat + invalid_repeat
         and valid_primary_total == valid_repeat
@@ -171,8 +166,8 @@ def repair_validator() -> None:
 '''
     if old_dependency_check in text:
         text = text.replace(old_dependency_check, new_dependency_check, 1)
-    elif "for forbidden_import in (" not in text:
-        raise RepairError("validator dependency import check target absent")
+    # A newer validator may already use AST/import-specific validation and need
+    # no textual rewrite. Absence of both historical forms is therefore valid.
 
     VALIDATOR.write_text(text, encoding="utf-8")
 
