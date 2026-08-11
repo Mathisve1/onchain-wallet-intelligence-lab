@@ -1,6 +1,6 @@
 # R11 evidence-driven repair architecture
 
-## Foundation implemented offline
+## Proposed offline foundation
 
 The successor code separates four layers instead of treating a convenient uniqueness check as event identity:
 
@@ -17,9 +17,9 @@ Resource limits are immutable per-instance values. Activity state has an explici
 
 R11A does not canonicalize anything. A later R11B repair may choose only the branch empirically supported by the complete diagnostic:
 
-1. If every repeat is `IDENTITY_KEY_SCOPE_COLLAPSE`, no observation is dropped. The reducer replaces the legacy weak-key guard with the documented layered identities and counts every valid wallet-side fill.
+1. If every repeat is `TID_SCOPE_FALSE_POSITIVE`, no observation is dropped. The reducer replaces the legacy weak-key guard with the documented layered identities and counts every valid wallet-side fill.
 2. If exact cross-object block replay is proven, canonicalization may occur only at the block layer. One semantic block contributes once to downstream aggregation, while every raw occurrence remains in an immutable provenance multimap. The exact suppression rule, tie-free deterministic ordering and conservation equation require a separate preregistration.
-3. If any block-number conflict, canonical wallet-fill payload conflict, schema violation, cap overflow or `UNKNOWN` group remains, aggregation fails closed. There is no first-seen, last-seen or payload-hash-only fallback.
+3. If any block-number conflict, canonical wallet-fill payload conflict, schema violation, cap overflow or `UNCLASSIFIABLE` group remains, aggregation fails closed. There is no first-seen, last-seen or payload-hash-only fallback.
 
 A normal matched trade can produce two wallet-side fill observations. Per-wallet fill counts must retain both counterparties in their respective wallets. Venue-wide `wallet_fill_observation_count` and `matched_trade_count` are different measures and must never be conflated.
 
