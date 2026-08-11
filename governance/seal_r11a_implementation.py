@@ -26,8 +26,14 @@ SEALED_PATHS = (
     "research/archive_inventory/r11a_implementation/R11A_RESOURCE_FEASIBILITY.json",
     "research/archive_inventory/r11a_implementation/R11A_RESOURCE_FEASIBILITY.md",
     "research/archive_inventory/r11a_implementation/R11A_ROLE_DECISION.json",
+    "research/archive_inventory/r11a_implementation/R11A_ROLE_DECISION.md",
     "research/archive_inventory/r11a_implementation/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
+    "governance/seal_r11a_implementation.py",
     "governance/validate_r11a_implementation.py",
+    "tests/test_archive_inventory_r11a_identity.py",
+    "tests/test_archive_inventory_r11a_diagnostic.py",
+    "tests/test_archive_inventory_r11a_storage_schema.py",
+    "tests/test_archive_inventory_r11a_implementation.py",
 )
 
 
