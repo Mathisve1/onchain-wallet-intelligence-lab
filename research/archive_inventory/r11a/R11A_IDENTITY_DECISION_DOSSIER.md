@@ -7,11 +7,13 @@ R11A must keep four identities separate: raw observation, archive block, protoco
 | Layer | Canonical key or locator | Role |
 |---|---|---|
 | raw observation | object key + verified compressed SHA-256 + record ordinal + event ordinal | lossless source provenance |
-| archive block | block number, checked against exact block time and ordered-event fingerprint | replay/conflict classification |
-| protocol matched trade | exact wrapper block time + exact schema-validated source `coin` namespace + validated integer `tid` | documented global trade identity |
-| wallet user-fill | wallet + exact wrapper block time + exact schema-validated source `coin` namespace + validated integer `tid` | one user side of a matched trade |
+| archive block | block number, checked against exact block time, ordered-event count and ordered-event fingerprint | replay/conflict classification |
+| protocol matched trade | exact wrapper block time + exact unmodified raw source `coin` string + validated integer `tid` | documented global trade identity |
+| wallet user-fill | wallet + exact wrapper block time + exact unmodified raw source `coin` string + validated integer `tid` | one user side of a matched trade |
 
-Hyperliquid documents `tid` as a 50-bit hash of buyer and seller order IDs and documents `(block_time, coin, tid)` as the globally unique trade ID. Wallet is added only to identify a user side; it does not replace block time or coin. An official-organization reference consumer strongly corroborates the adjacent A/B two-wallet representation, but that repository explicitly disclaims normative completeness; the diagnostic therefore tests this structure rather than assuming it.
+Hyperliquid documents `tid` as a 50-bit hash of buyer and seller order IDs and documents `(block_time, coin, tid)` as the globally unique trade ID. Wallet is added only to identify a user side; it does not replace block time or coin. An official-organization reference consumer strongly corroborates the adjacent A/B two-wallet representation: its websocket loop pops two adjacent fills, while its trade constructor maps them to buyer/seller and requires equal coin and TID. That repository explicitly disclaims normative completeness; the diagnostic therefore tests this structure rather than assuming it.
+
+The official fill schema defines `crossed=true` as the user order being taker/crossing the spread. R11A retains that exact boolean for both candidate pair members, but does not require complementary maker/taker values: the two-wallet construction remains corroborated rather than normative.
 
 ## Fingerprint boundary
 
@@ -19,7 +21,7 @@ Raw-record, ordered-block-event and full wallet-fill payload fingerprints are eq
 
 ## Schema boundary
 
-R11A accepts `tid` only as a raw JSON integer in `[0, 2^50)`. Strings, decimals, floats, booleans and out-of-domain values are schema violations; no type coercion is allowed. Block-time tolerance and timezone inference are forbidden.
+R11A accepts `tid` only as a raw JSON integer in `[0, 2^50)`. Strings, decimals, floats, booleans and out-of-domain values are schema violations; no type coercion is allowed. The `coin` identity component is the exact non-empty raw JSON string: trimming, case folding, Unicode normalization, prefix stripping and metadata resolution are forbidden. Block-time tolerance and timezone inference are forbidden.
 
 ## Decision still deferred
 
