@@ -6,4 +6,8 @@ Transport, integrity, and the record-anchored alignment rule all completed clean
 
 The final research result is nevertheless `R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED`. The aggregator observed at least one repeated normalized `tid` within the same wallet state. The retained evidence does not contain the duplicate count, locations, or the repeated payloads, so it cannot distinguish duplicated archive observations from legitimate distinct fills that share a `tid`. Blind deduplication is therefore forbidden.
 
+The missing count is a recorded contract deviation, not merely an inconvenient omission: the R11 preregistration required that count to be retained. The unresolved handler discarded it with the aggregate summary. A separate consumption record permanently closes the original release, while the original release snapshot remains immutable.
+
+The original collector is historical evidence and must not be reused as a successor. Its success path contains a read-mutation in active-day tracking, attributes previous-hour fills to source path activity, and mutates shared R10 limit constants when imported. No wallet rows were published, so these defects did not create a retained R11 feature dataset.
+
 No wallet-feature rows were retained. Ranking, PnL/alpha interpretation, copyability, enrichment, clustering, historical expansion, strategy inference, and all trading or capital authority remain closed. Any further network request requires a new preregistration, human approval, and separate single-use release.
