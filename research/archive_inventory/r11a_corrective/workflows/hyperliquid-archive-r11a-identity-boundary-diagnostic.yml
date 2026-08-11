@@ -1,0 +1,237 @@
+name: Hyperliquid Archive R11A Identity Boundary Diagnostic
+run-name: R11A identity and archive-boundary diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hyperliquid-archive-r11a-identity-boundary-diagnostic
+  cancel-in-progress: false
+
+env:
+  EVENT_NAME: ${{ github.event_name }}
+  DISPATCH_REF: ${{ github.ref }}
+  DISPATCH_SHA: ${{ github.sha }}
+  CURRENT_RUN_ID: ${{ github.run_id }}
+  CURRENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+  CURRENT_REPOSITORY: ${{ github.repository }}
+  R11A_ROLE_ARN: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a
+  R11A_WORKSPACE: ${{ runner.temp }}/r11a-workspace
+  R11A_CONTEXT: ${{ runner.temp }}/r11a-pending-context.json
+  R11A_PRINCIPAL: ${{ runner.temp }}/r11a-sts-caller-identity.json
+  R11A_ARTIFACT: ${{ runner.temp }}/r11a-workspace/r11a-artifact
+  AWS_EC2_METADATA_DISABLED: 'true'
+  AWS_PAGER: ''
+
+jobs:
+  r11a-identity-boundary-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 370
+    steps:
+      - name: Check out canonical dispatch SHA without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.DISPATCH_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact manual canonical-main identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${EVENT_NAME}" = workflow_dispatch
+          test "${DISPATCH_REF}" = refs/heads/main
+          [[ "${DISPATCH_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${DISPATCH_SHA}"
+          test "${CURRENT_RUN_ATTEMPT}" = 1
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Create pending minimized workflow context before all gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path.cwd()
+          corrective=root/'research/archive_inventory/r11a_corrective'
+          approval=root/'research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json'
+          release=root/'research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json'
+          activation=root/'research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json'
+          implementation=corrective/'R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT.json'
+          selection=root/'research/archive_inventory/r11/R11_72H_SELECTION.json'
+          pricing=corrective/'R11A_PRICING_EUR_SNAPSHOT.json'
+          validator=root/'governance/validate_r11a_execution_artifact.py'
+          workflow=root/'.github/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml'
+          def load(path): return json.loads(path.read_text())
+          def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+          a=load(approval); r=load(release); x=load(activation); i=load(implementation)
+          context={
+            'event_name':os.environ['EVENT_NAME'],
+            'dispatch_ref':os.environ['DISPATCH_REF'],
+            'dispatch_sha':os.environ['DISPATCH_SHA'],
+            'checked_out_commit':os.popen('git rev-parse HEAD').read().strip(),
+            'workflow_run_id':int(os.environ['CURRENT_RUN_ID']),
+            'workflow_run_attempt':int(os.environ['CURRENT_RUN_ATTEMPT']),
+            'repository':os.environ['CURRENT_REPOSITORY'],
+            'workflow_name':'Hyperliquid Archive R11A Identity Boundary Diagnostic',
+            'approval_id':a['approval_id'],
+            'approval_text_sha256':a['approval_text_sha256'],
+            'execution_release_id':r['execution_release_id'],
+            'execution_release_blob_sha256':sha(release),
+            'activation_id':x['activation_id'],
+            'implementation_contract_sha256':sha(implementation),
+            'workflow_sha256':sha(workflow),
+            'collector_sha256':i['implementation_file_hashes']['research/archive_inventory/r11a_corrective/runner.py'],
+            'validator_sha256':sha(validator),
+            'selection_sha256':sha(selection),
+            'pricing_snapshot_sha256':sha(pricing),
+          }
+          Path(os.environ['R11A_CONTEXT']).write_text(json.dumps(context,sort_keys=True,separators=(',',':'))+'\n')
+          PY
+
+      - name: Prove all static stages, free space, budget and single use before OIDC
+        id: static
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python governance/validate_r11a_preregistration.py
+          python governance/validate_r11a_corrective_implementation.py --approval-eligible
+          python governance/validate_r11a_approval.py
+          python governance/validate_r11a_role_attestation.py
+          python governance/validate_r11a_role_preflight_evidence.py
+          python governance/validate_r11a_workflow_installation.py
+          python governance/validate_r11a_execution_release.py
+          python governance/validate_r11a_activation.py
+          python - <<'PY'
+          import json,os,shutil,urllib.request
+          from datetime import datetime,timezone
+          from pathlib import Path
+          root=Path.cwd()
+          activation=json.loads((root/'research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json').read_text())
+          free=shutil.disk_usage(os.environ['RUNNER_TEMP']).free
+          if free < 6442450944: raise SystemExit('pre-OIDC free-space threshold not met')
+          start=datetime.fromisoformat(activation['single_use_window_start_utc'].replace('Z','+00:00')).astimezone(timezone.utc)
+          repo=os.environ['CURRENT_REPOSITORY']; current=int(os.environ['CURRENT_RUN_ID'])
+          url=f'https://api.github.com/repos/{repo}/actions/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml/runs?event=workflow_dispatch&branch=main&per_page=100'
+          req=urllib.request.Request(url,headers={'Accept':'application/vnd.github+json','Authorization':f"Bearer {os.environ['GH_TOKEN']}",'X-GitHub-Api-Version':'2022-11-28','User-Agent':'r11a-single-use-gate'})
+          with urllib.request.urlopen(req,timeout=15) as response: runs=json.load(response).get('workflow_runs')
+          if not isinstance(runs,list) or len(runs)>=100: raise SystemExit('single-use run history is not bounded')
+          eligible=[row for row in runs if datetime.fromisoformat(row['created_at'].replace('Z','+00:00')).astimezone(timezone.utc)>=start]
+          if len(eligible)!=1 or int(eligible[0]['id'])!=current: raise SystemExit('single-use activation has zero or multiple eligible runs')
+          if int(os.environ['CURRENT_RUN_ATTEMPT'])!=1: raise SystemExit('R11A rerun is forbidden')
+          PY
+
+      - name: Produce and validate pre-OIDC failure artifact
+        if: steps.static.outcome != 'success'
+        id: pre_oidc_failure
+        shell: bash
+        run: |
+          set +e
+          python -m research.archive_inventory.r11a_corrective.entrypoint \
+            --mode pre-oidc-failure \
+            --workspace "${R11A_WORKSPACE}" \
+            --workflow-context "${R11A_CONTEXT}" \
+            --failure-code PRE_OIDC_STATIC_GATE_FAILURE
+          rc=$?
+          set -e
+          test "${rc}" = 21
+          python governance/validate_r11a_execution_artifact.py \
+            --artifact-dir "${R11A_ARTIFACT}" \
+            --expected-run-id "${CURRENT_RUN_ID}"
+
+      - name: Upload validated pre-OIDC failure evidence
+        if: steps.static.outcome != 'success' && steps.pre_oidc_failure.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r11a-pre-oidc-failure-${{ github.run_id }}
+          path: ${{ env.R11A_ARTIFACT }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Stop after retained pre-OIDC failure
+        if: steps.static.outcome != 'success'
+        shell: bash
+        run: exit 1
+
+      - name: Assume exact R11A successor role with approved session intersection
+        if: steps.static.outcome == 'success'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a
+          aws-region: ap-northeast-1
+          role-duration-seconds: 21600
+          role-session-name: HLArchiveR11AIdentityBoundary
+          allowed-account-ids: '630956766927'
+          unset-current-credentials: true
+          retry-max-attempts: 1
+          action-timeout-s: 60
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Sid":"R11AApprovedThreeDateIntersection","Effect":"Allow","Action":"s3:GetObject","Resource":["arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250728/*","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250729/*","arn:aws:s3:::hl-mainnet-node-data/node_fills_by_block/hourly/20250730/*"]}]}
+
+      - name: Retain minimized exact post-OIDC principal evidence
+        if: steps.static.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity --output json > "${R11A_PRINCIPAL}"
+
+      - name: Execute bounded corrective R11A diagnostic
+        if: steps.static.outcome == 'success'
+        id: execute
+        shell: bash
+        run: |
+          set +e
+          python -m research.archive_inventory.r11a_corrective.entrypoint \
+            --mode execute \
+            --workspace "${R11A_WORKSPACE}" \
+            --workflow-context "${R11A_CONTEXT}" \
+            --principal-evidence "${R11A_PRINCIPAL}"
+          rc=$?
+          set -e
+          printf '%s\n' "${rc}" > "${RUNNER_TEMP}/r11a-entrypoint.rc"
+          test "${rc}" = 0 -o "${rc}" = 20 -o "${rc}" = 21
+
+      - name: Validate exact artifact before any upload
+        if: steps.static.outcome == 'success' && steps.execute.outcome == 'success'
+        id: artifact_validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/validate_r11a_execution_artifact.py \
+            --artifact-dir "${R11A_ARTIFACT}" \
+            --expected-run-id "${CURRENT_RUN_ID}"
+
+      - name: Upload only the already validated R11A artifact
+        if: steps.artifact_validate.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r11a-identity-boundary-${{ github.run_id }}
+          path: ${{ env.R11A_ARTIFACT }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Enforce terminal class and retained artifact
+        if: steps.static.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.artifact_validate.outcome }}" = success
+          test -f "${R11A_ARTIFACT}/r11a-result.json"
+          test -f "${R11A_ARTIFACT}/R11A_FILES.sha256"
+          test -f "${R11A_ARTIFACT}/R11A_PACKAGE_BOUNDARY.bin"
