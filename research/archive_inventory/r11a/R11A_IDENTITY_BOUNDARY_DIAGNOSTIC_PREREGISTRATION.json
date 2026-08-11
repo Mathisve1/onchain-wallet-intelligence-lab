@@ -42,7 +42,8 @@
         "record_ordinal_zero_based",
         "event_ordinal_zero_based"
       ],
-      "source_object_key_and_verified_compressed_sha256_both_required": true
+      "source_object_key_and_verified_compressed_sha256_both_required": true,
+      "comparator": "LEXICOGRAPHIC_BY_EXACT_FIELDS_ORDER;SOURCE_OBJECT_KEY_BY_UNSIGNED_STRICT_UTF8_BYTES;COMPRESSED_SHA256_BY_32_DECODED_BYTES;RECORD_AND_EVENT_ORDINALS_AS_NONNEGATIVE_INTEGERS"
     },
     "archive_block_locator": "block_number",
     "archive_block_equality_invariants": [
@@ -52,25 +53,243 @@
     ],
     "protocol_matched_trade_key": [
       "exact_raw_block_time",
-      "canonical_schema_validated_coin",
+      "exact_raw_coin_string",
       "validated_json_integer_tid"
     ],
     "wallet_user_fill_key": [
       "canonical_lowercase_wallet_address",
       "exact_raw_block_time",
-      "canonical_schema_validated_coin",
+      "exact_raw_coin_string",
       "validated_json_integer_tid"
     ],
     "legacy_weak_key_retained_for_diagnosis_only": [
       "canonical_lowercase_wallet_address",
       "normalized_typed_tid"
     ],
+    "legacy_weak_key_contract": {
+      "version": "R11_HISTORICAL_TYPED_TID_KEY_V1",
+      "exact_key_fields": [
+        "canonical_lowercase_wallet_address",
+        "normalized_typed_tid"
+      ],
+      "wallet_eligibility": "EXACT_LOWERCASE_0X40HEX_SOURCE_ADDRESS_ONLY",
+      "normalized_typed_tid_exact_two_element_array_rules": {
+        "JSON_INTEGER": [
+          "int",
+          "PYTHON_JSON_INTEGER_VALUE_RENDERED_BY_str_WITH_SOURCE_NEGATIVE_ZERO_NORMALIZED_TO_0_AND_NO_LEADING_PLUS_OR_ZERO"
+        ],
+        "JSON_NUMBER_MATHEMATICALLY_INTEGRAL": [
+          "int",
+          "CANONICAL_DECIMAL_FIXED_POINT_WITH_TRAILING_FRACTION_ZEROS_REMOVED_AND_NEGATIVE_ZERO_NORMALIZED_TO_ZERO"
+        ],
+        "JSON_STRING_NONEMPTY_MAXIMUM_128_CODEPOINTS": [
+          "str",
+          "EXACT_DECODED_STRING_WITH_NO_TRIMMING_OR_NUMERIC_COERCION"
+        ]
+      },
+      "strict_uint50_range_was_not_required_by_historical_normalizer": true,
+      "unsupported_values_with_no_legacy_key": [
+        "MISSING",
+        "NULL",
+        "BOOLEAN",
+        "ARRAY",
+        "OBJECT",
+        "NONINTEGRAL_JSON_NUMBER",
+        "NONFINITE_NUMBER",
+        "EMPTY_STRING",
+        "STRING_LONGER_THAN_128_CODEPOINTS"
+      ],
+      "legacy_group_eligibility_requires_wallet_and_all_pre_tid_selected_event_structure_valid": true,
+      "coin_validity_is_not_part_of_the_historical_legacy_weak_key": true,
+      "strict_tid_invalid_values_that_still_receive_a_historical_legacy_key": [
+        "INTEGER_OUTSIDE_UINT50_RANGE",
+        "MATHEMATICALLY_INTEGRAL_JSON_NUMBER",
+        "NONEMPTY_JSON_STRING_AT_MOST_128_CODEPOINTS"
+      ],
+      "strict_tid_invalid_or_wallet_invalid_values_without_a_historical_legacy_key_are_excluded_from_legacy_grouping_but_remain_in_schema_violation_universes": true,
+      "group_order": "RAW_OBSERVATION_LOCATOR_ASCENDING",
+      "group_first_is_the_lexicographically_first_raw_observation_locator": true,
+      "repeat_occurrences_are_all_group_members_after_group_first": true,
+      "invalid_tid_repeat_occurrence_count_is_recomputed_as_nonfirst_members_with_strict_tid_validation_status_TID_SCHEMA_VIOLATION": true,
+      "weak_key_group_id_uses_this_exact_key_without_reinterpretation": true
+    },
     "tid_schema_contract": {
       "required_raw_json_type": "INTEGER",
       "minimum_inclusive": 0,
       "maximum_exclusive": 1125899906842624,
       "string_decimal_float_or_boolean_tid_coercion_authorized": false,
-      "schema_violation_taxon": "TID_SCHEMA_VIOLATION"
+      "schema_violation_taxon": "TID_SCHEMA_VIOLATION",
+      "raw_json_type_exact_labels": [
+        "MISSING",
+        "NULL",
+        "BOOLEAN",
+        "INTEGER",
+        "NUMBER_FRACTION_OR_EXPONENT_TOKEN",
+        "STRING",
+        "ARRAY",
+        "OBJECT"
+      ],
+      "missing_value_representation": {
+        "raw_tid_json_type": "MISSING",
+        "raw_tid_token": null
+      },
+      "present_value_token_representation": "LOWERCASE_HEX_OF_R11A_CANONICAL_JSON_TYPED_FIELDS_V1_SERIALIZATION_BYTES;EVEN_LENGTH_LOWERCASE_HEX_PATTERN;PRESENT_NULL_IS_4e_AND_IS_DISTINCT_FROM_MISSING_JSON_NULL_TOKEN_FIELD",
+      "raw_record_sha256_retains_exact_source_lexeme_bytes": true
+    },
+    "coin_identity_contract": {
+      "required_raw_json_type": "STRING",
+      "canonical_identity_value": "EXACT_RAW_COIN_STRING",
+      "empty_string_authorized": false,
+      "trimming_case_folding_unicode_normalization_prefix_stripping_or_metadata_resolution_authorized": false,
+      "invalid_or_missing_coin_behavior": "RETAIN_TYPE_AND_TOKEN_CLASSIFY_UNCLASSIFIABLE_CONTINUE_WITHIN_CAPS_AND_REQUIRE_INCOMPLETE_TERMINAL",
+      "raw_value_and_raw_json_type_retained_for_repeat_evidence": true,
+      "raw_json_type_exact_labels": [
+        "MISSING",
+        "NULL",
+        "BOOLEAN",
+        "INTEGER",
+        "NUMBER_FRACTION_OR_EXPONENT_TOKEN",
+        "STRING",
+        "ARRAY",
+        "OBJECT"
+      ],
+      "missing_value_representation": {
+        "raw_coin_json_type": "MISSING",
+        "raw_coin_token": null
+      },
+      "present_value_token_representation": "LOWERCASE_HEX_OF_R11A_CANONICAL_JSON_TYPED_FIELDS_V1_SERIALIZATION_BYTES;EVEN_LENGTH_LOWERCASE_HEX_PATTERN;PRESENT_NULL_IS_4e_AND_IS_DISTINCT_FROM_MISSING_JSON_NULL_TOKEN_FIELD",
+      "raw_record_sha256_retains_exact_source_lexeme_bytes": true
+    },
+    "wallet_address_contract": {
+      "required_raw_json_type": "STRING",
+      "required_exact_pattern": "^0x[0-9a-f]{40}$",
+      "canonical_identity_value": "EXACT_SOURCE_STRING_ALREADY_LOWERCASE",
+      "case_folding_or_other_repair_authorized": false,
+      "invalid_present_wallet_behavior": "RETAIN_TYPE_AND_TOKEN_CLASSIFY_UNCLASSIFIABLE_CONTINUE_WITHIN_CAPS_AND_REQUIRE_INCOMPLETE_TERMINAL",
+      "missing_wallet_event_position_behavior": "FAIL_CLOSED_BLOCK_ENVELOPE_OR_EVENT_SHAPE_STOP_BECAUSE_THE_FILL_POSITION_CANNOT_BE_RECOVERED_UNAMBIGUOUSLY",
+      "raw_json_type_exact_labels": [
+        "NULL",
+        "BOOLEAN",
+        "INTEGER",
+        "NUMBER_FRACTION_OR_EXPONENT_TOKEN",
+        "STRING",
+        "ARRAY",
+        "OBJECT"
+      ],
+      "raw_wallet_address_field_rule": "EXACT_DECODED_SOURCE_STRING_WHEN_JSON_TYPE_IS_STRING_ELSE_NULL",
+      "canonical_lowercase_wallet_address_field_rule": "EXACT_RAW_WALLET_ADDRESS_WHEN_VALID_ELSE_NULL",
+      "present_value_token_representation": "LOWERCASE_HEX_OF_R11A_CANONICAL_JSON_TYPED_FIELDS_V1_SERIALIZATION_BYTES;EVEN_LENGTH_LOWERCASE_HEX_PATTERN;PRESENT_NULL_IS_4e",
+      "raw_record_sha256_retains_exact_source_lexeme_bytes": true
+    },
+    "source_archive_schema_contract": {
+      "decompressed_container": "STRICT_UTF8_NDJSON_ONE_BLOCK_WRAPPER_OBJECT_PER_RECORD",
+      "blank_or_whitespace_only_record_behavior": "FATAL_SCHEMA_FAILURE_AND_NEVER_CONSUMES_A_RECORD_ORDINAL",
+      "final_record_without_0x0a_is_allowed_and_consumes_one_record_ordinal": true,
+      "record_ordinal_rule": "ZERO_BASED_PHYSICAL_NONBLANK_NDJSON_RECORD_ORDER_WITHIN_EACH_CANONICAL_OBJECT",
+      "event_ordinal_rule": "ZERO_BASED_ARRAY_POSITION_WITHIN_THE_WRAPPER_events_ARRAY",
+      "json_parser": "DUPLICATE_OBJECT_KEYS_NONFINITE_CONSTANTS_BINARY_FLOATS_INVALID_UTF8_AND_MALFORMED_JSON_REJECTED",
+      "wrapper_required_fields": [
+        "local_time",
+        "block_time",
+        "block_number",
+        "events"
+      ],
+      "wrapper_additional_fields": "ALLOWED_AND_INCLUDED_IN_RAW_RECORD_SHA256_BUT_NOT_IDENTITY",
+      "local_time_contract": "NONEMPTY_EXACT_UTF8_STRING_RETAINED_WITHOUT_TIMEZONE_INFERENCE",
+      "block_time_contract": "NONEMPTY_EXACT_UTF8_STRING_USED_UNMODIFIED_IN_PROTOCOL_IDENTITY_WITHOUT_TIMEZONE_INFERENCE",
+      "block_number_contract": "JSON_INTEGER_INCLUSIVE_RANGE_0_TO_18446744073709551615_WITH_NO_COERCION",
+      "events_contract": "ORDERED_JSON_ARRAY",
+      "event_contract": "EXACT_TWO_ELEMENT_JSON_ARRAY_OF_LEADING_WALLET_VALUE_AND_TRAILING_FILL_OBJECT",
+      "wallet_source_position": "events[event_ordinal_zero_based][0]",
+      "fill_source_position": "events[event_ordinal_zero_based][1]",
+      "fill_required_fields_except_losslessly_handled_identity_fields": [
+        "time",
+        "side",
+        "px",
+        "sz",
+        "closedPnl",
+        "crossed"
+      ],
+      "fill_optional_fields": [
+        "liquidation"
+      ],
+      "coin_and_tid_may_be_missing_only_under_their_exact_schema_violation_contracts": true,
+      "fill_time_contract": "JSON_INTEGER_INCLUSIVE_RANGE_0_TO_18446744073709551615_WITH_NO_COERCION",
+      "side_contract": "EXACT_JSON_STRING_A_OR_B",
+      "px_sz_and_closedPnl_contract": "NONEMPTY_EXACT_JSON_STRINGS_RETAINED_WITHOUT_NUMERIC_TOLERANCE_OR_NORMALIZATION",
+      "crossed_contract": "EXACT_JSON_BOOLEAN",
+      "liquidation_contract": "OPTIONAL;WHEN_PRESENT_ANY_FINITE_CANONICAL_JSON_VALUE_INCLUDING_NULL_RETAINED_EXACTLY;MISSING_IS_DISTINCT_FROM_PRESENT_NULL",
+      "fill_additional_fields": "ALLOWED_AND_INCLUDED_IN_FULL_FILL_AND_FULL_EVENT_FINGERPRINTS",
+      "recoverable_field_schema_violations": [
+        "TID_SCHEMA_VIOLATION",
+        "COIN_SCHEMA_VIOLATION",
+        "PRESENT_WALLET_SCHEMA_VIOLATION"
+      ],
+      "all_other_wrapper_event_or_fill_schema_violations": "FAIL_CLOSED_STOP_BECAUSE_LOSSLESS_CLASSIFICATION_IS_NOT_PREREGISTERED",
+      "wrapper_block_time_and_inner_fill_time_are_DISTINCT_FIELDS_UNLESS_THE_SEPARATE_CLOCK_EVIDENCE_RULE_PROVES_EQUALITY": true
+    },
+    "canonical_serialization_contract": {
+      "version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
+      "maximum_nesting_depth": 128,
+      "frame": "MINIMAL_UNSIGNED_ASCII_BASE10_PAYLOAD_BYTE_LENGTH_PLUS_0X3A_PLUS_PAYLOAD_BYTES;ZERO_IS_0_AND_NONZERO_HAS_NO_LEADING_ZERO_OR_PLUS",
+      "null_encoding_hex": "4e",
+      "false_encoding_hex": "4230",
+      "true_encoding_hex": "4231",
+      "integer_encoding": "ASCII_I_PLUS_FRAME_OF_TOKEN_MATCHING_0_OR_MINUS_OPTIONAL_NONZERO_DIGIT_THEN_DIGITS;NO_PLUS_LEADING_ZERO_OR_NEGATIVE_ZERO",
+      "decimal_encoding": "ASCII_D_PLUS_FRAME;ZERO_PAYLOAD_IS_EXACTLY_0;NONZERO_PAYLOAD_MATCHES_MINUS_OPTIONAL_NONZERO_DIGIT_THEN_DIGITS_THEN_ASCII_e_THEN_EXPONENT_MATCHING_0_OR_MINUS_OPTIONAL_NONZERO_DIGIT_THEN_DIGITS;COEFFICIENT_HAS_NO_TRAILING_ZERO;NO_PLUS_LEADING_ZERO_OR_NEGATIVE_ZERO",
+      "string_encoding": "ASCII_S_PLUS_FRAME_OF_STRICT_UTF8_BYTES",
+      "bytes_encoding": "ASCII_Y_PLUS_FRAME_OF_EXACT_BYTES",
+      "list_encoding": "ASCII_L_PLUS_FRAME_OF_MINIMAL_UNSIGNED_BASE10_ITEM_COUNT_PLUS_CONCATENATED_FRAME_OF_EACH_ENCODED_ITEM_IN_ORDER",
+      "tuple_encoding": "ASCII_T_PLUS_FRAME_OF_MINIMAL_UNSIGNED_BASE10_ITEM_COUNT_PLUS_CONCATENATED_FRAME_OF_EACH_ENCODED_ITEM_IN_ORDER",
+      "mapping_encoding": "ASCII_M_PLUS_FRAME_OF_MINIMAL_UNSIGNED_BASE10_PAIR_COUNT_PLUS_CONCATENATED_FRAME_OF_ENCODED_STRING_KEY_AND_FRAME_OF_ENCODED_VALUE_SORTED_BY_ENCODED_KEY_BYTES",
+      "json_number_parse_contract": "INTEGER_TOKENS_TO_ARBITRARY_PRECISION_INTEGER_AND_FRACTION_OR_EXPONENT_TOKENS_TO_EXACT_FINITE_DECIMAL",
+      "forbidden_values": [
+        "BINARY_FLOAT",
+        "NONFINITE_NUMBER",
+        "NON_STRING_MAPPING_KEY",
+        "UNSUPPORTED_CONTAINER",
+        "CYCLE",
+        "DEPTH_GREATER_THAN_128"
+      ],
+      "sha256_contract": "LOWERCASE_HEX_SHA256_OF_EXACT_CANONICAL_SERIALIZATION_BYTES",
+      "frozen_golden_vectors": [
+        {
+          "input_description": "NULL",
+          "expected_hex": "4e",
+          "expected_sha256": "8ce86a6ae65d3692e7305e2c58ac62eebd97d3d943e093f577da25c36988246b"
+        },
+        {
+          "input_description": "BOOLEAN_TRUE",
+          "expected_hex": "4231",
+          "expected_sha256": "5b950e77941d01cdf246d00b1ece546bc95234b77d98b44c9187e2733afa696a"
+        },
+        {
+          "input_description": "INTEGER_NEGATIVE_12",
+          "expected_hex": "49333a2d3132",
+          "expected_sha256": "2eedfdf36c487caa7457f94b188ac00bc3b1d196a5514ae372f770c67ea8b9ce"
+        },
+        {
+          "input_description": "EXACT_DECIMAL_1_POINT_2300",
+          "expected_hex": "44363a313233652d32",
+          "expected_sha256": "99aa0166b53ea1512ad81c91e5e261960cbb2d65ea8fd33fc01555883525e558"
+        },
+        {
+          "input_description": "UTF8_STRING_E_ACUTE",
+          "expected_hex": "53323ac3a9",
+          "expected_sha256": "52669a268b3de8bd030d5dca3e0171b22b253b2ac8ccc8a7a238985fe419e171"
+        },
+        {
+          "input_description": "LIST_INTEGER_1_STRING_x",
+          "expected_hex": "4c313a32343a49313a31343a53313a78",
+          "expected_sha256": "5f7bb65918827caad1305f9ec7283105338fcc89daa21b36d43629a79331b086"
+        },
+        {
+          "input_description": "MAPPING_INSERTED_b_2_THEN_a_1",
+          "expected_hex": "4d313a32343a53313a61343a49313a31343a53313a62343a49313a32",
+          "expected_sha256": "eabf326e40ac5de0e41e7c9fd6d87081399c11b576619c71e797b9cb46e35916"
+        }
+      ],
+      "implementation_must_match_ALL_FROZEN_GOLDEN_VECTORS_AND_EXACT_SCHEMA_HASH_BEFORE_OWNER_APPROVAL": true
     },
     "canonical_serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1"
   },
@@ -78,7 +297,7 @@
     "selection_id": "HL-ARCHIVE-R11-72H-MODERN-PERSISTENCE-SELECTION-001",
     "canonical_selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
     "selection_path": "research/archive_inventory/r11/R11_72H_SELECTION.json",
-    "selection_file_sha256": "57ed7476401ed50ce2008177b2accf58e99de81184661ebc05d74308138f74d6",
+    "selection_file_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
     "prior_result_path": "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json",
     "prior_result_sha256": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
     "selected_object_count": 72,
@@ -106,6 +325,8 @@
     "maximum_ephemeral_workspace_bytes": 5368709120,
     "minimum_free_workspace_bytes_before_oidc": 6442450944,
     "maximum_retained_artifact_bytes": 134217728,
+    "reserved_non_scientific_package_metadata_bytes": 4194304,
+    "maximum_retained_scientific_output_bytes": 134217728,
     "maximum_runtime_seconds": 21600,
     "request_order": "PATH_HOUR_ASCENDING",
     "requester_pays_required": true,
@@ -129,6 +350,7 @@
     "validator_sha256",
     "workflow_git_blob_sha",
     "stdlib_dependency_declaration",
+    "provider_pricing_schedule_and_eur_conversion_snapshot_sha256",
     "dedicated_role_reuse_or_successor_decision"
   ],
   "diagnostic_passes": [
@@ -153,7 +375,7 @@
     },
     {
       "pass_id": "FILL_IDENTITY_PASS",
-      "method": "256_FIXED_WIDTH_VALID_WALLET_UINT50_TID_PARTITIONS_PLUS_LOSSLESS_INVALID_TID_LEDGER_THEN_DETERMINISTIC_SORT_AND_SECOND_LOCAL_PARSE",
+      "method": "256_SHA256_FIRST_BYTE_ROUTED_LENGTH_FRAMED_FULL_HISTORICAL_LEGACY_WEAK_KEY_PARTITIONS_WITH_FULL_KEY_EQUALITY_PLUS_LOSSLESS_TID_COIN_AND_PRESENT_WALLET_SCHEMA_VIOLATION_LEDGERS_THEN_DETERMINISTIC_EXTERNAL_SORT_AND_SECOND_LOCAL_PARSE",
       "sort_keys": [
         "legacy_weak_key",
         "protocol_matched_trade_key",
@@ -163,7 +385,7 @@
       "required_outputs": [
         "ALL_COMPLETE_REPEAT_GROUPS_WITH_RAW_BLOCK_AND_EVENT_PROVENANCE",
         "ALL_EXPECTED_COUNTERPARTY_PAIR_PROOFS_IN_RETAINED_TRADE_GROUPS",
-        "ALL_TID_SCHEMA_VIOLATIONS_WITHOUT_COERCION"
+        "ALL_TID_COIN_AND_PRESENT_WALLET_SCHEMA_VIOLATIONS_WITHOUT_COERCION_OR_REPAIR"
       ]
     }
   ],
@@ -171,7 +393,7 @@
     "record_type",
     "primary_taxon",
     "supporting_taxa",
-    "taxonomy_unit",
+    "taxonomy_unit_type",
     "taxonomy_unit_id",
     "weak_key_group_id",
     "block_replay_group_id",
@@ -179,11 +401,21 @@
     "wallet_fill_group_id",
     "legacy_weak_key",
     "raw_wallet_address",
+    "raw_wallet_json_type",
+    "raw_wallet_token",
+    "wallet_validation_status",
+    "wallet_schema_violation_reason",
+    "canonical_lowercase_wallet_address",
     "raw_tid_json_type",
     "raw_tid_token",
     "tid_validation_status",
     "tid_schema_violation_reason",
     "validated_integer_tid",
+    "raw_coin_json_type",
+    "raw_coin_token",
+    "coin_validation_status",
+    "coin_schema_violation_reason",
+    "exact_raw_coin_string",
     "weak_key_group_multiplicity",
     "block_replay_group_multiplicity",
     "protocol_trade_group_multiplicity",
@@ -191,6 +423,7 @@
     "protocol_trade_identity",
     "wallet_fill_identity",
     "raw_observation_locator",
+    "raw_block_locator",
     "source",
     "block_number",
     "block_time_exact",
@@ -209,8 +442,23 @@
     "deduplication_authorized"
   ],
   "required_global_outputs": [
+    "exact_scope_completion",
+    "object_transport_and_two_pass_conservation_ledger",
+    "reducer_partition_conservation_ledger",
+    "resource_and_cap_conservation_ledger",
+    "preflight_and_stop_evidence_ledger",
+    "package_boundary_record",
     "raw_event_observation_count",
+    "raw_block_observation_count",
+    "valid_tid_observation_count",
+    "tid_schema_violation_observation_count",
+    "valid_coin_observation_count",
+    "valid_wallet_observation_count",
+    "wallet_schema_violation_observation_count",
     "repeat_occurrence_count_sum_n_minus_one",
+    "valid_tid_repeat_occurrence_count_sum_n_minus_one",
+    "invalid_tid_repeat_occurrence_count",
+    "coin_schema_violation_observation_count",
     "affected_weak_key_group_count",
     "affected_wallet_count",
     "affected_tid_count",
@@ -222,12 +470,24 @@
     "repeat_relationship_counts",
     "taxonomy_group_counts_by_class",
     "taxonomy_occurrence_counts_by_class",
+    "taxonomy_unit_ledger",
     "complete_block_overlap_matrix",
+    "duplicate_observation_output",
+    "exact_block_replay_proofs",
+    "expected_counterparty_pair_proofs",
+    "retained_protocol_trade_group_member_ledger",
+    "schema_violation_evidence_ledger",
     "taxonomy_conservation_ledger",
     "block_reducer_sorted_output_sha256",
     "fill_reducer_sorted_output_sha256",
     "taxonomy_conservation_passed",
     "unclassifiable_group_count",
+    "unclassifiable_group_counts_by_taxonomy_unit",
+    "unclassifiable_occurrence_counts_by_taxonomy_unit",
+    "unique_block_number_count",
+    "singleton_block_number_count",
+    "singleton_block_observation_count",
+    "singleton_all_block_aggregate_sha256",
     "duplicate_observation_output_sha256",
     "duplicate_observation_output_bytes",
     "block_replay_output_sha256",
@@ -253,15 +513,37 @@
     "supporting_taxa_do_not_count_as_additional_primary_classifications": true,
     "payload_hash_only_replay_classification_authorized": false,
     "taxonomy_units_by_class": {
-      "TID_SCOPE_FALSE_POSITIVE": "LEGACY_WALLET_PLUS_TYPED_TID_GROUP",
-      "EXPECTED_COUNTERPARTY_PAIR": "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
-      "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": "ARCHIVE_BLOCK_NUMBER_GROUP",
-      "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY": "CANONICAL_WALLET_USER_FILL_GROUP",
-      "CONFLICTING_BLOCK_REPLAY": "ARCHIVE_BLOCK_NUMBER_GROUP",
-      "CONFLICTING_USER_FILL": "CANONICAL_WALLET_USER_FILL_GROUP",
-      "INTRA_BLOCK_REPEAT": "CANONICAL_WALLET_USER_FILL_GROUP_PER_RAW_BLOCK_OCCURRENCE",
-      "TID_SCHEMA_VIOLATION": "RAW_TID_OBSERVATION",
-      "UNCLASSIFIABLE": "ANY_REQUIRED_TAXONOMY_UNIT"
+      "TID_SCOPE_FALSE_POSITIVE": [
+        "LEGACY_REPEAT_OCCURRENCE"
+      ],
+      "EXPECTED_COUNTERPARTY_PAIR": [
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE"
+      ],
+      "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": [
+        "ARCHIVE_BLOCK_NUMBER_GROUP"
+      ],
+      "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY": [
+        "LEGACY_REPEAT_OCCURRENCE"
+      ],
+      "CONFLICTING_BLOCK_REPLAY": [
+        "ARCHIVE_BLOCK_NUMBER_GROUP"
+      ],
+      "CONFLICTING_USER_FILL": [
+        "LEGACY_REPEAT_OCCURRENCE"
+      ],
+      "INTRA_BLOCK_REPEAT": [
+        "LEGACY_REPEAT_OCCURRENCE"
+      ],
+      "TID_SCHEMA_VIOLATION": [
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION"
+      ],
+      "UNCLASSIFIABLE": [
+        "LEGACY_REPEAT_OCCURRENCE",
+        "ARCHIVE_BLOCK_NUMBER_GROUP",
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+      ]
     },
     "exact_block_replay_across_objects_requires": [
       "same_block_number",
@@ -285,6 +567,7 @@
       "same_raw_block_locator",
       "exactly_two_distinct_validated_wallets",
       "exact_side_set_A_and_B",
+      "adjacent_event_ordinals_in_the_same_raw_block",
       "each_wallet_fill_occurs_once_in_that_raw_block"
     ],
     "tid_scope_false_positive_requires": [
@@ -303,7 +586,1025 @@
     "tid_schema_violation_requires_validated_integer_tid_null": true,
     "unclassifiable_required_for_missing_conflicting_or_multiple_non_supporting_proofs": true
   },
+  "proof_and_classification_contract": {
+    "object_transport_and_two_pass_conservation_ledger_record_contract": {
+      "record_type": "OBJECT_TRANSPORT_AND_TWO_PASS_CONSERVATION",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_EXACTLY_72_RECORDS_BY_OBJECT_ORDINAL",
+      "primary_key": "object_ordinal_zero_based",
+      "exact_fields": [
+        "record_type",
+        "object_ordinal_zero_based",
+        "processing_status",
+        "last_completed_stage",
+        "path_hour_utc",
+        "source_object_key",
+        "expected_etag",
+        "observed_etag",
+        "expected_content_length",
+        "observed_content_length",
+        "compressed_response_body_bytes_received",
+        "expected_compressed_object_sha256",
+        "observed_compressed_object_sha256",
+        "get_object_request_count",
+        "retry_count",
+        "first_local_parse_decompressed_bytes_consumed",
+        "second_local_parse_decompressed_bytes_consumed",
+        "first_local_parse",
+        "second_local_parse"
+      ],
+      "processing_status_exact_values": [
+        "UNATTEMPTED_AFTER_FAIL_CLOSED_STOP",
+        "TRANSPORT_ATTEMPT_FAILED",
+        "RESPONSE_METADATA_IDENTITY_MISMATCH",
+        "BODY_READ_FAILED_AFTER_RESPONSE_METADATA",
+        "COMPRESSED_BODY_SHA256_MISMATCH",
+        "FIRST_LOCAL_PARSE_FAILED",
+        "FIRST_LOCAL_PARSE_COMPLETE_SECOND_NOT_STARTED",
+        "SECOND_LOCAL_PARSE_FAILED",
+        "COMPLETE_TWO_LOCAL_PASSES"
+      ],
+      "last_completed_stage_exact_values": [
+        "UNATTEMPTED",
+        "REQUEST_SENT_NO_ACCEPTED_RESPONSE",
+        "RESPONSE_METADATA_RECEIVED",
+        "RESPONSE_METADATA_RECEIVED_INCOMPLETE_BODY",
+        "RESPONSE_BODY_RECEIVED",
+        "FIRST_LOCAL_PARSE_COMPLETE",
+        "SECOND_LOCAL_PARSE_COMPLETE"
+      ],
+      "last_completed_stage_by_processing_status": {
+        "UNATTEMPTED_AFTER_FAIL_CLOSED_STOP": "UNATTEMPTED",
+        "TRANSPORT_ATTEMPT_FAILED": "REQUEST_SENT_NO_ACCEPTED_RESPONSE",
+        "RESPONSE_METADATA_IDENTITY_MISMATCH": "RESPONSE_METADATA_RECEIVED",
+        "BODY_READ_FAILED_AFTER_RESPONSE_METADATA": "RESPONSE_METADATA_RECEIVED_INCOMPLETE_BODY",
+        "COMPRESSED_BODY_SHA256_MISMATCH": "RESPONSE_BODY_RECEIVED",
+        "FIRST_LOCAL_PARSE_FAILED": "RESPONSE_BODY_RECEIVED",
+        "FIRST_LOCAL_PARSE_COMPLETE_SECOND_NOT_STARTED": "FIRST_LOCAL_PARSE_COMPLETE",
+        "SECOND_LOCAL_PARSE_FAILED": "FIRST_LOCAL_PARSE_COMPLETE",
+        "COMPLETE_TWO_LOCAL_PASSES": "SECOND_LOCAL_PARSE_COMPLETE"
+      },
+      "local_parse_summary_exact_fields": [
+        "pass_ordinal_one_based",
+        "decompressed_byte_count",
+        "decompressed_stream_sha256",
+        "raw_record_count",
+        "raw_event_observation_count",
+        "valid_tid_observation_count",
+        "tid_schema_violation_observation_count",
+        "valid_coin_observation_count",
+        "coin_schema_violation_observation_count",
+        "valid_wallet_observation_count",
+        "wallet_schema_violation_observation_count",
+        "clock_comparable_equal_observation_count",
+        "clock_comparable_mismatch_observation_count",
+        "clock_noncomparable_observation_count",
+        "ordered_raw_record_sha256_stream_sha256",
+        "schema_violation_unit_commitment_sha256",
+        "block_index_record_count",
+        "legacy_weak_key_index_record_count",
+        "schema_violation_index_record_count"
+      ],
+      "transport_projection_must_exactly_equal_joined_canonical_selection_target_and_prior_result_row": true,
+      "object_ordinal_path_hour_source_key_expected_etag_expected_content_length_and_expected_compressed_sha256_are_always_nonnull_and_exactly_equal_the_joined_target": true,
+      "expected_compressed_object_sha256_must_exactly_equal_the_prior_result_row_and_is_always_nonnull": true,
+      "observed_etag_and_observed_content_length_are_nonnull_iff_last_completed_stage_is_RESPONSE_METADATA_RECEIVED_or_later_in_the_declared_stage_order": true,
+      "observed_compressed_object_sha256_is_nonnull_iff_last_completed_stage_is_RESPONSE_BODY_RECEIVED_or_later": true,
+      "compressed_response_body_bytes_received_is_always_a_nonnegative_json_integer_zero_for_UNATTEMPTED_or_REQUEST_SENT_NO_ACCEPTED_RESPONSE_less_than_observed_content_length_for_BODY_READ_FAILED_AFTER_RESPONSE_METADATA_and_equals_observed_content_length_when_a_complete_body_was_received": true,
+      "BODY_READ_FAILED_AFTER_RESPONSE_METADATA_requires_observed_metadata_nonnull_observed_compressed_sha256_null_both_parse_summaries_null_and_zero_through_observed_content_length_minus_one_body_bytes_received": true,
+      "RESPONSE_METADATA_IDENTITY_MISMATCH_stops_before_reading_any_body_and_requires_compressed_response_body_bytes_received_0_observed_compressed_object_sha256_null_AND_both_parse_summaries_null": true,
+      "first_and_second_local_parse_decompressed_bytes_consumed_are_always_nonnegative_json_integers_zero_before_that_parse_starts_and_equal_the_complete_summary_decompressed_byte_count_when_that_parse_completes": true,
+      "every_nonnull_observed_transport_identity_must_be_compared_exactly_to_its_expected_field_and_processing_status_must_report_any_mismatch": true,
+      "get_object_request_count_exact_by_status": "0_FOR_UNATTEMPTED_AFTER_STOP;1_FOR_EVERY_OTHER_STATUS",
+      "retry_count_exact": 0,
+      "observed_transport_fields_and_parse_summaries_must_be_explicit_null_when_the_status_has_not_reached_them": true,
+      "first_local_parse_required_for_FIRST_LOCAL_PARSE_COMPLETE_SECOND_NOT_STARTED_SECOND_LOCAL_PARSE_FAILED_AND_COMPLETE_TWO_LOCAL_PASSES": true,
+      "second_local_parse_required_only_for_COMPLETE_TWO_LOCAL_PASSES": true,
+      "first_and_second_local_parse_all_fields_except_pass_ordinal_must_be_byte_for_byte_equal_when_both_exist": true,
+      "first_pass_ordinal_one_based": 1,
+      "second_pass_ordinal_one_based": 2,
+      "raw_record_count_equals_block_index_record_count": true,
+      "decompressed_stream_sha256_preimage": "EXACT_COMPLETE_DECOMPRESSED_OBJECT_BYTE_STREAM_INCLUDING_EVERY_ORIGINAL_NDJSON_DELIMITER_AND_FINAL_BYTE",
+      "ordered_raw_record_sha256_stream_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_ORDERED_RAW_RECORD_SHA256_STREAM_V1,ARRAY_OF_LOWERCASE_HEX_RAW_RECORD_SHA256_STRINGS_IN_RECORD_ORDINAL_ORDER]",
+      "schema_violation_unit_commitment_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_SCHEMA_VIOLATION_UNITS_V1,ARRAY_OF_EXACT_[TAXONOMY_UNIT_TYPE_STRING,RAW_OBSERVATION_LOCATOR_MAPPING,RAW_TYPED_TOKEN_LOWERCASE_HEX_OR_NULL,EXACT_REASON_STRING]_FOR_EVERY_DISJUNCT_TID_COIN_OR_WALLET_VIOLATION_IN_RAW_OBSERVATION_LOCATOR_THEN_DECLARED_TAXONOMY_UNIT_TYPE_ORDER]",
+      "raw_event_observation_count_equals_valid_plus_violation_counts_separately_for_tid_coin_and_wallet": true,
+      "raw_event_observation_count_equals_clock_comparable_equal_plus_clock_comparable_mismatch_plus_clock_noncomparable_observation_count": true,
+      "each_complete_parse_decompressed_byte_count_raw_record_count_and_raw_event_observation_count_must_exactly_equal_the_joined_prior_result_decompressed_byte_count_block_record_count_and_event_pair_count": true,
+      "legacy_weak_key_index_record_count_counts_only_exact_historical_normalizer_eligible_events": true,
+      "schema_violation_index_record_count_equals_number_of_disjunct_tid_coin_and_wallet_violation_units_so_one_event_may_contribute_up_to_three": true,
+      "when_scientific_status_IS_COMPLETE_the_exact_schema_violation_evidence_rows_for_each_object_must_rehash_in_raw_locator_then_declared_unit_type_order_to_both_equal_parse_summary_schema_violation_unit_commitment_sha256_values_and_their_row_count_must_equal_both_schema_violation_index_record_count_values": true,
+      "when_scientific_status_IS_CAP_OR_EARLY_EMPTY_no_schema_rows_exist;FOR_EACH_OBJECT_WITH_BOTH_COMPLETE_SUMMARIES_THE_TWO_COMMITMENTS_REMAIN_EQUAL_HASH_BOUND_COLLECTOR_ATTESTATIONS;FIRST_ONLY_PARTIAL_OR_ABSENT_COMMITMENTS_FOLLOW_THE_EXACT_OBJECT_STATUS_AND_ARE_NOT_CLAIMED_AS_TWO_PASS_EQUAL": true,
+      "all_count_fields_are_nonnegative_json_integers_and_all_sha256_fields_are_lowercase_64_hex": true,
+      "global_transport_parse_and_schema_counts_must_equal_exact_sums_of_all_present_first_parse_rows_and_all_present_second_parse_sums_must_match_the_same_completed_object_prefix": true,
+      "exact_scope_completion_scope_complete_is_true_iff_all_72_rows_are_COMPLETE_TWO_LOCAL_PASSES": true,
+      "request_order_and_stop_projection": "ROWS_ARE_CANONICAL_TARGET_ORDER;AFTER_THE_FIRST_NONCOMPLETE_ATTEMPT_STATUS_EVERY_LATER_ROW_IS_UNATTEMPTED_AFTER_FAIL_CLOSED_STOP;NO_SKIPPED_OR_REORDERED_TARGET",
+      "ledger_does_not_claim_independent_reconstruction_of_unretained_source_bytes": true
+    },
+    "reducer_partition_conservation_ledger_record_contract": {
+      "record_type": "REDUCER_PARTITION_CONSERVATION",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_EXACTLY_512_RECORDS_BY_REDUCER_ID_THEN_PARTITION_ORDINAL",
+      "primary_key_fields": [
+        "reducer_id",
+        "partition_ordinal_zero_based"
+      ],
+      "exact_fields": [
+        "record_type",
+        "reducer_id",
+        "partition_ordinal_zero_based",
+        "processing_status",
+        "partition_function",
+        "record_encoding",
+        "record_count",
+        "logical_input_bytes",
+        "unsorted_record_stream_sha256",
+        "sorted_record_stream_sha256",
+        "singleton_block_observation_count",
+        "singleton_block_detail_commitment_sha256",
+        "discovered_repeat_group_count",
+        "discovered_repeat_observation_count",
+        "retained_repeat_group_count",
+        "retained_repeat_observation_count",
+        "omitted_due_to_cap_group_count",
+        "omitted_due_to_cap_observation_count",
+        "omitted_group_commitment_sha256",
+        "not_retained_due_to_incomplete_group_count",
+        "not_retained_due_to_incomplete_observation_count",
+        "incomplete_stop_group_commitment_sha256"
+      ],
+      "reducer_id_exact_values": [
+        "BLOCK_NUMBER",
+        "HISTORICAL_LEGACY_WEAK_KEY"
+      ],
+      "partition_ordinal_range": "JSON_INTEGER_0_THROUGH_255",
+      "processing_status_exact_values": [
+        "NOT_STARTED_OR_ABORTED_BEFORE_PARTITION_COMPLETE",
+        "COMPLETE"
+      ],
+      "reducer_processing_order": [
+        "BLOCK_NUMBER",
+        "HISTORICAL_LEGACY_WEAK_KEY"
+      ],
+      "partition_processing_order_and_prefix_rule": "PROCESS_BLOCK_NUMBER_PARTITIONS_0_THROUGH_255_THEN_HISTORICAL_LEGACY_WEAK_KEY_PARTITIONS_0_THROUGH_255;COMPLETE_ROWS_MUST_FORM_ONE_EXACT_PREFIX;THE_FIRST_ABORTED_OR_UNSTARTED_ROW_AND_EVERY_LATER_ROW_ARE_NOT_STARTED_OR_ABORTED_AND_HAVE_THE_EXACT_NULL_FIELDS",
+      "reducer_start_gate": "NO_REDUCER_PARTITION_MAY_START_UNLESS_ALL_72_OBJECT_ROWS_ARE_COMPLETE_TWO_LOCAL_PASSES_exact_scope_completion.scope_complete_IS_TRUE_AND_NO_EARLIER_STOP_TRIGGERED;IF_THE_GATE_FAILS_ALL_512_ROWS_ARE_NOT_STARTED_WITH_NULL_FIELDS",
+      "partition_function": "FIRST_BYTE_OF_SHA256_OF_THE_COMPLETE_EQUALITY_KEY_BYTES",
+      "partition_function_field_must_exactly_equal_the_frozen_partition_function_literal_for_both_reducer_ids": true,
+      "block_number_equality_key_bytes": "UNSIGNED_UINT64_BIG_ENDIAN_BLOCK_NUMBER",
+      "block_number_record_encoding": "UNSIGNED_UINT64_BIG_ENDIAN_BLOCK_NUMBER_PLUS_UNSIGNED_UINT64_BIG_ENDIAN_GLOBAL_BLOCK_ORDINAL",
+      "historical_legacy_weak_key_equality_key_bytes": "IDENTITY_CANONICAL_SERIALIZATION_OF_THE_EXACT_TWO_ELEMENT_LEGACY_WEAK_KEY_ARRAY",
+      "historical_legacy_weak_key_record_encoding": "FRAME_OF_COMPLETE_EQUALITY_KEY_BYTES_PLUS_UNSIGNED_UINT64_BIG_ENDIAN_GLOBAL_EVENT_ORDINAL",
+      "record_encoding_field_exact_value_by_reducer_id": {
+        "BLOCK_NUMBER": "UNSIGNED_UINT64_BIG_ENDIAN_BLOCK_NUMBER_PLUS_UNSIGNED_UINT64_BIG_ENDIAN_GLOBAL_BLOCK_ORDINAL",
+        "HISTORICAL_LEGACY_WEAK_KEY": "FRAME_OF_COMPLETE_EQUALITY_KEY_BYTES_PLUS_UNSIGNED_UINT64_BIG_ENDIAN_GLOBAL_EVENT_ORDINAL"
+      },
+      "sort_order": "UNSIGNED_LEXICOGRAPHIC_FULL_RECORD_BYTES_WITH_EQUALITY_DECIDED_ONLY_BY_THE_COMPLETE_EQUALITY_KEY_NOT_ITS_HASH",
+      "global_block_ordinal_rule": "ZERO_BASED_PREFIX_SUM_OF_RAW_RECORD_COUNTS_IN_CANONICAL_OBJECT_ORDINAL_ORDER_PLUS_RECORD_ORDINAL_ZERO_BASED",
+      "global_event_ordinal_rule": "ZERO_BASED_PREFIX_SUM_OF_EVENT_COUNTS_IN_CANONICAL_OBJECT_ORDER_THEN_PRIOR_RECORD_ORDER_PLUS_EVENT_ORDINAL_ZERO_BASED",
+      "unsorted_record_write_order": "CANONICAL_OBJECT_ORDINAL_THEN_RECORD_ORDINAL_THEN_EVENT_ORDINAL_WHERE_APPLICABLE",
+      "sha256_stream_preimage": "EXACT_CONCATENATION_OF_RECORD_BYTES_IN_WRITE_ORDER_FOR_UNSORTED_AND_SORTED_ORDER_FOR_SORTED",
+      "sorted_stream_must_be_an_EXACT_BYTE_FOR_BYTE_MULTISET_PERMUTATION_OF_THE_UNSORTED_ENCODED_RECORDS_WITH_IDENTICAL_MULTIPLICITIES_AND_NO_ADDITION_LOSS_OR_MUTATION": true,
+      "complete_row_record_stream_hashes_and_applicable_singleton_hash_are_lowercase_64_hex_counts_and_bytes_are_nonnegative_json_integers_and_group_commitment_hashes_follow_the_exact_branch_nullability_rules": true,
+      "singleton_fields_applicability": "FOR_EACH_COMPLETE_BLOCK_NUMBER_ROW_singleton_block_observation_count_EQUALS_record_count_MINUS_discovered_repeat_observation_count_AND_singleton_block_detail_commitment_sha256_IS_NONNULL_LOWERCASE_64_HEX;FOR_COMPLETE_HISTORICAL_ROWS_BOTH_ARE_NULL;FOR_NOT_STARTED_ROWS_BOTH_ARE_NULL",
+      "singleton_block_detail_partition_commitment_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_SINGLETON_BLOCK_DETAILS_PARTITION_V1,PARTITION_ORDINAL,ARRAY_OF_EXACT_[BLOCK_NUMBER_UINT64,RAW_BLOCK_LOCATOR_MAPPING,EXACT_RAW_BLOCK_TIME_STRING,ORDERED_EVENT_COUNT_NONNEGATIVE_INTEGER,ORDERED_EVENT_FINGERPRINT_SHA256_LOWERCASE_HEX,RAW_RECORD_SHA256_LOWERCASE_HEX]_IN_BLOCK_NUMBER_THEN_RAW_LOCATOR_ORDER]",
+      "logical_input_bytes_equals_exact_sum_of_encoded_record_byte_lengths_and_for_BLOCK_NUMBER_equals_record_count_times_16": true,
+      "not_started_row_count_bytes_hashes_singleton_fields_all_group_counts_and_both_group_commitments_must_be_explicit_null": true,
+      "discovered_repeat_group_count_counts_COMPLETE_EQUALITY_KEY_GROUPS_WITH_MULTIPLICITY_GREATER_THAN_ONE": true,
+      "discovered_repeat_observation_count_sums_full_group_multiplicity_including_one_group_first_for_every_discovered_repeat_group": true,
+      "for_each_COMPLETE_partition_discovered_repeat_group_count_equals_retained_repeat_group_count_plus_omitted_due_to_cap_group_count_plus_not_retained_due_to_incomplete_group_count": true,
+      "for_each_COMPLETE_partition_discovered_repeat_observation_count_equals_retained_repeat_observation_count_plus_omitted_due_to_cap_observation_count_plus_not_retained_due_to_incomplete_observation_count": true,
+      "omitted_group_commitment_sha256_exact_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_OMITTED_GROUPS_PARTITION_V1,STRING_REDUCER_ID,PARTITION_ORDINAL,ARRAY_OF_[LOWERCASE_HEX_COMPLETE_EQUALITY_KEY_BYTES,NONNEGATIVE_INTEGER_MULTIPLICITY]_IN_UNSIGNED_LEXICOGRAPHIC_EQUALITY_KEY_ORDER_WITHIN_THIS_ROW_PARTITION]",
+      "incomplete_stop_group_commitment_sha256_exact_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_INCOMPLETE_STOP_GROUPS_PARTITION_V1,STRING_REDUCER_ID,PARTITION_ORDINAL,ARRAY_OF_[LOWERCASE_HEX_COMPLETE_EQUALITY_KEY_BYTES,NONNEGATIVE_INTEGER_MULTIPLICITY]_IN_UNSIGNED_LEXICOGRAPHIC_EQUALITY_KEY_ORDER_WITHIN_THIS_ROW_PARTITION]",
+      "complete_scientific_behavior": "retained_group_AND_observation_counts_EQUAL_discovered_group_AND_observation_counts;cap_omitted_AND_incomplete_not_retained_counts_EQUAL_0;BOTH_commitments_ARE_NULL",
+      "retention_or_artifact_cap_behavior": "retained_AND_incomplete_not_retained_counts_EQUAL_0;omitted_due_to_cap_group_AND_observation_counts_EQUAL_discovered_counts;omitted_group_commitment_sha256_COMMITS_EVERY_DISCOVERED_GROUP_AND_MULTIPLICITY;incomplete_stop_commitment_IS_NULL;ALL_SEVEN_SCIENTIFIC_OUTPUT_CONTAINERS_ARE_EXACT_ZERO_BYTES",
+      "early_stop_after_complete_partition_behavior": "retained_AND_cap_omitted_counts_EQUAL_0;not_retained_due_to_incomplete_group_AND_observation_counts_EQUAL_discovered_counts;incomplete_stop_group_commitment_COMMITS_EVERY_DISCOVERED_GROUP_AND_MULTIPLICITY;cap_omitted_commitment_IS_NULL;ALL_SEVEN_SCIENTIFIC_OUTPUT_CONTAINERS_ARE_EXACT_ZERO_BYTES",
+      "block_reducer_sorted_output_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_BLOCK_REDUCER_PARTITIONS_V1,ARRAY_OF_EXACT_[PARTITION_ORDINAL_NONNEGATIVE_INTEGER,RECORD_COUNT_NONNEGATIVE_INTEGER,LOGICAL_INPUT_BYTES_NONNEGATIVE_INTEGER,SORTED_RECORD_STREAM_SHA256_LOWERCASE_HEX_STRING]_FOR_PARTITIONS_0_THROUGH_255]",
+      "fill_reducer_sorted_output_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_LEGACY_WEAK_KEY_REDUCER_PARTITIONS_V1,ARRAY_OF_EXACT_[PARTITION_ORDINAL_NONNEGATIVE_INTEGER,RECORD_COUNT_NONNEGATIVE_INTEGER,LOGICAL_INPUT_BYTES_NONNEGATIVE_INTEGER,SORTED_RECORD_STREAM_SHA256_LOWERCASE_HEX_STRING]_FOR_PARTITIONS_0_THROUGH_255]",
+      "top_level_reducer_sha256_is_null_unless_all_256_corresponding_partitions_are_COMPLETE": true,
+      "all_partition_counts_must_reconcile_to_the_object_two_pass_ledger_index_counts_only_when_all_256_partitions_for_that_reducer_are_COMPLETE": true,
+      "sum_retained_BLOCK_NUMBER_groups_must_equal_repeated_block_group_count_and_complete_repeated_matrix_rows_only_when_all_256_BLOCK_NUMBER_partitions_are_COMPLETE_and_scientific_status_IS_COMPLETE_else_empty_science_counts_are_zero": true,
+      "sum_retained_HISTORICAL_LEGACY_WEAK_KEY_groups_must_equal_legacy_repeat_group_count_and_affected_weak_key_group_count_only_when_all_256_HISTORICAL_partitions_are_COMPLETE_and_scientific_status_IS_COMPLETE_else_empty_science_counts_are_zero": true,
+      "all_omitted_due_to_cap_counts_are_NULL_for_NOT_STARTED_rows_ZERO_for_COMPLETE_rows_unless_retention_caps_exceeded_and_terminal_is_R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_AND_THEN_EQUAL_DISCOVERED_COUNTS": true,
+      "all_not_retained_due_to_incomplete_counts_are_NULL_for_NOT_STARTED_rows_ZERO_for_COMPLETE_rows_unless_scientific_status_IS_EARLY_STOP_EMPTY_AND_THEN_EQUAL_DISCOVERED_COUNTS": true,
+      "when_any_partition_is_incomplete_all_complete_taxonomy_and_root_cause_terminals_are_forbidden": true
+    },
+    "deterministic_output_serialization_contract": {
+      "deterministic_ndjson_container": "STRICT_UTF8_NDJSON_WITH_ONE_0X0A_AFTER_EVERY_RECORD_INCLUDING_FINAL_RECORD_AND_ZERO_BYTES_FOR_EMPTY_SEQUENCE",
+      "deterministic_json_container": "EXACTLY_ONE_MAPPING_OR_ARRAY_SERIALIZED_WITH_THE_SAME_FROZEN_VALUE_GRAMMAR_AND_SCHEMA_DECLARED_FIELD_OR_ARRAY_ORDER_FOLLOWED_BY_EXACTLY_ONE_0X0A;EMPTY_TOP_LEVEL_JSON_DOCUMENT_FORBIDDEN",
+      "record_field_order": "EXACT_FIELDS_ORDER_FROM_THE_APPLICABLE_RECORD_CONTRACT;ARBITRARY_NESTED_SOURCE_MAPPINGS_USE_STRICT_UTF8_KEY_BYTES_ASCENDING",
+      "mapping_syntax": "0X7B_KEY_0X3A_VALUE_COMMA_SEPARATED_0X7D_WITH_NO_WHITESPACE",
+      "array_syntax": "0X5B_VALUES_COMMA_SEPARATED_0X5D_WITH_NO_WHITESPACE_AND_SOURCE_OR_CONTRACT_ORDER_PRESERVED",
+      "string_syntax": "DOUBLE_QUOTED_STRICT_UNICODE;QUOTE_AND_BACKSLASH_ESCAPED;BS_FF_LF_CR_TAB_USE_SHORT_ESCAPES;OTHER_U0000_TO_U001F_USE_LOWERCASE_U00XX;ALL_OTHER_SCALAR_VALUES_ARE_UNESCAPED_STRICT_UTF8;SURROGATES_FORBIDDEN",
+      "integer_syntax": "0_OR_OPTIONAL_MINUS_THEN_NONZERO_DIGIT_AND_DIGITS_WITH_NO_PLUS_LEADING_ZERO_OR_NEGATIVE_ZERO",
+      "decimal_syntax": "0_OR_OPTIONAL_MINUS_THEN_NONZERO_COEFFICIENT_DIGITS_WITH_NO_TRAILING_ZERO_FOLLOWED_BY_LOWERCASE_e_AND_MINIMAL_SIGNED_EXPONENT;NO_PLUS_LEADING_ZERO_OR_NEGATIVE_ZERO",
+      "boolean_and_null_syntax": "LOWERCASE_true_false_null",
+      "binary_values": "LOWERCASE_HEX_STRING_ONLY_WHERE_THE_EXACT_RECORD_SCHEMA_DECLARES_BYTES",
+      "record_sequence_sort_keys_by_container": {
+        "object_transport_and_two_pass_conservation_ledger": [
+          "object_ordinal_zero_based"
+        ],
+        "reducer_partition_conservation_ledger": [
+          "reducer_id",
+          "partition_ordinal_zero_based"
+        ],
+        "taxonomy_unit_ledger": [
+          "taxonomy_unit_type",
+          "taxonomy_unit_id"
+        ],
+        "complete_block_overlap_matrix": [
+          "block_number",
+          "block_replay_group_id"
+        ],
+        "duplicate_observation_output": [
+          "raw_observation_locator"
+        ],
+        "exact_block_replay_proofs": [
+          "exact_block_replay_proof_id"
+        ],
+        "expected_counterparty_pair_proofs": [
+          "expected_counterparty_pair_proof_id"
+        ],
+        "retained_protocol_trade_group_member_ledger": [
+          "protocol_trade_group_id",
+          "raw_observation_locator"
+        ],
+        "schema_violation_evidence_ledger": [
+          "taxonomy_unit_type",
+          "raw_observation_locator"
+        ]
+      },
+      "sort_component_comparator_by_field": {
+        "object_ordinal_zero_based": "NONNEGATIVE_INTEGER_ASCENDING",
+        "partition_ordinal_zero_based": "NONNEGATIVE_INTEGER_ASCENDING",
+        "block_number": "UNSIGNED_UINT64_ASCENDING",
+        "reducer_id": "DECLARATION_ORDER_BLOCK_NUMBER_THEN_HISTORICAL_LEGACY_WEAK_KEY",
+        "taxonomy_unit_type": "DECLARATION_ORDER_LEGACY_REPEAT_OCCURRENCE_THEN_ARCHIVE_BLOCK_NUMBER_GROUP_THEN_PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE_THEN_RAW_TID_SCHEMA_VIOLATION_OBSERVATION_THEN_RAW_COIN_SCHEMA_VIOLATION_OBSERVATION_THEN_RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION",
+        "raw_observation_locator": "RAW_LOCATOR_DECLARED_FIELD_COMPARATOR_WITH_EVENT_ORDINAL_NONNEGATIVE_INTEGER_LAST",
+        "protocol_trade_group_id": "LOWERCASE_64_HEX_DECODED_TO_32_BYTES_UNSIGNED_LEXICOGRAPHIC",
+        "taxonomy_unit_id": "LOWERCASE_64_HEX_DECODED_TO_32_BYTES_UNSIGNED_LEXICOGRAPHIC",
+        "block_replay_group_id": "LOWERCASE_64_HEX_DECODED_TO_32_BYTES_UNSIGNED_LEXICOGRAPHIC",
+        "exact_block_replay_proof_id": "LOWERCASE_64_HEX_DECODED_TO_32_BYTES_UNSIGNED_LEXICOGRAPHIC",
+        "expected_counterparty_pair_proof_id": "LOWERCASE_64_HEX_DECODED_TO_32_BYTES_UNSIGNED_LEXICOGRAPHIC"
+      },
+      "all_sort_keys_are_compared_component_by_component_with_no_canonical_JSON_byte_sort_fallback_and_equal_full_primary_keys_are_a_hard_failure": true,
+      "only_explicit_top_level_container_sha256_and_byte_fields_named_in_global_output_contract_hash_exact_serialized_container_bytes_and_equal_exact_container_length": true,
+      "empty_sequence_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "alternative_whitespace_escape_key_order_number_rendering_or_final_newline_authorized": false
+    },
+    "raw_block_locator_contract": {
+      "container_field": "raw_block_locator",
+      "exact_fields": [
+        "source_object_key",
+        "compressed_object_sha256",
+        "record_ordinal_zero_based"
+      ],
+      "identity_rule": "ONE_EXACT_ARCHIVE_BLOCK_WRAPPER_OCCURRENCE_PER_DECOMPRESSED_RECORD",
+      "object_key_and_verified_compressed_sha256_both_required": true,
+      "event_ordinal_is_not_part_of_raw_block_locator": true,
+      "locator_comparator": "LEXICOGRAPHIC_BY_DECLARED_FIELD_ORDER;STRICT_UTF8_STRING_FIELDS_COMPARE_BY_UNSIGNED_UTF8_BYTES;LOWERCASE_SHA256_HEX_COMPARES_BY_ITS_32_DECODED_BYTES;ORDINAL_FIELDS_COMPARE_AS_NONNEGATIVE_INTEGERS",
+      "two_equal_raw_block_locators_or_two_equal_raw_observation_locators_are_A_HARD_DUPLICATE_PRIMARY_KEY_CONFLICT": true,
+      "foreign_key_target": "complete_block_overlap_matrix.members.raw_block_locator"
+    },
+    "raw_locator_and_selection_projection_contract": {
+      "raw_observation_locator_exact_prefix_equals_raw_block_locator": true,
+      "raw_block_locator_contains_no_semantic_block_number_or_time_field": true,
+      "every_raw_locator_source_object_key_and_compressed_sha256_must_exactly_join_one_canonical_72_target": true,
+      "every_source_path_hour_and_object_ordinal_must_equal_the_joined_selection_target_order": true,
+      "every_source_record_ordinal_must_equal_the_joined_raw_block_locator_record_ordinal": true,
+      "every_raw_block_locator_resolves_to_exactly_one_matrix_member_and_one_matrix_block_number": true,
+      "every_raw_observation_event_ordinal_resolves_to_exactly_one_position_in_that_matrix_member_ordered_event_vector": true,
+      "duplicate_rows_protocol_member_rows_schema_rows_proofs_and_taxonomy_units_must_use_identical_locator_projections_for_the_same_member": true,
+      "foreign_key_existence_without_exact_projection_equality_is_invalid": true
+    },
+    "block_fingerprints_contract": {
+      "container_field": "block_fingerprints",
+      "exact_fields": [
+        "canonical_serialization_version",
+        "exact_raw_block_time",
+        "ordered_event_count",
+        "ordered_event_fingerprint_sha256",
+        "raw_record_sha256"
+      ],
+      "canonical_serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
+      "ordered_event_count_type": "NONNEGATIVE_JSON_INTEGER",
+      "sha256_fields_are_exact_lowercase_64_hex": true,
+      "ordered_event_fingerprint_input": "ORDERED_FULL_RAW_TYPED_EVENT_VECTOR",
+      "raw_record_sha256_input": "EXACT_DECOMPRESSED_RECORD_BYTES_EXCLUDING_ONLY_THE_SINGLE_0X0A_NDJSON_DELIMITER_WHEN_PRESENT_AND_PRESERVING_ANY_PRECEDING_0X0D_WHITESPACE_AND_ALL_OTHER_BYTES",
+      "final_record_without_0x0a_rule": "HASH_ALL_REMAINING_EXACT_DECOMPRESSED_RECORD_BYTES",
+      "raw_record_sha256_role": "SUPPLEMENTAL_BYTE_EVIDENCE_NOT_BLOCK_IDENTITY"
+    },
+    "fill_event_fingerprint_and_diff_contract": {
+      "selected_fill_field_order": [
+        "coin",
+        "tid",
+        "time",
+        "side",
+        "px",
+        "sz",
+        "closedPnl",
+        "crossed",
+        "liquidation"
+      ],
+      "selected_fill_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_SELECTED_FILL_V1,ARRAY_OF_EXACT_[FIELD_NAME_STRING,FIELD_PRESENT_BOOLEAN,EXACT_PARSED_TYPED_VALUE_OR_NULL_WHEN_ABSENT]_IN_selected_fill_field_order]",
+      "full_fill_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_FULL_FILL_V1,COMPLETE_EXACT_PARSED_FILL_MAPPING_INCLUDING_ADDITIONAL_FIELDS]",
+      "full_event_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_FULL_EVENT_V1,RAW_WALLET_FIELD_PRESENT_BOOLEAN,RAW_WALLET_EXACT_PARSED_TYPED_VALUE_OR_NULL_WHEN_ABSENT,COMPLETE_EXACT_PARSED_FILL_MAPPING]",
+      "ordered_event_fingerprint_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_ORDERED_EVENT_VECTOR_V1,ARRAY_OF_COMPLETE_EXACT_PARSED_EVENT_VALUES_IN_SOURCE_ORDER]",
+      "missing_field_distinguished_from_present_null_by_explicit_presence_boolean": true,
+      "all_preimages_use_identity_contract_canonical_serialization_contract": true,
+      "full_lossless_validated_fill_payload_contract": "COMPLETE_EXACT_PARSED_TYPED_FILL_MAPPING_INCLUDING_ADDITIONAL_FIELDS;SOURCE_LEXEME_BYTES_REMAIN_BOUND_BY_RAW_RECORD_SHA256",
+      "first_versus_occurrence_field_diffmask_type": "EXACT_ZERO_FILLED_MAPPING_OF_JSON_BOOLEANS",
+      "first_versus_occurrence_field_diffmask_exact_keys": [
+        "raw_wallet_typed_value_differs",
+        "coin_typed_value_or_presence_differs",
+        "tid_typed_value_or_presence_differs",
+        "time_differs",
+        "side_differs",
+        "px_differs",
+        "sz_differs",
+        "closedPnl_differs",
+        "crossed_differs",
+        "liquidation_differs",
+        "additional_fill_field_set_or_value_differs",
+        "full_fill_sha256_differs",
+        "full_event_sha256_differs",
+        "raw_block_locator_differs",
+        "block_number_differs",
+        "wrapper_block_time_exact_differs",
+        "local_time_exact_differs"
+      ],
+      "each_diff_boolean_is_exact_inequality_against_the_lexicographically_first_raw_observation_locator_in_the_legacy_group": true,
+      "exact_identical_payload_means_full_event_sha256_equal": true,
+      "conflicting_payload_means_full_event_sha256_differs_for_the_same_canonical_wallet_fill_identity": true,
+      "numeric_or_time_tolerance_authorized": false
+    },
+    "proof_id_contract": {
+      "algorithm": "SHA256",
+      "canonical_serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
+      "lowercase_64_hex_required": true,
+      "generated_primary_key_is_excluded_from_its_own_preimage": true,
+      "exact_preimage_fields_by_record_type": {
+        "EXACT_BLOCK_REPLAY_PROOF": [
+          "record_type",
+          "block_replay_group_id",
+          "block_number",
+          "member_count",
+          "member_evidence",
+          "exact_raw_block_time",
+          "ordered_event_count",
+          "ordered_event_fingerprint_sha256",
+          "classification"
+        ],
+        "EXPECTED_COUNTERPARTY_PAIR_PROOF": [
+          "record_type",
+          "protocol_trade_group_id",
+          "raw_block_locator",
+          "protocol_trade_identity",
+          "member_count",
+          "members",
+          "classification"
+        ]
+      },
+      "exact_preimage_container_shape": "CANONICAL_ARRAY_OF_STRING_R11A_PROOF_ID_V1_RECORD_TYPE_AND_AN_ORDERED_ARRAY_OF_TWO_ELEMENT_ARRAYS_FIELD_NAME_AND_EXACT_FIELD_VALUE_FOR_EVERY_LISTED_PREIMAGE_FIELD_IN_LIST_ORDER",
+      "random_or_runtime_dependent_ids_authorized": false
+    },
+    "deterministic_group_and_taxonomy_unit_id_contract": {
+      "algorithm": "SHA256",
+      "canonical_serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
+      "generated_id_is_excluded_from_its_own_preimage": true,
+      "lowercase_64_hex_required": true,
+      "exact_domain_tag_by_id": {
+        "weak_key_group_id": "WEAK_KEY_GROUP",
+        "block_replay_group_id": "BLOCK_NUMBER_GROUP",
+        "protocol_trade_group_id": "PROTOCOL_TRADE_GROUP_PER_RAW_BLOCK",
+        "wallet_fill_group_id": "WALLET_FILL_GROUP"
+      },
+      "exact_preimage_field_names_by_id": {
+        "weak_key_group_id": [
+          "legacy_weak_key"
+        ],
+        "block_replay_group_id": [
+          "block_number"
+        ],
+        "protocol_trade_group_id": [
+          "raw_block_locator",
+          "protocol_trade_identity"
+        ],
+        "wallet_fill_group_id": [
+          "wallet_fill_identity"
+        ]
+      },
+      "taxonomy_unit_id_preimage_by_taxonomy_unit_type": {
+        "LEGACY_REPEAT_OCCURRENCE": [
+          "raw_observation_locator"
+        ],
+        "ARCHIVE_BLOCK_NUMBER_GROUP": [
+          "block_replay_group_id"
+        ],
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": [
+          "protocol_trade_group_id"
+        ],
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": [
+          "raw_observation_locator"
+        ],
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": [
+          "raw_observation_locator"
+        ],
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": [
+          "raw_observation_locator"
+        ]
+      },
+      "group_id_exact_preimage_container_shape": "CANONICAL_ARRAY_OF_STRING_R11A_GROUP_ID_V1_GENERATED_ID_FIELD_NAME_EXACT_DOMAIN_TAG_AND_AN_ORDERED_ARRAY_OF_TWO_ELEMENT_ARRAYS_FIELD_NAME_AND_EXACT_FIELD_VALUE_FOR_EVERY_LISTED_FIELD_IN_LIST_ORDER",
+      "taxonomy_unit_id_exact_preimage_container_shape": "CANONICAL_ARRAY_OF_STRING_R11A_TAXONOMY_UNIT_ID_V1_TAXONOMY_UNIT_TYPE_AND_AN_ORDERED_ARRAY_OF_TWO_ELEMENT_ARRAYS_FIELD_NAME_AND_EXACT_FIELD_VALUE_FOR_EVERY_LISTED_FIELD_IN_LIST_ORDER",
+      "singular_raw_observation_locator_preimage_rule": "FOR_LEGACY_REPEAT_AND_RAW_SCHEMA_UNITS_THE_PREIMAGE_raw_observation_locator_IS_EXACTLY_THE_ONLY_MEMBER_OF_member_raw_observation_locators",
+      "random_runtime_order_or_python_hash_dependent_ids_authorized": false
+    },
+    "exact_block_replay_proof_contract": {
+      "record_type": "EXACT_BLOCK_REPLAY_PROOF",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key": "exact_block_replay_proof_id",
+      "exact_fields": [
+        "record_type",
+        "exact_block_replay_proof_id",
+        "block_replay_group_id",
+        "block_number",
+        "member_count",
+        "member_evidence",
+        "exact_raw_block_time",
+        "ordered_event_count",
+        "ordered_event_fingerprint_sha256",
+        "classification"
+      ],
+      "member_evidence_record_exact_fields": [
+        "raw_block_locator",
+        "source_object_key",
+        "raw_record_sha256"
+      ],
+      "classification": "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+      "minimum_member_count": 2,
+      "minimum_distinct_source_object_keys": 2,
+      "member_evidence_sorted_by_raw_block_locator_and_raw_block_locators_unique": true,
+      "member_count_equals_member_evidence_length": true,
+      "all_members_require_same_block_number_exact_raw_block_time_ordered_event_count_and_fingerprint": true,
+      "member_raw_record_sha256_may_differ_without_defeating_semantic_exact_block_replay": true,
+      "foreign_key_targets": {
+        "block_replay_group_id": "complete_block_overlap_matrix.block_replay_group_id",
+        "member_evidence.raw_block_locator": "complete_block_overlap_matrix.members.raw_block_locator"
+      },
+      "proof_member_evidence_and_shared_scalars_must_exactly_equal_full_referenced_matrix_row_projections": true,
+      "referenced_matrix_row_primary_taxon_must_equal_EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": true,
+      "referenced_matrix_row_exact_block_replay_proof_id_must_equal_this_proof_id": true,
+      "proper_subset_or_superset_proof_authorized": false,
+      "empty_object_or_partial_proof_authorized": false
+    },
+    "expected_counterparty_pair_proof_contract": {
+      "record_type": "EXPECTED_COUNTERPARTY_PAIR_PROOF",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key": "expected_counterparty_pair_proof_id",
+      "exact_fields": [
+        "record_type",
+        "expected_counterparty_pair_proof_id",
+        "protocol_trade_group_id",
+        "raw_block_locator",
+        "protocol_trade_identity",
+        "member_count",
+        "members",
+        "classification"
+      ],
+      "member_record_exact_fields": [
+        "raw_observation_locator",
+        "canonical_lowercase_wallet_address",
+        "side_exact",
+        "crossed_exact",
+        "full_event_sha256"
+      ],
+      "classification": "EXPECTED_COUNTERPARTY_PAIR",
+      "member_count": 2,
+      "distinct_validated_wallet_address_count": 2,
+      "exact_side_values_sorted": [
+        "A",
+        "B"
+      ],
+      "each_wallet_fill_occurs_exactly_once_in_raw_block": true,
+      "member_event_ordinals_must_differ_by_exactly_one": true,
+      "crossed_exact_is_required_json_boolean_but_complementary_maker_taker_values_are_not_A_CLASSIFICATION_PREDICATE": true,
+      "all_members_require_same_protocol_trade_identity_and_raw_block_locator": true,
+      "members_sorted_by_raw_observation_locator_and_raw_observation_locators_unique": true,
+      "foreign_key_targets": {
+        "protocol_trade_group_id": "taxonomy_unit_ledger.protocol_trade_group_id_WHERE_taxonomy_unit_type_EQUALS_PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+        "raw_block_locator": "complete_block_overlap_matrix.members.raw_block_locator",
+        "members.raw_observation_locator": "retained_protocol_trade_group_member_ledger.raw_observation_locator"
+      },
+      "members_identity_block_wallet_side_crossed_and_hashes_must_exactly_equal_full_referenced_taxonomy_unit_and_joined_member_ledger_projections": true,
+      "referenced_taxonomy_unit_primary_taxon_must_equal_EXPECTED_COUNTERPARTY_PAIR": true,
+      "referenced_taxonomy_unit_expected_counterparty_pair_proof_ids_must_equal_singleton_array_of_this_proof_id": true,
+      "proper_subset_or_superset_proof_authorized": false,
+      "empty_object_or_partial_proof_authorized": false
+    },
+    "occurrence_proof_reference_contract": {
+      "exact_block_replay_proof_field": "exact_block_replay_proof",
+      "exact_block_replay_proof_reference_field": "exact_block_replay_proof_id",
+      "exact_block_replay_proof_target": "exact_block_replay_proofs.exact_block_replay_proof_id",
+      "exact_block_replay_proof_nonnull_mapping_exact_fields": [
+        "exact_block_replay_proof_id"
+      ],
+      "expected_counterparty_pair_proof_field": "expected_counterparty_pair_proof",
+      "expected_counterparty_pair_proof_reference_field": "expected_counterparty_pair_proof_id",
+      "expected_counterparty_pair_proof_target": "expected_counterparty_pair_proofs.expected_counterparty_pair_proof_id",
+      "expected_counterparty_pair_proof_nonnull_mapping_exact_fields": [
+        "expected_counterparty_pair_proof_id"
+      ],
+      "nonnull_reference_is_exact_single_key_reference_mapping_not_an_embedded_full_proof_and_uses_declared_key_order": true,
+      "absent_reference_is_exact_JSON_null": true,
+      "null_required_when_taxon_does_not_admit_proof": true,
+      "all_foreign_keys_must_resolve_exactly_once": true
+    },
+    "taxonomy_unit_ledger_record_contract": {
+      "record_type": "TAXONOMY_UNIT",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key_fields": [
+        "taxonomy_unit_type",
+        "taxonomy_unit_id"
+      ],
+      "exact_fields": [
+        "record_type",
+        "taxonomy_unit_type",
+        "taxonomy_unit_id",
+        "primary_taxon",
+        "supporting_taxa",
+        "member_count",
+        "member_raw_observation_locators",
+        "member_raw_block_locators",
+        "weak_key_group_id",
+        "block_replay_group_id",
+        "protocol_trade_group_id",
+        "wallet_fill_group_id",
+        "classification_predicate_priority",
+        "exact_block_replay_proof_id",
+        "expected_counterparty_pair_proof_ids"
+      ],
+      "taxonomy_unit_type_exact_values": [
+        "LEGACY_REPEAT_OCCURRENCE",
+        "ARCHIVE_BLOCK_NUMBER_GROUP",
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+      ],
+      "member_lists_sorted_unique": true,
+      "inapplicable_scalar_fields_must_be_explicit_null_and_inapplicable_proof_id_arrays_must_be_empty": true,
+      "protocol_trade_group_id_is_unique_when_nonnull_within_protocol_trade_taxonomy_unit_type": true,
+      "member_contract_by_taxonomy_unit_type": {
+        "LEGACY_REPEAT_OCCURRENCE": {
+          "member_count_exact": 1,
+          "member_raw_observation_locators_length_exact": 1,
+          "member_raw_block_locators_length_exact": 1,
+          "weak_key_group_id_nonnull": true,
+          "block_replay_group_id_nonnull": true,
+          "protocol_trade_group_id_and_wallet_fill_group_id_nonnull_iff_tid_coin_and_wallet_are_valid": true,
+          "exact_block_replay_proof_id_nonnull_iff_primary_or_supporting_taxon_is_EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": true,
+          "expected_counterparty_pair_proof_ids_is_singleton_iff_primary_or_supporting_taxon_is_EXPECTED_COUNTERPARTY_PAIR_else_empty": true
+        },
+        "ARCHIVE_BLOCK_NUMBER_GROUP": {
+          "member_count_minimum": 2,
+          "member_raw_observation_locators_must_be_null": true,
+          "member_count_equals_member_raw_block_locators_length": true,
+          "block_replay_group_id_nonnull": true,
+          "weak_key_protocol_trade_and_wallet_fill_group_ids_must_be_null": true,
+          "exact_block_replay_proof_id_nonnull_iff_primary_taxon_is_EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": true,
+          "expected_counterparty_pair_proof_ids_must_be_empty": true
+        },
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": {
+          "member_count_minimum": 1,
+          "member_count_equals_member_raw_observation_locators_length": true,
+          "member_raw_block_locators_length_exact": 1,
+          "block_replay_group_id_and_protocol_trade_group_id_nonnull": true,
+          "weak_key_and_wallet_fill_group_ids_must_be_null": true,
+          "exact_block_replay_proof_id_must_be_null": true,
+          "expected_counterparty_pair_proof_ids_is_singleton_iff_primary_taxon_is_EXPECTED_COUNTERPARTY_PAIR_else_empty": true
+        },
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": {
+          "member_count_exact": 1,
+          "member_raw_observation_locators_length_exact": 1,
+          "member_raw_block_locators_length_exact": 1,
+          "all_group_and_proof_fields_must_be_null_or_empty": true
+        },
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": {
+          "member_count_exact": 1,
+          "member_raw_observation_locators_length_exact": 1,
+          "member_raw_block_locators_length_exact": 1,
+          "all_group_and_proof_fields_must_be_null_or_empty": true
+        },
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": {
+          "member_count_exact": 1,
+          "member_raw_observation_locators_length_exact": 1,
+          "member_raw_block_locators_length_exact": 1,
+          "all_group_and_proof_fields_must_be_null_or_empty": true
+        }
+      },
+      "classification_predicate_priority_contract_by_taxonomy_unit_type": {
+        "LEGACY_REPEAT_OCCURRENCE": "EXACT_PRIORITY_1_TO_6_OF_THE_FIRST_MATCHING_REPEAT_OCCURRENCE_PRIMARY_PRECEDENCE_ROW",
+        "ARCHIVE_BLOCK_NUMBER_GROUP": "EXACT_PRIORITY_1_TO_3_OF_THE_FIRST_MATCHING_BLOCK_GROUP_PRIMARY_PRECEDENCE_ROW",
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "EXACT_PRIORITY_1_TO_2_OF_THE_FIRST_MATCHING_PROTOCOL_TRADE_GROUP_PRIMARY_PRECEDENCE_ROW",
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": "EXACT_PRIORITY_1_OF_THE_SINGLE_ROW_UNIT_SPECIFIC_TID_SCHEMA_DECISION;NOT_THE_DUPLICATE_ROW_CROSS_SCHEMA_PRECEDENCE",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "EXACT_PRIORITY_1_OF_THE_SINGLE_ROW_UNIT_SPECIFIC_WALLET_SCHEMA_DECISION;NOT_THE_DUPLICATE_ROW_CROSS_SCHEMA_PRECEDENCE",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "EXACT_PRIORITY_1_OF_THE_SINGLE_ROW_UNIT_SPECIFIC_COIN_SCHEMA_DECISION;NOT_THE_DUPLICATE_ROW_CROSS_SCHEMA_PRECEDENCE"
+      },
+      "member_raw_observation_locator_target_by_taxonomy_unit_type": {
+        "LEGACY_REPEAT_OCCURRENCE": "duplicate_observation_output.raw_observation_locator",
+        "ARCHIVE_BLOCK_NUMBER_GROUP": null,
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "retained_protocol_trade_group_member_ledger.raw_observation_locator",
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": "schema_violation_evidence_ledger.taxonomy_unit_type_plus_raw_observation_locator",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "schema_violation_evidence_ledger.taxonomy_unit_type_plus_raw_observation_locator",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "schema_violation_evidence_ledger.taxonomy_unit_type_plus_raw_observation_locator"
+      },
+      "exact_projection_equality_by_taxonomy_unit_type": {
+        "LEGACY_REPEAT_OCCURRENCE": "THE_SINGLE_MEMBER_DUPLICATE_ROW_MUST_EXACTLY_EQUAL_THE_UNIT_TAXON_SUPPORT_GROUP_PROOF_TAXONOMY_UNIT_RAW_OBSERVATION_AND_RAW_BLOCK_PROJECTIONS",
+        "ARCHIVE_BLOCK_NUMBER_GROUP": "THE_UNIT_MEMBER_BLOCK_LOCATORS_TAXON_GROUP_AND_REPLAY_PROOF_FIELDS_MUST_EXACTLY_EQUAL_THE_FULL_REFERENCED_MATRIX_ROW_PROJECTIONS",
+        "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "THE_UNIT_MEMBER_OBSERVATION_LOCATORS_SINGLE_BLOCK_LOCATOR_GROUP_ID_TAXON_AND_PAIR_PROOF_FIELDS_MUST_EXACTLY_EQUAL_THE_FULL_JOINED_PROTOCOL_MEMBER_LEDGER_AND_PAIR_PROOF_PROJECTIONS",
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": "THE_UNIT_TAXON_ID_AND_SINGLE_OBSERVATION_AND_BLOCK_LOCATORS_MUST_EXACTLY_EQUAL_THE_REFERENCED_TID_SCHEMA_EVIDENCE_ROW",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "THE_UNIT_TAXON_ID_AND_SINGLE_OBSERVATION_AND_BLOCK_LOCATORS_MUST_EXACTLY_EQUAL_THE_REFERENCED_COIN_SCHEMA_EVIDENCE_ROW",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "THE_UNIT_TAXON_ID_AND_SINGLE_OBSERVATION_AND_BLOCK_LOCATORS_MUST_EXACTLY_EQUAL_THE_REFERENCED_WALLET_SCHEMA_EVIDENCE_ROW"
+      },
+      "foreign_key_targets": {
+        "member_raw_block_locators": "complete_block_overlap_matrix.members.raw_block_locator",
+        "exact_block_replay_proof_id": "exact_block_replay_proofs.exact_block_replay_proof_id",
+        "expected_counterparty_pair_proof_ids": "expected_counterparty_pair_proofs.expected_counterparty_pair_proof_id"
+      },
+      "all_conditional_and_unconditional_foreign_keys_must_resolve_exactly_once": true
+    },
+    "complete_block_overlap_matrix_record_contract": {
+      "record_type": "BLOCK_NUMBER_GROUP",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key": "block_replay_group_id",
+      "exact_fields": [
+        "record_type",
+        "block_replay_group_id",
+        "block_number",
+        "member_count",
+        "members",
+        "member_raw_block_locators",
+        "member_source_object_keys",
+        "primary_taxon",
+        "conflicting_invariant_fields",
+        "exact_block_replay_proof_id",
+        "boundary_relationship_counts"
+      ],
+      "record_scope": "WHEN_scientific_output_logical_status_IS_COMPLETE_RETAIN_EVERY_REPEATED_BLOCK_NUMBER_GROUP_PLUS_EVERY_OTHER_BLOCK_NUMBER_REFERENCED_BY_RETAINED_DUPLICATE_PROOF_MEMBER_OR_SCHEMA_VIOLATION_EVIDENCE;WHEN_scientific_output_logical_status_IS_RETENTION_CAP_FALLBACK_EMPTY_OR_EARLY_STOP_EMPTY_RETAIN_EXACT_ZERO_ROWS_AND_AVAILABLE_SOURCE_OR_REDUCER_DISCOVERY_COMMITMENTS_ARE_AUTHORITATIVE_WITH_EXACT_STATUS_DEPENDENT_NULLABILITY",
+      "block_number_type": "NONNEGATIVE_JSON_INTEGER",
+      "block_replay_group_id_must_equal_deterministic_id_for_row_block_number": true,
+      "all_singleton_block_numbers_retained_as_EXACT_GLOBAL_COUNT_PER_partition_counts_and_per_partition_detail_commitments_including_singletons_referenced_by_other_evidence": true,
+      "singleton_all_block_aggregate_sha256_preimage": "SHA256_OF_EXACT_CANONICAL_ARRAY_[STRING_SINGLETON_ALL_BLOCK_PARTITIONS_V1,ARRAY_OF_EXACT_[PARTITION_ORDINAL_0_THROUGH_255,SINGLETON_BLOCK_OBSERVATION_COUNT_NONNEGATIVE_INTEGER,SINGLETON_BLOCK_DETAIL_COMMITMENT_SHA256_LOWERCASE_HEX]_IN_PARTITION_ORDER]",
+      "singleton_all_block_aggregate_sha256_algorithm": "SHA256",
+      "singleton_all_block_aggregate_sha256_is_lowercase_64_hex_when_all_256_BLOCK_NUMBER_partitions_are_COMPLETE_else_explicit_null": true,
+      "singleton_partition_detail_commitments_are_frozen_collector_attestations_over_unretained_source_details_within_the_explicit_unretained_source_stream_trust_boundary_while_the_global_aggregate_is_independently_recomputed_from_all_256_retained_partition_rows": true,
+      "referenced_singleton_primary_taxon_and_proof_id_must_be_null": true,
+      "member_record_exact_fields": [
+        "raw_block_locator",
+        "source_object_key",
+        "block_fingerprints"
+      ],
+      "members_sorted_by_raw_block_locator_and_raw_block_locators_unique": true,
+      "member_count_equals_members_length_and_member_raw_block_locator_projection_length": true,
+      "member_raw_block_locators_exactly_equal_sorted_projection_from_members": true,
+      "member_source_object_keys_exactly_equal_sorted_unique_projection_from_members": true,
+      "member_block_fingerprints_follow_block_fingerprints_contract_and_preserve_duplicate_values_per_member": true,
+      "conflicting_invariant_fields_type": "ARRAY_IN_EXACT_INVARIANT_ORDER_WITH_NO_DUPLICATES",
+      "conflicting_invariant_fields_exact_allowed_order": [
+        "exact_raw_block_time",
+        "ordered_event_count",
+        "ordered_event_fingerprint_sha256"
+      ],
+      "conflicting_invariant_fields_contains_exactly_each_invariant_with_more_than_one_distinct_member_value": true,
+      "boundary_relationship_counts_exact_zero_filled_keys": [
+        "unordered_member_pair_count",
+        "same_source_object_pair_count",
+        "cross_source_object_pair_count",
+        "same_path_hour_pair_count",
+        "cross_path_hour_pair_count",
+        "same_utc_day_pair_count",
+        "cross_utc_day_pair_count",
+        "adjacent_path_hour_pair_count",
+        "non_adjacent_cross_path_hour_pair_count"
+      ],
+      "boundary_relationship_counts_are_nonnegative_json_integers_recomputed_over_every_unordered_member_pair_from_canonical_selection_provenance": true,
+      "boundary_pair_dichotomies_and_total_pair_formula_must_conserve": true,
+      "repeated_row_primary_taxon_and_proof_fields_must_equal_the_block_group_precedence_and_exact_replay_proof_contract": true,
+      "foreign_key_targets": {
+        "exact_block_replay_proof_id": "exact_block_replay_proofs.exact_block_replay_proof_id"
+      },
+      "all_nonnull_foreign_keys_must_resolve_exactly_once": true
+    },
+    "duplicate_observation_output_record_contract": {
+      "record_type": "LEGACY_REPEAT_OBSERVATION",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "exact_fields_must_equal_top_level_required_occurrence_fields_in_order": true,
+      "primary_key": "raw_observation_locator",
+      "one_row_for_group_first_and_every_repeat_occurrence_in_each_retained_legacy_repeat_group_when_scientific_output_logical_status_IS_COMPLETE_and_exact_zero_rows_when_status_IS_RETENTION_CAP_FALLBACK_EMPTY_OR_EARLY_STOP_EMPTY": true,
+      "group_first_row_is_baseline_evidence_and_is_not_a_LEGACY_REPEAT_OCCURRENCE_taxonomy_unit": true,
+      "every_nonfirst_strict_valid_tid_row_must_resolve_to_exactly_one_LEGACY_REPEAT_OCCURRENCE_taxonomy_unit": true,
+      "strict_tid_invalid_rows_are_classified_by_their_RAW_TID_SCHEMA_VIOLATION_OBSERVATION_unit_and_never_create_a_LEGACY_REPEAT_OCCURRENCE_unit": true,
+      "coin_or_wallet_schema_units_are_retained_separately_and_may_share_the_same_raw_locator_without_being_summed_as_one_partition": true,
+      "foreign_key_targets": {
+        "raw_block_locator": "complete_block_overlap_matrix.members.raw_block_locator",
+        "taxonomy_unit_type_plus_taxonomy_unit_id": "taxonomy_unit_ledger.taxonomy_unit_type_plus_taxonomy_unit_id",
+        "exact_block_replay_proof.exact_block_replay_proof_id": "exact_block_replay_proofs.exact_block_replay_proof_id",
+        "expected_counterparty_pair_proof.expected_counterparty_pair_proof_id": "expected_counterparty_pair_proofs.expected_counterparty_pair_proof_id"
+      },
+      "all_nonnull_foreign_keys_must_resolve_exactly_once": true
+    },
+    "retained_protocol_trade_group_member_ledger_record_contract": {
+      "record_type": "MINIMAL_PROTOCOL_TRADE_GROUP_MEMBER",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key": "raw_observation_locator",
+      "exact_fields": [
+        "record_type",
+        "raw_observation_locator",
+        "raw_block_locator",
+        "protocol_trade_group_id",
+        "canonical_lowercase_wallet_address",
+        "protocol_trade_identity",
+        "side_exact",
+        "crossed_exact",
+        "full_event_sha256",
+        "retention_reason",
+        "full_lossless_payload_retained"
+      ],
+      "retention_reason_exact_values": [
+        "EXPECTED_COUNTERPARTY_PAIR_PROOF_INTERSECTING_RETAINED_LEGACY_REPEAT_EVIDENCE",
+        "UNCLASSIFIABLE_PROTOCOL_TRADE_GROUP_INTERSECTING_RETAINED_LEGACY_REPEAT_EVIDENCE"
+      ],
+      "full_lossless_payload_retained": false,
+      "when_scientific_output_logical_status_IS_COMPLETE_every_member_of_every_protocol_trade_group_intersecting_retained_repeat_evidence_is_retained_exactly_once_and_when_status_IS_EITHER_EMPTY_THIS_CONTAINER_HAS_EXACT_ZERO_ROWS": true,
+      "all_rows_for_one_protocol_trade_group_id_must_exactly_equal_the_full_taxonomy_unit_member_projection": true,
+      "canonical_lowercase_wallet_address_must_be_valid_or_explicit_null_with_one_resolved_wallet_schema_violation_evidence_row": true,
+      "singleton_legacy_key_member_allowed_as_minimal_group_evidence": true,
+      "foreign_key_targets": {
+        "raw_block_locator": "complete_block_overlap_matrix.members.raw_block_locator",
+        "protocol_trade_group_id": "taxonomy_unit_ledger.protocol_trade_group_id_WHERE_taxonomy_unit_type_EQUALS_PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE"
+      },
+      "all_foreign_keys_must_resolve_exactly_once": true
+    },
+    "schema_violation_evidence_ledger_record_contract": {
+      "record_type": "MINIMAL_SCHEMA_VIOLATION_EVIDENCE",
+      "output_container_type": "DETERMINISTIC_SORTED_NDJSON_RECORD_SEQUENCE",
+      "primary_key_fields": [
+        "taxonomy_unit_type",
+        "raw_observation_locator"
+      ],
+      "exact_fields": [
+        "record_type",
+        "taxonomy_unit_type",
+        "taxonomy_unit_id",
+        "primary_taxon",
+        "raw_observation_locator",
+        "raw_block_locator",
+        "raw_tid_json_type",
+        "raw_tid_token",
+        "tid_schema_violation_reason",
+        "raw_coin_json_type",
+        "raw_coin_token",
+        "coin_schema_violation_reason",
+        "raw_wallet_json_type",
+        "raw_wallet_token",
+        "wallet_schema_violation_reason",
+        "full_lossless_payload_retained"
+      ],
+      "taxonomy_unit_type_exact_values": [
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+      ],
+      "when_scientific_output_logical_status_IS_COMPLETE_one_record_per_applicable_violation_type_so_one_raw_observation_may_have_up_to_three_records_and_when_status_IS_EITHER_EMPTY_THIS_CONTAINER_HAS_EXACT_ZERO_ROWS": true,
+      "raw_tid_unit_primary_taxon": "TID_SCHEMA_VIOLATION",
+      "raw_coin_unit_primary_taxon": "UNCLASSIFIABLE",
+      "raw_wallet_unit_primary_taxon": "UNCLASSIFIABLE",
+      "violation_reason_exact_values_by_taxonomy_unit_type": {
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": [
+          "TID_MISSING",
+          "TID_WRONG_JSON_TYPE",
+          "TID_FRACTION_OR_EXPONENT_NUMBER_TOKEN_IS_NOT_A_JSON_INTEGER",
+          "TID_INTEGER_OUTSIDE_UINT50_RANGE"
+        ],
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": [
+          "COIN_MISSING",
+          "COIN_WRONG_JSON_TYPE",
+          "COIN_EMPTY_STRING"
+        ],
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": [
+          "WALLET_WRONG_JSON_TYPE",
+          "WALLET_NOT_EXACT_LOWERCASE_0X40HEX"
+        ]
+      },
+      "full_lossless_payload_retained": false,
+      "inapplicable_raw_schema_fields_must_be_explicit_null": true,
+      "applicable_field_contract_by_taxonomy_unit_type": {
+        "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": "ONLY_RAW_TID_JSON_TYPE_TOKEN_AND_REASON_NON_NULL_EXCEPT_MISSING_TOKEN_IS_NULL",
+        "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "ONLY_RAW_COIN_JSON_TYPE_TOKEN_AND_REASON_NON_NULL_EXCEPT_MISSING_TOKEN_IS_NULL",
+        "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "ONLY_RAW_WALLET_JSON_TYPE_TOKEN_AND_REASON_NON_NULL_AND_THE_PRESENT_TYPED_TOKEN_IS_REQUIRED"
+      },
+      "foreign_key_targets": {
+        "taxonomy_unit_type_plus_taxonomy_unit_id": "taxonomy_unit_ledger.taxonomy_unit_type_plus_taxonomy_unit_id",
+        "raw_block_locator": "complete_block_overlap_matrix.members.raw_block_locator"
+      },
+      "all_foreign_keys_must_resolve_exactly_once": true
+    },
+    "supporting_taxa_contract": {
+      "exact_allowed_supporting_taxa_order": [
+        "EXPECTED_COUNTERPARTY_PAIR",
+        "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS"
+      ],
+      "duplicates_or_unknown_values_authorized": false,
+      "admissible_exact_arrays_by_primary_taxon": {
+        "TID_SCOPE_FALSE_POSITIVE": [
+          [],
+          [
+            "EXPECTED_COUNTERPARTY_PAIR"
+          ]
+        ],
+        "EXPECTED_COUNTERPARTY_PAIR": [
+          []
+        ],
+        "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": [
+          []
+        ],
+        "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY": [
+          [
+            "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS"
+          ],
+          [
+            "EXPECTED_COUNTERPARTY_PAIR",
+            "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS"
+          ]
+        ],
+        "CONFLICTING_BLOCK_REPLAY": [
+          []
+        ],
+        "CONFLICTING_USER_FILL": [
+          [],
+          [
+            "EXPECTED_COUNTERPARTY_PAIR"
+          ]
+        ],
+        "INTRA_BLOCK_REPEAT": [
+          []
+        ],
+        "TID_SCHEMA_VIOLATION": [
+          []
+        ],
+        "UNCLASSIFIABLE": [
+          []
+        ]
+      },
+      "expected_counterparty_support_requires_resolved_pair_proof": true,
+      "exact_block_replay_support_requires_resolved_replay_proof": true
+    },
+    "taxonomy_unit_universes": {
+      "LEGACY_REPEAT_OCCURRENCE": "EVERY_NONFIRST_VALID_UINT50_RAW_OBSERVATION_AFTER_SORTING_EACH_MULTIPLICITY_GREATER_THAN_ONE_LEGACY_WEAK_KEY_GROUP_BY_RAW_OBSERVATION_LOCATOR",
+      "ARCHIVE_BLOCK_NUMBER_GROUP": "EVERY_BLOCK_NUMBER_WITH_AT_LEAST_TWO_DISTINCT_RAW_BLOCK_LOCATORS",
+      "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "EVERY_VALID_PROTOCOL_TRADE_GROUP_INTERSECTING_RETAINED_LEGACY_REPEAT_EVIDENCE_WITHIN_ONE_RAW_BLOCK_LOCATOR",
+      "RAW_TID_SCHEMA_VIOLATION_OBSERVATION": "EVERY_RAW_OBSERVATION_WHOSE_TID_FAILS_THE_STRICT_UINT50_CONTRACT",
+      "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "EVERY_RAW_OBSERVATION_WHOSE_COIN_IS_MISSING_NON_STRING_OR_EMPTY",
+      "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "EVERY_RAW_OBSERVATION_WITH_A_PRESENT_LEADING_WALLET_VALUE_THAT_IS_NON_STRING_NOT_EXACTLY_LOWERCASE_OR_NOT_EXACTLY_0X_PLUS_40_HEX;A_MISSING_EVENT_POSITION_IS_A_FATAL_EVENT_SHAPE_FAILURE_NOT_THIS_UNIVERSE"
+    },
+    "taxonomy_unit_universe_materialization_contract": {
+      "scientific_output_logical_status_COMPLETE": "EVERY_DECLARED_UNIT_IS_FULLY_MATERIALIZED_EXACTLY_ONCE_WITH_ALL_REQUIRED_MEMBERS_PROOFS_AND_SCHEMA_EVIDENCE",
+      "scientific_output_logical_status_RETENTION_CAP_FALLBACK_EMPTY_OR_EARLY_STOP_EMPTY": "ALL_SEVEN_SCIENTIFIC_CONTAINERS_INCLUDING_TAXONOMY_UNITS_MATRIX_DUPLICATES_PROOFS_MEMBER_AND_SCHEMA_LEDGERS_ARE_EXACT_ZERO_BYTES;ONLY_SOURCE_OR_REDUCER_COUNTS_AND_COMMITMENTS_THAT_ARE_AVAILABLE_UNDER_THEIR_EXACT_STATUS_DEPENDENT_NULLABILITY_REMAIN_IN_METADATA;all_required_units_classified_taxonomy_conservation_passed_AND_counts_conserve_ARE_FALSE;ROOT_CAUSE_NOT_PROVEN",
+      "partial_materialization_authorized": false
+    },
+    "duplicate_observation_row_schema_primary_precedence": [
+      {
+        "priority": 1,
+        "if": "TID_IS_INVALID_REGARDLESS_OF_WALLET_OR_COIN_VALIDITY",
+        "occurrence_row_primary_taxon": "TID_SCHEMA_VIOLATION",
+        "required_schema_evidence_taxonomy_unit_type": "RAW_TID_SCHEMA_VIOLATION_OBSERVATION"
+      },
+      {
+        "priority": 2,
+        "if": "TID_IS_VALID_AND_WALLET_IS_INVALID_REGARDLESS_OF_COIN_VALIDITY",
+        "occurrence_row_primary_taxon": "UNCLASSIFIABLE",
+        "required_schema_evidence_taxonomy_unit_type": "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+      },
+      {
+        "priority": 3,
+        "if": "TID_AND_WALLET_ARE_VALID_AND_COIN_IS_INVALID",
+        "occurrence_row_primary_taxon": "UNCLASSIFIABLE",
+        "required_schema_evidence_taxonomy_unit_type": "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION"
+      }
+    ],
+    "multiple_tid_wallet_and_coin_violation_behavior": "EMIT_ONE_SCHEMA_VIOLATION_LEDGER_UNIT_PER_APPLICABLE_TYPE_UP_TO_THREE;IF_A_DUPLICATE_OBSERVATION_ROW_IS_ALSO_EMITTED_ITS_SINGLE_PRIMARY_TAXON_USES_TID_THEN_WALLET_THEN_COIN_PRECEDENCE;THE_SAME_RAW_LOCATOR_MAY_APPEAR_ONCE_PER_DISJOINT_SCHEMA_TAXONOMY_UNIT_TYPE",
+    "duplicate_row_taxonomy_unit_reference_precedence": "NONFIRST_HISTORICAL_LEGACY_GROUP_MEMBER_WITH_VALID_UINT50_REFERENCES_ITS_LEGACY_REPEAT_OCCURRENCE_UNIT_EVEN_WHEN_COIN_IS_INVALID;STRICT_TID_INVALID_MEMBER_REFERENCES_ITS_RAW_TID_SCHEMA_UNIT;GROUP_FIRST_VALID_TID_ROW_HAS_NULL_UNIT_REFERENCE;COIN_AND_WALLET_SCHEMA_UNITS_REMAIN_SEPARATE_SCHEMA_LEDGER_ROWS_AND_NEVER_REPLACE_A_LEGACY_REPEAT_UNIT_REFERENCE",
+    "repeat_occurrence_primary_precedence": [
+      {
+        "priority": 1,
+        "if": "RAW_WALLET_IS_INVALID_OR_RAW_COIN_IS_MISSING_NON_STRING_OR_EMPTY",
+        "then": "UNCLASSIFIABLE"
+      },
+      {
+        "priority": 2,
+        "if": "SAME_CANONICAL_WALLET_USER_FILL_KEY_AND_ANY_FULL_FILL_OR_FULL_EVENT_PAYLOAD_DIFFERENCE",
+        "then": "CONFLICTING_USER_FILL"
+      },
+      {
+        "priority": 3,
+        "if": "SAME_CANONICAL_WALLET_USER_FILL_KEY_AND_SAME_RAW_BLOCK_LOCATOR_AND_DISTINCT_EVENT_ORDINALS_AND_NO_PAYLOAD_DIFFERENCE",
+        "then": "INTRA_BLOCK_REPEAT"
+      },
+      {
+        "priority": 4,
+        "if": "SAME_CANONICAL_WALLET_USER_FILL_KEY_AND_NO_PAYLOAD_DIFFERENCE_AND_DISTINCT_RAW_BLOCK_LOCATORS_ALL_RESOLVE_TO_ONE_EXACT_BLOCK_REPLAY_PROOF",
+        "then": "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY"
+      },
+      {
+        "priority": 5,
+        "if": "DISTINCT_PROTOCOL_MATCHED_TRADE_KEYS_WITHIN_ONE_LEGACY_WEAK_KEY_GROUP_AND_NO_MISSING_OR_CONFLICTING_IDENTITY_OR_PROOF",
+        "then": "TID_SCOPE_FALSE_POSITIVE"
+      },
+      {
+        "priority": 6,
+        "if": "NO_EARLIER_EXACT_PREDICATE_MATCHES_OR_MULTIPLE_NON_SUPPORTING_PREDICATES_REMAIN",
+        "then": "UNCLASSIFIABLE"
+      }
+    ],
+    "block_group_primary_precedence": [
+      {
+        "priority": 1,
+        "if": "ANY_MEMBER_DIFFERS_IN_EXACT_RAW_BLOCK_TIME_ORDERED_EVENT_COUNT_OR_ORDERED_EVENT_FINGERPRINT",
+        "then": "CONFLICTING_BLOCK_REPLAY"
+      },
+      {
+        "priority": 2,
+        "if": "ALL_EQUALITY_INVARIANTS_MATCH_AND_AT_LEAST_TWO_DISTINCT_SOURCE_OBJECT_KEYS_EXIST",
+        "then": "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS"
+      },
+      {
+        "priority": 3,
+        "if": "NO_EARLIER_EXACT_PREDICATE_MATCHES",
+        "then": "UNCLASSIFIABLE"
+      }
+    ],
+    "protocol_trade_group_primary_precedence": [
+      {
+        "priority": 1,
+        "if": "EXACTLY_TWO_MEMBERS_SHARE_ONE_PROTOCOL_TRADE_IDENTITY_AND_RAW_BLOCK_LOCATOR_WITH_ADJACENT_EVENT_ORDINALS_TWO_DISTINCT_VALIDATED_WALLETS_AND_EXACT_SIDE_SET_A_B_AND_ONE_OCCURRENCE_PER_WALLET",
+        "then": "EXPECTED_COUNTERPARTY_PAIR"
+      },
+      {
+        "priority": 2,
+        "if": "THE_EXACT_EXPECTED_PAIR_PREDICATE_DOES_NOT_MATCH",
+        "then": "UNCLASSIFIABLE"
+      }
+    ],
+    "taxonomy_count_formulas_by_class": {
+      "TID_SCOPE_FALSE_POSITIVE": "GROUPS=COUNT_DISTINCT_LEGACY_WEAK_KEY_GROUP_ID_WITH_PRIMARY_REPEAT_OCCURRENCE;OCCURRENCES=COUNT_LEGACY_REPEAT_OCCURRENCES_WITH_PRIMARY_TAXON",
+      "EXPECTED_COUNTERPARTY_PAIR": "GROUPS=COUNT_EXPECTED_COUNTERPARTY_PAIR_PROOFS;OCCURRENCES=SUM_EXACTLY_TWO_MEMBER_RAW_OBSERVATION_LOCATORS_PER_PROOF",
+      "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS": "GROUPS=COUNT_EXACT_BLOCK_REPLAY_PROOFS;OCCURRENCES=SUM_MEMBER_RAW_BLOCK_LOCATORS_PER_PROOF",
+      "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY": "GROUPS=COUNT_DISTINCT_CANONICAL_WALLET_FILL_GROUP_ID_WITH_PRIMARY_REPEAT_OCCURRENCE;OCCURRENCES=COUNT_LEGACY_REPEAT_OCCURRENCES_WITH_PRIMARY_TAXON",
+      "CONFLICTING_BLOCK_REPLAY": "GROUPS=COUNT_ARCHIVE_BLOCK_NUMBER_GROUPS_WITH_PRIMARY_TAXON;OCCURRENCES=SUM_MEMBER_RAW_BLOCK_LOCATORS_IN_THOSE_GROUPS",
+      "CONFLICTING_USER_FILL": "GROUPS=COUNT_DISTINCT_CANONICAL_WALLET_FILL_GROUP_ID_WITH_PRIMARY_REPEAT_OCCURRENCE;OCCURRENCES=COUNT_LEGACY_REPEAT_OCCURRENCES_WITH_PRIMARY_TAXON",
+      "INTRA_BLOCK_REPEAT": "GROUPS=COUNT_DISTINCT_CANONICAL_WALLET_FILL_GROUP_ID_PLUS_RAW_BLOCK_LOCATOR_WITH_PRIMARY_REPEAT_OCCURRENCE;OCCURRENCES=COUNT_LEGACY_REPEAT_OCCURRENCES_WITH_PRIMARY_TAXON",
+      "TID_SCHEMA_VIOLATION": "GROUPS=COUNT_DISTINCT_RAW_OBSERVATION_LOCATOR_IN_RAW_TID_SCHEMA_VIOLATION_UNIT_LEDGER;OCCURRENCES=COUNT_ALL_RAW_TID_SCHEMA_VIOLATION_OBSERVATIONS_INCLUDING_SINGLETONS_AND_REPEAT_MEMBERS",
+      "UNCLASSIFIABLE": "GROUPS=ADMINISTRATIVE_SUM_OF_EXACT_PER_UNIT_UNIVERSE_GROUP_COUNTS;OCCURRENCES=ADMINISTRATIVE_SUM_OF_EXACT_PER_UNIT_UNIVERSE_OCCURRENCE_COUNTS;PER_UNIT_VALUES_ARE_AUTHORITATIVE_AND_THE_ADMINISTRATIVE_SUM_IS_NOT_A_UNIQUE_OBSERVATION_PARTITION"
+    },
+    "layer_conservation_equations": [
+      "REPEAT_OCCURRENCE_COUNT_SUM_N_MINUS_ONE_EQUALS_VALID_TID_REPEAT_OCCURRENCE_COUNT_SUM_N_MINUS_ONE_PLUS_INVALID_TID_REPEAT_OCCURRENCE_COUNT",
+      "SUM_VALID_REPEAT_OCCURRENCE_PRIMARY_COUNTS_FOR_TID_SCOPE_FALSE_POSITIVE_EXACT_USER_FILL_REOBSERVATION_CONFLICTING_USER_FILL_INTRA_BLOCK_REPEAT_AND_LEGACY_REPEAT_UNCLASSIFIABLE_EQUALS_VALID_TID_REPEAT_OCCURRENCE_COUNT_SUM_N_MINUS_ONE",
+      "SUM_BLOCK_GROUP_PRIMARY_COUNTS_FOR_EXACT_BLOCK_REPLAY_CONFLICTING_BLOCK_REPLAY_AND_ARCHIVE_BLOCK_UNCLASSIFIABLE_EQUALS_REPEATED_BLOCK_GROUP_COUNT",
+      "SUM_PROTOCOL_TRADE_GROUP_PRIMARY_COUNTS_FOR_EXPECTED_COUNTERPARTY_PAIR_AND_PROTOCOL_TRADE_UNCLASSIFIABLE_EQUALS_PROTOCOL_TRADE_GROUP_COUNT_IN_RETAINED_EVIDENCE",
+      "RAW_TID_SCHEMA_VIOLATION_UNIT_COUNT_EQUALS_TID_SCHEMA_VIOLATION_OBSERVATION_COUNT_INCLUDING_SINGLETONS_AND_INVALID_REPEAT_MEMBERS",
+      "RAW_COIN_SCHEMA_VIOLATION_UNIT_COUNT_EQUALS_COIN_SCHEMA_VIOLATION_OBSERVATION_COUNT_INCLUDING_SINGLETONS_AND_REPEAT_MEMBERS",
+      "RAW_WALLET_SCHEMA_VIOLATION_UNIT_COUNT_EQUALS_WALLET_SCHEMA_VIOLATION_OBSERVATION_COUNT_INCLUDING_SINGLETONS_AND_ANY_RETAINED_GROUP_MEMBERS",
+      "RAW_EVENT_OBSERVATION_COUNT_EQUALS_VALID_TID_OBSERVATION_COUNT_PLUS_TID_SCHEMA_VIOLATION_OBSERVATION_COUNT",
+      "RAW_EVENT_OBSERVATION_COUNT_EQUALS_VALID_COIN_OBSERVATION_COUNT_PLUS_COIN_SCHEMA_VIOLATION_OBSERVATION_COUNT_WITHOUT_SUMMING_TID_AND_COIN_VIOLATIONS",
+      "RAW_EVENT_OBSERVATION_COUNT_EQUALS_VALID_WALLET_OBSERVATION_COUNT_PLUS_WALLET_SCHEMA_VIOLATION_OBSERVATION_COUNT_WITHOUT_SUMMING_TID_COIN_AND_WALLET_VIOLATIONS",
+      "UNIQUE_BLOCK_NUMBER_COUNT_EQUALS_SINGLETON_BLOCK_NUMBER_COUNT_PLUS_REPEATED_BLOCK_GROUP_COUNT",
+      "SINGLETON_BLOCK_OBSERVATION_COUNT_EQUALS_SINGLETON_BLOCK_NUMBER_COUNT",
+      "RAW_BLOCK_OBSERVATION_COUNT_EQUALS_SINGLETON_BLOCK_OBSERVATION_COUNT_PLUS_REPEATED_BLOCK_OBSERVATION_COUNT",
+      "DUPLICATE_OBSERVATION_ROWS_HAVE_UNIQUE_RAW_OBSERVATION_LOCATORS_AND_SCHEMA_VIOLATION_ROWS_HAVE_UNIQUE_TAXONOMY_UNIT_TYPE_PLUS_RAW_OBSERVATION_LOCATOR_AND_EVERY_PROOF_FOREIGN_KEY_RESOLVES_EXACTLY_ONCE",
+      "COUNTS_FROM_DIFFERENT_TAXONOMY_UNIT_UNIVERSES_MUST_NEVER_BE_SUMMED_AS_ONE_OBSERVATION_PARTITION"
+    ],
+    "terminal_decision_table": [
+      {
+        "priority": 1,
+        "if": "retention_caps_exceeded_IS_TRUE_AND_THE_RETENTION_OR_ARTIFACT_CAP_STOP_ROW_IS_THE_SINGLE_TRIGGERED_STOP_AFTER_ITS_FROZEN_TERMINAL_ELIGIBILITY_POINT",
+        "terminal_class": "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED",
+        "root_cause_claim_status": "NOT_PROVEN",
+        "repair_selection_authorized": false
+      },
+      {
+        "priority": 2,
+        "if": "EXACT_72_OBJECT_3_DAY_SCOPE_COMPLETE_AND_ALL_CAPS_RESPECTED_AND_ALL_LAYER_CONSERVATION_EQUATIONS_TRUE_AND_ALL_PROOF_FOREIGN_KEYS_RESOLVE_EXACTLY_ONCE_AND_EACH_PER_UNIT_UNIVERSE_UNCLASSIFIABLE_GROUP_AND_OCCURRENCE_COUNT_IS_ZERO",
+        "terminal_class": "R11A_ROOT_CAUSE_TAXONOMY_COMPLETE",
+        "root_cause_claim_status": "PROVEN_COMPLETE_TAXONOMY_ONLY",
+        "repair_selection_authorized": false
+      },
+      {
+        "priority": 3,
+        "if": "NO_EARLIER_TERMINAL_PREDICATE_MATCHES",
+        "terminal_class": "R11A_DIAGNOSTIC_INCOMPLETE",
+        "root_cause_claim_status": "NOT_PROVEN",
+        "repair_selection_authorized": false
+      }
+    ]
+  },
   "occurrence_record_contract": {
+    "scope": "DUPLICATE_OBSERVATION_OUTPUT_ROWS_ONLY;SCHEMA_AND_PROTOCOL_MEMBER_LEDGERS_HAVE_THEIR_OWN_EXACT_RECORD_CONTRACTS",
     "all_required_occurrence_fields_present_on_every_row_with_explicit_null_when_inapplicable": true,
     "raw_observation_locator_exact_fields": [
       "source_object_key",
@@ -318,6 +1619,28 @@
       "object_ordinal_zero_based",
       "record_ordinal_zero_based"
     ],
+    "provenance_projection_contract": {
+      "raw_observation_locator_prefix_must_exactly_equal_raw_block_locator": true,
+      "raw_observation_locator_source_object_key_sha_and_record_ordinal_must_exactly_equal_source_object_key_sha_and_record_ordinal": true,
+      "source_object_key_sha_path_hour_and_object_ordinal_must_exactly_join_one_of_the_72_canonical_selection_targets_and_prior_result_rows": true,
+      "raw_block_locator_must_resolve_to_exactly_one_complete_block_overlap_matrix_member": true,
+      "row_block_number_must_exactly_equal_the_containing_matrix_row_block_number": true,
+      "matrix_member_source_object_key_must_exactly_equal_raw_block_locator_source_object_key": true,
+      "row_block_time_exact_local_time_exact_and_block_fingerprints_must_exactly_equal_the_resolved_matrix_member_and_wrapper_projection": true,
+      "event_ordinal_must_address_exactly_one_event_in_the_matrix_member_ordered_event_vector": true,
+      "contradictory_duplicate_or_partial_provenance_authorized": false
+    },
+    "identity_and_multiplicity_projection_contract": {
+      "legacy_weak_key_must_equal_the_exact_historical_normalizer_output_for_raw_wallet_and_raw_tid": true,
+      "protocol_trade_identity_must_equal_exact_array_block_time_exact_exact_raw_coin_string_and_validated_integer_tid_or_null_when_any_component_invalid": true,
+      "wallet_fill_identity_must_equal_exact_array_canonical_lowercase_wallet_address_plus_the_complete_protocol_trade_identity_or_null_when_any_component_invalid": true,
+      "weak_key_group_id_and_multiplicity_must_equal_the_complete_historical_legacy_group_id_and_member_count": true,
+      "block_replay_group_id_and_multiplicity_must_equal_the_resolved_matrix_row_group_id_and_member_count": true,
+      "protocol_trade_group_id_and_multiplicity_must_equal_the_complete_joined_protocol_trade_group_id_and_member_count_when_identity_valid_else_null": true,
+      "wallet_fill_group_id_and_multiplicity_must_equal_the_complete_wallet_fill_group_within_retained_legacy_repeat_evidence_when_identity_valid_else_null": true,
+      "all_nonnull_multiplicities_are_positive_json_integers_and_all_inapplicable_multiplicities_are_null": true,
+      "producer_supplied_group_ids_or_counts_without_exact_recomputed_projection_are_invalid": true
+    },
     "boundary_relationship_exact_fields": [
       "same_object",
       "same_block_number",
@@ -327,15 +1650,75 @@
       "path_hour_distance",
       "adjacent_hour_boundary"
     ],
+    "boundary_relationship_derivation": {
+      "all_same_fields_and_adjacent_hour_boundary_are_exact_json_booleans": true,
+      "same_object_iff_source_object_key_and_compressed_sha256_both_equal_group_first": true,
+      "same_block_number_iff_block_number_equal_group_first": true,
+      "same_raw_block_locator_iff_all_raw_block_locator_fields_equal_group_first": true,
+      "same_path_hour_iff_canonical_selection_path_hour_equal_group_first": true,
+      "same_utc_day_iff_canonical_selection_path_hour_utc_calendar_date_equal_group_first": true,
+      "path_hour_distance_is_absolute_nonnegative_json_integer_hour_difference": true,
+      "adjacent_hour_boundary_iff_not_same_path_hour_and_path_hour_distance_equals_1": true
+    },
+    "group_first_row_contract": {
+      "schema_valid_group_first_primary_taxon_must_be_null": true,
+      "strict_tid_invalid_group_first_primary_taxon_must_be_TID_SCHEMA_VIOLATION_and_taxonomy_unit_reference_must_equal_its_RAW_TID_SCHEMA_UNIT": true,
+      "valid_tid_group_first_with_coin_schema_violation_primary_taxon_must_be_UNCLASSIFIABLE_and_taxonomy_unit_reference_must_be_null_because_schema_evidence_is_in_the_separate_schema_ledger": true,
+      "supporting_taxa_must_be_empty": true,
+      "exact_block_replay_proof_and_expected_counterparty_pair_proof_must_be_null": true,
+      "deduplication_authorized_must_be_false": true,
+      "first_versus_occurrence_field_diffmask_all_values_must_be_false": true,
+      "boundary_relationship_to_group_first_requires_same_object_same_block_number_same_raw_block_locator_same_path_hour_same_utc_day_true_path_hour_distance_zero_and_adjacent_hour_boundary_false": true,
+      "group_multiplicity_and_identity_projections_remain_required": true
+    },
     "valid_tid_row": {
       "tid_validation_status": "VALID_UINT50",
       "validated_integer_tid_required": true,
-      "protocol_trade_identity_required": true,
-      "wallet_fill_identity_required": true
+      "protocol_trade_identity_required_only_when_coin_valid_and_must_be_null_otherwise": true,
+      "wallet_fill_identity_required_only_when_coin_and_wallet_valid_and_must_be_null_otherwise": true
+    },
+    "valid_coin_row": {
+      "coin_validation_status": "VALID_EXACT_RAW_NONEMPTY_STRING",
+      "exact_raw_coin_string_required": true,
+      "protocol_trade_identity_required_iff_tid_and_coin_are_valid": true,
+      "wallet_fill_identity_required_iff_tid_coin_and_wallet_are_valid": true
+    },
+    "valid_wallet_row": {
+      "wallet_validation_status": "VALID_EXACT_LOWERCASE_0X40HEX",
+      "canonical_lowercase_wallet_address_must_exactly_equal_raw_wallet_address": true,
+      "wallet_fill_identity_may_be_constructed_only_with_valid_tid_coin_and_wallet": true,
+      "case_folding_or_repair_authorized": false
+    },
+    "wallet_schema_violation_row": {
+      "wallet_validation_status": "WALLET_SCHEMA_VIOLATION",
+      "raw_wallet_json_type_required": true,
+      "raw_wallet_token_must_follow_wallet_address_contract_present_value_rule": true,
+      "canonical_lowercase_wallet_address_must_be_null": true,
+      "wallet_fill_identity_must_be_null": true,
+      "protocol_trade_identity_required_iff_tid_and_coin_are_valid": true,
+      "primary_taxon_when_tid_valid": "UNCLASSIFIABLE",
+      "primary_taxon_when_tid_invalid": "TID_SCHEMA_VIOLATION",
+      "separate_raw_wallet_violation_taxonomy_unit_required_in_both_cases": true,
+      "case_folding_or_repair_authorized": false,
+      "immediate_abort_authorized_when_lossless_raw_locator_and_token_are_available": false
+    },
+    "coin_schema_violation_row": {
+      "coin_validation_status": "COIN_SCHEMA_VIOLATION",
+      "raw_coin_json_type_required": true,
+      "raw_coin_token_must_follow_coin_identity_contract_missing_or_present_rule": true,
+      "exact_raw_coin_string_must_be_null": true,
+      "protocol_trade_identity_must_be_null": true,
+      "wallet_fill_identity_must_be_null": true,
+      "primary_taxon_when_tid_valid": "UNCLASSIFIABLE",
+      "primary_taxon_when_tid_invalid": "TID_SCHEMA_VIOLATION",
+      "separate_raw_coin_violation_taxonomy_unit_required_in_both_cases": true,
+      "coercion_or_normalization_authorized": false,
+      "immediate_abort_authorized_when_lossless_raw_locator_and_token_are_available": false
     },
     "tid_schema_violation_row": {
       "tid_validation_status": "TID_SCHEMA_VIOLATION",
-      "raw_tid_json_type_and_token_required": true,
+      "raw_tid_json_type_required": true,
+      "raw_tid_token_must_follow_tid_schema_contract_missing_or_present_rule": true,
       "validated_integer_tid_must_be_null": true,
       "protocol_trade_identity_must_be_null": true,
       "wallet_fill_identity_must_be_null": true,
@@ -346,6 +1729,766 @@
     "deduplication_authorized_must_be_false": true
   },
   "global_output_contract": {
+    "artifact_layout_contract": {
+      "artifact_root_contains_no_subdirectories_and_no_unlisted_entries": true,
+      "scientific_output_containers": {
+        "taxonomy_unit_ledger": [
+          "r11a-taxonomy-units.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "complete_block_overlap_matrix": [
+          "r11a-block-overlap-matrix.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "duplicate_observation_output": [
+          "r11a-duplicate-observations.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "exact_block_replay_proofs": [
+          "r11a-exact-block-replay-proofs.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "expected_counterparty_pair_proofs": [
+          "r11a-expected-counterparty-pair-proofs.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "retained_protocol_trade_group_member_ledger": [
+          "r11a-protocol-trade-group-members.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "schema_violation_evidence_ledger": [
+          "r11a-schema-violation-evidence.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ]
+      },
+      "non_scientific_metadata_containers": {
+        "execution_context": [
+          "r11a-context.json",
+          "DETERMINISTIC_JSON"
+        ],
+        "global_result_and_container_references": [
+          "r11a-result.json",
+          "DETERMINISTIC_JSON"
+        ],
+        "object_transport_and_two_pass_conservation_ledger": [
+          "r11a-object-two-pass-conservation.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "reducer_partition_conservation_ledger": [
+          "r11a-reducer-partition-conservation.ndjson",
+          "DETERMINISTIC_NDJSON"
+        ],
+        "taxonomy_conservation_ledger": [
+          "r11a-taxonomy-conservation.json",
+          "DETERMINISTIC_JSON"
+        ],
+        "resource_and_cap_conservation_ledger": [
+          "r11a-resource-cap-conservation.json",
+          "DETERMINISTIC_JSON"
+        ],
+        "preflight_and_stop_evidence_ledger": [
+          "r11a-preflight-stop-evidence.json",
+          "DETERMINISTIC_JSON"
+        ],
+        "empty_forbidden_wallet_feature_output": [
+          "r11a-wallet-features.ndjson",
+          "EXACT_ZERO_BYTES"
+        ],
+        "collector_return_code": [
+          "r11a.rc",
+          "ASCII_INTEGER_PLUS_0X0A"
+        ]
+      },
+      "package_metadata_containers": {
+        "hash_manifest": [
+          "R11A_FILES.sha256",
+          "LOWERCASE_SHA256_TWO_SPACES_RELATIVE_PATH_0X0A_SORTED_BY_PATH_EXCLUDING_ITSELF_AND_THE_LAST_WRITTEN_PACKAGE_BOUNDARY_RECORD"
+        ],
+        "package_boundary_record": [
+          "r11a-package-boundary.txt",
+          "FIXED_1024_BYTE_ASCII_RECORD"
+        ]
+      },
+      "execution_context_exact_fields_in_order": [
+        "schema_version",
+        "diagnostic_id",
+        "release_id",
+        "release_blob_sha256",
+        "run_id",
+        "run_attempt",
+        "event_name",
+        "git_ref",
+        "head_sha",
+        "workflow_path",
+        "workflow_blob_sha256",
+        "collector_path",
+        "collector_blob_sha256",
+        "canonical_selection_id",
+        "canonical_selection_sha256",
+        "expected_account_id",
+        "expected_role_arn",
+        "expected_session_name",
+        "aws_identity_evidence_status",
+        "observed_account_id",
+        "observed_principal_arn",
+        "observed_session_name",
+        "started_at_utc",
+        "context_sealed_at_utc"
+      ],
+      "execution_context_value_contract": "schema_version_EQUALS_R11A_EXECUTION_CONTEXT_V1;diagnostic_id_EQUALS_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC;release_selection_workflow_collector_role_AND_expected_session_VALUES_EXACTLY_PROJECT_THE_HASH_BOUND_CANONICAL_RELEASE;run_id_AND_run_attempt_ARE_NONNEGATIVE_JSON_INTEGERS_WITH_run_attempt_1_FOR_AN_AUTHORIZED_RUN;event_ref_head_EXACTLY_PROJECT_RUNTIME_CONTEXT;aws_identity_evidence_status_IS_EXACT_NOT_REACHED_ATTEMPTED_NO_VALID_ATTESTATION_OR_ATTESTED;observed_account_id_observed_principal_arn_AND_observed_session_name_ARE_ALL_NONNULL_EXACT_STRINGS_IFF_status_IS_ATTESTED_ELSE_ALL_NULL;started_AND_context_sealed_TIMESTAMPS_ARE_STRICT_RFC3339_UTC_Z_WITH_1_TO_9_FRACTION_DIGITS_AND_context_sealed_NOT_BEFORE_started",
+      "result_file_exact_field_order": "schema_version_THEN_diagnostic_id_THEN_container_references_THEN_EVERY_NONCONTAINER_required_global_output_IN_THE_EXACT_required_global_outputs_DECLARATION_ORDER",
+      "result_file_schema_and_diagnostic_values": [
+        "R11A_RESULT_V1",
+        "R11A_IDENTITY_BOUNDARY_DIAGNOSTIC"
+      ],
+      "scientific_entry_ledger_domain_is_exactly_the_seven_scientific_output_containers": true,
+      "result_file_container_reference_shape": "EXACT_MAPPING_IN_ARTIFACT_LAYOUT_DECLARATION_ORDER_FOR_EVERY_REQUIRED_FILE_CONTAINER_EXCEPT_global_result_and_container_references_hash_manifest_AND_package_boundary_record;EACH_VALUE_IS_AN_EXACT_MAPPING_IN_ORDER_path_sha256_byte_count_AND_FOR_SCIENTIFIC_CONTAINERS_logical_status;THE_RESULT_NEVER_REFERENCES_ITS_OWN_BYTES_OR_HASH_AND_NEVER_REFERENCES_THE_LATER_HASH_MANIFEST_OR_PACKAGE_BOUNDARY",
+      "result_file_scalar_keys_are_exactly_the_NONCONTAINER_required_global_outputs": true,
+      "every_result_container_reference_path_must_exactly_equal_the_artifact_layout_path_and_its_sha256_and_byte_count_must_equal_the_exact_sealed_file_and_the_hash_manifest_row_where_present": true,
+      "every_scientific_result_reference_logical_status_sha256_and_byte_count_must_exactly_equal_the_same_path_row_in_resource_and_cap_conservation_ledger": true,
+      "when_scientific_output_logical_status_IS_COMPLETE_every_projected_scientific_row_path_byte_count_and_sha256_must_exactly_equal_the_corresponding_retained_scientific_row": true,
+      "hash_manifest_includes_every_OTHER_artifact_entry_including_zero_byte_wallet_features_but_excludes_itself_and_package_boundary_to_avoid_a_write_order_cycle": true,
+      "package_boundary_is_verified_by_its_exact_fixed_schema_and_the_provider_artifact_digest_during_evidence_closure": true,
+      "scientific_cap_counts_only_the_seven_scientific_output_container_file_lengths": true,
+      "metadata_reservation_counts_every_other_file_including_context_result_ledgers_empty_wallet_features_return_code_manifest_and_package_boundary": true,
+      "collector_return_code_exact_terminal_mapping": {
+        "R11A_ROOT_CAUSE_TAXONOMY_COMPLETE": 0,
+        "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED": 20,
+        "R11A_DIAGNOSTIC_INCOMPLETE": 21
+      },
+      "collector_return_code_bytes": "UNSIGNED_MINIMAL_BASE10_INTEGER_FROM_THE_EXACT_TERMINAL_MAPPING_FOLLOWED_BY_ONE_0X0A",
+      "acyclic_sealing_order": [
+        "execution_context",
+        "object_transport_and_two_pass_conservation_ledger",
+        "reducer_partition_conservation_ledger",
+        "seven_scientific_output_containers",
+        "taxonomy_conservation_ledger_preflight_and_stop_evidence_ledger_resource_and_cap_conservation_ledger_empty_wallet_features_and_collector_return_code_FROM_ONE_FROZEN_VALUE_GRAPH",
+        "global_result_and_container_references",
+        "hash_manifest",
+        "package_boundary_record"
+      ],
+      "no_file_may_reference_the_hash_of_itself_or_any_later_sealing_order_entry_and_no_file_may_change_after_its_hash_is_consumed": true,
+      "deterministically_precomputed_later_file_lengths_may_be_projected_only_where_an_exact_schema_and_sealing_rule_makes_the_length_independent_of_later_hash_values": true
+    },
+    "exact_scope_completion_exact_fields": [
+      "selected_object_count_processed",
+      "selected_hour_count_processed",
+      "complete_utc_day_count_processed",
+      "all_target_object_keys_etags_lengths_and_compressed_sha256_verified",
+      "all_records_parsed_twice_locally",
+      "scope_complete"
+    ],
+    "exact_scope_completion_required_complete_values": {
+      "selected_object_count_processed": 72,
+      "selected_hour_count_processed": 72,
+      "complete_utc_day_count_processed": 3,
+      "all_target_object_keys_etags_lengths_and_compressed_sha256_verified": true,
+      "all_records_parsed_twice_locally": true,
+      "scope_complete": true
+    },
+    "exact_scope_completion_field_derivations": {
+      "selected_object_count_processed": "COUNT_OBJECT_LEDGER_ROWS_WITH_processing_status_COMPLETE_TWO_LOCAL_PASSES",
+      "selected_hour_count_processed": "COUNT_DISTINCT_CANONICAL_PATH_HOURS_WHOSE_ONLY_TARGET_ROW_IS_COMPLETE_TWO_LOCAL_PASSES",
+      "complete_utc_day_count_processed": "COUNT_UTC_CALENDAR_DAYS_FOR_WHICH_ALL_24_CANONICAL_TARGET_HOURS_ARE_COMPLETE_TWO_LOCAL_PASSES",
+      "all_target_object_keys_etags_lengths_and_compressed_sha256_verified": "TRUE_IFF_ALL_72_ROWS_REACHED_RESPONSE_BODY_AND_EVERY_EXPECTED_OBSERVED_KEY_ETAG_LENGTH_AND_COMPRESSED_SHA256_EQUALITY_PASSED",
+      "all_records_parsed_twice_locally": "TRUE_IFF_ALL_72_ROWS_ARE_COMPLETE_TWO_LOCAL_PASSES_AND_EACH_FIRST_SECOND_PARSE_SUMMARY_EQUALITY_PASSED",
+      "scope_complete": "TRUE_IFF_SELECTED_OBJECTS_72_SELECTED_HOURS_72_COMPLETE_DAYS_3_ALL_TARGET_IDENTITIES_VERIFIED_AND_ALL_RECORDS_PARSED_TWICE_LOCALLY",
+      "failed_attempted_or_single_pass_rows_do_not_count_as_processed": true
+    },
+    "preflight_and_stop_evidence_ledger_contract": {
+      "container_type": "EXACT_ORDERED_JSON_ARRAY_ONE_ROW_PER_TOP_LEVEL_STOP_CONDITION",
+      "row_exact_fields": [
+        "stop_condition",
+        "evaluation_phase",
+        "evaluation_status",
+        "predicate_inputs",
+        "predicate_result",
+        "first_evaluation_step_ordinal",
+        "trigger_step_ordinal"
+      ],
+      "row_order_must_exactly_equal_top_level_stop_conditions": true,
+      "evaluation_status_exact_values": [
+        "NOT_REACHED_AFTER_EARLIER_STOP",
+        "PASS",
+        "TRIGGERED"
+      ],
+      "predicate_result_is_true_for_TRIGGERED_false_for_PASS_and_null_for_NOT_REACHED": true,
+      "predicate_inputs_must_be_explicit_JSON_null_for_NOT_REACHED_AND_an_exact_declared_mapping_for_PASS_or_TRIGGERED": true,
+      "step_ordinals_are_nonnegative_json_integers_when_applicable_else_null_and_trigger_step_is_nonnull_only_for_TRIGGERED": true,
+      "predicate_inputs_exact_fields_by_stop_condition": {
+        "NONCANONICAL_MAIN_OR_NONFIRST_ATTEMPT": [
+          "event_name",
+          "git_ref",
+          "head_sha",
+          "expected_release_dispatch_sha",
+          "run_attempt"
+        ],
+        "RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED": [
+          "release_id",
+          "release_blob_sha256",
+          "release_consumed",
+          "remaining_get_object_budget",
+          "authorized_attempt"
+        ],
+        "INSUFFICIENT_EPHEMERAL_DISK_BEFORE_OIDC": [
+          "pre_oidc_free_workspace_bytes",
+          "minimum_required_free_workspace_bytes"
+        ],
+        "AWS_IDENTITY_MISMATCH": [
+          "expected_account_id",
+          "expected_role_arn",
+          "expected_session_name",
+          "observed_account_id",
+          "observed_principal_arn",
+          "observed_session_name"
+        ],
+        "REQUEST_CAP_REACHED": [
+          "request_about_to_be_issued",
+          "request_kind",
+          "get_object_request_count",
+          "maximum_get_object_requests",
+          "retry_count",
+          "maximum_retries"
+        ],
+        "BUDGET_CAP_EXCEEDED": [
+          "conservative_one_time_cost_upper_bound_eur_micros",
+          "maximum_one_time_budget_eur_micros",
+          "persistent_monthly_cost_eur_micros",
+          "maximum_monthly_budget_eur_micros"
+        ],
+        "HTTP_OR_REQUESTER_PAYS_FAILURE": [
+          "first_failed_object_ordinal",
+          "first_failed_processing_status",
+          "requester_pays_header_required"
+        ],
+        "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH": [
+          "first_mismatch_object_ordinal",
+          "mismatched_exact_fields"
+        ],
+        "DECOMPRESSION_OR_BLOCK_ENVELOPE_SCHEMA_FAILURE_PREVENTING_LOSSLESS_RAW_LOCATOR_OR_CONTINUED_PARSE": [
+          "first_failed_object_ordinal",
+          "parse_ordinal_one_based",
+          "record_ordinal_zero_based_or_null",
+          "failure_code"
+        ],
+        "INDEX_OR_WORKSPACE_CAP_REACHED": [
+          "triggered_cap_keys",
+          "peak_ephemeral_workspace_bytes",
+          "maximum_ephemeral_workspace_bytes"
+        ],
+        "RETENTION_OR_ARTIFACT_CAP_EXCEEDED": [
+          "triggered_cap_keys",
+          "first_omitted_reducer_id_or_null",
+          "first_omitted_partition_or_null"
+        ],
+        "TAXONOMY_OR_CONSERVATION_INCOMPLETE": [
+          "all_required_units_classified",
+          "all_proof_references_resolve",
+          "counts_conserve",
+          "per_unit_unclassifiable_counts_are_all_zero"
+        ],
+        "RUNTIME_CAP_REACHED": [
+          "reserved_runtime_observed_milliseconds",
+          "maximum_runtime_milliseconds"
+        ]
+      },
+      "predicate_formula_by_stop_condition": {
+        "NONCANONICAL_MAIN_OR_NONFIRST_ATTEMPT": "TRIGGER_IFF_event_name_NOT_workflow_dispatch_OR_git_ref_NOT_refs/heads/main_OR_head_sha_NOT_expected_release_dispatch_sha_OR_run_attempt_NOT_INTEGER_1",
+        "RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED": "TRIGGER_IFF_ANY_RELEASE_ID_OR_BLOB_BINDING_DIFFERS_FROM_THE_INSTALLED_EXACT_RELEASE_OR_release_consumed_IS_NOT_FALSE_OR_remaining_get_object_budget_IS_NOT_INTEGER_72_OR_authorized_attempt_IS_NOT_INTEGER_1",
+        "INSUFFICIENT_EPHEMERAL_DISK_BEFORE_OIDC": "TRIGGER_IFF_pre_oidc_free_workspace_bytes_LESS_THAN_minimum_required_free_workspace_bytes",
+        "AWS_IDENTITY_MISMATCH": "TRIGGER_IFF_ANY_OBSERVED_IDENTITY_FIELD_IS_NULL_OR_DOES_NOT_EXACTLY_EQUAL_ITS_EXPECTED_ACCOUNT_ROLE_AND_SESSION_BINDING",
+        "REQUEST_CAP_REACHED": "TRIGGER_IFF_request_about_to_be_issued_IS_TRUE_AND_EITHER_request_kind_IS_RETRY_WITH_retry_count_GREATER_THAN_OR_EQUAL_maximum_retries_OR_request_kind_IS_INITIAL_GET_WITH_get_object_request_count_GREATER_THAN_OR_EQUAL_maximum_get_object_requests",
+        "BUDGET_CAP_EXCEEDED": "TRIGGER_IFF_conservative_one_time_cost_upper_bound_eur_micros_IS_GREATER_THAN_maximum_one_time_budget_eur_micros_OR_persistent_monthly_cost_eur_micros_IS_GREATER_THAN_maximum_monthly_budget_eur_micros_USING_THE_SAME_RESOURCE_LEDGER_COST_ROWS",
+        "HTTP_OR_REQUESTER_PAYS_FAILURE": "TRIGGER_IFF_first_failed_object_ordinal_AND_first_failed_processing_status_ARE_NONNULL_OR_requester_pays_header_required_IS_NOT_TRUE",
+        "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH": "TRIGGER_IFF_first_mismatch_object_ordinal_IS_NONNULL_AND_mismatched_exact_fields_IS_A_NONEMPTY_EXACT_ALLOWED_ARRAY",
+        "DECOMPRESSION_OR_BLOCK_ENVELOPE_SCHEMA_FAILURE_PREVENTING_LOSSLESS_RAW_LOCATOR_OR_CONTINUED_PARSE": "TRIGGER_IFF_failure_code_IS_NONNULL_WITH_OBJECT_PARSE_AND_OPTIONAL_RECORD_LOCATOR_EVIDENCE",
+        "INDEX_OR_WORKSPACE_CAP_REACHED": "TRIGGER_IFF_triggered_cap_keys_CONTAINS_AN_INDEX_OR_WORKSPACE_KEY_OR_peak_ephemeral_workspace_bytes_IS_GREATER_THAN_maximum_ephemeral_workspace_bytes_USING_THE_SAME_RESOURCE_CAP_ROW",
+        "RETENTION_OR_ARTIFACT_CAP_EXCEEDED": "TRIGGER_IFF_THE_FROZEN_TERMINAL_ELIGIBILITY_POINT_HAS_BEEN_REACHED_WITH_NO_EARLIER_NONRETENTION_STOP_AND_EITHER_BOTH_REDUCER_FAMILIES_ARE_COMPLETE_WITH_ANY_DISCOVERED_GROUP_OR_OBSERVATION_CAP_EVALUATION_TRUE_OR_THE_PRECAP_ARTIFACT_DECISION_IS_AVAILABLE_AND_ITS_CAP_EVALUATION_IS_TRUE_OR_ANY_ELIGIBLE_OMITTED_DUE_TO_CAP_GROUP_COUNT_IS_POSITIVE",
+        "RUNTIME_CAP_REACHED": "TRIGGER_IFF_reserved_runtime_observed_milliseconds_EQUALS_elapsed_runtime_milliseconds_PLUS_300000_AND_IS_GREATER_THAN_OR_EQUAL_maximum_runtime_milliseconds_USING_THE_SAME_RESOURCE_LEDGER_RUNTIME_ROW",
+        "TAXONOMY_OR_CONSERVATION_INCOMPLETE": "TRIGGER_IFF_ANY_OF_all_required_units_classified_all_proof_references_resolve_counts_conserve_OR_per_unit_unclassifiable_counts_are_all_zero_IS_NOT_TRUE"
+      },
+      "predicate_input_type_and_nullability_contract": "ALL_count_ordinal_byte_millisecond_attempt_AND_budget_FIELDS_ARE_NONNULL_NONNEGATIVE_JSON_INTEGERS_WHEN_THEIR_PHASE_IS_REACHED_EXCEPT_first_omitted_partition_or_null_IS_NULL_UNLESS_THE_RETENTION_ROW_IS_TRIGGERED_AND_A_DISCOVERED_GROUP_EXISTS_AND_record_ordinal_zero_based_or_null_FOLLOWS_THE_EXACT_PARSE_FAILURE_CODE_MAPPING;ALL_BOOLEAN_FIELDS_ARE_EXACT_JSON_BOOLEANS;request_kind_IS_EXACT_INITIAL_GET_OR_RETRY;ALL_SHA_FIELDS_ARE_NONNULL_LOWERCASE_64_HEX;ALL_ID_REF_SESSION_EVENT_STATUS_AND_FAILURE_FIELDS_ARE_STRICT_UTF8_STRINGS_EXCEPT_THE_THREE_observed_AWS_IDENTITY_FIELDS_MAY_BE_ALL_NULL_FOR_ATTEMPTED_NO_VALID_ATTESTATION_AND_first_omitted_reducer_id_or_null_IS_NULL_UNLESS_THE_RETENTION_ROW_IS_TRIGGERED_AND_A_DISCOVERED_GROUP_EXISTS;FIRST_FAILURE_OR_MISMATCH_OBJECT_ORDINALS_AND_REQUIRED_DEPENDENT_FIELDS_ARE_ALL_NULL_WHEN_NO_SUCH_EVENT_EXISTS_AND_ALL_NONNULL_WHEN_IT_EXISTS_EXCEPT_THE_PARSE_RECORD_ORDINAL_USES_ITS_CODE_SPECIFIC_NULLABILITY;ARRAY_FIELDS_ARE_EXACT_SORTED_UNIQUE_ALLOWED_STRINGS;ALL_predicate_inputs_MUST_HAVE_EXACTLY_THE_DECLARED_KEYS",
+      "exact_allowed_array_values_by_field_and_stop": {
+        "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH.mismatched_exact_fields": [
+          "observed_etag",
+          "observed_content_length",
+          "observed_compressed_object_sha256"
+        ],
+        "INDEX_OR_WORKSPACE_CAP_REACHED.triggered_cap_keys": [
+          "total_compressed_bytes",
+          "individual_compressed_bytes",
+          "total_decompressed_bytes_across_two_passes",
+          "individual_decompressed_bytes_per_pass",
+          "peak_ephemeral_workspace_bytes"
+        ],
+        "RETENTION_OR_ARTIFACT_CAP_EXCEEDED.triggered_cap_keys": [
+          "discovered_legacy_key_groups",
+          "discovered_repeat_observations",
+          "discovered_repeated_block_groups",
+          "projected_final_staging_directory_bytes"
+        ]
+      },
+      "array_value_order_is_the_exact_declaration_order_above_not_utf8_sort_order": true,
+      "retention_first_omitted_locator_contract": "IF_THE_RETENTION_STOP_ROW_IS_NOT_TRIGGERED_BOTH_FIELDS_ARE_EXACT_NULL;IF_TRIGGERED_BOTH_ARE_NULL_IFF_NO_DISCOVERED_GROUP_EXISTS_ELSE_reducer_id_IS_EXACT_BLOCK_NUMBER_OR_HISTORICAL_LEGACY_WEAK_KEY_partition_IS_JSON_INTEGER_0_THROUGH_255_AND_THE_PAIR_LOCATES_THE_FIRST_DISCOVERED_GROUP_IN_FROZEN_REDUCER_THEN_PARTITION_THEN_UNSIGNED_EQUALITY_KEY_ORDER",
+      "aws_identity_evidence_status_projection": "NOT_REACHED_IFF_AWS_IDENTITY_MISMATCH_ROW_IS_NOT_REACHED;ATTEMPTED_NO_VALID_ATTESTATION_IFF_THE_ROW_IS_TRIGGERED_BECAUSE_ANY_OBSERVED_IDENTITY_VALUE_IS_UNAVAILABLE_AND_CONTEXT_STORES_ALL_THREE_AS_NULL;ATTESTED_IFF_ALL_THREE_OBSERVED_VALUES_ARE_NONNULL_EXACT_RUNTIME_STRINGS_WHETHER_THE_ROW_PASSES_OR_TRIGGERS_ON_A_MISMATCH",
+      "first_failed_processing_status_allowed_values": [
+        "TRANSPORT_ATTEMPT_FAILED",
+        "BODY_READ_FAILED_AFTER_RESPONSE_METADATA"
+      ],
+      "parse_failure_code_exact_values": [
+        "LZ4_DECOMPRESSION_FAILURE",
+        "DECOMPRESSED_UTF8_FAILURE",
+        "BLANK_OR_WHITESPACE_ONLY_NDJSON_RECORD",
+        "JSON_SYNTAX_OR_DUPLICATE_KEY_OR_NONFINITE_FAILURE",
+        "BLOCK_WRAPPER_KEY_SET_OR_TYPE_FAILURE",
+        "EVENT_VECTOR_OR_EVENT_TUPLE_SHAPE_FAILURE",
+        "FILL_MAPPING_REQUIRED_FIELD_OR_TYPE_FAILURE",
+        "CANONICAL_SERIALIZATION_DEPTH_OR_UNICODE_FAILURE",
+        "LOSSLESS_RAW_LOCATOR_COULD_NOT_BE_CONSTRUCTED"
+      ],
+      "parse_failure_record_ordinal_nullability_by_failure_code": {
+        "record_ordinal_must_be_null": [
+          "LZ4_DECOMPRESSION_FAILURE",
+          "DECOMPRESSED_UTF8_FAILURE",
+          "BLANK_OR_WHITESPACE_ONLY_NDJSON_RECORD"
+        ],
+        "record_ordinal_must_be_nonnegative_json_integer": [
+          "JSON_SYNTAX_OR_DUPLICATE_KEY_OR_NONFINITE_FAILURE",
+          "BLOCK_WRAPPER_KEY_SET_OR_TYPE_FAILURE",
+          "EVENT_VECTOR_OR_EVENT_TUPLE_SHAPE_FAILURE",
+          "FILL_MAPPING_REQUIRED_FIELD_OR_TYPE_FAILURE",
+          "CANONICAL_SERIALIZATION_DEPTH_OR_UNICODE_FAILURE",
+          "LOSSLESS_RAW_LOCATOR_COULD_NOT_BE_CONSTRUCTED"
+        ]
+      },
+      "parse_failure_code_lists_are_disjoint_and_their_union_exactly_equals_parse_failure_code_exact_values": true,
+      "predicate_inputs_must_be_exactly_typed_and_recomputed_from_github_context_release_object_ledger_resource_ledger_or_taxonomy_ledger_as_applicable": true,
+      "evaluation_phase_by_stop_condition": {
+        "NONCANONICAL_MAIN_OR_NONFIRST_ATTEMPT": "PRE_OIDC_STATIC",
+        "RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED": "PRE_OIDC_STATIC",
+        "INSUFFICIENT_EPHEMERAL_DISK_BEFORE_OIDC": "PRE_OIDC_STATIC",
+        "AWS_IDENTITY_MISMATCH": "POST_OIDC_PRE_REQUEST",
+        "REQUEST_CAP_REACHED": "BEFORE_EACH_REQUEST",
+        "BUDGET_CAP_EXCEEDED": "PRE_OIDC_STATIC_AFTER_RELEASE_BINDING",
+        "HTTP_OR_REQUESTER_PAYS_FAILURE": "AFTER_EACH_REQUEST_ATTEMPT",
+        "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH": "AFTER_RESPONSE_METADATA_OR_BODY",
+        "DECOMPRESSION_OR_BLOCK_ENVELOPE_SCHEMA_FAILURE_PREVENTING_LOSSLESS_RAW_LOCATOR_OR_CONTINUED_PARSE": "DURING_EACH_LOCAL_PARSE",
+        "INDEX_OR_WORKSPACE_CAP_REACHED": "IMMEDIATELY_AFTER_THE_INITIAL_RUNTIME_PASS_THAT_FOLLOWS_THE_SINGLE_EXEMPT_BOUNDARY_PLACEHOLDER_BOOTSTRAP_THEN_BEFORE_AND_AFTER_EVERY_SUBSEQUENT_WORKSPACE_MUTATING_CREATE_APPEND_FLUSH_INDEX_SORT_RUN_MERGE_SCIENTIFIC_SERIALIZATION_TEMP_FILE_RENAME_DELETE_AND_FINAL_FROZEN_GRAPH_OPERATION",
+        "RETENTION_OR_ARTIFACT_CAP_EXCEEDED": "BEFORE_EACH_COMPLETE_GROUP_RETENTION_AND_BEFORE_SEALING_OUTPUTS",
+        "RUNTIME_CAP_REACHED": "IMMEDIATELY_BEFORE_EVERY_STATIC_AND_AWS_PREDICATE_AND_BEFORE_AND_AFTER_EVERY_NETWORK_PARSE_SORT_AND_RETENTION_OPERATION_THEN_ONCE_AT_THE_FINAL_FROZEN_GRAPH_CHECKPOINT;NO_RESERVED_RUNTIME_REEVALUATION_AFTER_FREEZE_ONLY_THE_BOUNDARY_HARD_TIME_CHECK",
+        "TAXONOMY_OR_CONSERVATION_INCOMPLETE": "FINAL_VALIDATION_ONLY"
+      },
+      "phase_check_order": "INITIAL_RUNTIME_PASS_THEN_ONE_BOOTSTRAP_WORKSPACE_CHECK_THEN_STATIC_LIST_ORDER_THEN_AWS;AT_EACH_SUBSEQUENT_OPERATION_RUNTIME_CHECK_FIRST_THEN_OPERATION_SPECIFIC_CAP_THEN_OPERATION_THEN_TRANSPORT_IDENTITY_OR_SCHEMA_CHECK;RETENTION_CAP_BEFORE_GROUP_WRITE;FINAL_TAXONOMY_ONLY_AFTER_ALL_PRIOR_PHASES_PASS",
+      "global_evaluation_step_ordinal_rule": "START_AT_INTEGER_0_FOR_THE_INITIAL_RUNTIME_PASS_IMMEDIATELY_AFTER_THE_BOUNDARY_PLACEHOLDER_BOOTSTRAP_THEN_INTEGER_1_FOR_THE_POST_PLACEHOLDER_BOOTSTRAP_WORKSPACE_CHECK_THEN_INTEGER_2_FOR_THE_FIRST_PRE_OIDC_STATIC_PREDICATE_AND_INCREMENT_BY_EXACTLY_1_BEFORE_EVERY_SUBSEQUENT_PREDICATE_EVALUATION_IN_THE_FROZEN_PHASE_OPERATION_OBJECT_RECORD_EVENT_REDUCER_PARTITION_AND_SEAL_ORDER;NO_WALL_CLOCK_OR_CONCURRENCY_ORDER_IS_USED",
+      "repeated_condition_snapshot_rule": "A_TRIGGERED_ROW_RETAINS_THE_EXACT_TRIGGERING_INPUT_SNAPSHOT;A_PASS_ROW_FOR_A_REPEATED_CONDITION_RETAINS_THE_LAST_EVALUATED_PASS_SNAPSHOT_BEFORE_THE_NEXT_PHASE_OR_TERMINAL;first_evaluation_step_ordinal_ALWAYS_RETAINS_THE_FIRST_EVALUATION_AND_trigger_step_ordinal_IS_NULL_FOR_PASS;NOT_REACHED_RETAINS_NULL_INPUTS_AND_BOTH_ORDINALS_NULL",
+      "at_most_one_row_may_be_TRIGGERED_AT_THE_LOWEST_ACTUAL_STEP_ORDINAL_AND_ALL_CONDITIONS_NOT_REACHED_BEFORE_THAT_STEP_MUST_BE_NOT_reached": true,
+      "output_row_order_is_schema_order_only_and_does_not_override_phase_check_order": true,
+      "when_no_early_stop_is_triggered_all_pre_final_conditions_pass_and_final_taxonomy_condition_is_PASS_for_complete_or_TRIGGERED_for_incomplete": true,
+      "minimal_pre_oidc_failure_artifact_requires_the_full_exact_72_row_object_ledger_with_every_row_UNATTEMPTED_AFTER_FAIL_CLOSED_STOP_get_object_request_count_0_and_no_attempted_rows_even_when_the_first_preflight_condition_triggers": true,
+      "resource_ledger_triggered_stop_conditions_must_exactly_equal_rows_with_evaluation_status_TRIGGERED": true
+    },
+    "resource_and_cap_conservation_ledger_contract": {
+      "container_type": "ONE_EXACT_JSON_MAPPING",
+      "exact_fields": [
+        "resource_measurement_completion_status",
+        "scientific_output_logical_status",
+        "pre_oidc_free_workspace_bytes",
+        "peak_ephemeral_workspace_bytes",
+        "elapsed_runtime_milliseconds",
+        "get_object_request_count",
+        "retry_count",
+        "total_compressed_bytes_received",
+        "maximum_individual_compressed_bytes_received",
+        "total_decompressed_bytes_processed_across_local_parses",
+        "maximum_individual_decompressed_bytes_per_parse",
+        "discovered_legacy_key_group_count",
+        "discovered_repeat_observation_count",
+        "discovered_repeated_block_group_count",
+        "discovered_repeated_block_observation_count",
+        "projected_scientific_output_bytes_before_cap_fallback",
+        "metadata_projection_mode",
+        "final_staging_projection_kind",
+        "metadata_variant_byte_counts",
+        "projected_non_scientific_package_metadata_bytes",
+        "artifact_cap_decision_staging_bytes",
+        "projected_final_staging_directory_bytes",
+        "conservative_one_time_cost_upper_bound_eur_micros",
+        "persistent_monthly_cost_eur_micros",
+        "post_measurement_packaging_reservation_milliseconds",
+        "projected_scientific_output_entry_ledger",
+        "retained_scientific_output_entry_ledger",
+        "total_retained_scientific_output_bytes",
+        "reserved_non_scientific_package_metadata_bytes",
+        "cap_evaluations",
+        "triggered_stop_conditions"
+      ],
+      "retained_scientific_output_entry_exact_fields": [
+        "relative_path",
+        "byte_count",
+        "sha256",
+        "logical_status"
+      ],
+      "projected_scientific_output_entry_exact_fields": [
+        "relative_path",
+        "evaluation_status",
+        "would_be_complete_byte_count",
+        "would_be_complete_sha256"
+      ],
+      "projected_scientific_output_evaluation_status_exact_values": [
+        "NOT_EVALUATED",
+        "EVALUATED"
+      ],
+      "projected_scientific_output_entry_rules": "EXACTLY_SEVEN_ROWS_SORTED_BY_THE_SAME_UNIQUE_SCIENTIFIC_PATH_DOMAIN;NOT_EVALUATED_REQUIRES_BOTH_VALUE_FIELDS_NULL;EVALUATED_REQUIRES_NONNEGATIVE_BYTE_COUNT_AND_LOWERCASE_64_HEX_SHA256_OF_THE_EXACT_STREAMED_WOULD_BE_COMPLETE_CONTAINER_BYTES;IFF_ALL_SEVEN_ARE_EVALUATED_THE_AGGREGATE_EQUALS_THEIR_BYTE_COUNT_SUM_ELSE_THE_AGGREGATE_IS_NULL;COUNT_OR_PROVEN_STREAMING_BYTE_CAP_MAY_LEAVE_CURRENT_AND_LATER_ROWS_NOT_EVALUATED_AND_RUNNING_LOWER_BOUND_EXISTS_ONLY_IN_final_staging_projection_kind",
+      "scientific_projection_start_and_prefix_gate": "SCIENCE_PROJECTION_MAY_START_ONLY_IF_SCOPE_IS_COMPLETE_ALL_512_REDUCER_ROWS_ARE_COMPLETE_AND_NO_EARLIER_STOP_TRIGGERED;PROCESS_THE_SEVEN_PATHS_IN_artifact_layout_contract.scientific_output_containers_DECLARATION_ORDER;EVALUATED_ROWS_FORM_ONE_EXACT_PREFIX_AND_THE_CURRENT_ABORTED_AND_ALL_LATER_ROWS_ARE_NOT_EVALUATED",
+      "resource_measurement_completion_status_exact_values": [
+        "PREFLIGHT_OR_SOURCE_INCOMPLETE",
+        "SOURCE_COMPLETE_REDUCERS_INCOMPLETE",
+        "REDUCERS_COMPLETE_PROJECTION_INCOMPLETE",
+        "PROJECTION_COMPLETE"
+      ],
+      "metadata_projection_mode_exact_values": [
+        "NONRETENTION_EARLY_ONLY_CONTEXT",
+        "COMPLETE_WITH_REACHABLE_CAP_SUCCESSOR_CONTEXT",
+        "CAP_ONLY_CONTEXT"
+      ],
+      "metadata_projection_mode_derivation": "NONRETENTION_EARLY_ONLY_CONTEXT_IFF_A_NONRETENTION_STOP_BEFORE_THE_ATOMIC_COMPLETE_SCIENCE_COMMIT_SELECTS_EARLY_STOP_EMPTY;COMPLETE_WITH_REACHABLE_CAP_SUCCESSOR_CONTEXT_IFF_ALL_SEVEN_PROJECTED_ROWS_ARE_EVALUATED_WITH_NO_NONRETENTION_STOP_BEFORE_THE_ATOMIC_COMPLETE_SCIENCE_COMMIT_AND_NO_EARLIER_COUNT_GROUP_CAP_WHETHER_THE_FINAL_ARTIFACT_EDGE_SELECTS_COMPLETE_OR_CAP_FALLBACK;THE_POST_COMMIT_FINAL_TAXONOMY_OR_CONSERVATION_TRIGGER_IS_ALLOWED_IN_THIS_COMPLETE_CONTEXT_AND_SELECTS_THE_NO_CAP_INCOMPLETE_TERMINAL_WITHOUT_EMPTYING_SCIENCE;CAP_ONLY_CONTEXT_IFF_A_COUNT_GROUP_OR_STREAMING_PREFIX_CAP_SELECTS_CAP_WITHOUT_A_COMPLETE_PREDECISION_GRAPH;THE_THREE_CONTEXTS_ARE_MUTUALLY_EXCLUSIVE_AND_NO_UNOBSERVED_STOP_SNAPSHOT_IS_SYNTHESIZED",
+      "final_staging_projection_kind_exact_values": [
+        "EXACT_FULL_PROJECTION",
+        "EXACT_EMPTY_PACKAGE_PROJECTION",
+        "PROVEN_EXCEEDS_CAP_LOWER_BOUND"
+      ],
+      "final_staging_projection_kind_derivation": "PROVEN_STREAMING_BYTE_CAP_BEFORE_ALL_SEVEN_ROWS_COMPLETE_USES_PROVEN_EXCEEDS_CAP_LOWER_BOUND;ANY_NONRETENTION_STOP_BEFORE_THE_ATOMIC_COMPLETE_SCIENCE_COMMIT_OR_ANY_COUNT_CAP_BEFORE_SCIENCE_COUNTING_USES_EXACT_EMPTY_PACKAGE_PROJECTION_EVEN_IF_ALL_SEVEN_PROJECTED_ROWS_WERE_EVALUATED;EXACT_FULL_PROJECTION_REQUIRES_ALL_SEVEN_PROJECTED_ROWS_EVALUATED_NO_NONRETENTION_STOP_BEFORE_THE_ATOMIC_COMPLETE_SCIENCE_COMMIT_AND_THE_COMPLETE_SCIENCE_VALUE_GRAPH_CLASSIFICATION_AND_ATOMIC_COMMIT_TO_BE_READY;A_POST_COMMIT_FINAL_TAXONOMY_OR_CONSERVATION_TRIGGER_IS_EXPLICITLY_ALLOWED_IN_EXACT_FULL_PROJECTION_AND_SELECTS_THE_NO_CAP_INCOMPLETE_TERMINAL_WITHOUT_EMPTYING_SCIENCE;THESE_BRANCHES_ARE_MUTUALLY_EXCLUSIVE_IN_THIS_PRECEDENCE_ORDER",
+      "metadata_variant_byte_counts_exact_keys": [
+        "EARLY_STOP_EMPTY",
+        "RETENTION_CAP_FALLBACK_EMPTY",
+        "COMPLETE"
+      ],
+      "metadata_variant_byte_count_rules": "ALL_THREE_KEYS_ARE_ALWAYS_PRESENT;NONRETENTION_EARLY_ONLY_CONTEXT_REQUIRES_ONLY_EARLY_STOP_EMPTY_NONNULL;COMPLETE_WITH_REACHABLE_CAP_SUCCESSOR_CONTEXT_REQUIRES_COMPLETE_AND_RETENTION_CAP_FALLBACK_EMPTY_NONNULL;CAP_ONLY_CONTEXT_REQUIRES_ONLY_RETENTION_CAP_FALLBACK_EMPTY_NONNULL;EVERY_OTHER_NONAPPLICABLE_VALUE_IS_EXACT_JSON_NULL;EACH_NONNULL_VALUE_IS_THE_EXACT_SUM_FOR_ITS_CONTEXT_VALID_TEMPLATE_OR_REACHABLE_SUCCESSOR_AT_THE_JOINT_VECTOR_FIXED_POINT_INCLUDING_ALL_NONSCIENTIFIC_AND_PACKAGE_METADATA_FILES_AND_THE_FIXED_1024_BYTE_BOUNDARY;projected_non_scientific_package_metadata_bytes_EQUALS_THE_MAXIMUM_NONNULL_VALUE_AND_IS_PREUPLOAD_SAFETY_ONLY",
+      "predecision_template_contract": {
+        "template_is_counterfactual_and_never_uploaded_or_claimed_as_observed_evidence": true,
+        "NONRETENTION_EARLY_STOP_EMPTY_template": "USE_THE_EXACT_OBSERVED_INCOMPLETE_VALUE_GRAPH_WITH_scientific_output_logical_status_EARLY_STOP_EMPTY_terminal_R11A_DIAGNOSTIC_INCOMPLETE_rc_21_retention_caps_exceeded_false;PRESERVE_EVERY_ACTUAL_EARLIER_TRIGGERED_PASS_AND_NOT_REACHED_STOP_ROW_INCLUDING_THE_RETENTION_ROW_AS_NOT_REACHED_OR_PASS_ACCORDING_TO_THE_FROZEN_STEP_ORDER;DO_NOT_FABRICATE_A_RETENTION_TRIGGER",
+        "RETENTION_COUNT_OR_GROUP_CAP_EMPTY_template": "PRESERVE_EVERY_TRUE_DISCOVERED_GROUP_OR_OBSERVATION_CAP_EVALUATION_retention_caps_exceeded_true_THE_RETENTION_ROW_AS_THE_SINGLE_TRIGGERED_STOP_scientific_output_logical_status_RETENTION_CAP_FALLBACK_EMPTY_terminal_R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_AND_rc_20",
+        "STREAMING_ARTIFACT_CAP_PREFIX_template": "PRESERVE_THE_EXACT_EVALUATED_SCIENTIFIC_OUTPUT_PREFIX_AND_NOT_EVALUATED_SUFFIX_THE_PROVEN_RUNNING_SERIALIZED_SCIENCE_LOWER_BOUND_AND_EVERY_PRIOR_PASS_ROW;BEFORE_APPLYING_THE_PROVEN_ARTIFACT_EDGE_FREEZE_THE_RETENTION_ROW_IN_ITS_EXACT_PRETRIGGER_PASS_STATE_retention_caps_exceeded_false_scientific_output_logical_status_EARLY_STOP_EMPTY_terminal_R11A_DIAGNOSTIC_INCOMPLETE_AND_rc_21;THIS_TEMPLATE_SUPPLIES_THE_REQUIRED_EARLY_METADATA_LENGTH_ONLY_AND_NEVER_REVERSES_THE_ALREADY_PROVEN_STREAMING_CAP",
+        "COMPLETE_template": "USE_THE_EXACT_OBSERVED_COMPLETE_SCIENCE_VALUE_GRAPH_WITH_scientific_output_logical_status_COMPLETE_retention_caps_exceeded_false_AND_RETENTION_STOP_PASS;terminal_root_cause_status_AND_rc_ARE_THE_EXACT_RECOMPUTED_NO_CAP_TAXONOMY_DECISION_AND_MAY_BE_ROOT_CAUSE_TAXONOMY_COMPLETE_0_OR_DIAGNOSTIC_INCOMPLETE_21",
+        "artifact_cap_row_inside_each_template": "evaluation_status_EVALUATED_limit_134217728_observed_EQUALS_THE_SAME_TEMPLATE_FIXED_POINT_FINAL_STAGING_BYTE_COUNT_AND_ONLY_THE_artifact_cap_row.exceeded_ARTIFACT_TRIGGER_KEY_AND_ARTIFACT_DERIVED_RETENTION_EDGE_ARE_FORCED_false_OR_ABSENT_WHILE_COMPUTING_THE_PREDECISION_TEMPLATE;ALL_EARLIER_NONARTIFACT_CAP_AND_STOP_EVIDENCE_REMAINS_EXACTLY_CONTEXT_TRUE",
+        "all_other_fields": "EXACTLY_EQUAL_THE_OBSERVED_OR_RECOMPUTED_VALUES_FOR_THAT_CONTEXT_BRANCH_WITH_NO_UNFROZEN_PLACEHOLDERS",
+        "decision_rule": "AFTER_THE_CONTEXT_TEMPLATE_VECTOR_REACHES_ITS_EXACT_FIXED_POINT_COMPARE_THE_TEMPLATE_artifact_cap_row.observed_TO_134217728_USING_GREATER_THAN;FOR_COMPLETE_IF_TRUE_SELECT_THE_ACTUAL_RETENTION_CAP_FALLBACK_EMPTY_GRAPH_ELSE_EMIT_THE_NO_CAP_GRAPH;FOR_NONRETENTION_EARLY_IF_TRUE_KEEP_THE_EARLIER_INCOMPLETE_TERMINAL_AND_FORBID_UPLOAD_BECAUSE_THE_EVIDENCE_PACKAGE_CANNOT_FIT_ELSE_EMIT_THE_EARLY_GRAPH;FOR_RETENTION_COUNT_OR_GROUP_CAP_THE_CAP_TERMINAL_IS_ALREADY_SELECTED_AND_THE_COMPARE_ONLY_DETERMINES_THE_REAL_ARTIFACT_CAP_ROW_AND_UPLOAD_SAFETY_WITHOUT_CHANGING_THE_TERMINAL;FOR_STREAMING_ARTIFACT_CAP_PREFIX_THE_PROVEN_LOWER_BOUND_ALREADY_SELECTS_THE_CAP_TERMINAL_AND_THE_TEMPLATE_ONLY_DETERMINES_REQUIRED_METADATA_LENGTH_AND_UPLOAD_SAFETY",
+        "cap_variant_must_never_reenter_or_reverse_this_predecision": true
+      },
+      "resource_measurement_completion_status_iff_mapping": {
+        "PREFLIGHT_OR_SOURCE_INCOMPLETE": "exact_scope_completion.scope_complete_IS_FALSE",
+        "SOURCE_COMPLETE_REDUCERS_INCOMPLETE": "exact_scope_completion.scope_complete_IS_TRUE_AND_AT_LEAST_ONE_REDUCER_PARTITION_IS_NOT_COMPLETE",
+        "REDUCERS_COMPLETE_PROJECTION_INCOMPLETE": "exact_scope_completion.scope_complete_IS_TRUE_AND_ALL_512_REDUCER_PARTITIONS_ARE_COMPLETE_AND_AT_LEAST_ONE_PROJECTED_SCIENTIFIC_ROW_IS_NOT_EVALUATED",
+        "PROJECTION_COMPLETE": "exact_scope_completion.scope_complete_IS_TRUE_AND_ALL_512_REDUCER_PARTITIONS_ARE_COMPLETE_AND_ALL_SEVEN_PROJECTED_SCIENTIFIC_ROWS_ARE_EVALUATED"
+      },
+      "scientific_output_logical_status_exact_values": [
+        "COMPLETE",
+        "RETENTION_CAP_FALLBACK_EMPTY",
+        "EARLY_STOP_EMPTY"
+      ],
+      "scientific_output_status_derivation": "COMPLETE_IFF_EXACT_SCOPE_REDUCERS_AND_CLASSIFICATION_SEALED_WITH_NO_CAP;RETENTION_CAP_FALLBACK_EMPTY_IFF_RETENTION_OR_ARTIFACT_CAP_TERMINAL;ELSE_EARLY_STOP_EMPTY",
+      "all_seven_retained_scientific_output_entries_must_have_logical_status_exactly_equal_the_top_level_scientific_output_logical_status": true,
+      "both_empty_statuses_require_exact_zero_byte_files_with_sha256_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": true,
+      "retained_scientific_output_entries_sorted_by_relative_path_unique_and_include_every_scientific_output_container_including_zero_byte_files": true,
+      "each_scientific_entry_byte_count_equals_exact_sealed_file_length_and_sha256_equals_lowercase_64_hex_SHA256_of_exact_sealed_file_bytes_at_the_unique_safe_relative_path": true,
+      "non_scientific_package_metadata_including_this_resource_ledger_and_hash_manifests_is_excluded_to_avoid_self_reference_and_has_a_separate_fixed_reservation": true,
+      "total_retained_scientific_output_bytes_equals_sum_entry_byte_count": true,
+      "reserved_non_scientific_package_metadata_bytes_must_equal_proposed_request_envelope_value_4194304": true,
+      "always_measured_resource_count_byte_and_millisecond_scalars_are_nonnegative_json_integers": true,
+      "phase_dependent_nullability": "discovered_repeated_block_group_count_AND_discovered_repeated_block_observation_count_ARE_NONNULL_IFF_ALL_256_BLOCK_NUMBER_PARTITIONS_ARE_COMPLETE;discovered_legacy_key_group_count_AND_discovered_repeat_observation_count_ARE_NONNULL_IFF_ALL_256_HISTORICAL_PARTITIONS_ARE_COMPLETE;projected_scientific_output_bytes_before_cap_fallback_IS_NONNULL_IFF_ALL_SEVEN_PROJECTED_ROWS_ARE_EVALUATED;projected_metadata_variant_decision_and_safety_fields_cost_fields_reserved_bytes_resource_usage_transport_counts_elapsed_and_retained_file_entries_ARE_ALWAYS_NONNULL_IN_ANY_SEALED_MINIMAL_ARTIFACT",
+      "pre_oidc_free_workspace_bytes_measurement": "FILESYSTEM_FREE_BYTES_ON_THE_EXACT_WORKSPACE_VOLUME_AT_THE_FIRST_POST_PLACEHOLDER_BOOTSTRAP_PREFLIGHT_CHECKPOINT_BEFORE_STATIC_GATE_EVALUATION_OIDC_OR_ANY_NETWORK_REQUEST_SO_THE_VALUE_EXISTS_EVEN_FOR_THE_FIRST_STATIC_STOP_AND_INCLUDES_THE_PREALLOCATED_BOUNDARY_COST",
+      "peak_ephemeral_workspace_bytes_measurement": "MAXIMUM_RECURSIVE_ALLOCATED_BYTE_COUNT_UNDER_THE_EXACT_WORKSPACE_ROOT_STARTING_WITH_THE_MANDATORY_POST_PLACEHOLDER_BOOTSTRAP_BASELINE_AND_THEN_MEASURED_AFTER_EVERY_SUBSEQUENT_COLLECTOR_CREATE_APPEND_FLUSH_SORT_RUN_MERGE_AND_DELETE_BOUNDARY_THROUGH_THE_SINGLE_FROZEN_GRAPH_CHECKPOINT_BEFORE_METADATA_SEALING",
+      "elapsed_runtime_milliseconds_measurement": "CEILING_OF_MONOTONIC_NS_FROM_IMMEDIATELY_BEFORE_PREFLIGHT_THROUGH_THE_LAST_RUNTIME_PASS_IMMEDIATELY_PRECEDING_THE_FIRST_NONRUNTIME_STOP_OR_THE_RUNTIME_TRIGGER_ITSELF_OR_WHEN_NO_STOP_THE_SINGLE_FINAL_RESERVED_RUNTIME_CHECK_IMMEDIATELY_BEFORE_ATOMIC_FROZEN_GRAPH_METADATA_SEALING;THE_PREFLIGHT_RUNTIME_ROW_AND_RESOURCE_RUNTIME_ROW_USE_THIS_SAME_VALUE_AND_RESERVED_RUNTIME_IS_NOT_REEVALUATED_AFTER_FREEZE",
+      "post_measurement_packaging_reservation_milliseconds_exact": 300000,
+      "post_measurement_packaging_reservation_milliseconds_field_must_equal_300000_and_runtime_cap_observed_value_equals_elapsed_plus_this_reservation": true,
+      "reserved_runtime_cap_trigger_means_STOP_SCIENTIFIC_WORK_AND_USE_THE_300000_MILLISECOND_RESERVATION_TO_SEAL_THE_INCOMPLETE_ARTIFACT_NOT_UPLOAD_FORBIDDEN": true,
+      "workflow_hard_timeout_must_remain_21600_SECONDS_AND_THE_PREUPLOAD_PACKAGE_BOUNDARY_HARD_TIMEOUT_BOOLEAN_MUST_BE_1_FOR_UPLOAD": true,
+      "discovered_legacy_key_group_count_equals_sum_reducer_discovered_HISTORICAL_LEGACY_WEAK_KEY_group_count_only_when_all_256_HISTORICAL_partitions_are_COMPLETE_else_NULL": true,
+      "discovered_repeat_observation_count_equals_sum_reducer_discovered_HISTORICAL_LEGACY_WEAK_KEY_repeat_observation_count_including_one_group_first_per_group_only_when_all_256_HISTORICAL_partitions_are_COMPLETE_else_NULL": true,
+      "discovered_repeated_block_group_count_equals_sum_reducer_discovered_BLOCK_NUMBER_group_count_only_when_all_256_BLOCK_NUMBER_partitions_are_COMPLETE_else_NULL": true,
+      "discovered_repeated_block_observation_count_equals_sum_reducer_discovered_BLOCK_NUMBER_repeat_observation_count_only_when_all_256_BLOCK_NUMBER_partitions_are_COMPLETE_else_NULL": true,
+      "projected_scientific_output_bytes_before_cap_fallback_equals_exact_sum_from_THE_DETERMINISTIC_SERIALIZER_COUNTING_SINK_FOR_ALL_SEVEN_WOULD_BE_COMPLETE_CONTAINERS_WITHOUT_REQUIRING_FULL_TEMPORARY_MATERIALIZATION": true,
+      "second_pass_scientific_output_strategy": "STREAM_EACH_WOULD_BE_ROW_THROUGH_THE_EXACT_SERIALIZER_TO_A_BYTE_COUNTER_AND_COMMITMENT_HASH;MATERIALIZE_TEMPORARY_BYTES_ONLY_WHILE_ALL_COUNT_AND_BYTE_CAPS_CAN_STILL_PASS;ON_FIRST_PROVEN_COUNT_CAP_SKIP_SCIENCE_PROJECTION_OR_ON_FIRST_COMPLETE_SERIALIZED_ROW_BOUNDARY_THAT_PROVES_THE_TOTAL_ARTIFACT_CAP_STOP_FURTHER_SCIENCE_PROJECTION;DELETE_ALL_TEMP_SCIENCE_AND_SEAL_SEVEN_EMPTY_FILES;IF_NO_CAP_ATOMICALLY_RENAME_ALL_SEVEN_COMPLETE_TEMP_FILES",
+      "cap_short_circuit_must_complete_SOURCE_SCAN_BOTH_REDUCER_DISCOVERY_COUNTS_AND_REDUCER_OR_SCHEMA_COMMITMENTS_when_safety_allows_but_may_leave_projected_scientific_rows_NOT_EVALUATED_and_must_not_continue_scientific_work_past_runtime_or_workspace_safety;A_TRUE_PARTIAL_REDUCER_CAP_EVALUATION_IS_RETAINED_AS_NONTERMINAL_EVIDENCE_UNTIL_BOTH_REDUCER_FAMILIES_COMPLETE_AND_IF_A_RUNTIME_WORKSPACE_TRANSPORT_OR_OTHER_NONRETENTION_STOP_INTERVENES_THAT_STOP_WINS_AND_TERMINAL_IS_INCOMPLETE": true,
+      "projected_non_scientific_package_metadata_bytes_scope": "USE_ONLY_THE_ACTUAL_CONTEXT_TEMPLATE_AND_ITS_EXACTLY_REACHABLE_CAP_SUCCESSOR_DECLARED_BY_metadata_projection_mode_WITH_ONE_JOINTLY_ITERATED_VARIANT_SPECIFIC_LENGTH_VECTOR;NEVER_SYNTHESIZE_AN_UNOBSERVED_STOP_SNAPSHOT_OR_NONREACHABLE_VARIANT;EACH_APPLICABLE_VARIANT_INCLUDES_THE_FIXED_1024_BYTE_BOUNDARY",
+      "projected_metadata_self_length_fixed_point_rule": "DEFINE_ONE_ORDERED_VECTOR_CONTAINING_ONLY_THE_ACTUAL_CONTEXT_APPLICABLE_NONRETENTION_EARLY_RETENTION_COUNT_OR_GROUP_CAP_STREAMING_ARTIFACT_CAP_PREFIX_OR_COMPLETE_PREDECISION_TEMPLATE_AND_ITS_REACHABLE_ACTUAL_CAP_SUCCESSOR_WHERE_DECLARED_PLUS_THE_BYTE_LENGTH_OF_EVERY_NONSCIENTIFIC_METADATA_CONTAINER_IN_artifact_layout_contract_SEALING_ORDER_metadata_variant_byte_counts_WITH_NONAPPLICABLE_KEYS_NULL_projected_non_scientific_package_metadata_bytes_artifact_cap_decision_staging_bytes_AND_projected_final_staging_directory_bytes;START_EVERY_APPLICABLE_COMPONENT_AT_INTEGER_0_AND_KEEP_ALL_NONAPPLICABLE_COMPONENTS_NULL;FOR_EACH_ITERATION_SERIALIZE_ONLY_THOSE_CONTEXT_VALID_TEMPLATES_OR_VARIANTS_WITH_THEIR_OWN_CURRENT_VECTOR_COMPONENTS_AND_RECOMPUTE_EVERY_APPLICABLE_FILE_LENGTH_VARIANT_TOTAL_MAXIMUM_DECISION_AND_SAFETY_COMPONENT_SIMULTANEOUSLY_WHILE_EACH_PREDECISION_TEMPLATE_SUPPRESSES_ONLY_ITS_ARTIFACT_BYTE_EDGE_AND_PRESERVES_ALL_CONTEXT_TRUE_EARLIER_STOP_GROUP_CAP_OR_STREAMING_PREFIX_FIELDS;STOP_ONLY_WHEN_THE_ENTIRE_ORDERED_VECTOR_IS_BYTE_FOR_BYTE_UNCHANGED;SELECT_THE_LEAST_COMPONENTWISE_FIXED_POINT_REACHED_FROM_ZERO;THE_REPORTED_NONNULL_VARIANT_LENGTHS_MUST_EQUAL_THE_EXACT_SERIALIZATIONS_AT_THAT_SAME_STABLE_VECTOR;FAIL_INCOMPLETE_IF_NO_FIXED_POINT_WITHIN_64_ITERATIONS",
+      "actual_cap_fallback_metadata_and_final_staging_byte_counts_are_recomputed_after_fallback_and_recorded_in_THE_PACKAGE_BOUNDARY_NOT_USED_TO_REVERSE_THE_WOULD_BE_CAP_DECISION": true,
+      "artifact_cap_decision_staging_bytes_derivation_by_kind": "EXACT_FULL_PROJECTION_ALWAYS_USES_THE_FROZEN_COMPLETE_PREDECISION_TEMPLATE_AND_EQUALS_full_projected_science_PLUS_metadata_variant_byte_counts.COMPLETE;EXACT_EMPTY_PACKAGE_PROJECTION_USES_THE_CONTEXT_VALID_NONRETENTION_EARLY_OR_RETENTION_COUNT_OR_GROUP_CAP_PREDECISION_TEMPLATE_AND_EQUALS_THAT_TEMPLATE_EXACT_FINAL_STAGING_LENGTH;PROVEN_EXCEEDS_CAP_LOWER_BOUND_EQUALS_THE_EXACT_RUNNING_SERIALIZED_SCIENCE_BYTE_COUNT_AT_THE_FIRST_COMPLETE_ROW_BOUNDARY_PLUS_THE_FROZEN_SAFE_METADATA_LOWER_BOUND_0_AND_MUST_BE_GREATER_THAN_134217728;ACTUAL_CAP_METADATA_IS_PACKAGE_SAFETY_ONLY_AND_NEVER_REENTERS_OR_REVERSES_THE_PREDECISION",
+      "projected_final_staging_directory_bytes_is_preupload_safety_not_artifact_cap_decision_and_equals_full_projected_science_when_available_else_0_PLUS_projected_non_scientific_package_metadata_bytes": true,
+      "total_retained_scientific_output_bytes_equals_projected_scientific_output_bytes_before_cap_fallback_only_when_scientific_output_logical_status_IS_COMPLETE_and_equals_zero_for_both_empty_statuses": true,
+      "cap_evaluation_exact_fields": [
+        "evaluation_status",
+        "limit_nonnegative_json_integer",
+        "observed_nonnegative_json_integer_or_null",
+        "exceeded"
+      ],
+      "cap_evaluation_status_values": [
+        "NOT_EVALUATED",
+        "EVALUATED"
+      ],
+      "cap_evaluation_nullability": "NOT_EVALUATED_REQUIRES_observed_AND_exceeded_NULL;EVALUATED_REQUIRES_observed_NONNEGATIVE_JSON_INTEGER_AND_exceeded_EXACT_JSON_BOOLEAN;limit_IS_ALWAYS_NONNULL_NONNEGATIVE_JSON_INTEGER",
+      "cap_evaluation_status_by_key": "discovered_legacy_key_groups_AND_discovered_repeat_observations_ARE_EVALUATED_IFF_ALL_256_HISTORICAL_PARTITIONS_ARE_COMPLETE;discovered_repeated_block_groups_IS_EVALUATED_IFF_ALL_256_BLOCK_NUMBER_PARTITIONS_ARE_COMPLETE;THESE_ARE_NOT_EVALUATED_OTHERWISE;EVERY_OTHER_CAP_KEY_INCLUDING_artifact_cap_decision_staging_bytes_IS_EVALUATED_IN_EVERY_SEALED_MINIMAL_ARTIFACT",
+      "cap_evaluation_exact_keys": [
+        "minimum_free_workspace_before_oidc_shortfall",
+        "get_object_requests",
+        "retries",
+        "total_compressed_bytes",
+        "individual_compressed_bytes",
+        "total_decompressed_bytes_across_two_passes",
+        "individual_decompressed_bytes_per_pass",
+        "peak_ephemeral_workspace_bytes",
+        "runtime_milliseconds",
+        "one_time_cost_eur_micros",
+        "persistent_monthly_cost_eur_micros",
+        "discovered_legacy_key_groups",
+        "discovered_repeat_observations",
+        "discovered_repeated_block_groups",
+        "projected_final_staging_directory_bytes"
+      ],
+      "every_cap_limit_must_exactly_equal_the_corresponding_proposed_request_envelope_or_retention_and_privacy_limit_with_runtime_seconds_multiplied_by_1000": true,
+      "maximum_retained_scientific_output_bytes_equals_the_inherited_total_artifact_cap_and_is_not_an_independent_stricter_terminal_predicate": true,
+      "reserved_non_scientific_package_metadata_bytes_is_a_PLANNING_RESERVATION_NOT_AN_INDEPENDENT_TERMINAL_CAP": true,
+      "projected_final_staging_directory_bytes_limit_must_equal_maximum_retained_artifact_bytes_134217728": true,
+      "cap_observed_value_projection_by_key": {
+        "minimum_free_workspace_before_oidc_shortfall": "pre_oidc_free_workspace_bytes",
+        "get_object_requests": "get_object_request_count",
+        "retries": "retry_count",
+        "total_compressed_bytes": "total_compressed_bytes_received",
+        "individual_compressed_bytes": "maximum_individual_compressed_bytes_received",
+        "total_decompressed_bytes_across_two_passes": "total_decompressed_bytes_processed_across_local_parses",
+        "individual_decompressed_bytes_per_pass": "maximum_individual_decompressed_bytes_per_parse",
+        "peak_ephemeral_workspace_bytes": "peak_ephemeral_workspace_bytes",
+        "runtime_milliseconds": "elapsed_runtime_milliseconds_PLUS_post_measurement_packaging_reservation_milliseconds",
+        "one_time_cost_eur_micros": "conservative_one_time_cost_upper_bound_eur_micros",
+        "persistent_monthly_cost_eur_micros": "persistent_monthly_cost_eur_micros",
+        "discovered_legacy_key_groups": "discovered_legacy_key_group_count",
+        "discovered_repeat_observations": "discovered_repeat_observation_count",
+        "discovered_repeated_block_groups": "discovered_repeated_block_group_count",
+        "projected_final_staging_directory_bytes": "artifact_cap_decision_staging_bytes"
+      },
+      "cost_cap_limits_eur_micros": {
+        "one_time_cost_eur_micros": 500000,
+        "persistent_monthly_cost_eur_micros": 0
+      },
+      "cost_upper_bound_formula": "CEILING_TO_WHOLE_EUR_MICROS_OF_THE_FULL_AUTHORIZED_72_GET_REQUESTS_AND_maximum_total_compressed_bytes_2107738436_USING_THE_EXACT_OWNER_APPROVED_PROVIDER_PRICE_SCHEDULE_AND_CONSERVATIVE_EUR_CONVERSION_SNAPSHOT_HASH_BOUND_IN_THE_RELEASE_SO_THE_FULL_RUN_BOUND_IS_KNOWN_BEFORE_FIRST_REQUEST;PERSISTENT_MONTHLY_COST_IS_0_IFF_NO_PERSISTENT_CLOUD_RESOURCE_POLICY_OR_PERMISSION_MUTATION_IS_CREATED",
+      "pricing_schedule_and_conversion_snapshot_sha256_must_be_frozen_in_implementation_contract_and_owner_approval_before_any_release": true,
+      "minimum_free_workspace_shortfall_exceeded_iff_pre_oidc_free_bytes_is_less_than_required_minimum": true,
+      "cap_comparator_by_key": "minimum_free_workspace_before_oidc_shortfall_IS_exceeded_IFF_observed_LESS_THAN_limit;runtime_milliseconds_IS_exceeded_IFF_observed_GREATER_THAN_OR_EQUAL_limit;EVERY_OTHER_EVALUATED_KEY_IS_exceeded_IFF_observed_GREATER_THAN_limit;NOT_EVALUATED_FIELDS_DO_NOT_CONTRIBUTE_TO_ANY_OR",
+      "request_retry_compressed_body_bytes_and_partial_or_complete_decompressed_parse_totals_and_maxima_must_exactly_recompute_from_object_transport_and_two_pass_ledger": true,
+      "retained_group_counts_must_exactly_recompute_from_retained_taxonomy_and_duplicate_artifacts": true,
+      "actual_fallback_early_or_complete_final_staging_directory_bytes_must_be_recomputed_before_boundary_seal_must_not_exceed_the_conservative_projected_final_staging_directory_bytes_and_must_be_at_or_below_maximum_retained_artifact_bytes_before_upload": true,
+      "triggered_stop_conditions_is_exact_sorted_unique_subset_of_top_level_stop_conditions_recomputed_from_ledger": true,
+      "one_time_or_monthly_cost_cap_exceeded_requires_the_single_BUDGET_CAP_EXCEEDED_stop_row_and_R11A_DIAGNOSTIC_INCOMPLETE": true,
+      "retention_caps_exceeded_terminal_eligibility_and_derivation": "TRUE_IFF_NO_NONRETENTION_STOP_TRIGGERED_EARLIER_AND_EITHER_BOTH_REDUCER_FAMILIES_ARE_COMPLETE_AND_THE_OR_OF_EVALUATED_discovered_legacy_key_groups_discovered_repeat_observations_AND_discovered_repeated_block_groups_IS_TRUE_OR_THE_PRECAP_artifact_cap_decision_staging_bytes_EVALUATION_IS_AVAILABLE_AND_TRUE;AN_EARLIER_TRUE_PARTIAL_REDUCER_CAP_EVALUATION_REMAINS_RETAINED_BUT_DOES_NOT_SET_THIS_BOOLEAN_UNTIL_ELIGIBILITY",
+      "nonretention_resource_or_transport_cap_stop_requires_R11A_DIAGNOSTIC_INCOMPLETE_not_ARTIFACT_CAP_EXCEEDED_and_forces_retention_caps_exceeded_FALSE_when_it_occurs_before_retention_terminal_eligibility": true
+    },
+    "package_boundary_record_contract": {
+      "relative_path": "r11a-package-boundary.txt",
+      "exact_byte_count": 1024,
+      "encoding": "STRICT_ASCII",
+      "write_order": "AN_EXACT_1024_BYTE_SPACE_PLACEHOLDER_IS_PREALLOCATED_BEFORE_PREFLIGHT_AND_INCLUDED_IN_ALL_WORKSPACE_MEASUREMENTS;THE_FINAL_1024_BYTES_OVERWRITE_THAT_ALLOCATION_IN_PLACE_LAST_AFTER_EVERY_OTHER_FILE_AND_HASH_MANIFEST_IS_SEALED;NO_OTHER_FILE_MAY_CHANGE_AFTERWARD",
+      "exact_line_fields_in_order": [
+        "schema_version_R11A_PACKAGE_BOUNDARY_V1",
+        "scientific_output_bytes_20_DIGIT_ZERO_PADDED",
+        "other_metadata_bytes_excluding_this_record_20_DIGIT_ZERO_PADDED",
+        "this_record_bytes_00000000000000001024",
+        "total_metadata_bytes_20_DIGIT_ZERO_PADDED",
+        "final_staging_bytes_20_DIGIT_ZERO_PADDED",
+        "reserved_metadata_limit_bytes_00000000000004194304",
+        "artifact_limit_bytes_00000000000134217728",
+        "metadata_within_reservation_0_OR_1",
+        "final_staging_within_artifact_limit_0_OR_1",
+        "preupload_elapsed_runtime_milliseconds_20_DIGIT_ZERO_PADDED",
+        "hard_runtime_limit_milliseconds_00000000000021600000",
+        "minimum_upload_window_milliseconds_00000000000000060000",
+        "preupload_runtime_within_hard_limit_after_upload_window_0_OR_1",
+        "preupload_peak_workspace_bytes_20_DIGIT_ZERO_PADDED",
+        "filesystem_allocation_unit_bytes_20_DIGIT_ZERO_PADDED",
+        "boundary_overwrite_allocation_reservation_bytes_20_DIGIT_ZERO_PADDED",
+        "workspace_limit_bytes_00000000005368709120",
+        "boundary_write_within_workspace_limit_0_OR_1"
+      ],
+      "separator": "ASCII_0X7C",
+      "termination_and_padding": "ASCII_SPACES_TO_EXACTLY_1023_BYTES_THEN_ONE_0X0A",
+      "scientific_output_bytes_must_equal_resource_ledger_total_retained_scientific_output_bytes": true,
+      "other_metadata_bytes_is_exact_recursive_file_length_sum_of_ALL_ACTUALLY_SEALED_NONSCIENTIFIC_FILES_EXCEPT_THIS_RECORD": true,
+      "total_metadata_bytes_equals_other_metadata_bytes_plus_1024": true,
+      "final_staging_bytes_equals_scientific_output_bytes_plus_total_metadata_bytes_and_equals_exact_recursive_staging_directory_bytes_after_this_record_is_written": true,
+      "for_every_terminal_actual_metadata_bytes_must_not_exceed_the_resource_ledger_conservative_maximum_metadata_projection_and_actual_final_staging_must_not_exceed_its_conservative_projection": true,
+      "when_COMPLETE_actual_scientific_bytes_equal_the_projected_scientific_bytes;when_cap_fallback_or_early_stop_actual_scientific_bytes_equal_0;all_actual_boundary_counts_are_recomputed_from_the_sealed_package": true,
+      "preupload_elapsed_runtime_milliseconds_is_measured_from_the_same_monotonic_start_immediately_before_this_last_boundary_write_and_runtime_boolean_equals_elapsed_LESS_THAN_OR_EQUAL_21540000_RESERVING_EXACTLY_60000_MILLISECONDS_FOR_PROVIDER_UPLOAD_AND_TERMINAL_CHECKS": true,
+      "boundary_placeholder_allocation_contract": "THE_EXCLUSIVE_1024_SPACE_BYTE_CREATE_AND_FSYNC_IS_THE_ONE_BOOTSTRAP_WORKSPACE_MUTATION_EXEMPT_FROM_A_PRECEDING_CAP_EVALUATION;IMMEDIATELY_AFTERWARD_REQUIRE_ALLOCATED_BLOCKS_COVER_AT_LEAST_1024_MEASURE_THE_POST_PLACEHOLDER_BASELINE_RUN_THE_INITIAL_RUNTIME_PASS_AT_GLOBAL_STEP_0_AND_RUN_THE_INDEX_OR_WORKSPACE_CAP_CHECK_AT_GLOBAL_STEP_1_BEFORE_STATIC_GATES_OIDC_OR_NETWORK;IF_BOOTSTRAP_CREATE_FSYNC_OR_ALLOCATION_VALIDATION_FAILS_STOP_PRENETWORK_WITHOUT_EMPIRICAL_CLAIM_AND_WITHOUT_ATTEMPTING_THE_DIAGNOSTIC;filesystem_allocation_unit_bytes_EQUALS_THE_POSITIVE_statvfs_f_frsize_FOR_THE_EXACT_WORKSPACE_VOLUME;boundary_overwrite_allocation_reservation_bytes_EQUALS_2_TIMES_CEILING_1024_DIVIDED_BY_ALLOCATION_UNIT_TIMES_ALLOCATION_UNIT",
+      "final_boundary_overwrite_contract": "OPEN_THE_EXISTING_PLACEHOLDER_READ_WRITE_WITHOUT_CREATE_TRUNCATE_TEMP_FILE_OR_RENAME;OVERWRITE_EXACTLY_1024_BYTES_FROM_OFFSET_0_AND_FSYNC;NO_OTHER_LOCAL_FILE_WRITE_FOLLOWS",
+      "preupload_peak_workspace_bytes_is_the_ACTUAL_ALLOCATED_WORKSPACE_PEAK_THROUGH_MANIFEST_SEAL_INCLUDING_THE_PREALLOCATED_BOUNDARY_AND_boundary_write_within_workspace_limit_equals_preupload_peak_PLUS_boundary_overwrite_allocation_reservation_bytes_LESS_THAN_OR_EQUAL_5368709120": true,
+      "if_the_final_runtime_workspace_or_staging_boolean_is_0_the_boundary_must_not_be_finalized_or_uploaded_no_empirical_claim_is_created_and_the_single_use_release_remains_consumed_fail_closed": true,
+      "final_staging_within_artifact_limit_preupload_runtime_within_hard_limit_after_upload_window_AND_boundary_write_within_workspace_limit_must_all_be_1_before_upload_else_UPLOAD_IS_FORBIDDEN;metadata_within_reservation_is_informational": true,
+      "record_does_not_contain_its_own_hash_and_is_therefore_non_self_referential": true
+    },
+    "authoritative_ledger_projection_contract": {
+      "authoritative_container": "taxonomy_conservation_ledger",
+      "top_level_fields_that_must_exactly_equal_the_same_named_authoritative_ledger_field": [
+        "exact_scope_completion",
+        "raw_event_observation_count",
+        "raw_block_observation_count",
+        "valid_tid_observation_count",
+        "tid_schema_violation_observation_count",
+        "valid_coin_observation_count",
+        "coin_schema_violation_observation_count",
+        "valid_wallet_observation_count",
+        "wallet_schema_violation_observation_count",
+        "repeat_occurrence_count_sum_n_minus_one",
+        "valid_tid_repeat_occurrence_count_sum_n_minus_one",
+        "invalid_tid_repeat_occurrence_count",
+        "unclassifiable_group_counts_by_taxonomy_unit",
+        "unclassifiable_occurrence_counts_by_taxonomy_unit",
+        "unique_block_number_count",
+        "singleton_block_number_count",
+        "singleton_block_observation_count",
+        "singleton_all_block_aggregate_sha256",
+        "retention_caps_exceeded",
+        "taxonomy_conservation_passed"
+      ],
+      "top_level_unclassifiable_group_count_must_equal_authoritative_ledger_unclassifiable_unit_count": true,
+      "any_missing_extra_type_drift_or_value_disagreement_is_validator_failure": true
+    },
+    "block_reducer_aggregate_derivation_contract": {
+      "applicability": "resource.discovered_repeated_block_group_count_resource.discovered_repeated_block_observation_count_unique_block_number_count_singleton_block_number_count_singleton_block_observation_count_AND_singleton_all_block_aggregate_sha256_ARE_NONNULL_AND_THEIR_REDUCER_EQUATIONS_APPLY_IFF_ALL_256_BLOCK_NUMBER_PARTITIONS_ARE_COMPLETE_ELSE_THOSE_FIELDS_ARE_NULL;raw_block_observation_count_IS_ALWAYS_THE_NONNULL_SOURCE_LEDGER_PREFIX_SUM_AND_IS_NOT_GOVERNED_BY_THIS_NULLABILITY",
+      "raw_block_observation_count": "ALWAYS_EQUALS_THE_SUM_OF_block_record_count_FROM_EVERY_PRESENT_COMPLETE_FIRST_LOCAL_PARSE_SUMMARY_WITH_ZERO_WHEN_NONE_COMPLETED;IFF_ALL_256_BLOCK_NUMBER_PARTITIONS_ARE_COMPLETE_IT_MUST_ALSO_EQUAL_SUM_record_count_OVER_ALL_256_BLOCK_NUMBER_PARTITION_ROWS",
+      "resource.discovered_repeated_block_group_count": "SUM_discovered_repeat_group_count_OVER_ALL_256_BLOCK_NUMBER_PARTITION_ROWS",
+      "resource.discovered_repeated_block_observation_count": "SUM_discovered_repeat_observation_count_OVER_ALL_256_BLOCK_NUMBER_PARTITION_ROWS",
+      "singleton_block_observation_count": "SUM_singleton_block_observation_count_WHICH_EQUALS_SUM_record_count_MINUS_discovered_repeat_observation_count_OVER_ALL_256_ROWS",
+      "singleton_block_number_count": "EXACTLY_EQUALS_singleton_block_observation_count_BECAUSE_EACH_SINGLETON_BLOCK_NUMBER_HAS_ONE_OBSERVATION",
+      "unique_block_number_count": "singleton_block_number_count_PLUS_resource.discovered_repeated_block_group_count",
+      "singleton_all_block_aggregate_sha256": "RECOMPUTE_THE_FROZEN_GLOBAL_PREIMAGE_FROM_THE_256_PARTITION_ORDINAL_COUNT_AND_DETAIL_COMMITMENT_ROWS",
+      "taxonomy_ledger_repeated_block_group_and_observation_counts_are_RETAINED_SCIENTIFIC_COUNTS_equal_discovered_counts_only_for_COMPLETE_science_and_zero_for_both_empty_scientific_statuses": true
+    },
+    "incomplete_and_cap_output_applicability_contract": {
+      "all_required_global_output_keys_are_present_for_every_terminal_even_when_the_exact_value_is_null_by_this_contract": true,
+      "raw_event_block_tid_coin_wallet_and_clock_counts": "EXACT_SUMS_OF_ALL_NONNULL_COMPLETE_FIRST_LOCAL_PARSE_SUMMARIES;ZERO_WHEN_NO_FIRST_PARSE_COMPLETED;SECOND_PASS_SUMS_MUST_MATCH_THE_SAME_COMPLETED_OBJECT_PREFIX",
+      "scientific_output_empty_terminal_statuses": [
+        "RETENTION_CAP_FALLBACK_EMPTY",
+        "EARLY_STOP_EMPTY"
+      ],
+      "empty_scientific_terminal_exact_zero_fields": [
+        "affected_weak_key_group_count",
+        "affected_wallet_count",
+        "affected_tid_count",
+        "affected_canonical_key_count",
+        "affected_block_count",
+        "affected_object_count",
+        "affected_path_hour_count",
+        "affected_utc_day_count",
+        "unclassifiable_group_count",
+        "duplicate_observation_output_bytes",
+        "block_replay_output_bytes"
+      ],
+      "empty_scientific_terminal_exact_zero_filled_maps": [
+        "repeat_relationship_counts",
+        "taxonomy_group_counts_by_class",
+        "taxonomy_occurrence_counts_by_class",
+        "unclassifiable_group_counts_by_taxonomy_unit",
+        "unclassifiable_occurrence_counts_by_taxonomy_unit"
+      ],
+      "empty_scientific_terminal_taxonomy_ledger_counts": "ALL_RETAINED_GROUP_OBSERVATION_PROTOCOL_WALLET_REPLAY_UNCLASSIFIABLE_AND_REPEAT_COUNTS_ARE_ZERO_BECAUSE_THE_AUTHORITATIVE_SCIENTIFIC_ROW_UNIVERSE_IS_EMPTY;SOURCE_PREFIX_COUNTS_REMAIN_THE_OBJECT_LEDGER_SUMS;all_required_units_classified_all_proof_references_resolve_counts_conserve_AND_taxonomy_conservation_passed_ARE_FALSE",
+      "empty_scientific_terminal_duplicate_and_block_output_hashes": "EXACT_EMPTY_FILE_SHA256_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855_WITH_ZERO_BYTES_NEVER_NULL",
+      "reducer_discovery_counts_and_commitments_are_authoritative_only_in_THE_RESOURCE_AND_REDUCER_LEDGERS_AND_MUST_NOT_BE_MISREPRESENTED_AS_RETAINED_TAXONOMY_COUNTS": true,
+      "block_discovery_fields_unique_block_number_count_singleton_block_number_count_singleton_block_observation_count_AND_singleton_all_block_aggregate_sha256_are_NONNULL_IFF_ALL_256_BLOCK_NUMBER_REDUCER_PARTITIONS_ARE_COMPLETE_ELSE_EXPLICIT_NULL": true,
+      "block_and_fill_reducer_sorted_output_sha256_are_NONNULL_IFF_ALL_256_PARTITIONS_OF_THE_CORRESPONDING_REDUCER_ARE_COMPLETE_ELSE_EXPLICIT_NULL": true,
+      "fill_time_versus_block_time_evidence_status_is_UNKNOWN_NONCOMPARABLE_OR_INCOMPLETE_UNLESS_EXACT_SCOPE_IS_COMPLETE": true,
+      "terminal_and_root_cause_for_both_empty_scientific_statuses": "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_WITH_NOT_PROVEN_FOR_RETENTION_CAP_FALLBACK_EMPTY;R11A_DIAGNOSTIC_INCOMPLETE_WITH_NOT_PROVEN_FOR_EARLY_STOP_EMPTY"
+    },
+    "nonnegative_json_integer_global_scalar_fields": [
+      "raw_event_observation_count",
+      "raw_block_observation_count",
+      "valid_tid_observation_count",
+      "tid_schema_violation_observation_count",
+      "valid_coin_observation_count",
+      "coin_schema_violation_observation_count",
+      "valid_wallet_observation_count",
+      "wallet_schema_violation_observation_count",
+      "repeat_occurrence_count_sum_n_minus_one",
+      "valid_tid_repeat_occurrence_count_sum_n_minus_one",
+      "invalid_tid_repeat_occurrence_count",
+      "affected_weak_key_group_count",
+      "affected_wallet_count",
+      "affected_tid_count",
+      "affected_canonical_key_count",
+      "affected_block_count",
+      "affected_object_count",
+      "affected_path_hour_count",
+      "affected_utc_day_count",
+      "unclassifiable_group_count",
+      "unique_block_number_count",
+      "singleton_block_number_count",
+      "singleton_block_observation_count",
+      "duplicate_observation_output_bytes",
+      "block_replay_output_bytes"
+    ],
+    "nonnegative_global_scalar_nullability_override": "unique_block_number_count_singleton_block_number_count_AND_singleton_block_observation_count_ARE_EXPLICIT_NULL_UNTIL_THE_BLOCK_REDUCER_IS_COMPLETE;ALL_OTHER_LISTED_SCALARS_ARE_NONNULL_NONNEGATIVE_JSON_INTEGERS",
+    "affected_count_derivations": {
+      "affected_weak_key_group_count": "COUNT_COMPLETE_HISTORICAL_LEGACY_WEAK_KEY_GROUPS_WITH_MULTIPLICITY_GREATER_THAN_ONE",
+      "affected_wallet_count": "COUNT_DISTINCT_CANONICAL_LOWERCASE_WALLET_ADDRESS_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_tid_count": "COUNT_DISTINCT_NORMALIZED_TYPED_TID_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_canonical_key_count": "COUNT_DISTINCT_NONNULL_WALLET_FILL_IDENTITY_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_block_count": "COUNT_DISTINCT_BLOCK_NUMBER_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_object_count": "COUNT_DISTINCT_SOURCE_OBJECT_KEY_PLUS_COMPRESSED_SHA256_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_path_hour_count": "COUNT_DISTINCT_CANONICAL_SELECTION_PATH_HOUR_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS",
+      "affected_utc_day_count": "COUNT_DISTINCT_UTC_CALENDAR_DATE_FROM_CANONICAL_SELECTION_PATH_HOUR_ACROSS_COMPLETE_RETAINED_LEGACY_REPEAT_GROUPS"
+    },
+    "repeat_relationship_derivation_contract": {
+      "universe": "EVERY_NONFIRST_MEMBER_OF_EVERY_COMPLETE_HISTORICAL_LEGACY_WEAK_KEY_GROUP_COMPARED_TO_THAT_GROUPS_LEXICOGRAPHIC_RAW_LOCATOR_FIRST_MEMBER",
+      "same_object_means_same_source_object_key_and_compressed_sha256": true,
+      "same_block_means_same_raw_block_locator": true,
+      "same_path_hour_and_same_utc_day_use_the_EXACT_CANONICAL_SELECTION_PROVENANCE": true,
+      "path_hour_distance_is_absolute_nonnegative_integer_HOURS_BETWEEN_CANONICAL_PATH_HOURS": true,
+      "adjacent_hour_boundary_iff_cross_path_hour_and_path_hour_distance_equals_1": true,
+      "non_adjacent_hour_boundary_iff_cross_path_hour_and_path_hour_distance_is_not_1": true,
+      "exact_identical_payload_iff_full_event_sha256_equal_else_conflicting_payload": true,
+      "intra_plus_inter_object_block_same_plus_cross_path_hour_same_plus_cross_utc_day_and_exact_plus_conflicting_payload_each_equal_repeat_occurrence_count_sum_n_minus_one": true,
+      "adjacent_plus_non_adjacent_hour_boundary_equals_cross_path_hour_not_total_repeat_occurrences": true
+    },
+    "fill_time_versus_block_time_evidence_contract": {
+      "allowed_values": [
+        "PROVEN_EQUAL_FOR_ALL_COMPLETE_VALID_COMPARABLE_OBSERVATIONS",
+        "PROVEN_NOT_EQUAL_FOR_AT_LEAST_ONE_COMPLETE_VALID_COMPARABLE_OBSERVATION",
+        "UNKNOWN_NONCOMPARABLE_OR_INCOMPLETE"
+      ],
+      "wrapper_clock_identity_value_remains_the_exact_unmodified_source_string": true,
+      "comparison_parser": "STRICT_RFC3339_UTC_Z_WITH_GREGORIAN_DATE_TIME_AND_OPTIONAL_1_TO_9_DIGIT_FRACTION_NO_LEAP_SECOND_OR_TIMEZONE_INFERENCE",
+      "comparison_rule": "CONVERT_WRAPPER_INSTANT_TO_EXACT_DECIMAL_UNIX_MILLISECONDS_AND_COMPARE_WITH_THE_EXACT_NONNEGATIVE_INTEGER_FILL_time_WITH_ZERO_TOLERANCE",
+      "retained_sufficient_statistics": "SUM_THE_THREE_CLOCK_COMPARISON_COUNTS_FROM_ALL_PRESENT_FIRST_LOCAL_PARSE_SUMMARIES_AND_REQUIRE_THE_SECOND_PARSE_SUMS_TO_MATCH_FOR_THE_SAME_COMPLETED_OBJECT_PREFIX",
+      "complete_scope_clock_counts_must_sum_to_raw_event_observation_count": true,
+      "status_decision_precedence": [
+        "IF_SCOPE_INCOMPLETE_THEN_UNKNOWN_NONCOMPARABLE_OR_INCOMPLETE",
+        "ELSE_IF_ANY_VALID_COMPARABLE_OBSERVATION_DIFFERS_THEN_PROVEN_NOT_EQUAL_FOR_AT_LEAST_ONE_COMPLETE_VALID_COMPARABLE_OBSERVATION",
+        "ELSE_IF_EVERY_RAW_EVENT_HAS_VALID_COMPARABLE_CLOCKS_THEN_PROVEN_EQUAL_FOR_ALL_COMPLETE_VALID_COMPARABLE_OBSERVATIONS",
+        "ELSE_UNKNOWN_NONCOMPARABLE_OR_INCOMPLETE"
+      ],
+      "PROVEN_EQUAL_rule": "EXACT_SCOPE_COMPLETE_AND_EVERY_RAW_EVENT_HAS_VALID_COMPARABLE_CLOCKS_AND_ALL_COMPARISONS_EQUAL",
+      "PROVEN_NOT_EQUAL_rule": "EXACT_SCOPE_COMPLETE_AND_AT_LEAST_ONE_VALID_COMPARABLE_OBSERVATION_DIFFERS_REGARDLESS_OF_OTHER_NONCOMPARABLE_OBSERVATIONS",
+      "UNKNOWN_rule": "SCOPE_INCOMPLETE_OR_SCOPE_COMPLETE_WITH_NO_PROVEN_MISMATCH_AND_AT_LEAST_ONE_NONCOMPARABLE_OBSERVATION",
+      "clock_evidence_does_not_rewrite_protocol_or_wallet_identity": true
+    },
+    "output_hash_and_byte_derivation_contract": {
+      "duplicate_observation_output_sha256_and_bytes": "SHA256_AND_EXACT_BYTE_LENGTH_OF_THE_DETERMINISTIC_SERIALIZED_duplicate_observation_output_CONTAINER",
+      "block_replay_output_sha256_and_bytes": "SHA256_AND_EXACT_BYTE_LENGTH_OF_THE_DETERMINISTIC_SERIALIZED_complete_block_overlap_matrix_CONTAINER",
+      "block_reducer_sorted_output_sha256": "RECOMPUTED_FROM_THE_COMPLETE_BLOCK_NUMBER_ROWS_OF_reducer_partition_conservation_ledger_USING_ITS_FROZEN_PREIMAGE",
+      "fill_reducer_sorted_output_sha256": "RECOMPUTED_FROM_THE_COMPLETE_HISTORICAL_LEGACY_WEAK_KEY_ROWS_OF_reducer_partition_conservation_ledger_USING_ITS_FROZEN_PREIMAGE",
+      "duplicate_and_block_scientific_file_sha256_are_always_lowercase_64_hex_HASHES_OF_THE_ACTUAL_SEALED_FILES_AND_ARE_NEVER_NULL_INCLUDING_EARLY_OR_CAP_EMPTY_FILES": true,
+      "block_and_fill_reducer_sha256_are_null_exactly_when_their_corresponding_256_partition_source_is_incomplete_else_lowercase_64_hex": true,
+      "duplicate_and_block_byte_fields_are_always_the_exact_actual_sealed_file_lengths_and_equal_zero_exactly_for_the_two_declared_empty_logical_statuses_or_a_genuinely_empty_complete_container": true
+    },
+    "terminal_output_exact_allowed_values": {
+      "terminal_class": [
+        "R11A_ROOT_CAUSE_TAXONOMY_COMPLETE",
+        "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED",
+        "R11A_DIAGNOSTIC_INCOMPLETE"
+      ],
+      "root_cause_claim_status": [
+        "PROVEN_COMPLETE_TAXONOMY_ONLY",
+        "NOT_PROVEN"
+      ]
+    },
     "taxonomy_count_fields_must_have_exact_zero_filled_keys": [
       "TID_SCOPE_FALSE_POSITIVE",
       "EXPECTED_COUNTERPARTY_PAIR",
@@ -375,29 +2518,89 @@
       "conflicting_payload"
     ],
     "taxonomy_conservation_ledger_exact_fields": [
+      "exact_scope_completion",
       "raw_event_observation_count",
+      "raw_block_observation_count",
       "valid_tid_observation_count",
       "tid_schema_violation_observation_count",
       "legacy_repeat_group_count",
       "legacy_repeat_observation_count",
       "repeat_occurrence_count_sum_n_minus_one",
+      "valid_tid_repeat_occurrence_count_sum_n_minus_one",
+      "invalid_tid_repeat_occurrence_count",
+      "valid_coin_observation_count",
+      "coin_schema_violation_observation_count",
+      "valid_wallet_observation_count",
+      "wallet_schema_violation_observation_count",
       "protocol_trade_group_count_in_retained_evidence",
       "wallet_fill_group_count_in_retained_evidence",
       "repeated_block_group_count",
       "repeated_block_observation_count",
       "unclassifiable_unit_count",
+      "unclassifiable_group_counts_by_taxonomy_unit",
+      "unclassifiable_occurrence_counts_by_taxonomy_unit",
+      "unique_block_number_count",
+      "singleton_block_number_count",
+      "singleton_block_observation_count",
+      "singleton_all_block_aggregate_sha256",
       "all_required_units_classified",
-      "all_occurrences_have_one_unique_raw_locator",
+      "all_duplicate_observation_rows_have_unique_raw_locator_and_schema_violation_rows_have_unique_taxonomy_unit_type_plus_raw_locator",
       "all_proof_references_resolve",
-      "counts_conserve"
+      "counts_conserve",
+      "retention_caps_exceeded",
+      "taxonomy_conservation_passed"
     ],
+    "unclassifiable_group_counts_by_taxonomy_unit_exact_zero_filled_keys": [
+      "LEGACY_REPEAT_OCCURRENCE",
+      "ARCHIVE_BLOCK_NUMBER_GROUP",
+      "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+      "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION",
+      "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+    ],
+    "unclassifiable_occurrence_counts_by_taxonomy_unit_exact_zero_filled_keys": [
+      "LEGACY_REPEAT_OCCURRENCE",
+      "ARCHIVE_BLOCK_NUMBER_GROUP",
+      "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE",
+      "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION",
+      "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION"
+    ],
+    "unclassifiable_group_and_occurrence_derivation_by_taxonomy_unit": {
+      "LEGACY_REPEAT_OCCURRENCE": "GROUPS=COUNT_UNITS_WITH_PRIMARY_UNCLASSIFIABLE;OCCURRENCES=SUM_member_count_OVER_THOSE_UNITS_WHICH_EQUALS_GROUPS_BECAUSE_MEMBER_COUNT_IS_1",
+      "ARCHIVE_BLOCK_NUMBER_GROUP": "GROUPS=COUNT_UNITS_WITH_PRIMARY_UNCLASSIFIABLE;OCCURRENCES=SUM_member_count_OVER_THOSE_UNITS",
+      "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE": "GROUPS=COUNT_UNITS_WITH_PRIMARY_UNCLASSIFIABLE;OCCURRENCES=SUM_member_count_OVER_THOSE_UNITS",
+      "RAW_COIN_SCHEMA_VIOLATION_OBSERVATION": "GROUPS=COUNT_UNITS_WITH_PRIMARY_UNCLASSIFIABLE;OCCURRENCES=SUM_member_count_OVER_THOSE_UNITS_WHICH_EQUALS_GROUPS_BECAUSE_MEMBER_COUNT_IS_1",
+      "RAW_WALLET_SCHEMA_VIOLATION_OBSERVATION": "GROUPS=COUNT_UNITS_WITH_PRIMARY_UNCLASSIFIABLE;OCCURRENCES=SUM_member_count_OVER_THOSE_UNITS_WHICH_EQUALS_GROUPS_BECAUSE_MEMBER_COUNT_IS_1"
+    },
+    "unclassifiable_group_count_equals_sum_of_per_unit_universe_counts": true,
+    "taxonomy_conservation_ledger_unclassifiable_unit_count_equals_unclassifiable_group_count": true,
+    "taxonomy_group_counts_by_class_unclassifiable_equals_unclassifiable_group_count": true,
+    "taxonomy_occurrence_counts_by_class_unclassifiable_equals_sum_of_per_unit_universe_occurrence_counts": true,
+    "independent_validator_recomputation_contract": {
+      "producer_assertions_are_never_sufficient_for_values_derivable_from_retained_evidence_without_independent_recomputation": true,
+      "unretained_source_stream_trust_boundary": "THE_2.1_GIB_COMPRESSED_SOURCE_OBJECTS_AND_FULL_REDUCER_RECORD_STREAMS_ARE_NOT_RETAINED;SOURCE_DERIVED_PARSE_COUNTS_PARTITION_STREAM_HASHES_DISCOVERED_GROUP_COUNTS_AND_COMMITMENTS_ARE_TWO_PASS_ATTESTATIONS_BY_THE_EXACT_HASH_BOUND_FROZEN_COLLECTOR_AND_CANNOT_BE_BYTE_INDEPENDENTLY_RECOMPUTED_FROM_THE_CAPPED_ARTIFACT",
+      "no_claim_of_independent_reexecution_or_rehashing_of_unretained_source_or_reducer_streams": true,
+      "evidence_validator_must_exactly_bind_all_72_PREKNOWN_COMPRESSED_SHA256_VALUES_COLLECTOR_SCHEMA_AND_WORKFLOW_HASHES_TWO_PASS_EQUALITY_AND_CROSS_LEDGER_CONSERVATION": true,
+      "all_taxonomy_group_and_occurrence_counts_must_be_recomputed_from_taxonomy_unit_ledger_matrix_proofs_duplicate_rows_protocol_member_rows_and_schema_rows": true,
+      "raw_block_event_tid_coin_wallet_and_scope_summary_fields_must_be_recomputed_from_the_retained_object_transport_and_two_pass_ledger_attestations": true,
+      "global_reducer_hashes_and_counts_must_be_recomputed_from_the_retained_partition_ledger_while_each_partition_stream_hash_and_discovery_count_remains_an_explicit_frozen_collector_attestation": true,
+      "affected_and_repeat_relationship_counts_must_be_recomputed_from_complete_duplicate_rows_and_their_resolved_provenance": true,
+      "all_required_units_classified_must_equal_exact_unit_universe_coverage_with_one_primary_taxon_and_no_extra_unit": true,
+      "all_proof_references_resolve_must_equal_recomputed_exact_foreign_key_and_full_projection_equality_result": true,
+      "counts_conserve_must_equal_conjunction_of_every_frozen_layer_conservation_equation": true,
+      "taxonomy_conservation_passed_must_equal_all_required_units_classified_and_all_proof_references_resolve_and_counts_conserve_and_no_retention_cap_exceeded": true,
+      "retention_caps_exceeded_must_be_recomputed_from_the_exact_resource_preflight_and_package_ledgers_using_the_frozen_terminal_eligibility_rule_and_never_from_a_true_but_not_yet_eligible_partial_reducer_cap_evaluation;scientific_metadata_split_is_planning_only": true,
+      "exact_scope_completion_must_be_recomputed_from_the_72_target_transport_hash_and_two_local_parse_ledgers": true,
+      "terminal_class_and_root_cause_claim_status_must_be_recomputed_by_first_matching_terminal_decision_table_row": true,
+      "terminal_R11A_ROOT_CAUSE_TAXONOMY_COMPLETE_requires_recomputed_taxonomy_conservation_passed_and_zero_every_per_unit_unclassifiable_count": true,
+      "any_disagreement_between_producer_field_and_recomputed_value_is_validator_failure": true
+    },
     "complete_terminal_class_requires_all_72_hours_3_days_caps_and_conservation": true,
     "root_cause_proven_requires_zero_unclassifiable_units_and_no_cap_overflow": true
   },
   "conservation_invariants": {
-    "raw_observations_equal_singletons_plus_all_occurrences_in_emitted_repeat_groups": true,
-    "each_weak_group_observations_equal_one_plus_repeat_occurrences": true,
-    "each_replayed_block_is_exactly_equal_or_conflict": true,
+    "complete_no_cap_raw_observations_equal_singletons_plus_all_occurrences_in_emitted_repeat_groups": true,
+    "each_complete_no_cap_weak_group_observations_equal_one_plus_repeat_occurrences": true,
+    "each_complete_no_cap_replayed_block_is_exactly_equal_or_conflict": true,
     "every_future_reduction_candidate_has_all_raw_provenance": true,
     "fixed_width_indices_second_parse_and_emitted_taxonomy_must_conserve_counts": true,
     "all_72_hours_and_3_days_must_complete_before_any_complete_terminal_class": true,
@@ -410,12 +2613,17 @@
     "R11A_DIAGNOSTIC_INCOMPLETE"
   ],
   "retention_and_privacy": {
-    "retain_all_complete_repeat_groups": true,
-    "retain_all_occurrences_and_provenance_for_each_repeat_group": true,
-    "retain_complete_repeated_block_number_overlap_ledger": true,
+    "retain_all_complete_repeat_groups_iff_scientific_output_logical_status_IS_COMPLETE": true,
+    "retain_all_occurrences_and_provenance_for_each_repeat_group_when_status_IS_COMPLETE_with_no_partial_group": true,
+    "retain_complete_repeated_block_number_overlap_ledger_iff_scientific_output_logical_status_IS_COMPLETE": true,
     "retain_singleton_raw_fill_payloads": false,
     "retain_singleton_aggregate_counts_and_deterministic_hashes": true,
+    "when_scientific_output_logical_status_IS_COMPLETE_retain_minimal_protocol_trade_group_member_locator_hash_wallet_side_and_trade_identity_for_every_group_intersecting_repeat_evidence": true,
+    "protocol_trade_group_member_exception_does_not_retain_full_singleton_payload": true,
+    "when_scientific_output_logical_status_IS_COMPLETE_retain_minimal_schema_violation_locator_type_token_reason_and_block_locator_for_every_tid_coin_or_wallet_violation": true,
+    "schema_violation_evidence_does_not_retain_full_payload": true,
     "lossy_or_sampled_repeat_group_representation_authorized": false,
+    "only_scientific_output_empty_exceptions_are_RETENTION_CAP_FALLBACK_EMPTY_or_EARLY_STOP_EMPTY_with_all_seven_containers_zero_bytes_available_status_dependent_source_or_reducer_counts_and_commitments_root_cause_NOT_PROVEN_and_no_partial_prefix": true,
     "wallet_feature_output_required_empty": true,
     "ranking_or_economic_output_fields_authorized": false,
     "maximum_repeated_legacy_key_groups_retained": 100000,
@@ -445,15 +2653,17 @@
   "stop_conditions": [
     "NONCANONICAL_MAIN_OR_NONFIRST_ATTEMPT",
     "RELEASE_NOT_EXACT_SINGLE_USE_OR_ALREADY_CONSUMED",
+    "BUDGET_CAP_EXCEEDED",
     "INSUFFICIENT_EPHEMERAL_DISK_BEFORE_OIDC",
     "AWS_IDENTITY_MISMATCH",
     "REQUEST_CAP_REACHED",
     "HTTP_OR_REQUESTER_PAYS_FAILURE",
     "ETAG_CONTENT_LENGTH_OR_COMPRESSED_SHA256_MISMATCH",
-    "DECOMPRESSION_OR_NON_TID_STRUCTURAL_SCHEMA_FAILURE",
-    "FIXED_INDEX_OR_ARTIFACT_CAP_EXCEEDED",
-    "TAXONOMY_OR_CONSERVATION_INCOMPLETE",
-    "RUNTIME_CAP_REACHED"
+    "DECOMPRESSION_OR_BLOCK_ENVELOPE_SCHEMA_FAILURE_PREVENTING_LOSSLESS_RAW_LOCATOR_OR_CONTINUED_PARSE",
+    "INDEX_OR_WORKSPACE_CAP_REACHED",
+    "RETENTION_OR_ARTIFACT_CAP_EXCEEDED",
+    "RUNTIME_CAP_REACHED",
+    "TAXONOMY_OR_CONSERVATION_INCOMPLETE"
   ],
   "future_implementation_contract_requirements": {
     "implementation_contract_path": "research/archive_inventory/r11a_implementation/R11A_IMPLEMENTATION_CONTRACT.json",
