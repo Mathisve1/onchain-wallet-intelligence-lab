@@ -288,6 +288,73 @@ class R11ExecutionEvidenceTests(unittest.TestCase):
                     finally:
                         temporary.cleanup()
 
+    def test_every_derived_json_rejects_duplicate_keys_and_nonfinite_constants(self) -> None:
+        derived_documents = (
+            ("reconstruction", validator.RUN / "ARTIFACT_RECONSTRUCTION.json", "NaN"),
+            ("verification", validator.RUN / "INDEPENDENT_ARTIFACT_VERIFICATION.json", "Infinity"),
+            ("diagnostics", validator.EVIDENCE / "R11_AGGREGATE_DIAGNOSTICS.json", "-Infinity"),
+            (
+                "attestation",
+                validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json",
+                "NaN",
+            ),
+            ("consumption", validator.CONSUMPTION, "Infinity"),
+        )
+        for label, relative, constant in derived_documents:
+            for mutation_label in ("duplicate", "nonfinite"):
+                with self.subTest(document=label, mutation=mutation_label):
+                    temporary, root = self.fixture_root()
+                    try:
+                        path = root / relative
+                        text = path.read_text(encoding="utf-8")
+                        if mutation_label == "duplicate":
+                            text = text.replace("{", '{"schema_version":"duplicate",', 1)
+                        else:
+                            value = json.loads(text)
+                            needle = f'"artifact_id": {value["artifact_id"]}'
+                            self.assertIn(needle, text)
+                            text = text.replace(needle, f'"artifact_id": {constant}', 1)
+                        path.write_text(text, encoding="utf-8")
+                        with self.assertRaises(validator.R11EvidenceError):
+                            validator.validate(root)
+                    finally:
+                        temporary.cleanup()
+
+    def test_retained_context_and_result_use_the_same_strict_decoder(self) -> None:
+        context = (ROOT / validator.RUN / "r11-context.json").read_text(encoding="utf-8")
+        result = (ROOT / validator.RUN / "r11-result.json").read_text(encoding="utf-8")
+        mutations = (
+            ("context_duplicate", context.replace("{", '{"workflow_run_id":0,', 1)),
+            (
+                "context_nonfinite",
+                context.replace('"maximum_get_object_requests": 72', '"maximum_get_object_requests": NaN', 1),
+            ),
+            ("result_duplicate", result.replace("{", '{"terminal_status":"duplicate",', 1)),
+            (
+                "result_nonfinite",
+                result.replace(
+                    f'"runtime_seconds": {json.loads(result)["runtime_seconds"]}',
+                    '"runtime_seconds": -Infinity',
+                    1,
+                ),
+            ),
+        )
+        for label, text in mutations:
+            with self.subTest(mutation=label), self.assertRaises(validator.R11EvidenceError):
+                validator.strict_json_loads(text, label)
+
+    def test_strict_decoder_rejects_nested_duplicates_and_all_nonfinite_constants(self) -> None:
+        invalid_documents = (
+            '{"outer":{"key":1,"key":2}}',
+            '{"value":NaN}',
+            '{"value":Infinity}',
+            '{"value":-Infinity}',
+            '{"value":1e9999}',
+        )
+        for text in invalid_documents:
+            with self.subTest(text=text), self.assertRaises(validator.R11EvidenceError):
+                validator.strict_json_loads(text, "synthetic strict JSON")
+
     def test_rerun_or_budget_reopening_fails_closed(self) -> None:
         temporary, root = self.fixture_root()
         self.addCleanup(temporary.cleanup)
