@@ -107,6 +107,84 @@ class R11ExecutionEvidenceTests(unittest.TestCase):
         with self.assertRaises(validator.R11EvidenceError):
             validator.validate(root)
 
+    def test_attestation_claim_proven_value_mutation_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json"
+        value = json.loads(path.read_text())
+        value["claims_proven"]["all_72_getobject_requests_succeeded"] = False
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
+    def test_attestation_exact_summary_success_count_mutation_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json"
+        value = json.loads(path.read_text())
+        value["exact_execution_summary"]["successful_get_object_requests"] = 71
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
+    def test_consumption_duplicate_locations_mutation_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.CONSUMPTION
+        value = json.loads(path.read_text())
+        value["duplicate_wallet_tid_locations_known"] = True
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
+    def test_consumption_success_count_mutation_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.CONSUMPTION
+        value = json.loads(path.read_text())
+        value["successful_get_object_requests"] = 71
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
+    def test_exact_nested_schema_drift_fails_closed(self) -> None:
+        mutations = (
+            (
+                validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json",
+                lambda value: value["claims_proven"].pop("zero_retries"),
+            ),
+            (
+                validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json",
+                lambda value: value["exact_execution_summary"].__setitem__("unreviewed_extra", 0),
+            ),
+            (
+                validator.CONSUMPTION,
+                lambda value: value.pop("artifact_name"),
+            ),
+        )
+        for relative, mutate in mutations:
+            with self.subTest(relative=relative, mutation=mutate):
+                temporary, root = self.fixture_root()
+                try:
+                    path = root / relative
+                    value = json.loads(path.read_text())
+                    mutate(value)
+                    path.write_text(json.dumps(value), encoding="utf-8")
+                    with self.assertRaises(validator.R11EvidenceError):
+                        validator.validate(root)
+                finally:
+                    temporary.cleanup()
+
+    def test_exact_claim_type_drift_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json"
+        value = json.loads(path.read_text())
+        value["claims_proven"]["zero_retries"] = 1
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
     def test_rerun_or_budget_reopening_fails_closed(self) -> None:
         temporary, root = self.fixture_root()
         self.addCleanup(temporary.cleanup)
