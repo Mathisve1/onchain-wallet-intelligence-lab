@@ -39,3 +39,61 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Validate repository governance
         run: python governance/validate_repository.py
+
+  r11a-implementation-seal:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 141 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'research/r11a-implementation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - name: Check out exact R11A implementation head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_CI_COMMIT }}
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+      - name: Seal implementation and manifest against canonical CI bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/workflows/ci.yml "${RUNNER_TEMP}/transient-ci.yml"
+          git fetch --no-tags --depth=1 origin main
+          git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
+          python governance/seal_r11a_implementation.py --write
+          python governance/seal_r11a_implementation.py --check
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          python governance/validate_r11a_preregistration.py
+          python governance/validate_r11a_implementation.py
+          python -m unittest \
+            tests.test_archive_inventory_r11a_identity \
+            tests.test_archive_inventory_r11a_diagnostic \
+            tests.test_archive_inventory_r11a_storage_schema \
+            tests.test_archive_inventory_r11a_implementation -v
+          cp "${RUNNER_TEMP}/transient-ci.yml" .github/workflows/ci.yml
+          git add \
+            research/archive_inventory/r11a_implementation/R11A_IMPLEMENTATION_CONTRACT.json \
+            governance/REPOSITORY_MANIFEST.sha256
+          git diff --cached --check
+      - name: Commit exact implementation seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then
+            echo 'R11A implementation already sealed'
+            exit 0
+          fi
+          git commit -m 'ci: seal inert R11A implementation and manifest'
+          git push origin HEAD:research/r11a-implementation
