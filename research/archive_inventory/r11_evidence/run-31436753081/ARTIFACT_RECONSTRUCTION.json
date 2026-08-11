@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": 9082810554,
+  "artifact_name": "r11-72h-persistence-31436753081",
+  "encoding": "BASE64_RFC4648_WRAPPED_76_COLUMNS",
+  "encoded_parts": [
+    "artifact/r11-72h-persistence-31436753081.zip.b64"
+  ],
+  "decoded_size_bytes": 10866,
+  "decoded_sha256": "45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5",
+  "exact_zip_entry_names": [
+    "r11-context.json",
+    "r11-result.json",
+    "r11-wallet-features.ndjson",
+    "r11.rc",
+    "R11_FILES.sha256"
+  ],
+  "reconstruction_command": "base64 --decode artifact/r11-72h-persistence-31436753081.zip.b64 > /tmp/r11-72h-persistence-31436753081.zip",
+  "network_required_for_reconstruction": false
+}

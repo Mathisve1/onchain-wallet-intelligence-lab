@@ -1,0 +1,129 @@
+{
+  "artifact_id": 9082810554,
+  "artifact_name": "r11-72h-persistence-31436753081",
+  "artifact_zip_sha256": "45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5",
+  "attestation_id": "ATTEST_HL_ARCHIVE_R11_72H_PERSISTENCE_SCALING_001",
+  "canonical_dispatch_sha": "baca1925c23ef6b0136aa3d96d6d479ac7717bdf",
+  "claims_not_proven": {
+    "active_day_count_would_have_been_correct": false,
+    "active_hour_count_represents_event_time_activity": false,
+    "copyability": false,
+    "duplicate_wallet_tid_count": false,
+    "duplicate_wallet_tid_locations": false,
+    "duplicate_wallet_tid_rows_are_distinct_legitimate_fills": false,
+    "duplicate_wallet_tid_rows_are_identical_repeated_archive_observations": false,
+    "one_wallet_address_equals_one_human_or_economic_entity": false,
+    "sum_closed_pnl_fill_statistic_is_exact_account_return": false,
+    "three_day_window_is_sufficient_wallet_performance_history": false,
+    "tid_can_be_safely_used_as_a_deduplication_key": false,
+    "tid_is_globally_unique_per_wallet": false,
+    "wallet_quality_or_profitability": false
+  },
+  "claims_proven": {
+    "all_72_exact_objects_completed_under_single_use_release": true,
+    "all_72_getobject_requests_succeeded": true,
+    "at_least_one_repeated_normalized_tid_within_one_wallet_state_was_observed": true,
+    "blind_deduplication_was_not_performed": true,
+    "wallet_feature_output_was_not_retained_after_unresolved_duplicate_condition": true,
+    "zero_after_path_hour_fills": true,
+    "zero_failed_requests": true,
+    "zero_record_anchored_alignment_violations": true,
+    "zero_retries": true
+  },
+  "downstream_authorizations": {
+    "candidate_shortlisting": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "full_population_historical_ingestion": false,
+    "historical_window_beyond_three_days": false,
+    "legacy_modern_merged_history": false,
+    "market_data_ingestion": false,
+    "pnl_or_alpha_analysis": false,
+    "public_api_enrichment": false,
+    "strategy_inference": false,
+    "wallet_ranking": false
+  },
+  "exact_execution_summary": {
+    "aggregate_wallet_feature_summary": null,
+    "block_record_count": 3283391,
+    "completed_day_count": 3,
+    "completed_hour_count": 72,
+    "event_pair_count": 26384234,
+    "failed_get_object_requests": 0,
+    "fill_time_after_path_hour_count": 0,
+    "fill_time_before_path_hour_count": 490,
+    "fill_time_inside_path_hour_count": 26383744,
+    "http_redirects_followed": false,
+    "record_anchored_alignment_violation_count": 0,
+    "request_attempt_count": 72,
+    "retries_used": 0,
+    "selected_hour_count": 72,
+    "successful_get_object_requests": 72,
+    "total_compressed_bytes": 2107738436,
+    "total_decompressed_bytes": 10539979245,
+    "wallet_feature_bytes": 0,
+    "wallet_feature_retained": false
+  },
+  "execution_release_id": "RELEASE_HL_ARCHIVE_R11_72H_PERSISTENCE_001",
+  "failure_class": "duplicate wallet+tid observations require investigation; blind deduplication forbidden",
+  "known_implementation_defects": {
+    "base_limit_globals_mutated_at_r11_import": true,
+    "day_tracking_getitem_mutates_state_on_read": true,
+    "path_hour_used_as_activity_hour_for_previous_hour_fills": true,
+    "preregistered_duplicate_count_discarded_on_unresolved_path": true
+  },
+  "known_defect_effect_on_this_retained_result": {
+    "aggregate_summary_was_removed_before_day_tracking_render_loop": true,
+    "duplicate_count_and_provenance_lost": true,
+    "published_wallet_feature_rows_corrupted": false,
+    "wallet_feature_rows_published": false
+  },
+  "future_r11_dispatch_authorized": false,
+  "new_network_request_requires_new_preregistration_approval_and_release": true,
+  "numeric_tolerance_authorized": false,
+  "per_day_summaries": [
+    {
+      "block_record_count": 1104869,
+      "event_pair_count": 9366079,
+      "fill_time_before_path_hour_count": 106,
+      "hour_count": 24,
+      "utc_date": "2025-07-28"
+    },
+    {
+      "block_record_count": 1088772,
+      "event_pair_count": 9172210,
+      "fill_time_before_path_hour_count": 160,
+      "hour_count": 24,
+      "utc_date": "2025-07-29"
+    },
+    {
+      "block_record_count": 1089750,
+      "event_pair_count": 7845945,
+      "fill_time_before_path_hour_count": 224,
+      "hour_count": 24,
+      "utc_date": "2025-07-30"
+    }
+  ],
+  "pilot_id": "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001",
+  "record_anchored_rule_id": "RAW_LOCAL_PREFIX_PLUS_BLOCK_PREFIX_NO_NUMERIC_TOLERANCE_V1",
+  "release_consumed": true,
+  "remaining_get_object_budget_from_consumed_release": 0,
+  "rerun_authorized": false,
+  "preregistered_duplicate_wallet_tid_count_retention_met": false,
+  "research_conclusion": "R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED",
+  "schema_version": "1.0",
+  "status": "ATTESTED_UNRESOLVED_DUPLICATE_WALLET_TID",
+  "technical_result": "R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED",
+  "terminal_status": "R11_72H_PERSISTENCE_STUDY_COMPLETE",
+  "trading_authorizations": {
+    "capital_allocation": false,
+    "integration": false,
+    "leverage": false,
+    "live": false,
+    "paper": false,
+    "shadow": false
+  },
+  "workflow_job_id": 93612467250,
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 31436753081
+}
