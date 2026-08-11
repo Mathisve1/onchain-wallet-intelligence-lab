@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "R11A-DEDICATED-SUCCESSOR-ROLE-001",
+  "status": "FROZEN_INERT_SUCCESSOR_ROLE_CANDIDATE_NO_IAM_MUTATION",
+  "decision": "CREATE_NEW_DEDICATED_R11A_ROLE_ONLY_AFTER_EXACT_OWNER_APPROVAL",
+  "reason": "The consumed R11 role trust is bound to the historical workflow name Hyperliquid Archive 72H Persistence Scaling R11. Reusing it without trust mutation would require an intentionally duplicated workflow identity; mutating it would change a consumed lineage. A new R11A role gives a distinct workflow identity and preserves the R11 role unchanged.",
+  "successor_role": {
+    "role_name": "onchain-wallet-intelligence-hl-archive-identity-r11a",
+    "role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a",
+    "workflow_name": "Hyperliquid Archive R11A Identity Boundary Diagnostic",
+    "role_session_name": "HLArchiveR11AIdentity",
+    "maximum_session_duration_seconds": 21600,
+    "future_workflow_role_duration_seconds": 21600,
+    "trust_policy_path": "research/archive_inventory/r11a_implementation/R11A_OIDC_TRUST_POLICY.json",
+    "permission_policy_path": "research/archive_inventory/r11a_implementation/R11A_PERMISSION_POLICY.json",
+    "inline_policy_name": "HLArchiveR11AExact72Only",
+    "persistent_get_object_resource_count": 72,
+    "persistent_resources_must_equal_exact_r11a_selection": true,
+    "managed_policies_authorized": false,
+    "additional_inline_policies_authorized": false
+  },
+  "existing_r11_role": {
+    "role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-scaling-r11",
+    "reuse_authorized_now": false,
+    "trust_mutation_authorized": false,
+    "permission_mutation_authorized": false,
+    "deletion_authorized": false
+  },
+  "current_authority": {
+    "owner_approval_present": false,
+    "new_role_creation": false,
+    "trust_policy_application": false,
+    "permission_policy_application": false,
+    "oidc_assumption": false,
+    "sts_preflight": false,
+    "s3_access": false
+  },
+  "network_or_iam_actions_executed_by_this_decision": 0,
+  "empirical_result": null
+}

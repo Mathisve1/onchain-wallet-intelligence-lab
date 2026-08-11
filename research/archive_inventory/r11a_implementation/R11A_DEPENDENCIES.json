@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "dependency_declaration_id": "R11A-STDLIB-AND-REPOSITORY-LOCAL-DEPENDENCIES-001",
+  "status": "FROZEN_INERT_IMPLEMENTATION_NO_INSTALLATION",
+  "python_runtime": {
+    "implementation": "CPython",
+    "exact_version": "3.12.13",
+    "third_party_python_packages_required_by_collector": []
+  },
+  "standard_library_modules": [
+    "argparse",
+    "collections",
+    "dataclasses",
+    "datetime",
+    "decimal",
+    "enum",
+    "hashlib",
+    "heapq",
+    "json",
+    "os",
+    "pathlib",
+    "re",
+    "shutil",
+    "struct",
+    "sys",
+    "tempfile",
+    "time",
+    "types",
+    "typing"
+  ],
+  "repository_local_runtime_dependencies": [
+    {
+      "path": "research/archive_inventory/r10_implementation/collector.py",
+      "sha256": "fccb709a2f1e08a7817a1fdd19cb4944990620384bfa0e70413f19db83452f15",
+      "allowed_symbols": [
+        "LZ4FrameError",
+        "LZ4FrameLimit",
+        "build_signed_request",
+        "https_transport",
+        "iter_lz4_frame"
+      ],
+      "global_limit_mutation_authorized": false
+    }
+  ],
+  "system_executables_required_by_collector": [],
+  "network_dependency_installation_authorized": false,
+  "pip_install_authorized": false,
+  "apt_install_authorized": false,
+  "unlocked_dependency_authorized": false,
+  "dependency_resolution_performed_by_this_stage": false
+}
