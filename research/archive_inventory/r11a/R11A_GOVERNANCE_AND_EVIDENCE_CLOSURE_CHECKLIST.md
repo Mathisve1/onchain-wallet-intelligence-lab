@@ -15,7 +15,7 @@ At the audited snapshot:
 
 Those facts identify the audit snapshot only. They do not claim that a later branch or pull request has the same state.
 
-## Gate 0 — complete: original R11 run closed as consumed-unresolved without repair
+## Gate 0 — complete: original R11 evidence and release closure; research remains unresolved
 
 The canonical evidence-closure pull request attests only the retained original-run facts and the unresolved conclusion. Its merged contract includes all of the following:
 
