@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.0",
+  "review_id": "R11A-D1-INDEPENDENT-CLEAN-CONTEXT-RED-001",
+  "reviewed_implementation_merge_commit": "8e778fdf6e7b5ef5475791bd4292b2d04055afcd",
+  "reviewed_head": "f7de440dae7e28023031b94069b246d95cd6b6c0",
+  "reviewed_exact_head_ci_run_id": 31505737678,
+  "reviewed_exact_head_ci_job_id": 93826726751,
+  "containment_merge_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+  "verdict": "RED",
+  "owner_approval_eligible": false,
+  "execution_authorized": false,
+  "findings": [
+    {
+      "finding_id": "R11A-RED-001",
+      "severity": "CRITICAL",
+      "title": "FULL_PREREGISTERED_TERMINAL_PREDICATE_NOT_IMPLEMENTED",
+      "required_fix": "Compute exact 72-object and three-day completion, every layer conservation equation, per-unit-universe unclassifiable group and occurrence counts, exact-once proof foreign keys, provenance joins, output hashes and byte counts before any complete-taxonomy terminal."
+    },
+    {
+      "finding_id": "R11A-RED-002",
+      "severity": "CRITICAL",
+      "title": "HARDCODED_PROOF_RESOLUTION_CLAIM",
+      "required_fix": "Remove hard-coded proof claims and derive all_proof_references_resolve only from exact validated foreign-key joins."
+    },
+    {
+      "finding_id": "R11A-RED-003",
+      "severity": "CRITICAL",
+      "title": "PARTIAL_SCIENCE_AND_FAILURE_ARTIFACT_SEMANTICS_INVALID",
+      "required_fix": "Differentiate fully materialized incomplete science from true early stop, make all seven scientific containers exactly empty only for early stop or cap fallback, and emit a complete minimal deterministic artifact for every allowed failure."
+    },
+    {
+      "finding_id": "R11A-RED-004",
+      "severity": "CRITICAL",
+      "title": "WORKFLOW_STAGE_VALIDATOR_CONTRADICTION",
+      "required_fix": "Use separate inert implementation, approval, role, preflight, installation, release, activation and evidence validators; the future workflow must never call an inert-stage validator that forbids its own installed stage."
+    },
+    {
+      "finding_id": "R11A-RED-005",
+      "severity": "HIGH",
+      "title": "RUNTIME_EVIDENCE_SCHEMAS_AND_FOREIGN_KEYS_INCOMPLETE",
+      "required_fix": "Implement exact status-dependent object rows, 512 reducer rows, ordered stop ledger, complete resource ledger, context lineage, proof files and exact-once foreign-key validation."
+    },
+    {
+      "finding_id": "R11A-RED-006",
+      "severity": "HIGH",
+      "title": "TAXONOMY_PREDICATES_NOT_GROUP_WIDE",
+      "required_fix": "Evaluate TID scope, intra-block repetition and replay predicates over complete equality groups and all distinct raw locators, not only first/current pairs."
+    },
+    {
+      "finding_id": "R11A-RED-007",
+      "severity": "HIGH",
+      "title": "RESOURCE_AND_RUNTIME_BOUNDS_NOT_ENFORCED_END_TO_END",
+      "required_fix": "Reserve and measure workspace before writes, include final artifact staging in the same 5 GiB root, stream outputs, bound equality groups, enforce runtime through parse, sort, classify, seal, cleanup and pre-upload, and retain packaging/upload reserve."
+    },
+    {
+      "finding_id": "R11A-RED-008",
+      "severity": "HIGH",
+      "title": "EXTERNAL_SORT_MULTISET_EQUALITY_NOT_INDEPENDENTLY_PROVEN",
+      "required_fix": "Compare source and destination with independent order-insensitive, multiplicity-sensitive commitments in addition to count, bytes and sorted stream digest."
+    },
+    {
+      "finding_id": "R11A-RED-009",
+      "severity": "HIGH",
+      "title": "PRICING_AND_EUR_SNAPSHOT_NOT_BOUND",
+      "required_fix": "Freeze provider pricing and EUR-conversion evidence before approval and enforce a runtime budget predicate before OIDC and every request."
+    },
+    {
+      "finding_id": "R11A-RED-010",
+      "severity": "MEDIUM",
+      "title": "LEGACY_DECIMAL_NORMALIZER_CONTEXT_DEPENDENT",
+      "required_fix": "Replace Decimal.quantize based normalization with context-independent exact integral normalization and adversarial exponent tests."
+    },
+    {
+      "finding_id": "R11A-RED-011",
+      "severity": "MEDIUM",
+      "title": "CANONICAL_MAPPING_ORDER_AND_PACKAGE_BOUNDARY_NOT_FULLY_VALIDATED",
+      "required_fix": "Canonicalize mapping keys by UTF-8 bytes, validate every package-boundary formula and require all success booleans to equal one."
+    },
+    {
+      "finding_id": "R11A-RED-012",
+      "severity": "MEDIUM",
+      "title": "TOP_LEVEL_GOVERNANCE_DRIFT",
+      "required_fix": "Update PROJECT_STATE.md, ROADMAP.md and README.md to the RED-contained corrective state and dedicated successor-role decision."
+    },
+    {
+      "finding_id": "R11A-RED-013",
+      "severity": "LOW",
+      "title": "NESTED_FILL_PAYLOAD_NOT_DEEPLY_IMMUTABLE",
+      "required_fix": "Store a deep immutable canonical payload snapshot so hashes and retained values cannot diverge after parsing."
+    },
+    {
+      "finding_id": "R11A-RED-014",
+      "severity": "CRITICAL",
+      "title": "ARTIFACT_UPLOAD_PRECEDES_VALIDATION",
+      "required_fix": "Validate terminal class, hashes, empty/full semantics, ledgers, package boundary and zero wallet-feature output before upload."
+    },
+    {
+      "finding_id": "R11A-RED-015",
+      "severity": "HIGH",
+      "title": "ATOMIC_OUTPUT_AND_CLEANUP_NOT_FAIL_CLOSED",
+      "required_fix": "Perform all checks before atomic rename, never leave a committed directory after failure, and make cleanup failures explicit rather than ignore_errors."
+    },
+    {
+      "finding_id": "R11A-RED-016",
+      "severity": "HIGH",
+      "title": "SCIENTIFIC_OUTPUT_MATERIALIZED_BEFORE_CAP_DECISION",
+      "required_fix": "Stream NDJSON and enforce scientific and total artifact reservations before each record write, with deterministic empty fallback on breach."
+    },
+    {
+      "finding_id": "R11A-RED-017",
+      "severity": "HIGH",
+      "title": "EQUALITY_GROUP_MEMORY_UNBOUNDED",
+      "required_fix": "Spool each complete equality group to bounded workspace and classify by streaming or repeated bounded passes without a full in-memory list."
+    },
+    {
+      "finding_id": "R11A-RED-018",
+      "severity": "HIGH",
+      "title": "RELEASE_AND_EXECUTION_BINDING_INCOMPLETE",
+      "required_fix": "Future release must bind approval hash, release ID and blob hash, exact commit, workflow, collector, validator and selection hashes, single run ID and immutable consumption."
+    },
+    {
+      "finding_id": "R11A-RED-019",
+      "severity": "HIGH",
+      "title": "POST_OIDC_PRINCIPAL_EVIDENCE_ABSENT",
+      "required_fix": "Retain minimized exact sts:GetCallerIdentity account, role-session ARN and session name evidence before S3 access."
+    },
+    {
+      "finding_id": "R11A-RED-020",
+      "severity": "HIGH",
+      "title": "ADVERSARIAL_TEST_MATRIX_INCOMPLETE",
+      "required_fix": "Add dangling-FK, non-empty-incomplete, cleanup, post-rename, huge-group, nested-key-order, false-boundary, artifact-outside-workspace and stage-validator contradiction tests."
+    },
+    {
+      "finding_id": "R11A-RED-021",
+      "severity": "HIGH",
+      "title": "MAIN_MERGE_GUARD_ABSENT",
+      "required_fix": "Do not merge corrective work on red CI; require exact-head Research CI and clean-context review before any approval-eligible merge."
+    }
+  ],
+  "current_authority": {
+    "owner_approval": false,
+    "role_creation": false,
+    "role_mutation": false,
+    "workflow_installation": false,
+    "aws_oidc": false,
+    "sts": false,
+    "s3_get_object": false,
+    "diagnostic_execution": false,
+    "release": false,
+    "activation": false,
+    "deduplication": false,
+    "r11b_repair": false,
+    "wallet_feature_publication": false,
+    "wallet_ranking": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "paper_trading": false,
+    "live_trading": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
