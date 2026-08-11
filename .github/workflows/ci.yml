@@ -69,6 +69,30 @@ jobs:
           cp .github/workflows/ci.yml "${RUNNER_TEMP}/transient-ci.yml"
           git fetch --no-tags --depth=1 origin main
           git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
+
+          # The validator is both directly executable and importable. Repair the
+          # branch-only implementation candidate before sealing so direct
+          # execution resolves repository-local packages without PYTHONPATH.
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('governance/validate_r11a_implementation.py')
+          text = path.read_text(encoding='utf-8')
+          if 'import sys\n' not in text:
+              text = text.replace('import json\n', 'import json\nimport sys\n', 1)
+          marker = 'ROOT = Path(__file__).resolve().parents[1]\n'
+          insertion = (
+              marker
+              + 'if str(ROOT) not in sys.path:\n'
+              + '    sys.path.insert(0, str(ROOT))\n'
+          )
+          if 'sys.path.insert(0, str(ROOT))' not in text:
+              if marker not in text:
+                  raise SystemExit('R11A validator ROOT marker absent')
+              text = text.replace(marker, insertion, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
           python governance/seal_r11a_implementation.py --write
           python governance/seal_r11a_implementation.py --check
           python governance/regenerate_manifest.py --write
@@ -82,6 +106,7 @@ jobs:
             tests.test_archive_inventory_r11a_implementation -v
           cp "${RUNNER_TEMP}/transient-ci.yml" .github/workflows/ci.yml
           git add \
+            governance/validate_r11a_implementation.py \
             research/archive_inventory/r11a_implementation/R11A_IMPLEMENTATION_CONTRACT.json \
             governance/REPOSITORY_MANIFEST.sha256
           git diff --cached --check
