@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIAGNOSTIC = ROOT / "research/archive_inventory/r11a_implementation/diagnostic.py"
 COLLECTOR = ROOT / "research/archive_inventory/r11a_implementation/collector.py"
+VALIDATOR = ROOT / "governance/validate_r11a_implementation.py"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -97,9 +98,52 @@ def repair_collector() -> None:
     COLLECTOR.write_text(text, encoding="utf-8")
 
 
+def repair_validator() -> None:
+    text = VALIDATOR.read_text(encoding="utf-8")
+    if "import sys\n" not in text:
+        text = replace_once(
+            text,
+            "import json\n",
+            "import json\nimport sys\n",
+            "validator sys import",
+        )
+    marker = "ROOT = Path(__file__).resolve().parents[1]\n"
+    if "sys.path.insert(0, str(ROOT))" not in text:
+        text = replace_once(
+            text,
+            marker,
+            marker + "if str(ROOT) not in sys.path:\n    sys.path.insert(0, str(ROOT))\n",
+            "validator repository import path",
+        )
+    text = replace_once(
+        text,
+        '''    require(
+        all(name not in collector_text for name in ("boto3", "botocore", "requests")),
+        "unfrozen dependency introduced",
+    )
+''',
+        '''    for forbidden_import in (
+        "import boto3",
+        "from boto3",
+        "import botocore",
+        "from botocore",
+        "import requests",
+        "from requests",
+    ):
+        require(
+            forbidden_import not in collector_text,
+            f"unfrozen dependency introduced: {forbidden_import}",
+        )
+''',
+        "validator dependency import check",
+    )
+    VALIDATOR.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     repair_diagnostic()
     repair_collector()
+    repair_validator()
     Path(__file__).unlink()
     print("R11A_D1_PRESEAL_REPAIRS_APPLIED")
     return 0
