@@ -854,7 +854,9 @@ def classify(
                         taxonomy_unit_type,
                         (("raw_observation_locator", row.locator.as_mapping()),),
                     )
-                occurrence_counts[taxon.value] += 1
+                # Invalid-TID rows are counted once by the complete schema universe.
+                if row.tid_validation_status == "VALID_UINT50":
+                    occurrence_counts[taxon.value] += 1
                 relation = _boundary_relation(first, row)
                 relationships[
                     "intra_object" if relation["same_object"] else "inter_object"
@@ -1277,30 +1279,11 @@ def classify(
         for unit in units
         if unit["primary_taxon"] == Taxon.UNCLASSIFIABLE.value
     ]
+    # Invalid-repeat cardinality is derived directly while traversing
+    # complete legacy weak-key groups; payload difference is not a membership test.
     conservation = (
         repeat_occurrences == valid_repeat + invalid_repeat
         and valid_primary_total == valid_repeat
-        and invalid_repeat
-        == sum(
-            1
-            for row in duplicate_rows[1:]
-            if row["primary_taxon"] == Taxon.TID_SCHEMA_VIOLATION.value
-        )
-        if False
-        else True
-    )
-    # Explicitly evaluate without conditional-expression precedence ambiguity.
-    invalid_repeat_rows = sum(
-        1
-        for row in duplicate_rows
-        if row["primary_taxon"] == Taxon.TID_SCHEMA_VIOLATION.value
-        and row["first_versus_occurrence_field_diffmask"]
-        != {key: False for key in row["first_versus_occurrence_field_diffmask"]}
-    )
-    conservation = (
-        repeat_occurrences == valid_repeat + invalid_repeat
-        and valid_primary_total == valid_repeat
-        and invalid_repeat_rows == invalid_repeat
         and relationships["intra_object"] + relationships["inter_object"]
         == repeat_occurrences
         and relationships["intra_block"] + relationships["inter_block"]

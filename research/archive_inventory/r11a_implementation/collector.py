@@ -598,7 +598,7 @@ def _science_files(report: diagnostic.DiagnosticReport) -> dict[str, bytes]:
         "r11a-duplicate-observations.ndjson": schema.deterministic_ndjson(report.duplicate_rows),
         "r11a-exact-block-replay-proofs.ndjson": schema.deterministic_ndjson(report.replay_proofs),
         "r11a-expected-counterparty-pair-proofs.ndjson": schema.deterministic_ndjson(report.pair_proofs),
-        "r11a-protocol-trade-group-members.ndjson": b"",
+        "r11a-protocol-trade-group-members.ndjson": schema.deterministic_ndjson(report.protocol_member_rows),
         "r11a-schema-violation-evidence.ndjson": schema.deterministic_ndjson(report.schema_rows),
     }
 
@@ -632,6 +632,7 @@ def seal_artifact(
             pair_proofs=(),
             taxonomy_units=(),
             schema_rows=(),
+            protocol_member_rows=(),
         )
         science = _empty_science()
     logical_status = (

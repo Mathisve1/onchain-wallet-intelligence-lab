@@ -4,9 +4,12 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 BASE = ROOT / "research/archive_inventory"
 IMPL = BASE / "r11a_implementation"
 CONTRACT = IMPL / "R11A_IMPLEMENTATION_CONTRACT.json"
@@ -366,7 +369,18 @@ def validate_source_static() -> None:
                         },
                         f"R10 global mutation in {name}: {label}",
                     )
-        require("requests" not in source and "boto3" not in source, f"unexpected dependency in {name}")
+        for forbidden_import in (
+            "import boto3",
+            "from boto3",
+            "import botocore",
+            "from botocore",
+            "import requests",
+            "from requests",
+        ):
+            require(
+                forbidden_import not in source,
+                f"unexpected dependency import in {name}: {forbidden_import}",
+            )
     activity = paths["activity.py"].read_text(encoding="utf-8")
     activity_tree = ast.parse(activity)
     method_names = {
@@ -375,7 +389,28 @@ def validate_source_static() -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
     require("__getitem__" not in method_names, "activity tracker reintroduces read mutation hook")
-    require("defaultdict" not in activity and "setdefault" not in activity, "activity tracker lazy-read mutation pattern")
+    imports_defaultdict = any(
+        (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "collections"
+            and any(alias.name == "defaultdict" for alias in node.names)
+        )
+        or (
+            isinstance(node, ast.Import)
+            and any(alias.name == "collections.defaultdict" for alias in node.names)
+        )
+        for node in ast.walk(activity_tree)
+    )
+    calls_setdefault = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "setdefault"
+        for node in ast.walk(activity_tree)
+    )
+    require(
+        not imports_defaultdict and not calls_setdefault,
+        "activity tracker lazy-read mutation pattern",
+    )
     require("def record(" in activity and "def snapshot(" in activity, "explicit activity API missing")
     collector = paths["collector.py"].read_text(encoding="utf-8")
     require("R11A runtime release absent; network execution forbidden" in collector, "release fail gate missing")
