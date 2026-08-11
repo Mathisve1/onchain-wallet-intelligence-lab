@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "report_id": "R10D-BACKWARD-CONSISTENCY-AFTER-R11-IDENTITY-AUDIT-001",
+  "status": "OFFLINE_REVIEW_COMPLETE_R10D_CANONICAL_IDENTITY_UNRESOLVED",
+  "review_scope": "RETAINED_R10D_MECHANICS_EVIDENCE_VERSUS_R11_AUDIT_IDENTITY_MODEL",
+  "source_basis": {
+    "canonical_r10d_run_id": 31420197671,
+    "canonical_r10d_job_id": 93558813495,
+    "canonical_r10d_artifact_id": 9075129362,
+    "canonical_r10d_dispatch_sha": "c3e893da2e25d993250258f9b4b81aa5ad332e77",
+    "canonical_r10d_evidence_merge_commit": "0b13a80235ecd43bcd220985383f79f8ccbfb6ca",
+    "artifact_zip_sha256": "4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+    "result_path": "research/archive_inventory/r10d_evidence/run-31420197671/r10d-result.json",
+    "diagnostics_path": "research/archive_inventory/r10d_evidence/R10D_AGGREGATE_DIAGNOSTICS.json",
+    "attestation_path": "research/archive_inventory/r10d_evidence/HL-ARCHIVE-R10D-RECORD-ANCHORED-MULTI-HOUR-FEATURE-REPAIR-001-ATTESTATION.json"
+  },
+  "backward_consistency_classification": {
+    "classification": "C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY",
+    "scope": "CANONICAL_UNIQUE_BLOCK_AND_WALLET_USER_FILL_SEMANTICS",
+    "option_a_exact_reproduction_proven": false,
+    "option_b_demonstrable_correction_proven": false,
+    "option_c_r10d_uncertain": true,
+    "reason": "R10D retains exact legacy observation aggregates and a zero repeat count under wallet plus typed tid, but it has no occurrence-level block overlap ledger or canonical wallet-fill provenance with which to recompute the six hours under the documented block_time plus coin plus tid scope."
+  },
+  "retained_mechanics_result": {
+    "terminal_status": "R10D_MULTI_HOUR_FEATURE_REPAIR_STUDY_COMPLETE",
+    "technical_result": "R10D_MULTI_HOUR_FEATURE_PIPELINE_COMPLETE",
+    "completed_hour_count": 6,
+    "request_attempt_count": 6,
+    "successful_request_count": 6,
+    "failed_request_count": 0,
+    "retries_used": 0,
+    "http_redirects_followed": false,
+    "total_compressed_bytes": 120999698,
+    "total_decompressed_bytes": 599233794,
+    "block_record_observation_count": 241414,
+    "path_block_record_observation_count": 241409,
+    "previous_block_record_observation_count": 5,
+    "event_pair_observation_count": 1486542,
+    "before_path_hour_observation_count": 10,
+    "inside_path_hour_observation_count": 1486532,
+    "after_path_hour_observation_count": 0,
+    "record_anchored_alignment_violation_count": 0,
+    "record_anchored_rule_id": "RAW_LOCAL_PREFIX_PLUS_BLOCK_PREFIX_NO_NUMERIC_TOLERANCE_V1",
+    "numeric_tolerance_authorized": false
+  },
+  "retained_legacy_wallet_aggregate": {
+    "wallet_feature_row_count": 16410,
+    "sum_fill_count": 1486542,
+    "sum_side_count": 1486542,
+    "duplicate_wallet_typed_tid_repeat_count": 0,
+    "wallet_feature_bytes": 6557323,
+    "wallet_feature_sha256": "ea83c15398ed7b3c76d0be52aed0d9472ace3c975ac416fcd4a6d95760c4c991",
+    "active_hour_count_distribution": {
+      "1": 8388,
+      "2": 3305,
+      "3": 1508,
+      "4": 981,
+      "5": 639,
+      "6": 1589
+    },
+    "crossed_true_count_total": 743271,
+    "liquidation_associated_fill_count_total": 1330,
+    "sum_abs_px_times_sz_notional_proxy_total": "3670148918.05560308",
+    "sum_closed_pnl_fill_statistic_total": "308059.4394867907",
+    "semantic_status": "HISTORICAL_LEGACY_OBSERVATION_AGGREGATE_NOT_CANONICAL_UNIQUE_FILL_LEDGER"
+  },
+  "offline_artifact_recomputation": {
+    "status": "PROVEN_BYTE_EXACT_FOR_RETAINED_LEGACY_OUTPUT",
+    "provider_zip_reconstructed_from_canonical_repository_parts": true,
+    "provider_zip_sha256_reproduced": "4e63afc141f98ee05030ce19effc88f3bbd1eab59796c716a5d3c671eb2476ae",
+    "wallet_feature_file_sha256_reproduced": "ea83c15398ed7b3c76d0be52aed0d9472ace3c975ac416fcd4a6d95760c4c991",
+    "unique_sorted_lowercase_wallet_rows_recomputed": 16410,
+    "fill_count_sum_recomputed": 1486542,
+    "side_count_sum_recomputed": 1486542,
+    "legacy_duplicate_wallet_typed_tid_sum_recomputed": 0,
+    "active_hour_count_distribution_recomputed": {
+      "1": 8388,
+      "2": 3305,
+      "3": 1508,
+      "4": 981,
+      "5": 639,
+      "6": 1589
+    },
+    "notional_proxy_total_recomputed_exact_decimal": "3670148918.05560308",
+    "closed_pnl_fill_statistic_total_recomputed_exact_decimal": "308059.4394867907",
+    "meaning": "EXACT_REPRODUCTION_OF_RETAINED_LEGACY_REDUCER_OUTPUT_NOT_RECOMPUTATION_FROM_RAW_OBJECTS_UNDER_NEW_IDENTITY"
+  },
+  "legacy_identity_assumption": {
+    "key": [
+      "wallet_address",
+      "normalized_typed_tid"
+    ],
+    "empirical_r10d_repeat_result": "ZERO_REPEATS_IN_EXACT_SIX_HOUR_RUN",
+    "canonical_identity_status": "SUPERSEDED_AS_SEMANTIC_EVENT_IDENTITY",
+    "supersession_reason": "Wallet does not replace the documented global trade scope fields block_time and coin. A zero six-hour weak-key repeat count does not prove protocol uniqueness."
+  },
+  "canonical_identity_model_under_review": {
+    "raw_observation_key": [
+      "object_key",
+      "verified_compressed_sha256",
+      "record_ordinal",
+      "event_ordinal"
+    ],
+    "archive_block_locator": "block_number",
+    "archive_block_equality_invariants": [
+      "exact_block_time",
+      "ordered_event_fingerprint"
+    ],
+    "protocol_matched_trade_key": [
+      "exact_block_time",
+      "canonical_coin",
+      "validated_integer_tid"
+    ],
+    "wallet_user_fill_key": [
+      "canonical_lowercase_wallet",
+      "exact_block_time",
+      "canonical_coin",
+      "validated_integer_tid"
+    ]
+  },
+  "evidence_matrix": {
+    "six_selected_objects_processed": "PROVEN",
+    "record_anchored_alignment_clean": "PROVEN",
+    "fill_and_side_observation_counts_conserve": "PROVEN",
+    "legacy_wallet_typed_tid_repeat_count_zero": "PROVEN_FOR_R10D_RUN",
+    "wallet_plus_tid_is_semantically_valid_identity": "DISPROVEN",
+    "canonical_unique_block_count_equals_block_record_observation_count": "UNKNOWN",
+    "canonical_unique_wallet_fill_count_equals_1486542": "UNKNOWN",
+    "r10d_contains_cross_object_exact_block_replay": "UNKNOWN",
+    "new_identity_model_exactly_reproduces_r10d_wallet_rows": "UNKNOWN",
+    "new_identity_model_demonstrably_corrects_r10d_wallet_rows": "UNKNOWN",
+    "source_path_active_hour_counts_equal_event_time_active_hour_counts": "UNKNOWN",
+    "all_r10d_tids_are_json_integer_uint50": "UNKNOWN"
+  },
+  "scientific_consequences": {
+    "historical_r10d_evidence_must_not_be_rewritten": true,
+    "r10d_transport_and_alignment_evidence_remains_valid": true,
+    "r10d_counts_must_be_labelled_source_observations": true,
+    "r10d_wallet_aggregate_must_be_labelled_legacy_weak_identity": true,
+    "economic_or_global_uniqueness_interpretation_authorized": false,
+    "backward_recomputation_requires_occurrence_level_identity_and_block_provenance": true,
+    "r11a_exact_72_object_diagnostic_does_not_include_r10d_six_objects": true,
+    "full_r10d_identity_backcompat_requires_separate_same_six_object_preregistration_approval_and_release": true,
+    "next_permitted_empirical_source": "SEPARATELY_APPROVED_SAME_SIX_OBJECT_R10D_IDENTITY_BACKCOMPAT_DIAGNOSTIC"
+  },
+  "execution_and_downstream_boundaries": {
+    "network_execution_performed_by_report": false,
+    "aws_or_s3_execution_authorized_by_report": false,
+    "r10d_rerun_authorized": false,
+    "historical_expansion_authorized": false,
+    "wallet_ranking_authorized": false,
+    "pnl_or_alpha_analysis_authorized": false,
+    "copyability_analysis_authorized": false,
+    "strategy_inference_authorized": false,
+    "paper_or_live_trading_authorized": false,
+    "leverage_or_capital_allocation_authorized": false
+  }
+}
