@@ -60,7 +60,7 @@ The R10D backward-consistency report and machine-readable decision may be propos
 Only after the original R11 evidence is canonically closed should the R11A identity dossier and preregistration be reviewed for approval. A clean-context review must verify that the contract:
 
 - separates raw observation, archive block, protocol matched trade and wallet user-fill identity;
-- treats `(exact block_time, canonical coin, validated integer tid)` as the matched-trade key and adds the validated wallet only for the user-fill key;
+- treats `(exact block_time, exact unmodified raw source coin string, validated integer tid)` as the matched-trade key and adds the validated wallet only for the user-fill key;
 - accepts `tid` only as a raw JSON integer in `[0, 2^50)`, with no string, float, decimal or Boolean coercion and no time tolerance;
 - uses hashes only as integrity/equality invariants, never as unproved semantic identity;
 - binds exactly the existing 72 selected R11 objects and their exact keys, ETags, lengths and already observed compressed SHA-256 values;
