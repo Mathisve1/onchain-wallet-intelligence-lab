@@ -46,6 +46,14 @@ class R11ExecutionEvidenceTests(unittest.TestCase):
         with self.assertRaises(validator.R11EvidenceError):
             validator.validate(root)
 
+    def test_artifact_base64_representation_mutation_fails_closed(self) -> None:
+        temporary, root = self.fixture_root()
+        self.addCleanup(temporary.cleanup)
+        path = root / validator.RUN / "artifact/r11-72h-persistence-31436753081.zip.b64"
+        path.write_bytes(b"\n" + path.read_bytes())
+        with self.assertRaises(validator.R11EvidenceError):
+            validator.validate(root)
+
     def test_missing_raw_entry_fails_closed(self) -> None:
         temporary, root = self.fixture_root()
         self.addCleanup(temporary.cleanup)
@@ -184,6 +192,101 @@ class R11ExecutionEvidenceTests(unittest.TestCase):
         path.write_text(json.dumps(value), encoding="utf-8")
         with self.assertRaises(validator.R11EvidenceError):
             validator.validate(root)
+
+    def test_reported_unbound_attestation_mutations_fail_closed(self) -> None:
+        path_relative = validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json"
+        mutations = (
+            ("future_dispatch", lambda value: value.__setitem__("future_r11_dispatch_authorized", True)),
+            (
+                "network_prerequisite",
+                lambda value: value.__setitem__(
+                    "new_network_request_requires_new_preregistration_approval_and_release", False
+                ),
+            ),
+            ("numeric_tolerance", lambda value: value.__setitem__("numeric_tolerance_authorized", True)),
+            (
+                "known_duplicate_loss",
+                lambda value: value["known_implementation_defects"].__setitem__(
+                    "preregistered_duplicate_count_discarded_on_unresolved_path", False
+                ),
+            ),
+            (
+                "missing_unproven_claim",
+                lambda value: value["claims_not_proven"].pop("duplicate_wallet_tid_locations"),
+            ),
+            ("closed_status", lambda value: value.__setitem__("status", "R11_CLOSED")),
+            ("extra_top_level", lambda value: value.__setitem__("unreviewed_extra", False)),
+        )
+        for name, mutate in mutations:
+            with self.subTest(mutation=name):
+                temporary, root = self.fixture_root()
+                try:
+                    path = root / path_relative
+                    value = json.loads(path.read_text())
+                    mutate(value)
+                    path.write_text(json.dumps(value), encoding="utf-8")
+                    with self.assertRaises(validator.R11EvidenceError):
+                        validator.validate(root)
+                finally:
+                    temporary.cleanup()
+
+    def test_every_derived_json_rejects_top_level_schema_type_and_authority_drift(self) -> None:
+        derived_documents = (
+            (
+                "reconstruction",
+                validator.RUN / "ARTIFACT_RECONSTRUCTION.json",
+                "encoding",
+                lambda value: value.__setitem__("artifact_id", str(value["artifact_id"])),
+                lambda value: value.__setitem__("network_required_for_reconstruction", True),
+            ),
+            (
+                "verification",
+                validator.RUN / "INDEPENDENT_ARTIFACT_VERIFICATION.json",
+                "verification_result",
+                lambda value: value.__setitem__("artifact_size_bytes", str(value["artifact_size_bytes"])),
+                lambda value: value.__setitem__("duplicate_wallet_tid_count_known_from_retained_evidence", True),
+            ),
+            (
+                "diagnostics",
+                validator.EVIDENCE / "R11_AGGREGATE_DIAGNOSTICS.json",
+                "schema_version",
+                lambda value: value.__setitem__("completed_hour_count", str(value["completed_hour_count"])),
+                lambda value: value.__setitem__("blind_deduplication_authorized", True),
+            ),
+            (
+                "attestation",
+                validator.EVIDENCE / "HL-ARCHIVE-R11-72H-PERSISTENCE-SCALING-001-ATTESTATION.json",
+                "attestation_id",
+                lambda value: value.__setitem__("workflow_run_id", str(value["workflow_run_id"])),
+                lambda value: value.__setitem__("future_r11_dispatch_authorized", True),
+            ),
+            (
+                "consumption",
+                validator.CONSUMPTION,
+                "execution_release_id",
+                lambda value: value.__setitem__("artifact_size_bytes", str(value["artifact_size_bytes"])),
+                lambda value: value.__setitem__("future_r11_dispatch_authorized", True),
+            ),
+        )
+        for label, relative, missing_key, type_mutation, authority_mutation in derived_documents:
+            mutations = (
+                ("extra", lambda value: value.__setitem__("unreviewed_extra", None)),
+                ("missing", lambda value, key=missing_key: value.pop(key)),
+                ("type", type_mutation),
+                ("authority", authority_mutation),
+            )
+            for mutation_label, mutate in mutations:
+                with self.subTest(document=label, mutation=mutation_label):
+                    temporary, root = self.fixture_root()
+                    try:
+                        path = root / relative
+                        value = json.loads(path.read_text())
+                        mutate(value)
+                        path.write_text(json.dumps(value), encoding="utf-8")
+                        with self.assertRaises(validator.R11EvidenceError):
+                            validator.validate(root)
+                    finally:
+                        temporary.cleanup()
 
     def test_rerun_or_budget_reopening_fails_closed(self) -> None:
         temporary, root = self.fixture_root()
