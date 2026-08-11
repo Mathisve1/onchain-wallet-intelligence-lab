@@ -23,10 +23,19 @@
       "value": "BUYER_OID_AND_SELLER_OID_ARE_ORDERED_INPUTS_TO_TID",
       "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
     },
+    "crossed_user_order_role": {
+      "status": "PROVEN",
+      "value": "crossed_TRUE_MEANS_THE_USER_ORDER_WAS_TAKER_AND_CROSSED_THE_SPREAD",
+      "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions",
+      "diagnostic_consequence": "RETAIN_EXACT_BOOLEAN_FOR_EACH_PROTOCOL_PAIR_MEMBER_BUT_DO_NOT_REQUIRE_COMPLEMENTARY_VALUES_BECAUSE_TWO_WALLET_PAIR_CONSTRUCTION_IS_NOT_NORMATIVE"
+    },
     "two_wallet_fill_representation": {
       "status": "LIKELY_STRONGLY_CORROBORATED_NOT_NORMATIVE",
       "value": "THE_REFERENCE_CONSUMER_PAIRS_ADJACENT_A_AND_B_USER_FILLS_WITH_EQUAL_COIN_AND_TID_INTO_ONE_TRADE",
-      "source": "https://github.com/hyperliquid-dex/order_book_server/blob/8b4f237904f683aca2dba21a07d87e831ead2a97/server/src/types/mod.rs#L59-L76",
+      "sources": [
+        "https://github.com/hyperliquid-dex/order_book_server/blob/8b4f237904f683aca2dba21a07d87e831ead2a97/server/src/servers/websocket_server.rs#L278-L299",
+        "https://github.com/hyperliquid-dex/order_book_server/blob/8b4f237904f683aca2dba21a07d87e831ead2a97/server/src/types/mod.rs#L59-L76"
+      ],
       "qualification": "THE_REFERENCE_REPOSITORY_EXPLICITLY_SAYS_IT_IS_NOT_CORE_TEAM_CODE_AND_MAY_BE_INCOMPLETE",
       "consequence": "SAME_TRADE_ACROSS_DIFFERENT_WALLETS_IS_EXPECTED_AND_MUST_NOT_BE_HALVED_FROM_PER_WALLET_ACTIVITY"
     },
@@ -70,25 +79,25 @@
     "protocol_matched_trade": {
       "canonical_key": [
         "exact_raw_block_time",
-        "canonical_schema_validated_coin",
+        "exact_raw_coin_string",
         "validated_json_integer_tid"
       ],
       "purpose": "DOCUMENTED_GLOBALLY_UNIQUE_MATCHED_TRADE_IDENTITY",
       "collision_semantics": "SAME_KEY_WITH_CONFLICTING_TRADE_OR_FILL_CONTENT_IS_HARD_UNRESOLVED",
       "replay_semantics": "THE_KEY_MAY_HAVE TWO_DIFFERENT_USER_SIDES_AND MAY_BE_REOBSERVED_ONLY_IF_RAW_OR_BLOCK_PROVENANCE_PROVES_REPLAY",
-      "ordering_semantics": "EXACT_BLOCK_TIME_THEN_CANONICAL_COIN_THEN_INTEGER_TID"
+      "ordering_semantics": "EXACT_BLOCK_TIME_THEN_EXACT_RAW_COIN_STRING_THEN_INTEGER_TID"
     },
     "wallet_user_fill": {
       "canonical_key": [
         "canonical_lowercase_wallet_address",
         "exact_raw_block_time",
-        "canonical_schema_validated_coin",
+        "exact_raw_coin_string",
         "validated_json_integer_tid"
       ],
       "purpose": "ONE_USER_SIDE_OF_A_DOCUMENTED_PROTOCOL_MATCHED_TRADE",
       "collision_semantics": "SAME_KEY_WITH_ANY_VALIDATED_PAYLOAD_DIFFERENCE_IS_CONFLICTING_USER_FILL",
       "replay_semantics": "AN_EXACTLY_EQUAL REOBSERVATION_IS_NOT_REDUCIBLE_UNLESS_THE_BLOCK_LAYER_PROVES_EXACT_REPLAY",
-      "ordering_semantics": "WALLET_THEN_EXACT_BLOCK_TIME_THEN_CANONICAL_COIN_THEN_INTEGER_TID"
+      "ordering_semantics": "WALLET_THEN_EXACT_BLOCK_TIME_THEN_EXACT_RAW_COIN_STRING_THEN_INTEGER_TID"
     }
   },
   "schema_boundaries": {
@@ -99,11 +108,13 @@
     "block_time_tolerance_authorized": false,
     "metadata_timezone_inference_authorized": false,
     "coin_rewriting_without_versioned_schema_authorized": false,
+    "coin_identity_value": "EXACT_RAW_COIN_STRING",
+    "coin_trimming_case_folding_unicode_normalization_prefix_stripping_or_metadata_resolution_authorized": false,
     "wallet_address_canonicalization": "EXACT_0X40HEX_LOWERCASE_AFTER_STRICT_VALIDATION"
   },
   "fingerprints": {
     "serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
-    "raw_record_sha256": "EXACT_DECOMPRESSED_RECORD_BYTES",
+    "raw_record_sha256": "EXACT_DECOMPRESSED_RECORD_BYTES_EXCLUDING_ONLY_THE_SINGLE_0X0A_NDJSON_DELIMITER_WHEN_PRESENT_AND_PRESERVING_ANY_PRECEDING_0X0D_WHITESPACE_AND_ALL_OTHER_BYTES;HASH_ALL_BYTES_FOR_A_FINAL_RECORD_WITHOUT_0X0A",
     "ordered_event_fingerprint": "VERSIONED_ORDER_PRESERVING_SERIALIZATION_OF_ALL_RAW_TYPED_EVENTS",
     "wallet_fill_payload_fingerprint": "VERSIONED_SERIALIZATION_OF_ALL_SCHEMA_VALIDATED_USER_FILL_FIELDS_AND_RAW_TYPES",
     "role": "EQUALITY_CONFLICT_AND_INTEGRITY_INVARIANT_ONLY_NOT_PRIMARY_IDENTITY"
