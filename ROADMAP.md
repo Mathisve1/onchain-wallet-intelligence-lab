@@ -21,6 +21,18 @@
 - [ ] Freeze archive object inventory, estimated requester cost and retention.
 - [ ] Resolve non-empty historical schema and pagination questions in a separate body-access/schema pilot if inventory passes.
 
+## Phase 1B — R11 identity and boundary closure
+
+- [x] Retain the exact consumed R11 artifact and release-consumption record; preserve the unresolved duplicate-count deviation.
+- [x] Record R10D as byte-exact under its legacy reducer but uncertain under canonical identity and event-time activity.
+- [x] Freeze the four-layer R11A identity model and exact-same-72-object diagnostic as `PREREGISTERED_NO_EXECUTION`.
+- [ ] Merge the separately reviewed inert R11A implementation and workflow candidate outside `.github/workflows`.
+- [ ] Obtain one exact hash-bound owner approval for role reuse and the frozen diagnostic envelope.
+- [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
+- [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
+
+R11 remains unresolved and R12 remains blocked throughout Phase 1B. No step above authorizes wallet ranking, alpha/copyability interpretation or trading.
+
 ## Phase 2 — deterministic wallet ledger
 
 - [ ] Parse fills, funding, deposits, withdrawals, internal transfers,
