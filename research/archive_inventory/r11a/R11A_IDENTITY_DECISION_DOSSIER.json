@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "R11A-CANONICAL-IDENTITY-MODEL-001",
+  "status": "FROZEN_FOR_DIAGNOSTIC_DESIGN_NO_REPAIR_DECISION",
+  "scope": "HYPERLIQUID_NODE_FILLS_BY_BLOCK_IDENTITY_AND_REPLAY_DIAGNOSTICS",
+  "authoritative_semantics": {
+    "tid_definition": {
+      "status": "PROVEN",
+      "value": "50_BIT_HASH_OF_BUYER_OID_AND_SELLER_OID",
+      "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
+    },
+    "globally_unique_matched_trade_key": {
+      "status": "PROVEN",
+      "fields": [
+        "block_time",
+        "coin",
+        "tid"
+      ],
+      "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
+    },
+    "matched_trade_order_roles": {
+      "status": "PROVEN",
+      "value": "BUYER_OID_AND_SELLER_OID_ARE_ORDERED_INPUTS_TO_TID",
+      "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions"
+    },
+    "two_wallet_fill_representation": {
+      "status": "LIKELY_STRONGLY_CORROBORATED_NOT_NORMATIVE",
+      "value": "THE_REFERENCE_CONSUMER_PAIRS_ADJACENT_A_AND_B_USER_FILLS_WITH_EQUAL_COIN_AND_TID_INTO_ONE_TRADE",
+      "source": "https://github.com/hyperliquid-dex/order_book_server/blob/8b4f237904f683aca2dba21a07d87e831ead2a97/server/src/types/mod.rs#L59-L76",
+      "qualification": "THE_REFERENCE_REPOSITORY_EXPLICITLY_SAYS_IT_IS_NOT_CORE_TEAM_CODE_AND_MAY_BE_INCOMPLETE",
+      "consequence": "SAME_TRADE_ACROSS_DIFFERENT_WALLETS_IS_EXPECTED_AND_MUST_NOT_BE_HALVED_FROM_PER_WALLET_ACTIVITY"
+    },
+    "archive_envelope": {
+      "status": "PROVEN",
+      "fields": [
+        "local_time",
+        "block_time",
+        "block_number",
+        "events"
+      ],
+      "batching": "ONE_BLOCK_RECORD_PER_LINE_FROM_WRITE_FILLS_BATCH_BY_BLOCK",
+      "source": "https://github.com/hyperliquid-dex/node/blob/405cc08b17a727ee51b0f9128918955a84439915/README.md#L131-L139"
+    }
+  },
+  "identity_layers": {
+    "raw_observation": {
+      "canonical_key": [
+        "object_key",
+        "verified_compressed_sha256",
+        "decompressed_record_ordinal",
+        "event_ordinal"
+      ],
+      "purpose": "LOSSLESS_SOURCE_LINEAGE",
+      "collision_semantics": "DUPLICATE_RAW_KEY_IS_A_HARD_IMPLEMENTATION_ERROR",
+      "replay_semantics": "DISTINCT_RAW_KEYS_MAY_OBSERVE_THE_SAME_ARCHIVE_BLOCK_OR_WALLET_FILL_AND_MUST_REMAIN_IN_THE_PROVENANCE_MULTIMAP",
+      "ordering_semantics": "OBJECT_PATH_HOUR_ASCENDING_THEN_RECORD_ORDINAL_THEN_EVENT_ORDINAL"
+    },
+    "archive_block": {
+      "locator": "block_number",
+      "equality_invariants": [
+        "exact_raw_block_time",
+        "ordered_event_count",
+        "ordered_event_fingerprint"
+      ],
+      "purpose": "EXACT_BLOCK_REPLAY_AND_CONFLICT_CLASSIFICATION",
+      "collision_semantics": "SAME_BLOCK_NUMBER_WITH_ANY_INVARIANT_DIFFERENCE_IS_CONFLICTING_BLOCK_REPLAY",
+      "replay_semantics": "REDUCTION_IS_NOT_AUTHORIZED_BY_THIS DOSSIER; EXACT_REPLAY_MAY_ONLY_INFORM_A_LATER_R11B_GATE",
+      "ordering_semantics": "BLOCK_NUMBER_THEN_RAW_PROVENANCE_KEY"
+    },
+    "protocol_matched_trade": {
+      "canonical_key": [
+        "exact_raw_block_time",
+        "canonical_schema_validated_coin",
+        "validated_json_integer_tid"
+      ],
+      "purpose": "DOCUMENTED_GLOBALLY_UNIQUE_MATCHED_TRADE_IDENTITY",
+      "collision_semantics": "SAME_KEY_WITH_CONFLICTING_TRADE_OR_FILL_CONTENT_IS_HARD_UNRESOLVED",
+      "replay_semantics": "THE_KEY_MAY_HAVE TWO_DIFFERENT_USER_SIDES_AND MAY_BE_REOBSERVED_ONLY_IF_RAW_OR_BLOCK_PROVENANCE_PROVES_REPLAY",
+      "ordering_semantics": "EXACT_BLOCK_TIME_THEN_CANONICAL_COIN_THEN_INTEGER_TID"
+    },
+    "wallet_user_fill": {
+      "canonical_key": [
+        "canonical_lowercase_wallet_address",
+        "exact_raw_block_time",
+        "canonical_schema_validated_coin",
+        "validated_json_integer_tid"
+      ],
+      "purpose": "ONE_USER_SIDE_OF_A_DOCUMENTED_PROTOCOL_MATCHED_TRADE",
+      "collision_semantics": "SAME_KEY_WITH_ANY_VALIDATED_PAYLOAD_DIFFERENCE_IS_CONFLICTING_USER_FILL",
+      "replay_semantics": "AN_EXACTLY_EQUAL REOBSERVATION_IS_NOT_REDUCIBLE_UNLESS_THE_BLOCK_LAYER_PROVES_EXACT_REPLAY",
+      "ordering_semantics": "WALLET_THEN_EXACT_BLOCK_TIME_THEN_CANONICAL_COIN_THEN_INTEGER_TID"
+    }
+  },
+  "schema_boundaries": {
+    "tid_required_raw_json_type": "INTEGER",
+    "tid_minimum_inclusive": 0,
+    "tid_maximum_exclusive": 1125899906842624,
+    "string_decimal_float_or_boolean_tid_coercion_authorized": false,
+    "block_time_tolerance_authorized": false,
+    "metadata_timezone_inference_authorized": false,
+    "coin_rewriting_without_versioned_schema_authorized": false,
+    "wallet_address_canonicalization": "EXACT_0X40HEX_LOWERCASE_AFTER_STRICT_VALIDATION"
+  },
+  "fingerprints": {
+    "serialization_version": "R11A_CANONICAL_JSON_TYPED_FIELDS_V1",
+    "raw_record_sha256": "EXACT_DECOMPRESSED_RECORD_BYTES",
+    "ordered_event_fingerprint": "VERSIONED_ORDER_PRESERVING_SERIALIZATION_OF_ALL_RAW_TYPED_EVENTS",
+    "wallet_fill_payload_fingerprint": "VERSIONED_SERIALIZATION_OF_ALL_SCHEMA_VALIDATED_USER_FILL_FIELDS_AND_RAW_TYPES",
+    "role": "EQUALITY_CONFLICT_AND_INTEGRITY_INVARIANT_ONLY_NOT_PRIMARY_IDENTITY"
+  },
+  "explicitly_rejected_primary_keys": {
+    "wallet_plus_tid": "MISSING_DOCUMENTED_BLOCK_TIME_AND_COIN_SCOPE",
+    "wallet_plus_tid_plus_fill_time": "FILL_TIME_IS_NOT_THE_DOCUMENTED_BLOCK_TIME_KEY_AND_COIN_IS_MISSING",
+    "wallet_plus_tid_plus_side": "SIDE_IS_NOT_AN_IDENTITY_FIELD_AND_CAN_HIDE_CONFLICTS",
+    "transaction_hash": "TRANSACTION_TO_FILL_CARDINALITY_IS_NOT_ONE_TO_ONE",
+    "oid": "ONE_ORDER_MAY_HAVE_MULTIPLE_PARTIAL_FILLS",
+    "full_payload_hash": "PAYLOAD_EQUALITY_DOES_NOT_PROVE_ECONOMIC_IDENTITY_OR_REPLAY",
+    "raw_observation_key": "SOURCE_PROVENANCE_DOES_NOT_PROVE_ECONOMIC_EVENT_IDENTITY",
+    "block_number_plus_event_ordinal": "ARCHIVE_LOCATION_DOES_NOT_REPLACE_PROTOCOL_TRADE_SCOPE"
+  },
+  "duplicate_taxonomy": [
+    "TID_SCOPE_FALSE_POSITIVE",
+    "EXPECTED_COUNTERPARTY_PAIR",
+    "EXACT_BLOCK_REPLAY_ACROSS_OBJECTS",
+    "EXACT_USER_FILL_REOBSERVATION_FROM_PROVEN_BLOCK_REPLAY",
+    "CONFLICTING_BLOCK_REPLAY",
+    "CONFLICTING_USER_FILL",
+    "INTRA_BLOCK_REPEAT",
+    "TID_SCHEMA_VIOLATION",
+    "UNCLASSIFIABLE"
+  ],
+  "decision_boundaries": {
+    "blind_drop_duplicates_authorized": false,
+    "first_seen_or_last_seen_wins_authorized": false,
+    "payload_hash_only_deduplication_authorized": false,
+    "time_or_numeric_tolerance_authorized": false,
+    "repair_selected_by_this_dossier": false,
+    "r11b_authorized_by_this_dossier": false,
+    "wallet_aggregation_may_start_before_identity_resolution": false,
+    "unknown_conflict_or_incomplete_group_is_fail_closed": true
+  },
+  "boundary_evidence_status": {
+    "source_object_path_hour_is_semantic_event_hour": "DISPROVEN_AS_AN_ASSUMPTION",
+    "previous_hour_block_in_next_object_proves_replay": "DISPROVEN_AS_AN_INFERENCE",
+    "exact_cross_object_block_replay_exists_in_r11": "UNKNOWN_PENDING_R11A",
+    "block_number_is_canonical_only_after_one_to_one_invariant_validation": "PROVEN_AS_FAIL_CLOSED_DESIGN_REQUIREMENT",
+    "wrapper_block_time_equals_inner_fill_time": "UNKNOWN_PENDING_R11A"
+  }
+}
