@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0",
+  "dossier_id": "R11-ROOT-CAUSE-STATUS-BEFORE-R11A-001",
+  "status": "OFFLINE_AUDIT_COMPLETE_EMPIRICAL_ROOT_CAUSE_PENDING_R11A",
+  "canonical_original_run": {
+    "run_id": 31436753081,
+    "job_id": 93612467250,
+    "artifact_id": 9082810554,
+    "dispatch_sha": "baca1925c23ef6b0136aa3d96d6d479ac7717bdf",
+    "attempt": 1,
+    "research_conclusion": "R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED"
+  },
+  "finding_register": [
+    {
+      "finding": "AT_LEAST_ONE_REPEATED_LEGACY_WALLET_PLUS_TID_PROJECTION_OCCURRED",
+      "status": "PROVEN",
+      "basis": "CANONICAL_R11_FAILURE_CLASS_AND_EMPTY_RETAINED_FEATURE_OUTPUT"
+    },
+    {
+      "finding": "WALLET_PLUS_TID_IS_A_SEMANTIC_CANONICAL_EVENT_IDENTITY",
+      "status": "DISPROVEN",
+      "basis": "OFFICIAL_TRADE_IDENTITY_REQUIRES_BLOCK_TIME_COIN_AND_TID"
+    },
+    {
+      "finding": "R11_REPEAT_COUNT_LOCATIONS_AND_AFFECTED_CARDINALITIES",
+      "status": "UNKNOWN",
+      "basis": "PREREGISTERED_COUNT_WAS_DISCARDED_BY_UNRESOLVED_EXCEPTION_PATH"
+    },
+    {
+      "finding": "TID_SCOPE_FALSE_POSITIVE_EXPLAINS_ANY_OR_ALL_R11_REPEATS",
+      "status": "UNKNOWN",
+      "basis": "NO_OCCURRENCE_LEVEL_BLOCK_TIME_OR_COIN_PROVENANCE_RETAINED"
+    },
+    {
+      "finding": "EXACT_CROSS_OBJECT_BLOCK_REPLAY_EXPLAINS_ANY_OR_ALL_R11_REPEATS",
+      "status": "UNKNOWN",
+      "basis": "NO_CROSS_OBJECT_BLOCK_NUMBER_AND_EVENT_VECTOR_LEDGER_RETAINED"
+    },
+    {
+      "finding": "PREVIOUS_HOUR_BLOCK_RECORDS_INSIDE_LATER_PATH_OBJECTS_BY_THEMSELVES_PROVE_REPLAY",
+      "status": "DISPROVEN",
+      "basis": "PATH_ROTATION_OR_WRITE_TIME_PLACEMENT_REMAINS_AN_ALTERNATIVE; EXACT_BLOCK_EQUALITY_NOT_CHECKED"
+    },
+    {
+      "finding": "CONFLICTING_BLOCK_REPLAY_EXPLAINS_ANY_OR_ALL_R11_REPEATS",
+      "status": "UNKNOWN",
+      "basis": "BLOCK_NUMBER_AND_ORDERED_EVENT_VECTOR_EQUALITY_WAS_NOT_RETAINED_FOR_REPEATS"
+    },
+    {
+      "finding": "CONFLICTING_USER_FILL_EXPLAINS_ANY_OR_ALL_R11_REPEATS",
+      "status": "UNKNOWN",
+      "basis": "SELECTED_AND_FULL_USER_FILL_PAYLOAD_EQUALITY_WAS_NOT_RETAINED_FOR_REPEATS"
+    },
+    {
+      "finding": "TID_SCHEMA_VIOLATION_EXPLAINS_ANY_OR_ALL_R11_REPEATS",
+      "status": "UNKNOWN",
+      "basis": "RAW_TID_JSON_TYPES_TOKENS_AND_RANGES_WERE_NOT_RETAINED_FOR_REPEATS"
+    },
+    {
+      "finding": "NORMAL_TWO_COUNTERPARTY_WALLET_SIDES_EXPLAIN_A_REPEAT_UNDER_THE_SAME_WALLET_KEY",
+      "status": "DISPROVEN_FOR_DISTINCT_WALLET_SIDES",
+      "basis": "THE_LEGACY_GROUP_ALREADY_INCLUDES_WALLET; DISTINCT_COUNTERPARTIES_HAVE_DISTINCT_LEGACY_KEYS"
+    },
+    {
+      "finding": "DAYTRACKINGSTATES_GETITEM_MUTATES_STATE_ON_READ",
+      "status": "PROVEN",
+      "basis": "HISTORICAL_R11_SOURCE_AND_ADVERSARIAL_OFFLINE_TEST"
+    },
+    {
+      "finding": "DAYTRACKING_READ_MUTATION_CORRUPTED_RETAINED_CANONICAL_R11_WALLET_ROWS",
+      "status": "DISPROVEN",
+      "basis": "DUPLICATE_GUARD_RAISED_BEFORE_RENDER_ITERATION_AND_RETAINED_OUTPUT_IS_ZERO_BYTES"
+    },
+    {
+      "finding": "DAYTRACKING_READ_MUTATION_WOULD_OVERCOUNT_SUCCESS_PATH_ACTIVE_DAYS",
+      "status": "PROVEN",
+      "basis": "RENDER_READ_WOULD_ADD_LAST_PROCESSED_DAY_TO_EVERY_EXISTING_WALLET"
+    },
+    {
+      "finding": "R11_IMPORT_MUTATES_R10_GLOBAL_RESOURCE_LIMITS",
+      "status": "PROVEN",
+      "basis": "HISTORICAL_IMPORT_SIDE_EFFECT_AND_IMPORT_ORDER_REGRESSION_TEST"
+    },
+    {
+      "finding": "R10D_CANONICAL_IDENTITY_AND_EVENT_TIME_ACTIVITY_EXACTLY_MATCH_RETAINED_LEGACY_OUTPUT",
+      "status": "UNKNOWN",
+      "basis": "RAW_OCCURRENCE_PROVENANCE_TYPES_AND_EVENT_TIME_ACTIVITY_LEDGER_NOT_RETAINED"
+    }
+  ],
+  "empirical_counts_available_now": {
+    "completed_hours": 72,
+    "completed_days": 3,
+    "successful_requests": 72,
+    "failed_requests": 0,
+    "retries": 0,
+    "block_record_observations": 3283391,
+    "wallet_fill_observations": 26384234,
+    "previous_hour_block_record_observations": 94,
+    "pre_path_hour_fill_observations": 490,
+    "legacy_repeat_count": null,
+    "affected_legacy_key_count": null,
+    "affected_wallet_count": null,
+    "affected_tid_count": null,
+    "affected_block_count": null,
+    "affected_source_object_count": null
+  },
+  "required_empirical_gate": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-001",
+  "root_cause_claim_authorized_now": false,
+  "repair_selection_authorized_now": false,
+  "r11_closed": false,
+  "r12_ready": false
+}

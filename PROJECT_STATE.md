@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, and independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`.
+Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`, and canonical consumed-unresolved R11 evidence closure merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`.
 
 ## Current status
 
@@ -10,6 +10,7 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
+| archive diagnostic gate | `R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTERED_NO_EXECUTION` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
@@ -81,6 +82,16 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | R11 original release | `CONSUMED`; remaining request budget `0`; rerun forbidden |
 | R11 evidence-retention deviation | preregistered duplicate count was not retained (`false`) |
 | R11 closed / R12 ready | `false` / `false` |
+| R11 evidence closure merge | `f7aa612d2a5638cce0fd197f57efea4b787f87f1` |
+| R10D backward consistency | `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY` |
+| R10D legacy reducer reproduction | byte-exact; canonical unique-fill and event-time activity equivalence remain `UNKNOWN` |
+| R11A diagnostic | `HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-001` |
+| R11A status | `PREREGISTERED_NO_EXECUTION` |
+| R11A exact input | same 72 R11 objects; no 73rd object or wider window |
+| R11A owner approval | `NOT_PRESENT` |
+| R11A workflow / release / activation | absent / absent / absent |
+| R11A empirical root cause | `UNKNOWN_PENDING_DIAGNOSTIC` |
+| R11A repair selected / R11B authorized | `false` / `false` |
 | R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` after consumption |
 | R2 aggregate S3 requests / metadata entries observed | `5` / `125` |
 | larger 300-request inventory | `false` |
@@ -98,6 +109,10 @@ The provider ZIP is retained reconstructably together with all five exact entrie
 The preregistration promised to retain the duplicate count, but the historical exception path discarded the aggregate summary. That promise was not met. The retained original evidence therefore proves neither the repeat count nor its locations, payload equality, block replay status or root cause. It also does not validate the success-path active-day output: the historical `DayTrackingStates.__getitem__` mutates on reads, although the duplicate guard fired before that render loop in the canonical run and the retained feature file is empty.
 
 R11 is not closed and R12 is not ready. Any new object read requires a new preregistration, explicit owner approval and separate single-use release. The consumed R11 release cannot be rerun.
+
+R11A freezes a diagnostic identity model but does not authorize execution. The legacy `wallet+tid` projection is semantically under-keyed: the diagnostic preserves raw observation provenance, validates archive-block invariants, uses exact wrapper `block_time` plus exact source `coin` plus strict JSON uint50 `tid` for protocol-trade identity, and adds the validated wallet for wallet-user-fill identity. It must retain complete repeat provenance and classify every group without deduplication or repair.
+
+The R10D artifact is reproducible byte-for-byte under its historical reducer. That does not prove equivalence under canonical block/wallet-fill identity or event-time activity because R10D did not retain the necessary occurrence-level ledger. Its backward-consistency class is therefore `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY`.
 
 The single-use Region probe executed against exact canonical release commit `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`. All exact-main, release and single-use checks passed before AWS OIDC. AWS role assumption succeeded. The probe issued exactly one authenticated direct SigV4 `HEAD /` to `hl-mainnet-node-data.s3.amazonaws.com`, requested Requester Pays acknowledgement, used zero retries, followed zero redirects and did not read a response body.
 
@@ -247,6 +262,17 @@ r11_preregistered_duplicate_count_retention_met = false
 r11_duplicate_root_cause_known = false
 r11_closed = false
 r12_ready = false
+r11_evidence_closure_merge = f7aa612d2a5638cce0fd197f57efea4b787f87f1
+r10d_backward_consistency_class = C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY
+r11a_preregistered_no_execution = true
+r11a_owner_approval_present = false
+r11a_workflow_installed = false
+r11a_release_present = false
+r11a_aws_oidc_authorized = false
+r11a_get_object_authorized = false
+r11a_decompression_authorized = false
+r11a_empirical_root_cause_known = false
+r11a_repair_authorized = false
 fresh_paid_attempt_authorized = false
 fresh_list_attempt_authorized = false
 requester_pays_authorized = false
@@ -275,9 +301,8 @@ All release-scoped R2 execution flags are false after consumption of release 002
 
 ## Exact next gate
 
-1. Preserve the original R11 run as consumed-unresolved evidence; never rerun or rewrite its immutable release snapshot.
-2. Canonically review an identity-and-boundary diagnostic preregistration over the exact same 72 objects, with occurrence provenance, block overlap classification, strict `tid` typing and complete repeat taxonomy.
-3. Review a fully inert implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
-4. Only after exact-head CI and clean-context review, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
-5. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
-6. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
+1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
+2. Review and merge a fully inert R11A implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
+3. After exact-head CI and clean-context review of the inert implementation, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
+4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
+5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
