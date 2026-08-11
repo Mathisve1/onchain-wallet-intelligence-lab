@@ -5,6 +5,8 @@
   "attestation_id": "ATTEST_HL_ARCHIVE_R11_72H_PERSISTENCE_SCALING_001",
   "canonical_dispatch_sha": "baca1925c23ef6b0136aa3d96d6d479ac7717bdf",
   "claims_not_proven": {
+    "active_day_count_would_have_been_correct": false,
+    "active_hour_count_represents_event_time_activity": false,
     "copyability": false,
     "duplicate_wallet_tid_count": false,
     "duplicate_wallet_tid_locations": false,
@@ -64,6 +66,18 @@
   },
   "execution_release_id": "RELEASE_HL_ARCHIVE_R11_72H_PERSISTENCE_001",
   "failure_class": "duplicate wallet+tid observations require investigation; blind deduplication forbidden",
+  "known_implementation_defects": {
+    "base_limit_globals_mutated_at_r11_import": true,
+    "day_tracking_getitem_mutates_state_on_read": true,
+    "path_hour_used_as_activity_hour_for_previous_hour_fills": true,
+    "preregistered_duplicate_count_discarded_on_unresolved_path": true
+  },
+  "known_defect_effect_on_this_retained_result": {
+    "aggregate_summary_was_removed_before_day_tracking_render_loop": true,
+    "duplicate_count_and_provenance_lost": true,
+    "published_wallet_feature_rows_corrupted": false,
+    "wallet_feature_rows_published": false
+  },
   "future_r11_dispatch_authorized": false,
   "new_network_request_requires_new_preregistration_approval_and_release": true,
   "numeric_tolerance_authorized": false,
@@ -95,6 +109,7 @@
   "release_consumed": true,
   "remaining_get_object_budget_from_consumed_release": 0,
   "rerun_authorized": false,
+  "preregistered_duplicate_wallet_tid_count_retention_met": false,
   "research_conclusion": "R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED",
   "schema_version": "1.0",
   "status": "ATTESTED_UNRESOLVED_DUPLICATE_WALLET_TID",
