@@ -1,6 +1,6 @@
 # Project State
 
-Verified: 2026-08-09 against canonical public-probe evidence, canonical R0 evidence, Region-probe preregistration `910997423f5e008f3c7bca65fd739d6aa14d25a7`, approval merge `b86156d71ef438441e6d3903a8bbc2da564a2046`, implementation merge `91687b4c803e331d4b2ef8493df731c99e25a0e5`, release merge `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`, successful single-use Region-probe run `31273770895`, Region-probe attestation merge `9378f625648592bd4a5890f47a98b36028cbd433`, canonical R2 preregistration merge `39b40cccc7e9a3fdbc439d06fb188e946d9da2aa`, canonical R2 approval merge `151e08f54037ca7d3a0a9c17d3bdfb84d707a66e`, canonical R2 implementation merge `142ce50be20507761c4cce37b325ac69d57f8b25`, canonical first R2 release merge `0dd6f32ab3a202b0c58f37821d1038ac917d84ce`, first-dispatch pre-OIDC / zero-S3 evidence, canonical successor release 002 merge `6128e6a9974742113f74c6e17fba7159dc60bde5` from exact-head PR #37, activation merge `5cf612b2125877a097b9697c074ac82d66cb1635`, and successful consumed successor run `31280640653` / job `93161240213` / artifact `9028305474`.
+Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, and independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`.
 
 ## Current status
 
@@ -69,6 +69,18 @@ Verified: 2026-08-09 against canonical public-probe evidence, canonical R0 evide
 | R2 successor release 002 exact-head CI | `d8e0a4102e26b12f64d7871b274e65891e81b431` / run `31279273339` / job `93157850604` / `185/185 PASS` |
 | R2 successor manual SHA input | `removed`; identity derives from `github.event_name`, `github.ref`, `github.sha` and checked-out HEAD |
 | R2 execution ready | `false`; release 002 consumed |
+| R10D status | `CONSUMED_COMPLETE_LEGACY_REDUCER_MECHANICS`; canonical identity backward consistency remains separately unresolved |
+| R10D run / artifact | `31420197671` / `9075129362` |
+| R11 status | `CONSUMED_UNRESOLVED_IDENTITY_DIAGNOSTIC_REQUIRED` |
+| R11 run / job / artifact | `31436753081` / `93612467250` / `9082810554` |
+| R11 dispatch / attempt | `baca1925c23ef6b0136aa3d96d6d479ac7717bdf` / `1` |
+| R11 requests / failures / retries | `72` / `0` / `0` |
+| R11 hours / days | `72` / `3` |
+| R11 wallet feature output | empty; `wallet_feature_retained=false` |
+| R11 failure | repeated legacy `wallet+tid` observations; root cause and count absent from retained original result |
+| R11 original release | `CONSUMED`; remaining request budget `0`; rerun forbidden |
+| R11 evidence-retention deviation | preregistered duplicate count was not retained (`false`) |
+| R11 closed / R12 ready | `false` / `false` |
 | R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` after consumption |
 | R2 aggregate S3 requests / metadata entries observed | `5` / `125` |
 | larger 300-request inventory | `false` |
@@ -78,6 +90,14 @@ Verified: 2026-08-09 against canonical public-probe evidence, canonical R0 evide
 | integration / paper / shadow / live / leverage / capital | all `false` |
 
 ## Evidence and interpretation
+
+R11's exact single-use run completed all 72 approved object reads, all three source-path UTC dates and all transport/alignment mechanics without a failed request or retry. The collector then detected at least one repeated legacy `(wallet, tid)` projection and deliberately emitted no wallet-feature rows. The canonical conclusion remains `R11_72H_PERSISTENCE_PIPELINE_UNRESOLVED`.
+
+The provider ZIP is retained reconstructably together with all five exact entries, including the zero-byte feature artifact and internal ledger. A separate immutable consumption record binds the run, job, artifact, dispatch SHA and artifact digest and leaves no reusable R11 request budget. The original pre-run release snapshot remains unchanged.
+
+The preregistration promised to retain the duplicate count, but the historical exception path discarded the aggregate summary. That promise was not met. The retained original evidence therefore proves neither the repeat count nor its locations, payload equality, block replay status or root cause. It also does not validate the success-path active-day output: the historical `DayTrackingStates.__getitem__` mutates on reads, although the duplicate guard fired before that render loop in the canonical run and the retained feature file is empty.
+
+R11 is not closed and R12 is not ready. Any new object read requires a new preregistration, explicit owner approval and separate single-use release. The consumed R11 release cannot be rerun.
 
 The single-use Region probe executed against exact canonical release commit `f32901ac1946ff6456c44b3a1f75e4a7b641fa39`. All exact-main, release and single-use checks passed before AWS OIDC. AWS role assumption succeeded. The probe issued exactly one authenticated direct SigV4 `HEAD /` to `hl-mainnet-node-data.s3.amazonaws.com`, requested Requester Pays acknowledgement, used zero retries, followed zero redirects and did not read a response body.
 
@@ -204,6 +224,29 @@ r2_market_data_ingestion_authorized = false
 r2_larger_300_request_inventory_authorized = false
 r2_s3_requests_executed = 5
 r2_metadata_entries_observed = 125
+r10d_release_consumed = true
+r10d_rerun_authorized = false
+r10d_event_pair_observation_count = 1486542
+r10d_legacy_wallet_tid_repeat_count = 0
+r10d_canonical_identity_backward_consistency = UNKNOWN
+r11_run_id = 31436753081
+r11_job_id = 93612467250
+r11_artifact_id = 9082810554
+r11_dispatch_sha = baca1925c23ef6b0136aa3d96d6d479ac7717bdf
+r11_run_attempt = 1
+r11_release_consumed = true
+r11_remaining_get_object_budget = 0
+r11_rerun_authorized = false
+r11_completed_hour_count = 72
+r11_completed_day_count = 3
+r11_successful_get_object_requests = 72
+r11_failed_requests = 0
+r11_retries_used = 0
+r11_wallet_feature_retained = false
+r11_preregistered_duplicate_count_retention_met = false
+r11_duplicate_root_cause_known = false
+r11_closed = false
+r12_ready = false
 fresh_paid_attempt_authorized = false
 fresh_list_attempt_authorized = false
 requester_pays_authorized = false
@@ -232,9 +275,9 @@ All release-scoped R2 execution flags are false after consumption of release 002
 
 ## Exact next gate
 
-1. Require exact-head Research CI, byte-exact repository-manifest validation, R2 evidence tests and clean-context review on this attestation branch.
-2. Merge only if run `31280640653`, job `93161240213`, artifact `9028305474`, dispatch commit `5cf612b2125877a097b9697c074ac82d66cb1635` and provider/downloaded artifact SHA-256 `491e651ab5b434c2c7489a4ec194a10f42cce50e80d801a3bb816c3e6b5144c8` remain exactly bound and all five first-page observations remain successful/truncated.
-3. After canonical evidence merge, treat release 002 as consumed permanently; do not rerun it.
-4. The next technical step may be a separately preregistered **bounded paginated metadata inventory** because all five first pages were truncated. Freeze its family scope, page/request ceiling, cost ceiling, completeness rules, retention fields and continuation-token handling before any network request.
-5. The existing larger 300-request inventory is still not authorized and must not be inferred as the default successor size; derive the smallest useful inventory envelope from the R2 evidence first.
-6. Object-body access, decompression, market-data ingestion, wallet analysis and all trading/capital stages remain separate future gates and are not authorized by this metadata result.
+1. Preserve the original R11 run as consumed-unresolved evidence; never rerun or rewrite its immutable release snapshot.
+2. Canonically review an identity-and-boundary diagnostic preregistration over the exact same 72 objects, with occurrence provenance, block overlap classification, strict `tid` typing and complete repeat taxonomy.
+3. Review a fully inert implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
+4. Only after exact-head CI and clean-context review, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
+5. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
+6. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
