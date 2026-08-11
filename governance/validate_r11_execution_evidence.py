@@ -85,15 +85,31 @@ def decode_retained_zip(root: Path) -> tuple[bytes, dict[str, bytes]]:
         archive = base64.b64decode(b"".join(encoded.split()), validate=True)
     except Exception as exc:  # pragma: no cover - exact decoder exception is implementation detail
         raise R11EvidenceError("retained artifact base64 is invalid") from exc
-    require(len(archive) == 10866 == reconstruction["decoded_size_bytes"], "artifact size drift")
-    require(sha256(archive) == ARTIFACT_SHA256 == reconstruction["decoded_sha256"], "artifact SHA-256 drift")
+    require(encoded == base64.encodebytes(archive), "retained artifact base64 wrapping drift")
+    require(len(archive) == 10866, "artifact size drift")
+    require(sha256(archive) == ARTIFACT_SHA256, "artifact SHA-256 drift")
+    expected_reconstruction = {
+        "schema_version": "1.0",
+        "artifact_id": ARTIFACT_ID,
+        "artifact_name": "r11-72h-persistence-31436753081",
+        "encoding": "BASE64_RFC4648_WRAPPED_76_COLUMNS",
+        "encoded_parts": ["artifact/r11-72h-persistence-31436753081.zip.b64"],
+        "decoded_size_bytes": len(archive),
+        "decoded_sha256": sha256(archive),
+        "exact_zip_entry_names": list(EXPECTED_ENTRIES),
+        "reconstruction_command": (
+            "base64 --decode artifact/r11-72h-persistence-31436753081.zip.b64 "
+            "> /tmp/r11-72h-persistence-31436753081.zip"
+        ),
+        "network_required_for_reconstruction": False,
+    }
+    require_exact_mapping(reconstruction, expected_reconstruction, "artifact reconstruction")
     with zipfile.ZipFile(io.BytesIO(archive), "r") as bundle:
         names = tuple(info.filename for info in bundle.infolist())
         require(len(names) == len(set(names)), "artifact contains duplicate entry names")
         require(set(names) == set(EXPECTED_ENTRIES), "artifact entry set drift")
         require(all(not name.startswith(("/", "\\")) and ".." not in Path(name).parts for name in names), "unsafe artifact entry")
         entries = {name: bundle.read(name) for name in names}
-    require(reconstruction["exact_zip_entry_names"] == list(EXPECTED_ENTRIES), "reconstruction entry contract drift")
     for name, data in entries.items():
         require((run / name).read_bytes() == data, f"retained raw entry differs from ZIP: {name}")
     return archive, entries
@@ -173,21 +189,101 @@ def validate(root: Path = ROOT) -> None:
     require(sum(day["event_pair_count"] for day in days) == sums["event_pair_count"], "per-day event conservation failed")
     require(sum(day["fill_time_before_path_hour_count"] for day in days) == 490, "per-day pre-hour conservation failed")
 
-    require(verification["provider_sha256"] == verification["independently_supplied_zip_sha256"] == ARTIFACT_SHA256, "provider artifact binding drift")
-    require(verification["artifact_id"] == ARTIFACT_ID and verification["run_id"] == RUN_ID and verification["job_id"] == JOB_ID, "verification identity drift")
-    require(verification["internal_ledger"] == ledger and verification["internal_ledger_matches_all_retained_raw_files"] is True, "verification ledger drift")
-    require(verification["duplicate_wallet_tid_observation_exists"] is True, "retained failure-path duplicate observation drift")
-    require(verification["duplicate_wallet_tid_count_known_from_retained_evidence"] is False, "duplicate count overclaim")
-    require(verification["duplicate_wallet_tid_locations_known_from_retained_evidence"] is False, "duplicate location overclaim")
-
     rules = prereg["cross_object_aggregation_rules"]
     require(rules["duplicate_wallet_tid_count_retained"] is True, "preregistered duplicate-retention promise drift")
-    require(attestation["preregistered_duplicate_wallet_tid_count_retention_met"] is False, "attestation hides preregistration deviation")
-    require(diagnostics["duplicate_wallet_tid_count_retention_was_preregistered"] is True, "diagnostics hide preregistration promise")
-    require(diagnostics["duplicate_wallet_tid_count_retention_met"] is False, "diagnostics hide retention failure")
-    require(diagnostics["duplicate_wallet_tid_count_known_from_retained_evidence"] is False, "diagnostics overclaim duplicate count")
-    require(diagnostics["duplicate_wallet_tid_locations_known_from_retained_evidence"] is False, "diagnostics overclaim duplicate locations")
-    require(diagnostics["event_pair_count"] == sums["event_pair_count"] and diagnostics["block_record_count"] == sums["block_record_count"], "diagnostic totals drift")
+    expected_verification = {
+        "artifact_files": list(EXPECTED_ENTRIES),
+        "artifact_id": ARTIFACT_ID,
+        "artifact_name": "r11-72h-persistence-31436753081",
+        "artifact_size_bytes": len(archive),
+        "completed_day_count": result["completed_day_count"],
+        "completed_hour_count": result["completed_hour_count"],
+        "configure_aws_outcome": context["configure_aws_outcome"],
+        "dispatch_ref": context["dispatch_ref"],
+        "dispatch_sha": context["dispatch_sha"],
+        "duplicate_wallet_tid_count_known_from_retained_evidence": False,
+        "duplicate_wallet_tid_locations_known_from_retained_evidence": False,
+        "duplicate_wallet_tid_observation_exists": True,
+        "event_name": context["event_name"],
+        "failed_request_count": result["failed_request_count"],
+        "failure_class": result["failure_class"],
+        "independently_supplied_zip_sha256": sha256(archive),
+        "internal_ledger": ledger,
+        "internal_ledger_matches_all_retained_raw_files": True,
+        "job_conclusion": "success",
+        "job_id": JOB_ID,
+        "pilot_id": result["pilot_id"],
+        "provider_digest_matches_independently_supplied_zip": True,
+        "provider_sha256": sha256(archive),
+        "request_attempt_count": result["request_attempt_count"],
+        "research_conclusion": result["research_conclusion"],
+        "retries_used": result["retries_used"],
+        "return_code_value": int(entries["r11.rc"].decode("ascii").strip()),
+        "run_id": context["workflow_run_id"],
+        "s3_http_request_count": result["s3_http_request_count"],
+        "schema_version": "1.0",
+        "successful_request_count": result["successful_request_count"],
+        "technical_result": result["technical_result"],
+        "terminal_status": result["terminal_status"],
+        "total_compressed_bytes": result["total_compressed_bytes"],
+        "total_decompressed_bytes": result["total_decompressed_bytes"],
+        "verification_result": "ALL_ARTIFACT_AND_BOUNDARY_CHECKS_PASS_RESEARCH_RESULT_UNRESOLVED",
+        "wallet_feature_file_bytes": len(entries["r11-wallet-features.ndjson"]),
+        "wallet_feature_retained": result["wallet_feature_retained"],
+        "workflow_run_attempt": context["workflow_run_attempt"],
+    }
+    require_exact_mapping(verification, expected_verification, "independent artifact verification")
+
+    expected_diagnostics = {
+        "aggregate_wallet_feature_summary": result["aggregate_wallet_feature_summary"],
+        "artifact_id": ARTIFACT_ID,
+        "before_fills_in_local_path_block_previous_records": sums[
+            "before_fills_in_local_path_block_previous_records"
+        ],
+        "blind_deduplication_authorized": False,
+        "block_record_count": sums["block_record_count"],
+        "completed_day_count": result["completed_day_count"],
+        "completed_hour_count": result["completed_hour_count"],
+        "duplicate_wallet_tid_count_known_from_retained_evidence": False,
+        "duplicate_wallet_tid_locations_known_from_retained_evidence": False,
+        "duplicate_wallet_tid_observation_exists": True,
+        "duplicate_wallet_tid_count_retention_was_preregistered": rules[
+            "duplicate_wallet_tid_count_retained"
+        ],
+        "duplicate_wallet_tid_count_retention_met": False,
+        "event_pair_count": sums["event_pair_count"],
+        "failed_request_count": result["failed_request_count"],
+        "failure_class": result["failure_class"],
+        "fill_time_after_path_hour_count": sums["fill_time_after_path_hour_count"],
+        "fill_time_before_path_hour_count": sums["fill_time_before_path_hour_count"],
+        "fill_time_inside_path_hour_count": sums["fill_time_inside_path_hour_count"],
+        "http_redirects_followed": result["http_redirects_followed"],
+        "local_path_block_path_record_count": sums["local_path_block_path_record_count"],
+        "local_path_block_previous_record_count": sums["local_path_block_previous_record_count"],
+        "per_day_summaries": days,
+        "pilot_id": result["pilot_id"],
+        "record_anchored_alignment_violation_count": sums[
+            "record_anchored_alignment_violation_count"
+        ],
+        "request_attempt_count": result["request_attempt_count"],
+        "research_conclusion": result["research_conclusion"],
+        "retries_used": result["retries_used"],
+        "s3_http_request_count": result["s3_http_request_count"],
+        "schema_version": "1.0",
+        "successful_request_count": result["successful_request_count"],
+        "technical_result": result["technical_result"],
+        "terminal_status": result["terminal_status"],
+        "total_compressed_bytes": result["total_compressed_bytes"],
+        "total_decompressed_bytes": result["total_decompressed_bytes"],
+        "wallet_feature_file_bytes": len(entries["r11-wallet-features.ndjson"]),
+        "wallet_feature_file_sha256": ledger["r11-wallet-features.ndjson"],
+        "wallet_feature_retained": result["wallet_feature_retained"],
+        "active_day_success_path_validated": False,
+        "source_path_hour_is_event_activity_hour_proven": False,
+        "workflow_job_id": JOB_ID,
+        "workflow_run_id": context["workflow_run_id"],
+    }
+    require_exact_mapping(diagnostics, expected_diagnostics, "R11 aggregate diagnostics")
 
     expected_claims_proven = {
         "all_72_exact_objects_completed_under_single_use_release": (
@@ -304,35 +400,69 @@ def validate(root: Path = ROOT) -> None:
     }
     require_exact_mapping(consumption, expected_consumption, "R11 release consumption")
 
-    expected_attestation_bindings = {
-        "artifact_id": verification["artifact_id"],
-        "artifact_name": verification["artifact_name"],
+    expected_claims_not_proven = {
+        "active_day_count_would_have_been_correct": False,
+        "active_hour_count_represents_event_time_activity": False,
+        "copyability": False,
+        "duplicate_wallet_tid_count": False,
+        "duplicate_wallet_tid_locations": False,
+        "duplicate_wallet_tid_rows_are_distinct_legitimate_fills": False,
+        "duplicate_wallet_tid_rows_are_identical_repeated_archive_observations": False,
+        "one_wallet_address_equals_one_human_or_economic_entity": False,
+        "sum_closed_pnl_fill_statistic_is_exact_account_return": False,
+        "three_day_window_is_sufficient_wallet_performance_history": False,
+        "tid_can_be_safely_used_as_a_deduplication_key": False,
+        "tid_is_globally_unique_per_wallet": False,
+        "wallet_quality_or_profitability": False,
+    }
+    expected_attestation = {
+        "artifact_id": ARTIFACT_ID,
+        "artifact_name": "r11-72h-persistence-31436753081",
         "artifact_zip_sha256": sha256(archive),
+        "attestation_id": "ATTEST_HL_ARCHIVE_R11_72H_PERSISTENCE_SCALING_001",
         "canonical_dispatch_sha": context["dispatch_sha"],
+        "claims_not_proven": expected_claims_not_proven,
+        "claims_proven": expected_claims_proven,
+        "downstream_authorizations": release["downstream_authorizations"],
+        "exact_execution_summary": expected_execution_summary,
+        "execution_release_id": release["execution_release_id"],
         "failure_class": result["failure_class"],
+        "known_implementation_defects": {
+            "base_limit_globals_mutated_at_r11_import": True,
+            "day_tracking_getitem_mutates_state_on_read": True,
+            "path_hour_used_as_activity_hour_for_previous_hour_fills": True,
+            "preregistered_duplicate_count_discarded_on_unresolved_path": True,
+        },
+        "known_defect_effect_on_this_retained_result": {
+            "aggregate_summary_was_removed_before_day_tracking_render_loop": True,
+            "duplicate_count_and_provenance_lost": True,
+            "published_wallet_feature_rows_corrupted": False,
+            "wallet_feature_rows_published": False,
+        },
+        "future_r11_dispatch_authorized": False,
+        "new_network_request_requires_new_preregistration_approval_and_release": True,
+        "numeric_tolerance_authorized": result["numeric_tolerance_authorized"],
+        "per_day_summaries": days,
         "pilot_id": result["pilot_id"],
         "record_anchored_rule_id": result["record_anchored_rule_id"],
-        "release_consumed": consumption["release_consumed"],
-        "remaining_get_object_budget_from_consumed_release": consumption[
-            "remaining_get_object_budget_from_consumed_release"
-        ],
-        "rerun_authorized": consumption["rerun_authorized"],
-        "preregistered_duplicate_wallet_tid_count_retention_met": diagnostics[
-            "duplicate_wallet_tid_count_retention_met"
-        ],
+        "release_consumed": True,
+        "remaining_get_object_budget_from_consumed_release": (
+            release["maximum_get_object_requests"] - result["request_attempt_count"]
+        ),
+        "rerun_authorized": False,
+        "preregistered_duplicate_wallet_tid_count_retention_met": False,
         "research_conclusion": result["research_conclusion"],
+        "schema_version": "1.0",
+        "status": "ATTESTED_UNRESOLVED_DUPLICATE_WALLET_TID",
         "technical_result": result["technical_result"],
         "terminal_status": result["terminal_status"],
-        "workflow_job_id": verification["job_id"],
+        "trading_authorizations": release["trading_authorizations"],
+        "workflow_job_id": JOB_ID,
         "workflow_run_attempt": context["workflow_run_attempt"],
         "workflow_run_id": context["workflow_run_id"],
     }
-    for key, expected in expected_attestation_bindings.items():
-        require(key in attestation and exact_json_equal(attestation[key], expected), f"attestation {key} drift")
+    require_exact_mapping(attestation, expected_attestation, "R11 execution attestation")
 
-    require(all(value is False for value in attestation["claims_not_proven"].values()), "attestation marks an unproven claim true")
-    require(all(value is False for value in attestation["downstream_authorizations"].values()), "attestation opens downstream authority")
-    require(all(value is False for value in attestation["trading_authorizations"].values()), "attestation opens trading authority")
     require(all(value is False for value in consumption["downstream_authorizations"].values()), "consumption opens downstream authority")
     require(all(value is False for value in consumption["trading_authorizations"].values()), "consumption opens trading authority")
     for name in ("R11_RESEARCH_CONCLUSION.md", "README.md"):
