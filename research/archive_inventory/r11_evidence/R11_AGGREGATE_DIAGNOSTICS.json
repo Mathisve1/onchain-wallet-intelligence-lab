@@ -9,6 +9,8 @@
   "duplicate_wallet_tid_count_known_from_retained_evidence": false,
   "duplicate_wallet_tid_locations_known_from_retained_evidence": false,
   "duplicate_wallet_tid_observation_exists": true,
+  "duplicate_wallet_tid_count_retention_was_preregistered": true,
+  "duplicate_wallet_tid_count_retention_met": false,
   "event_pair_count": 26384234,
   "failed_request_count": 0,
   "failure_class": "duplicate wallet+tid observations require investigation; blind deduplication forbidden",
@@ -56,6 +58,8 @@
   "wallet_feature_file_bytes": 0,
   "wallet_feature_file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "wallet_feature_retained": false,
+  "active_day_success_path_validated": false,
+  "source_path_hour_is_event_activity_hour_proven": false,
   "workflow_job_id": 93612467250,
   "workflow_run_id": 31436753081
 }
