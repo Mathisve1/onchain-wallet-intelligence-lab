@@ -9,7 +9,8 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | program | `ONCHAIN-WALLET-INTELLIGENCE` |
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
-| lifecycle stage | `R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTERED` |
+| lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
+| archive diagnostic gate | `R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTERED_NO_EXECUTION` |
 | experiment status | `R11_CONSUMED_UNRESOLVED_R11A_NO_EXECUTION` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
