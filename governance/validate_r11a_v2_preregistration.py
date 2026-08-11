@@ -288,7 +288,7 @@ def validate_document(
     require(len(set(value for key, value in stages.items() if key != "inert_validator_must_not_be_called_by_post_approval_runtime_workflow")) == 9, "stage validators are not distinct")
 
     required_values = document["values_required_before_owner_approval"]
-    require(len(required_values) == len(set(required_values)) == 10, "pre-approval hash binding list drift")
+    require(len(required_values) == len(set(required_values)) == 11, "pre-approval hash binding list drift")
     require("provider_pricing_and_eur_conversion_snapshot_sha256" in required_values, "pricing/EUR snapshot no longer required")
 
     require(all(value is False for value in document["current_runtime_authority"].values()), "runtime authority opened")

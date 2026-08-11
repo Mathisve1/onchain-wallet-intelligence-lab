@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "binding_id": "R11A-V2-PREREGISTRATION-BINDINGS-001",
+  "status": "SEALED_PREREGISTRATION_NO_EXECUTION",
+  "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
+  "file_sha256": {
+    "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json": "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f",
+    "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.md": "53a530333ecd13de36554fd200a4be377ba4893857bf6859500c856a10577bf7",
+    "research/archive_inventory/r11a_v2/R11A_V2_STATUS.json": "68ea8af8623487f3b65a18ce7196c60c6e620ac456bbfcaff2edb6278bd2da93",
+    "research/archive_inventory/r11a_v2/README.md": "63e7e4a79f302da36818aff19ad4183335e3a80919149195028dc21d924839ad",
+    "governance/R11A_V2_REVIEW_FINDINGS.md": "b1b1a717f4ee5047c459e7976bc1f74398426c66c47b1f3db87d92e203e8b8c9",
+    "governance/validate_r11a_v2_preregistration.py": "2c2a7c5df641c57129f7626acfa2783c75ef3604cf1c76103fa3593d8c590553",
+    "governance/validate_r11a_v2_bindings.py": "940716f77d4f09de2a70cf68b56c1a8924c5990a348da521b27b829b18263fab",
+    "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988",
+    "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b"
+  },
+  "external_bindings": {
+    "canonical_parent_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+    "original_preregistration_merge_commit": "5103c846be8a53732d8559a281ac8b57ce4d7aac",
+    "original_inert_implementation_merge_commit": "8e778fdf6e7b5ef5475791bd4292b2d04055afcd",
+    "failed_closure_attempt_merge_commit": "4bb3eaf4cbcfea7771261ade73d618912496585a",
+    "containment_merge_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+    "selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+    "prior_result_sha256": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
+    "original_r11_artifact_sha256": "45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5"
+  },
+  "owner_approval_eligible": false,
+  "network_execution_authorized": false,
+  "r11_closed": false,
+  "r12_ready": false,
+  "empirical_result": null
+}
