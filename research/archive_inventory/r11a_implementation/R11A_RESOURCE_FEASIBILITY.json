@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "report_id": "R11A-RESOURCE-FEASIBILITY-001",
+  "status": "OFFLINE_STATIC_BOUND_COMPLETE_FULL_SCALE_SUCCESS_CONDITIONAL",
+  "source_counts": {
+    "selected_compressed_bytes": 2107738436,
+    "one_pass_decompressed_bytes": 10539979245,
+    "two_pass_decompressed_processing_bytes": 21079958490,
+    "raw_block_observations": 3283391,
+    "raw_event_observations": 26384234
+  },
+  "implementation_index_model": {
+    "block_index_framed_bytes_per_record": 26,
+    "block_index_projected_bytes": 85368166,
+    "representative_integer_tid_weak_index_bytes_per_record": 96,
+    "representative_integer_tid_weak_index_projected_bytes": 2532886464,
+    "representative_presort_workspace_bytes_excluding_schema_index": 4725993066,
+    "workspace_cap_bytes": 5368709120,
+    "representative_presort_margin_bytes_excluding_schema_index": 642716054,
+    "external_sort_memory_bytes": 67108864,
+    "fixed_partition_count_per_primary_reducer": 256,
+    "primary_reducer_count": 2,
+    "primary_reducer_partition_rows": 512
+  },
+  "worst_case_boundaries": {
+    "legacy_tid_string_up_to_128_codepoints_can_exceed_representative_96_byte_index_record": true,
+    "four_byte_utf8_codepoints_can_expand_legacy_string_keys": true,
+    "schema_violation_index_size_is_data_dependent": true,
+    "repeated_block_member_event_volume_is_data_dependent": true,
+    "successful_complete_terminal_within_workspace_is_not_proven_before_execution": true,
+    "workspace_cap_breach_behavior": "R11A_DIAGNOSTIC_INCOMPLETE_NO_PARTIAL_SCIENTIFIC_OUTPUT",
+    "retention_or_artifact_cap_breach_behavior": "R11A_DIAGNOSTIC_ARTIFACT_CAP_EXCEEDED_WITH_SEVEN_EMPTY_SCIENTIFIC_CONTAINERS",
+    "runtime_cap_breach_behavior": "R11A_DIAGNOSTIC_INCOMPLETE_WITH_PACKAGING_RESERVATION"
+  },
+  "bounded_safety_findings": {
+    "all_source_objects_are_retained_only_ephemerally": true,
+    "compressed_objects_are_deleted_after_second_local_pass": true,
+    "index_records_are_partitioned_before_sort": true,
+    "one_partition_is_externally_sorted_at_a_time": true,
+    "sort_memory_is_bounded": true,
+    "workspace_is_measured_after_mutating_boundaries": true,
+    "pre_oidc_free_space_threshold_exceeds_workspace_cap": true,
+    "scientific_output_is_committed_atomically": true,
+    "partial_scientific_prefix_upload_is_forbidden": true,
+    "wallet_feature_output_is_always_zero_bytes": true,
+    "network_execution_is_blocked_without_a_separate_release": true
+  },
+  "complexity": {
+    "source_parse_time": "O(N) per local pass over exact decompressed bytes",
+    "index_write_time": "O(E+B) where E is event observations and B is block observations",
+    "partition_sort_time": "sum O(P_i log P_i) over 256 partitions per reducer",
+    "materialization_time": "O(N) second pass plus output proportional to retained repeat and schema evidence",
+    "in_memory_state": "bounded sort chunk plus retained repeat/block locator sets and materialized evidence under frozen caps",
+    "disk_state": "compressed source bodies plus partitioned framed indices plus one partition sort overhead plus final staging"
+  },
+  "offline_test_scope": {
+    "canonical_serialization_golden_vectors": true,
+    "all_nine_taxa_have_synthetic_or_adversarial_tests_required": true,
+    "input_order_determinism_required": true,
+    "two_pass_commitment_mismatch_test_required": true,
+    "workspace_and_artifact_cap_failure_tests_required": true,
+    "atomic_cleanup_after_failure_test_required": true,
+    "full_21gb_wall_clock_benchmark_performed": false
+  },
+  "conclusion": {
+    "bounded_fail_closed_execution_feasible": true,
+    "successful_complete_terminal_guaranteed": false,
+    "reason_success_is_conditional": "The exact raw tid types, repeat multiplicities, schema violation volume and block replay member volume were not retained by R11. R11A exists to measure them. Frozen caps guarantee bounded failure, not a fabricated complete result.",
+    "owner_approval_eligible_only_after_exact_head_ci_and_clean_context_review": true
+  },
+  "network_requests_executed_by_report": 0,
+  "empirical_result": null
+}
