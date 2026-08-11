@@ -188,6 +188,38 @@ def repair_validator() -> None:
     elif "for forbidden_import in (" not in text:
         raise RepairError("validator dependency import check target absent")
 
+    old_activity_check = (
+        '    require("defaultdict" not in activity and "setdefault" not in activity, '
+        '"activity tracker lazy-read mutation pattern")\n'
+    )
+    new_activity_check = '''    imports_defaultdict = any(
+        (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "collections"
+            and any(alias.name == "defaultdict" for alias in node.names)
+        )
+        or (
+            isinstance(node, ast.Import)
+            and any(alias.name == "collections.defaultdict" for alias in node.names)
+        )
+        for node in ast.walk(activity_tree)
+    )
+    calls_setdefault = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "setdefault"
+        for node in ast.walk(activity_tree)
+    )
+    require(
+        not imports_defaultdict and not calls_setdefault,
+        "activity tracker lazy-read mutation pattern",
+    )
+'''
+    if old_activity_check in text:
+        text = text.replace(old_activity_check, new_activity_check, 1)
+    elif "calls_setdefault = any(" not in text:
+        raise RepairError("validator activity AST guard target absent")
+
     VALIDATOR.write_text(text, encoding="utf-8")
 
 
