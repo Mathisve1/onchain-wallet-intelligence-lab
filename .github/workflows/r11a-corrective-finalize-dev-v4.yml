@@ -50,22 +50,25 @@ jobs:
           import ast
           from pathlib import Path
 
-          def replace_function(path: Path, function_name: str, replacement: str) -> None:
+          def replace_definition(path: Path, definition_name: str, replacement: str) -> None:
               text = path.read_text(encoding='utf-8')
               tree = ast.parse(text, filename=str(path))
               target = next(
                   (
                       node
                       for node in tree.body
-                      if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                      and node.name == function_name
+                      if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                      and node.name == definition_name
                   ),
                   None,
               )
               if target is None or target.end_lineno is None:
-                  raise SystemExit(f'function not found: {path}:{function_name}')
+                  raise SystemExit(f'definition not found: {path}:{definition_name}')
               lines = text.splitlines(keepends=True)
-              lines[target.lineno - 1 : target.end_lineno] = [replacement.rstrip() + '\n\n']
+              start = target.lineno - 1
+              while start > 0 and lines[start - 1].lstrip().startswith('@'):
+                  start -= 1
+              lines[start : target.end_lineno] = [replacement.rstrip() + '\n\n']
               path.write_text(''.join(lines), encoding='utf-8')
 
           canonical = Path('research/archive_inventory/r11a_corrective/canonical.py')
@@ -78,7 +81,7 @@ jobs:
           elif new_alias not in text:
               raise SystemExit('recursive FrozenValue alias has unexpected bytes')
 
-          replace_function(
+          replace_definition(
               canonical,
               'mathematically_integral_number',
               '''def mathematically_integral_number(token: NumberToken) -> str | None:
@@ -136,6 +139,89 @@ jobs:
               artifact.write_text(artifact_text, encoding='utf-8')
           elif new_import not in artifact_text:
               raise SystemExit('artifact taxonomy import has unexpected bytes')
+
+          storage = Path('research/archive_inventory/r11a_corrective/storage.py')
+          replace_definition(
+              storage,
+              'SortEvidence',
+              '''@dataclasses.dataclass(frozen=True, slots=True)
+              class SortEvidence:
+                  input_records: int
+                  output_records: int
+                  input_logical_bytes: int
+                  output_logical_bytes: int
+                  source_commitment: dict[str, object]
+                  destination_commitment: dict[str, object]
+                  sorted_stream_sha256: str
+                  output_bytes: int
+
+                  def validate(self) -> None:
+                      values = (
+                          self.input_records,
+                          self.output_records,
+                          self.input_logical_bytes,
+                          self.output_logical_bytes,
+                          self.output_bytes,
+                      )
+                      if any(type(value) is not int or value < 0 for value in values):
+                          raise StorageBoundaryError("sort evidence counts and bytes must be nonnegative integers")
+                      if self.input_records != self.output_records:
+                          raise StorageBoundaryError("external sort changed record count")
+                      if self.input_logical_bytes != self.output_logical_bytes:
+                          raise StorageBoundaryError("external sort changed logical byte count")
+                      if int(self.source_commitment.get("record_count", -1)) != self.input_records:
+                          raise StorageBoundaryError("source commitment record count mismatch")
+                      if int(self.destination_commitment.get("record_count", -1)) != self.output_records:
+                          raise StorageBoundaryError("destination commitment record count mismatch")
+                      if int(self.source_commitment.get("logical_bytes", -1)) != self.input_logical_bytes:
+                          raise StorageBoundaryError("source commitment logical byte mismatch")
+                      if int(self.destination_commitment.get("logical_bytes", -1)) != self.output_logical_bytes:
+                          raise StorageBoundaryError("destination commitment logical byte mismatch")
+                      if self.source_commitment != self.destination_commitment:
+                          raise StorageBoundaryError("external sort changed the exact record multiset")
+                      if len(self.sorted_stream_sha256) != 64:
+                          raise StorageBoundaryError("sorted stream SHA-256 format invalid")
+                      if self.output_bytes < self.output_logical_bytes:
+                          raise StorageBoundaryError("framed output bytes cannot be smaller than logical bytes")''',
+          )
+          storage_text = storage.read_text(encoding='utf-8')
+          old_constructor = '''    evidence = SortEvidence(
+              source_commitment=source_commitment,
+              destination_commitment=destination_commitment.as_mapping(),
+              sorted_stream_sha256=sorted_stream.hexdigest(),
+              output_bytes=destination.stat().st_size,
+          )'''
+          new_constructor = '''    destination_mapping = destination_commitment.as_mapping()
+              evidence = SortEvidence(
+                  input_records=int(source_commitment["record_count"]),
+                  output_records=int(destination_mapping["record_count"]),
+                  input_logical_bytes=int(source_commitment["logical_bytes"]),
+                  output_logical_bytes=int(destination_mapping["logical_bytes"]),
+                  source_commitment=source_commitment,
+                  destination_commitment=destination_mapping,
+                  sorted_stream_sha256=sorted_stream.hexdigest(),
+                  output_bytes=destination.stat().st_size,
+              )'''
+          if old_constructor in storage_text:
+              storage_text = storage_text.replace(old_constructor, new_constructor, 1)
+              storage.write_text(storage_text, encoding='utf-8')
+          elif new_constructor not in storage_text:
+              raise SystemExit('SortEvidence constructor has unexpected bytes')
+
+          test_path = Path('tests/test_archive_inventory_r11a_corrective_artifacts.py')
+          test_text = test_path.read_text(encoding='utf-8')
+          replacements = {
+              'hyperliquid-archive-r11a-identity-boundary-diagnostic-r3.yml':
+                  'hyperliquid-archive-r11a-identity-boundary-diagnostic-r6.yml',
+              'validate_r11a_corrective_implementation.py --approval-eligible':
+                  'validate_r11a_corrective_implementation_r5.py --canonical-bytes',
+          }
+          for old, new in replacements.items():
+              if old in test_text:
+                  test_text = test_text.replace(old, new)
+              elif new not in test_text:
+                  raise SystemExit(f'corrective test expectation has unexpected bytes: {old}')
+          test_path.write_text(test_text, encoding='utf-8')
           PY
           python governance/generate_r11a_corrective_policies.py --write
 
