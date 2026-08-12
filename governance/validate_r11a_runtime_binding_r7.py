@@ -6,6 +6,7 @@ from governance import _validate_r11a_runtime_binding_core_r7 as _core
 _EXTRA_TRANSITIVE_PATHS = (
     "governance/_validate_r11a_runtime_binding_core_r7.py",
     "research/archive_inventory/r11a_corrective/_artifact_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_artifact_schema_core_r7.py",
     "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
 )
 
