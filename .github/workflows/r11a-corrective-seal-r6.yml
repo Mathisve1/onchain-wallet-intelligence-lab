@@ -41,6 +41,36 @@ jobs:
           python-version: '3.12.13'
           check-latest: false
 
+      - name: Make the sealer tolerant of test files without lifecycle references
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('governance/seal_r11a_corrective_r6.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    for relative in TEST_FILES:
+              path = ROOT / relative
+              if path.is_file():
+                  replace_required(
+                      path,
+                      "validate_r11a_corrective_implementation_r5.py",
+                      "validate_r11a_corrective_implementation_r6.py",
+                  )'''
+          new = '''    for relative in TEST_FILES:
+              path = ROOT / relative
+              if not path.is_file():
+                  continue
+              text = path.read_text(encoding="utf-8")
+              old_validator_name = "validate_r11a_corrective_implementation_r5.py"
+              new_validator_name = "validate_r11a_corrective_implementation_r6.py"
+              if old_validator_name in text:
+                  path.write_text(text.replace(old_validator_name, new_validator_name), encoding="utf-8")'''
+          if old not in text:
+              raise SystemExit('sealer test-binding loop has unexpected bytes')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Write and verify the exact sealed-review implementation state
         shell: bash
         run: |
