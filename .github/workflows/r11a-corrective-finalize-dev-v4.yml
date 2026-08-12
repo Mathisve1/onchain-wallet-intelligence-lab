@@ -185,13 +185,24 @@ jobs:
                           raise StorageBoundaryError("framed output bytes cannot be smaller than logical bytes")''',
           )
           storage_text = storage.read_text(encoding='utf-8')
-          old_constructor = '''    evidence = SortEvidence(
-              source_commitment=source_commitment,
-              destination_commitment=destination_commitment.as_mapping(),
-              sorted_stream_sha256=sorted_stream.hexdigest(),
-              output_bytes=destination.stat().st_size,
-          )'''
-          new_constructor = '''    destination_mapping = destination_commitment.as_mapping()
+          storage_tree = ast.parse(storage_text, filename=str(storage))
+          sort_function = next(
+              node
+              for node in storage_tree.body
+              if isinstance(node, ast.FunctionDef) and node.name == 'external_sort_partition'
+          )
+          constructor = next(
+              node
+              for node in sort_function.body
+              if isinstance(node, ast.Assign)
+              and isinstance(node.value, ast.Call)
+              and isinstance(node.value.func, ast.Name)
+              and node.value.func.id == 'SortEvidence'
+          )
+          if constructor.end_lineno is None:
+              raise SystemExit('SortEvidence constructor has no end line')
+          lines = storage_text.splitlines(keepends=True)
+          replacement = '''    destination_mapping = destination_commitment.as_mapping()
               evidence = SortEvidence(
                   input_records=int(source_commitment["record_count"]),
                   output_records=int(destination_mapping["record_count"]),
@@ -202,11 +213,8 @@ jobs:
                   sorted_stream_sha256=sorted_stream.hexdigest(),
                   output_bytes=destination.stat().st_size,
               )'''
-          if old_constructor in storage_text:
-              storage_text = storage_text.replace(old_constructor, new_constructor, 1)
-              storage.write_text(storage_text, encoding='utf-8')
-          elif new_constructor not in storage_text:
-              raise SystemExit('SortEvidence constructor has unexpected bytes')
+          lines[constructor.lineno - 1 : constructor.end_lineno] = [replacement.rstrip() + '\n']
+          storage.write_text(''.join(lines), encoding='utf-8')
 
           test_path = Path('tests/test_archive_inventory_r11a_corrective_artifacts.py')
           test_text = test_path.read_text(encoding='utf-8')
