@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from . import _artifact_schema_core_r7 as _core
 from .canonical import NumberToken
 
@@ -18,6 +20,21 @@ def _exact_nonnegative_int(value: object, label: str) -> int:
             f"{label} must be a nonnegative exact integer"
         )
     return observed
+
+
+def _normalize_exact_integers(value: object) -> object:
+    if isinstance(value, NumberToken):
+        if not value.is_integer_token:
+            return value
+        return int(value.token, 10)
+    if isinstance(value, Mapping):
+        return {
+            key: _normalize_exact_integers(observed)
+            for key, observed in value.items()
+        }
+    if isinstance(value, tuple):
+        return tuple(_normalize_exact_integers(observed) for observed in value)
+    return value
 
 
 _core._exact_nonnegative_int = _exact_nonnegative_int
@@ -54,9 +71,16 @@ validate_terminal_tuple = _core.validate_terminal_tuple
 validate_sha256 = _core.validate_sha256
 zero_taxon_counts = _core.zero_taxon_counts
 validate_parse_conservation = _core.validate_parse_conservation
-validate_object_row_shape = _core.validate_object_row_shape
 validate_universe_rows = _core.validate_universe_rows
 validate_terminal_gates = _core.validate_terminal_gates
+
+
+def validate_object_row_shape(row: Mapping[str, object]) -> None:
+    normalized = _normalize_exact_integers(row)
+    if not isinstance(normalized, Mapping):
+        raise ArtifactSchemaError("object ledger row normalization failed")
+    _core.validate_object_row_shape(normalized)
+
 
 __all__ = [
     "AUTHORITATIVE_UNIT_UNIVERSES",
