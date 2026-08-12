@@ -8,6 +8,7 @@ _EXTRA_TRANSITIVE_PATHS = (
     "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
     "research/archive_inventory/r11a_corrective/_artifact_core_r7.py",
     "research/archive_inventory/r11a_corrective/_artifact_schema_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_runner_core_r7.py",
     "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
 )
 
