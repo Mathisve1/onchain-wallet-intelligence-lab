@@ -11,6 +11,7 @@ _EXTRA_TRANSITIVE_PATHS = (
     "research/archive_inventory/r11a_corrective/_runner_core_r7.py",
     "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py",
     "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
+    "research/archive_inventory/r11a_corrective/taxonomy_precedence_r7.py",
 )
 
 _core.TRANSITIVE_CODE_PATHS = tuple(
