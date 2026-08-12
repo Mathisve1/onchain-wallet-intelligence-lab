@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "status_id": "R11A-V2-STATUS-001",
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "canonical_parent_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
+  "independent_review_verdict_on_original_implementation": "RED",
+  "original_implementation_owner_approval_eligible": false,
+  "corrective_preregistration_present": true,
+  "corrective_implementation_present": false,
+  "owner_approval_present": false,
+  "workflow_installed": false,
+  "successor_role_created": false,
+  "sts_preflight_completed": false,
+  "execution_release_present": false,
+  "canonical_activation_present": false,
+  "network_requests_executed": 0,
+  "diagnostic_rows_created": 0,
+  "r11_closed": false,
+  "r12_ready": false,
+  "empirical_result": null
+}
