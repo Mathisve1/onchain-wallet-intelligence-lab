@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from . import _artifact_schema_core_r7 as _core
 from .canonical import NumberToken
@@ -23,6 +23,13 @@ def _exact_nonnegative_int(value: object, label: str) -> int:
 
 
 def _normalize_exact_integers(value: object) -> object:
+    """Convert only strict-decoded lexical JSON integers to Python ints.
+
+    The canonical decoder deliberately retains source number tokens. Schema
+    validation, however, must perform arithmetic over exact integers without
+    coercing decimals, booleans, floats, or other source values.
+    """
+
     if isinstance(value, NumberToken):
         if not value.is_integer_token:
             return value
@@ -70,9 +77,13 @@ exact_root_cause_status = _core.exact_root_cause_status
 validate_terminal_tuple = _core.validate_terminal_tuple
 validate_sha256 = _core.validate_sha256
 zero_taxon_counts = _core.zero_taxon_counts
-validate_parse_conservation = _core.validate_parse_conservation
-validate_universe_rows = _core.validate_universe_rows
-validate_terminal_gates = _core.validate_terminal_gates
+
+
+def validate_parse_conservation(value: Mapping[str, object]) -> None:
+    normalized = _normalize_exact_integers(value)
+    if not isinstance(normalized, Mapping):
+        raise ArtifactSchemaError("parse conservation normalization failed")
+    _core.validate_parse_conservation(normalized)
 
 
 def validate_object_row_shape(row: Mapping[str, object]) -> None:
@@ -80,6 +91,20 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
     if not isinstance(normalized, Mapping):
         raise ArtifactSchemaError("object ledger row normalization failed")
     _core.validate_object_row_shape(normalized)
+
+
+def validate_universe_rows(rows: Sequence[Mapping[str, object]]) -> None:
+    normalized = _normalize_exact_integers(tuple(rows))
+    if not isinstance(normalized, tuple) or any(
+        not isinstance(row, Mapping) for row in normalized
+    ):
+        raise ArtifactSchemaError("unit conservation normalization failed")
+    _core.validate_universe_rows(normalized)  # type: ignore[arg-type]
+
+
+def validate_terminal_gates(value: object) -> None:
+    normalized = _normalize_exact_integers(value)
+    _core.validate_terminal_gates(normalized)
 
 
 __all__ = [
