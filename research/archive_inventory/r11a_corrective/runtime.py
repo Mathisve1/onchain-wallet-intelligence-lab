@@ -5,7 +5,13 @@ import hashlib
 import time
 from collections.abc import Callable, Mapping, Sequence
 
-from .artifact_schema import DIAGNOSTIC_ID, PHASES, validate_object_row_shape
+from .artifact_schema import (
+    DIAGNOSTIC_ID,
+    PARSE_CONSERVATION_FIELDS,
+    PHASES,
+    validate_object_row_shape,
+    validate_parse_conservation,
+)
 from .canonical import canonical_json_bytes
 from .limits import R11ALimits
 
@@ -38,7 +44,10 @@ class RuntimeGuard:
             raise RuntimeBoundaryError(f"scientific runtime reserve reached at {phase}")
 
     def check_packaging_phase(self, phase: str) -> None:
-        deadline = self.limits.maximum_runtime_seconds - self.limits.minimum_upload_window_seconds
+        deadline = (
+            self.limits.maximum_runtime_seconds
+            - self.limits.minimum_upload_window_seconds
+        )
         if self.elapsed_ns() >= deadline * 1_000_000_000:
             raise RuntimeBoundaryError(f"packaging runtime reserve reached at {phase}")
 
@@ -50,7 +59,8 @@ class RuntimeGuard:
         elapsed = self.elapsed_seconds_floor()
         return {
             "preupload_runtime_within_hard_limit_after_upload_window": elapsed
-            < self.limits.maximum_runtime_seconds - self.limits.minimum_upload_window_seconds,
+            < self.limits.maximum_runtime_seconds
+            - self.limits.minimum_upload_window_seconds,
             "scientific_runtime_completed_before_packaging_reservation": elapsed
             < self.limits.maximum_runtime_seconds,
         }
@@ -110,10 +120,14 @@ class ExecutionEvidenceState:
     def __init__(self, targets: Sequence[RuntimeTarget], limits: R11ALimits) -> None:
         limits.validate()
         if len(targets) != 72:
-            raise RuntimeBoundaryError("runtime target count must equal exact 72-object scope")
+            raise RuntimeBoundaryError(
+                "runtime target count must equal exact 72-object scope"
+            )
         ordered = sorted(targets, key=lambda value: value.object_ordinal_zero_based)
         if [value.object_ordinal_zero_based for value in ordered] != list(range(72)):
-            raise RuntimeBoundaryError("object ordinals must be contiguous from zero")
+            raise RuntimeBoundaryError(
+                "object ordinals must be contiguous from zero"
+            )
         if len({value.object_key for value in ordered}) != 72:
             raise RuntimeBoundaryError("object keys must be unique")
         self._limits = limits
@@ -150,7 +164,9 @@ class ExecutionEvidenceState:
         if state.request_count != 0:
             raise RuntimeBoundaryError("object request attempted more than once")
         if ordinal != self._network_request_count:
-            raise RuntimeBoundaryError("request order differs from path-hour ascending selection")
+            raise RuntimeBoundaryError(
+                "request order differs from path-hour ascending selection"
+            )
         if self._network_request_count >= self._limits.maximum_get_object_requests:
             raise RuntimeBoundaryError("global request cap exceeded")
         state.request_count = 1
@@ -179,7 +195,10 @@ class ExecutionEvidenceState:
 
     def body_progress(self, ordinal: int, received_total: int) -> None:
         state = self._state(ordinal)
-        if state.request_status != "RESPONSE_METADATA_RECEIVED" or state.response is None:
+        if (
+            state.request_status != "RESPONSE_METADATA_RECEIVED"
+            or state.response is None
+        ):
             raise RuntimeBoundaryError("body arrived before response metadata")
         if received_total < state.body_bytes_received:
             raise RuntimeBoundaryError("received body byte count decreased")
@@ -218,6 +237,17 @@ class ExecutionEvidenceState:
             raise RuntimeBoundaryError("negative local parse evidence")
         if len(stream_sha256) != 64:
             raise RuntimeBoundaryError("decompressed stream SHA-256 malformed")
+        try:
+            validate_parse_conservation(
+                conservation,
+                record_count=record_count,
+                event_count=event_count,
+                label=f"object_{ordinal}_pass_{pass_number}",
+            )
+        except ValueError as exc:
+            raise RuntimeBoundaryError(
+                "local pass conservation does not match shared artifact schema"
+            ) from exc
         value = {
             "status": "COMPLETE",
             "decompressed_bytes": decompressed_bytes,
@@ -251,6 +281,8 @@ class ExecutionEvidenceState:
         evidence: Mapping[str, object] | None = None,
     ) -> None:
         observed_phase = self._current_phase if phase is None else phase
+        if observed_phase not in PHASES:
+            raise RuntimeBoundaryError("stop evidence uses unknown phase")
         payload = {} if evidence is None else dict(evidence)
         self._stops.append(
             StopEntry(
@@ -275,20 +307,29 @@ class ExecutionEvidenceState:
             row = {
                 "record_type": "R11A_V2_OBJECT_EXECUTION_EVIDENCE",
                 "diagnostic_id": DIAGNOSTIC_ID,
-                "object_ordinal_zero_based": state.target.object_ordinal_zero_based,
+                "object_ordinal_zero_based": (
+                    state.target.object_ordinal_zero_based
+                ),
                 "object_key": state.target.object_key,
                 "source_path_hour_utc": state.target.source_path_hour_utc,
                 "expected_identity": {
                     "size_bytes": state.target.expected_size_bytes,
                     "etag": state.target.expected_etag,
-                    "compressed_sha256": state.target.expected_compressed_sha256,
+                    "compressed_sha256": (
+                        state.target.expected_compressed_sha256
+                    ),
                 },
-                "request": {"count": state.request_count, "status": state.request_status},
+                "request": {
+                    "count": state.request_count,
+                    "status": state.request_status,
+                },
                 "response": state.response,
                 "body": {
                     "status": state.body_status,
                     "bytes_received": state.body_bytes_received,
-                    "observed_compressed_sha256": state.observed_compressed_sha256,
+                    "observed_compressed_sha256": (
+                        state.observed_compressed_sha256
+                    ),
                 },
                 "first_pass": state.first_pass,
                 "second_pass": state.second_pass,
@@ -305,7 +346,19 @@ class ExecutionEvidenceState:
     def exact_scope_complete(self) -> bool:
         return (
             self._network_request_count == 72
-            and all(value.terminal_status == "COMPLETE_TWO_LOCAL_PASSES" for value in self._objects)
+            and all(
+                value.request_count == 1
+                and value.request_status == "COMPLETE"
+                and value.body_status == "COMPLETE"
+                and value.observed_compressed_sha256
+                == value.target.expected_compressed_sha256
+                and value.first_pass is not None
+                and value.second_pass is not None
+                and value.first_pass == value.second_pass
+                and value.terminal_status == "COMPLETE_TWO_LOCAL_PASSES"
+                and value.terminal_error_code is None
+                for value in self._objects
+            )
         )
 
     def aggregate_counts(self) -> dict[str, int]:
@@ -317,15 +370,42 @@ class ExecutionEvidenceState:
                     result += int(value[field])
             return result
 
-        return {
+        def conservation_total(pass_name: str, field: str) -> int:
+            result = 0
+            for state in self._objects:
+                value = getattr(state, pass_name)
+                if value is not None:
+                    observed = value["conservation"]
+                    if not isinstance(observed, Mapping):
+                        raise RuntimeBoundaryError(
+                            "stored pass conservation is not a mapping"
+                        )
+                    result += int(observed[field])
+            return result
+
+        result = {
             "selected_object_count": 72,
             "get_object_request_count": self._network_request_count,
-            "first_pass_completed_object_count": sum(value.first_pass is not None for value in self._objects),
-            "second_pass_completed_object_count": sum(value.second_pass is not None for value in self._objects),
-            "first_pass_decompressed_bytes": total("first_pass", "decompressed_bytes"),
-            "second_pass_decompressed_bytes": total("second_pass", "decompressed_bytes"),
+            "first_pass_completed_object_count": sum(
+                value.first_pass is not None for value in self._objects
+            ),
+            "second_pass_completed_object_count": sum(
+                value.second_pass is not None for value in self._objects
+            ),
+            "first_pass_decompressed_bytes": total(
+                "first_pass", "decompressed_bytes"
+            ),
+            "second_pass_decompressed_bytes": total(
+                "second_pass", "decompressed_bytes"
+            ),
             "first_pass_record_count": total("first_pass", "record_count"),
             "second_pass_record_count": total("second_pass", "record_count"),
             "first_pass_event_count": total("first_pass", "event_count"),
             "second_pass_event_count": total("second_pass", "event_count"),
         }
+        for pass_name in ("first_pass", "second_pass"):
+            for field in PARSE_CONSERVATION_FIELDS:
+                result[f"{pass_name}_{field}"] = conservation_total(
+                    pass_name, field
+                )
+        return result
