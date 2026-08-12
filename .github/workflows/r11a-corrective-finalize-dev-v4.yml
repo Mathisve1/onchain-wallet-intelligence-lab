@@ -16,7 +16,7 @@ concurrency:
 jobs:
   finalize:
     if: >-
-      github.event.pull_request.number == 144 &&
+      github.event.pull_request.number == 148 &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'research/r11a-corrective-r3'
     runs-on: ubuntu-24.04
@@ -46,6 +46,19 @@ jobs:
         run: |
           set -euo pipefail
           python governance/generate_r11a_corrective_final_files_v4.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('research/archive_inventory/r11a_corrective/canonical.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'FrozenValue: TypeAlias = FrozenScalar | "FrozenObject" | tuple["FrozenValue", ...]'
+          new = 'FrozenValue: TypeAlias = "FrozenScalar | FrozenObject | tuple[FrozenValue, ...]"'
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          elif new not in text:
+              raise SystemExit('recursive FrozenValue alias has unexpected bytes')
+          PY
           python governance/generate_r11a_corrective_policies.py --write
 
       - name: Remove superseded draft modules validators and candidates
