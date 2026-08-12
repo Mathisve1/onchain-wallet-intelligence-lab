@@ -1,0 +1,87 @@
+name: R11A Corrective R6 Finalizer
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+env:
+  EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+
+concurrency:
+  group: r11a-corrective-r6-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.number == 148 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'research/r11a-corrective-r3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact corrective draft head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Verify exact source head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXACT_HEAD}"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12.13'
+          check-latest: false
+
+      - name: Generate, patch and reduce to one coherent R6 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/generate_r11a_corrective_final_files_v4.py
+          python governance/generate_r11a_corrective_policies.py --write
+          python governance/finalize_r11a_corrective_r6.py
+          git fetch --no-tags --depth=1 origin main
+          git show FETCH_HEAD:.github/workflows/ci.yml > .github/workflows/ci.yml
+
+      - name: Compile and validate focused corrective contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q research/archive_inventory/r11a_corrective governance
+          python -m unittest -v \
+            tests.test_archive_inventory_r11a_corrective_r3 \
+            tests.test_archive_inventory_r11a_corrective_artifacts
+          python governance/validate_r11a_corrective_implementation_r5.py --current-inert-stage
+          python governance/generate_r11a_corrective_policies.py
+
+      - name: Seal exact repository manifest and run every test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/regenerate_manifest.py --write
+          python governance/regenerate_manifest.py --check
+          python -m unittest discover -s tests -v
+          python governance/validate_repository.py
+          git add -A
+          git diff --cached --check
+
+      - name: Commit only the fully validated coherent R6 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then
+            echo 'Coherent corrective R6 tree is already present'
+            exit 0
+          fi
+          git commit -m 'ci: finalize coherent R11A corrective R6 implementation'
+          git push origin HEAD:research/r11a-corrective-r3
