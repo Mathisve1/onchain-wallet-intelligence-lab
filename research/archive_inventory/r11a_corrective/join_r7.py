@@ -4,6 +4,7 @@ import dataclasses
 import sqlite3
 from pathlib import Path
 
+from .canonical import FrozenObject, NumberToken, strict_json_loads
 from .storage_r7 import MeteredSQLite, WorkspaceMeter
 
 _JOIN_DB_MAX_BYTES = 512_000_000
@@ -26,6 +27,19 @@ class JoinValidationResult:
     all_retained_rows_reference_exactly_one_unit: bool
     all_referenced_projections_are_byte_equal: bool
     all_retained_row_counts_match_unit_occurrence_counts: bool
+
+
+def _projection_occurrence_count(projection: bytes) -> int:
+    value = strict_json_loads(projection)
+    if not isinstance(value, FrozenObject):
+        raise JoinBoundaryError("taxonomy unit projection must be a canonical object")
+    count = value["occurrence_count"]
+    if not isinstance(count, NumberToken) or not count.is_integer_token:
+        raise JoinBoundaryError("taxonomy unit projection occurrence count is not integer")
+    observed = int(count.token, 10)
+    if observed <= 0:
+        raise JoinBoundaryError("taxonomy unit occurrence count must be positive")
+    return observed
 
 
 class DiskJoinLedger:
@@ -117,14 +131,25 @@ class DiskJoinLedger:
         self,
         unit_id: str,
         universe: str,
-        occurrence_count: int,
-        projection: bytes,
+        occurrence_count: int | bytes,
+        projection: bytes | None = None,
     ) -> None:
         self._require_open()
-        if not unit_id or not universe or occurrence_count <= 0 or not projection:
+        if projection is None:
+            if not isinstance(occurrence_count, bytes):
+                raise JoinBoundaryError("three-argument add_unit requires projection bytes")
+            projection = occurrence_count
+            normalized_count = _projection_occurrence_count(projection)
+        else:
+            if type(occurrence_count) is not int:
+                raise JoinBoundaryError("taxonomy unit occurrence count must be exact integer")
+            normalized_count = occurrence_count
+        if not unit_id or not universe or normalized_count <= 0 or not projection:
             raise JoinBoundaryError("invalid taxonomy unit evidence")
+        if _projection_occurrence_count(projection) != normalized_count:
+            raise JoinBoundaryError("unit occurrence count differs from canonical projection")
         self._units.append(
-            (unit_id, universe, occurrence_count, sqlite3.Binary(projection))
+            (unit_id, universe, normalized_count, sqlite3.Binary(projection))
         )
         self._maybe_flush()
 
