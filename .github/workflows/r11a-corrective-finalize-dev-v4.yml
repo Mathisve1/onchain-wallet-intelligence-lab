@@ -117,6 +117,16 @@ jobs:
               return expanded''',
           )
 
+          taxonomy = Path('research/archive_inventory/r11a_corrective/taxonomy_r4.py')
+          taxonomy_text = taxonomy.read_text(encoding='utf-8')
+          old_protocol_import = 'from collections.abc import Iterator, Mapping, Protocol'
+          new_protocol_import = 'from collections.abc import Iterator, Mapping\nfrom typing import Protocol'
+          if old_protocol_import in taxonomy_text:
+              taxonomy_text = taxonomy_text.replace(old_protocol_import, new_protocol_import, 1)
+              taxonomy.write_text(taxonomy_text, encoding='utf-8')
+          elif new_protocol_import not in taxonomy_text:
+              raise SystemExit('taxonomy Protocol import has unexpected bytes')
+
           artifact = Path('research/archive_inventory/r11a_corrective/artifact_r3.py')
           artifact_text = artifact.read_text(encoding='utf-8')
           old_import = 'from .taxonomy_r3 import EvidenceEmitter, TaxonomyResult'
