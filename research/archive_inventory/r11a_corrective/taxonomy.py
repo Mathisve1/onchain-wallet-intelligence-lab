@@ -3,7 +3,10 @@ from __future__ import annotations
 import dataclasses
 
 from . import _taxonomy_contract_core_r7 as _core
+from . import taxonomy_precedence_r7 as _precedence
 from .artifact_schema import AUTHORITATIVE_UNIT_UNIVERSES, TAXA
+
+_precedence.install()
 
 TaxonomyBoundaryError = _core.TaxonomyBoundaryError
 Taxon = _core.Taxon
