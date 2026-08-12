@@ -7,7 +7,7 @@ from pathlib import Path
 from .canonical import FrozenObject, NumberToken, strict_json_loads
 from .context import PrincipalEvidence, WorkflowContext, combined_context
 from .network import AWSCredentials
-from .preflight_artifact import write_pre_oidc_failure_artifact
+from .preflight_artifact import _checked_remove, write_pre_oidc_failure_artifact
 from .pricing import PricingSnapshot
 from .runner_r4 import RunInputs, run_network
 from .selection import DEFAULT_SELECTION
@@ -102,18 +102,41 @@ def pre_oidc_failure(
 
 
 def execute(workspace: Path, context_path: Path, principal_path: Path) -> int:
-    workflow = WorkflowContext.from_bytes(context_path.read_bytes())
-    principal = PrincipalEvidence.from_bytes(principal_path.read_bytes())
-    snapshot = PricingSnapshot.load()
-    projected = snapshot.projected_eur_micros(72, DEFAULT_SELECTION.aggregate_expected_compressed_bytes)
-    context = combined_context(workflow, principal, pricing_projection_eur_micros=projected)
-    result = run_network(
-        inputs=RunInputs(workspace=workspace, context=context),
-        credentials=AWSCredentials.from_environment(),
-        pricing_snapshot=snapshot,
-    )
-    print(result.artifact.final_directory)
-    return result.artifact.return_code
+    raw_context = context_path.read_bytes()
+    try:
+        workflow = WorkflowContext.from_bytes(raw_context)
+        principal = PrincipalEvidence.from_bytes(principal_path.read_bytes())
+        snapshot = PricingSnapshot.load()
+        projected = snapshot.projected_eur_micros(
+            72, DEFAULT_SELECTION.aggregate_expected_compressed_bytes
+        )
+        context = combined_context(
+            workflow, principal, pricing_projection_eur_micros=projected
+        )
+        result = run_network(
+            inputs=RunInputs(workspace=workspace, context=context),
+            credentials=AWSCredentials.from_environment(),
+            pricing_snapshot=snapshot,
+        )
+        print(result.artifact.final_directory)
+        return result.artifact.return_code
+    except Exception as exc:
+        context = _minimal_context(raw_context, None, None)
+        context["execution_phase"] = "PRECOLLECTOR_FAILURE_AFTER_STATIC_GATES"
+        context["principal_observed"] = principal_path.exists()
+        context["failure_exception_type_sha256"] = hashlib.sha256(
+            type(exc).__name__.encode("utf-8")
+        ).hexdigest()
+        if workspace.exists():
+            _checked_remove(workspace)
+        outcome = write_pre_oidc_failure_artifact(
+            workspace=workspace,
+            context=context,
+            failure_code="PRECOLLECTOR_EXECUTION_SETUP_FAILURE",
+        )
+        print(outcome)
+        return 21
+
 
 
 def main(argv: list[str] | None = None) -> int:

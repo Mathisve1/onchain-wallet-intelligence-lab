@@ -15,6 +15,7 @@ _P3: Final[int] = 0xC2B2AE3D
 _P4: Final[int] = 0x27D4EB2F
 _P5: Final[int] = 0x165667B1
 _MASK: Final[int] = 0xFFFFFFFF
+_MAX_RECORD_BYTES: Final[int] = 16 << 20
 
 
 class LZ4StreamError(ValueError):
@@ -285,6 +286,8 @@ class LZ4LineReader:
                         raise LZ4StreamError("empty or CRLF archive record is forbidden")
                     self._record_count += 1
                     yield line
+                if len(line_buffer) > _MAX_RECORD_BYTES:
+                    raise LZ4StreamError("one decompressed archive record exceeds bounded line buffer")
             if line_buffer:
                 if line_buffer.endswith(b"\r"):
                     raise LZ4StreamError("trailing CR archive record is forbidden")

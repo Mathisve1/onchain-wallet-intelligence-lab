@@ -27,6 +27,7 @@ from research.archive_inventory.r11a_corrective.artifact_r3 import (  # noqa: E4
 from research.archive_inventory.r11a_corrective.canonical import (  # noqa: E402
     FrozenObject,
     NumberToken,
+    canonical_json_bytes,
     strict_json_loads,
 )
 from research.archive_inventory.r11a_corrective.limits import DEFAULT_LIMITS  # noqa: E402
@@ -224,7 +225,7 @@ def validate_scientific_joins(artifact: Path, conservation: FrozenObject) -> Non
                 for row in rows(artifact / filename):
                     unit_id = text(row["taxonomy_unit_id"], "taxonomy unit reference")
                     row_id = __import__("hashlib").sha256(
-                        json.dumps(row.to_plain(), sort_keys=True, separators=(",", ":")).encode("utf-8")
+                        canonical_json_bytes(row, final_newline=False)
                     ).hexdigest()
                     try:
                         connection.execute("INSERT INTO duplicate_refs VALUES(?,?)", (row_id, unit_id))
@@ -319,7 +320,7 @@ def main() -> int:
     else:
         if any((arguments.artifact_dir / name).stat().st_size != 0 for name in SCIENCE_CONTAINERS):
             raise ValidationError("empty failure artifact contains scientific bytes")
-    print("R11A_EXECUTION_ARTIFACT_R3_VALID_BEFORE_UPLOAD")
+    print("R11A_EXECUTION_ARTIFACT_R4_VALID_BEFORE_UPLOAD")
     return 0
 
 

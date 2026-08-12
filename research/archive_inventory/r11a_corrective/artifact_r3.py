@@ -12,7 +12,7 @@ from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_j
 from .limits import R11ALimits
 from .runtime import ExecutionEvidenceState
 from .storage import AtomicArtifactDirectory, WorkspaceMeter, directory_size
-from .taxonomy_r3 import EvidenceEmitter, TaxonomyResult
+from .taxonomy_r4 import EvidenceEmitter, TaxonomyResult
 
 SCIENCE_CONTAINERS: Final[tuple[str, ...]] = (
     "r11a-taxonomy-units.ndjson",
@@ -309,8 +309,28 @@ def validate_boundary(path: Path, limits: R11ALimits) -> None:
         raise ArtifactError("package boundary artifact cap drift")
     if _integer(value["maximum_ephemeral_workspace_bytes"], "workspace cap") != limits.maximum_ephemeral_workspace_bytes:
         raise ArtifactError("package boundary workspace cap drift")
-    if _integer(value["total_bytes_before_boundary"], "preboundary bytes") != directory_size(path.parent) - limits.package_boundary_bytes:
-        raise ArtifactError("package boundary preboundary byte formula mismatch")
+    preboundary_files = tuple(
+        candidate
+        for candidate in path.parent.iterdir()
+        if candidate.is_file() and candidate.name != BOUNDARY_FILE
+    )
+    actual_preboundary_bytes = sum(candidate.stat().st_size for candidate in preboundary_files)
+    actual_metadata_bytes = sum(
+        candidate.stat().st_size
+        for candidate in preboundary_files
+        if candidate.name not in SCIENCE_CONTAINERS
+    )
+    if _integer(value["preboundary_file_count"], "preboundary file count") != len(preboundary_files):
+        raise ArtifactError("package boundary file-count formula mismatch")
+    if _integer(value["preboundary_bytes"], "preboundary bytes") != actual_preboundary_bytes:
+        raise ArtifactError("package boundary preboundary-byte formula mismatch")
+    if _integer(value["total_bytes_before_boundary"], "total bytes before boundary") != actual_preboundary_bytes:
+        raise ArtifactError("package boundary total-byte formula mismatch")
+    if _integer(value["metadata_bytes"], "metadata bytes") != actual_metadata_bytes:
+        raise ArtifactError("package boundary metadata-byte formula mismatch")
+    if directory_size(path.parent) != actual_preboundary_bytes + limits.package_boundary_bytes:
+        raise ArtifactError("package boundary final directory-size formula mismatch")
+
 
 
 def validate_artifact(path: Path, limits: R11ALimits) -> None:

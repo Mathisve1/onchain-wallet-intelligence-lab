@@ -89,10 +89,10 @@ jobs:
           set -euo pipefail
           python governance/validate_r11a_preregistration.py
           python governance/validate_r11a_corrective_implementation_r5.py --canonical-bytes
-          python governance/validate_r11a_approval.py
-          python governance/validate_r11a_role_attestation.py
-          python governance/validate_r11a_role_preflight_evidence.py
-          python governance/validate_r11a_workflow_installation.py
+          python governance/validate_r11a_approval_r4.py
+          python governance/validate_r11a_role_attestation_r4.py
+          python governance/validate_r11a_role_preflight_evidence_r4.py
+          python governance/validate_r11a_workflow_installation_r4.py
           python governance/validate_r11a_execution_release_r4.py
           python governance/validate_r11a_activation_r4.py
           python - <<'PY'

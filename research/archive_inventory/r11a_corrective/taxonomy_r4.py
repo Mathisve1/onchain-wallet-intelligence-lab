@@ -4,7 +4,8 @@ import dataclasses
 import enum
 import hashlib
 from collections import Counter
-from collections.abc import Iterator, Mapping, Protocol
+from collections.abc import Iterator, Mapping
+from typing import Protocol
 from pathlib import Path
 
 from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_json_loads
@@ -535,6 +536,8 @@ def _classify_protocol_trades(
                 _locator_commitment_update(commitment, row)
                 if len(blocks) > _MAX_GROUP_KEYS:
                     overflow = True
+            if occurrences <= 1:
+                continue
             expected = not overflow and bool(blocks) and all(state.is_expected_pair() for state in blocks.values())
             if expected:
                 taxon = Taxon.EXPECTED_COUNTERPARTY_PAIR

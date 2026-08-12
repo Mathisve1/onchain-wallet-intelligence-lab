@@ -43,7 +43,7 @@ class NumberToken:
 
 
 FrozenScalar: TypeAlias = None | bool | str | int | NumberToken
-FrozenValue: TypeAlias = FrozenScalar | "FrozenObject" | tuple["FrozenValue", ...]
+FrozenValue: TypeAlias = "FrozenScalar | FrozenObject | tuple[FrozenValue, ...]"
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -217,8 +217,8 @@ def canonical_json_bytes(value: object, *, final_newline: bool = True) -> bytes:
 def mathematically_integral_number(token: NumberToken) -> str | None:
     """Return an exact context-independent base-10 integer string when integral.
 
-    The implementation never calls `quantize()` and therefore does not depend on the
-    active Decimal precision. Very large exponent expansions remain bounded.
+    The implementation never calls ``quantize()`` and therefore does not depend on
+    the active Decimal precision. Very large exponent expansions remain bounded.
     """
 
     if token.is_integer_token:
@@ -248,6 +248,8 @@ def mathematically_integral_number(token: NumberToken) -> str | None:
     if sign and expanded != "0":
         return "-" + expanded
     return expanded
+
+
 
 
 def historical_legacy_typed_tid(value: FrozenValue) -> bytes:

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "R11A-SUCCESSOR-ROLE-DECISION-001",
+  "status": "FROZEN_INERT_SUCCESSOR_ROLE_CANDIDATE_NO_IAM_MUTATION",
+  "decision": "CREATE_NEW_DEDICATED_R11A_ROLE_ONLY_AFTER_EXACT_OWNER_APPROVAL",
+  "successor_role": {
+    "role_name": "onchain-wallet-intelligence-hl-archive-identity-r11a",
+    "role_arn": "arn:aws:iam::630956766927:role/onchain-wallet-intelligence-hl-archive-identity-r11a",
+    "workflow_name": "Hyperliquid Archive R11A Identity Boundary Diagnostic",
+    "maximum_session_duration_seconds": 21600,
+    "persistent_get_object_resource_count": 72,
+    "persistent_permission_resources_are_exact_selection_objects": true,
+    "additional_managed_policies_authorized": false,
+    "additional_inline_policies_authorized": false
+  },
+  "existing_r11_role_reused": false,
+  "existing_r11_role_mutated": false,
+  "new_role_created_by_this_decision": false,
+  "owner_approval_required": true,
+  "separate_sts_only_preflight_required": true,
+  "current_authority": {
+    "iam_role_creation": false,
+    "iam_policy_application": false,
+    "aws_oidc": false,
+    "sts": false,
+    "s3": false
+  },
+  "network_or_iam_actions_executed_by_this_decision": 0
+}

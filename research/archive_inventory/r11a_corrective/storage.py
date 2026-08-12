@@ -255,14 +255,44 @@ class MultisetCommitment:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class SortEvidence:
+    input_records: int
+    output_records: int
+    input_logical_bytes: int
+    output_logical_bytes: int
     source_commitment: dict[str, object]
     destination_commitment: dict[str, object]
     sorted_stream_sha256: str
     output_bytes: int
 
     def validate(self) -> None:
+        values = (
+            self.input_records,
+            self.output_records,
+            self.input_logical_bytes,
+            self.output_logical_bytes,
+            self.output_bytes,
+        )
+        if any(type(value) is not int or value < 0 for value in values):
+            raise StorageBoundaryError("sort evidence counts and bytes must be nonnegative integers")
+        if self.input_records != self.output_records:
+            raise StorageBoundaryError("external sort changed record count")
+        if self.input_logical_bytes != self.output_logical_bytes:
+            raise StorageBoundaryError("external sort changed logical byte count")
+        if int(self.source_commitment.get("record_count", -1)) != self.input_records:
+            raise StorageBoundaryError("source commitment record count mismatch")
+        if int(self.destination_commitment.get("record_count", -1)) != self.output_records:
+            raise StorageBoundaryError("destination commitment record count mismatch")
+        if int(self.source_commitment.get("logical_bytes", -1)) != self.input_logical_bytes:
+            raise StorageBoundaryError("source commitment logical byte mismatch")
+        if int(self.destination_commitment.get("logical_bytes", -1)) != self.output_logical_bytes:
+            raise StorageBoundaryError("destination commitment logical byte mismatch")
         if self.source_commitment != self.destination_commitment:
             raise StorageBoundaryError("external sort changed the exact record multiset")
+        if len(self.sorted_stream_sha256) != 64:
+            raise StorageBoundaryError("sorted stream SHA-256 format invalid")
+        if self.output_bytes < self.output_logical_bytes:
+            raise StorageBoundaryError("framed output bytes cannot be smaller than logical bytes")
+
 
 
 def encode_keyed_record(key: bytes, payload: bytes) -> bytes:
@@ -462,9 +492,14 @@ def external_sort_partition(
                 _HeapItem(_record_sort_key(next_record), item.run_index, next_record),
             )
 
+    destination_mapping = destination_commitment.as_mapping()
     evidence = SortEvidence(
+        input_records=int(source_commitment["record_count"]),
+        output_records=int(destination_mapping["record_count"]),
+        input_logical_bytes=int(source_commitment["logical_bytes"]),
+        output_logical_bytes=int(destination_mapping["logical_bytes"]),
         source_commitment=source_commitment,
-        destination_commitment=destination_commitment.as_mapping(),
+        destination_commitment=destination_mapping,
         sorted_stream_sha256=sorted_stream.hexdigest(),
         output_bytes=destination.stat().st_size,
     )
