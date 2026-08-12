@@ -158,7 +158,15 @@ class GovernanceBoundaryTests(unittest.TestCase):
         status = json.loads(
             (root / "research/archive_inventory/r11a_corrective/R11A_CORRECTIVE_STATUS.json").read_text()
         )
-        self.assertEqual(status["status"], "CORRECTIVE_IMPLEMENTATION_IN_PROGRESS_NO_EXECUTION")
+        self.assertEqual(
+            status["status"],
+            "CORRECTIVE_IMPLEMENTATION_SEALED_AWAITING_CLEAN_CONTEXT_REVIEW_NO_EXECUTION",
+        )
+        self.assertTrue(status["implementation_sealed"])
+        self.assertEqual(status["closed_red_finding_count"], 20)
+        self.assertTrue(status["pricing_binding_pending"])
+        self.assertFalse(status["independent_clean_context_review_completed"])
+        self.assertIsNone(status["independent_clean_context_review_verdict"])
         self.assertFalse(status["owner_approval_eligible"])
         self.assertTrue(all(value is False for value in status["current_runtime_authority"].values()))
         self.assertTrue(all(value is False for value in status["downstream_authorizations"].values()))
