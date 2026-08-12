@@ -16,7 +16,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'research/r11a-corrective-r3'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out exact R7 development head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -41,9 +41,13 @@ jobs:
           python -m compileall -q \
             research/archive_inventory/r11a_corrective \
             governance/validate_r11a_execution_artifact_r7.py \
-            tests/test_archive_inventory_r11a_corrective_r7.py
+            governance/validate_r11a_runtime_binding_r7.py \
+            tests/test_archive_inventory_r11a_corrective_r7.py \
+            tests/test_archive_inventory_r11a_corrective_r7_precedence.py
       - name: Run focused adversarial R7 tests
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest -v tests.test_archive_inventory_r11a_corrective_r7
+          python -m unittest -v \
+            tests.test_archive_inventory_r11a_corrective_r7 \
+            tests.test_archive_inventory_r11a_corrective_r7_precedence
