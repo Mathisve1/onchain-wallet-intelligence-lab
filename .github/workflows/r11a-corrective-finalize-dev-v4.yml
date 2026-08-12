@@ -47,17 +47,85 @@ jobs:
           set -euo pipefail
           python governance/generate_r11a_corrective_final_files_v4.py
           python - <<'PY'
+          import ast
           from pathlib import Path
 
-          path = Path('research/archive_inventory/r11a_corrective/canonical.py')
-          text = path.read_text(encoding='utf-8')
-          old = 'FrozenValue: TypeAlias = FrozenScalar | "FrozenObject" | tuple["FrozenValue", ...]'
-          new = 'FrozenValue: TypeAlias = "FrozenScalar | FrozenObject | tuple[FrozenValue, ...]"'
-          if old in text:
-              text = text.replace(old, new, 1)
-              path.write_text(text, encoding='utf-8')
-          elif new not in text:
+          def replace_function(path: Path, function_name: str, replacement: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              tree = ast.parse(text, filename=str(path))
+              target = next(
+                  (
+                      node
+                      for node in tree.body
+                      if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                      and node.name == function_name
+                  ),
+                  None,
+              )
+              if target is None or target.end_lineno is None:
+                  raise SystemExit(f'function not found: {path}:{function_name}')
+              lines = text.splitlines(keepends=True)
+              lines[target.lineno - 1 : target.end_lineno] = [replacement.rstrip() + '\n\n']
+              path.write_text(''.join(lines), encoding='utf-8')
+
+          canonical = Path('research/archive_inventory/r11a_corrective/canonical.py')
+          text = canonical.read_text(encoding='utf-8')
+          old_alias = 'FrozenValue: TypeAlias = FrozenScalar | "FrozenObject" | tuple["FrozenValue", ...]'
+          new_alias = 'FrozenValue: TypeAlias = "FrozenScalar | FrozenObject | tuple[FrozenValue, ...]"'
+          if old_alias in text:
+              text = text.replace(old_alias, new_alias, 1)
+              canonical.write_text(text, encoding='utf-8')
+          elif new_alias not in text:
               raise SystemExit('recursive FrozenValue alias has unexpected bytes')
+
+          replace_function(
+              canonical,
+              'mathematically_integral_number',
+              '''def mathematically_integral_number(token: NumberToken) -> str | None:
+              """Return an exact context-independent base-10 integer string when integral.
+
+              The implementation never calls ``quantize()`` and therefore does not depend on
+              the active Decimal precision. Very large exponent expansions remain bounded.
+              """
+
+              if token.is_integer_token:
+                  return str(int(token.token, 10))
+              try:
+                  decimal_value = Decimal(token.token)
+              except InvalidOperation:
+                  return None
+              if not decimal_value.is_finite():
+                  return None
+              sign, digits_tuple, exponent = decimal_value.as_tuple()
+              digits = "".join(str(digit) for digit in digits_tuple) or "0"
+              if exponent >= 0:
+                  expanded = digits + ("0" * exponent)
+              else:
+                  fractional_digits = -exponent
+                  if fractional_digits > len(digits):
+                      return None
+                  split = len(digits) - fractional_digits
+                  fractional = digits[split:]
+                  if any(character != "0" for character in fractional):
+                      return None
+                  expanded = digits[:split] or "0"
+              expanded = expanded.lstrip("0") or "0"
+              if len(expanded) > _MAX_NORMALIZED_INTEGER_DIGITS:
+                  raise CanonicalJSONError("integral JSON number expansion exceeds the frozen bound")
+              if sign and expanded != "0":
+                  return "-" + expanded
+              return expanded''',
+          )
+
+          artifact = Path('research/archive_inventory/r11a_corrective/artifact_r3.py')
+          artifact_text = artifact.read_text(encoding='utf-8')
+          old_import = 'from .taxonomy_r3 import EvidenceEmitter, TaxonomyResult'
+          new_import = 'from .taxonomy_r4 import EvidenceEmitter, TaxonomyResult'
+          if old_import in artifact_text:
+              artifact_text = artifact_text.replace(old_import, new_import, 1)
+              artifact.write_text(artifact_text, encoding='utf-8')
+          elif new_import not in artifact_text:
+              raise SystemExit('artifact taxonomy import has unexpected bytes')
           PY
           python governance/generate_r11a_corrective_policies.py --write
 
