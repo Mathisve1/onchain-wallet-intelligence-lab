@@ -4,8 +4,8 @@ import dataclasses
 import hashlib
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Final
 
+from .artifact_schema import DIAGNOSTIC_ID, PHASES, validate_object_row_shape
 from .canonical import canonical_json_bytes
 from .limits import R11ALimits
 
@@ -38,15 +38,22 @@ class RuntimeGuard:
             raise RuntimeBoundaryError(f"scientific runtime reserve reached at {phase}")
 
     def check_packaging_phase(self, phase: str) -> None:
-        packaging_deadline = (
-            self.limits.maximum_runtime_seconds - self.limits.minimum_upload_window_seconds
-        )
-        if self.elapsed_ns() >= packaging_deadline * 1_000_000_000:
+        deadline = self.limits.maximum_runtime_seconds - self.limits.minimum_upload_window_seconds
+        if self.elapsed_ns() >= deadline * 1_000_000_000:
             raise RuntimeBoundaryError(f"packaging runtime reserve reached at {phase}")
 
     def check_hard_deadline(self, phase: str) -> None:
         if self.elapsed_ns() >= self.limits.maximum_runtime_seconds * 1_000_000_000:
             raise RuntimeBoundaryError(f"hard runtime reached at {phase}")
+
+    def package_flags(self) -> dict[str, bool]:
+        elapsed = self.elapsed_seconds_floor()
+        return {
+            "preupload_runtime_within_hard_limit_after_upload_window": elapsed
+            < self.limits.maximum_runtime_seconds - self.limits.minimum_upload_window_seconds,
+            "scientific_runtime_completed_before_packaging_reservation": elapsed
+            < self.limits.maximum_runtime_seconds,
+        }
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -59,8 +66,8 @@ class RuntimeTarget:
     source_path_hour_utc: str
 
     def __post_init__(self) -> None:
-        if self.object_ordinal_zero_based < 0:
-            raise RuntimeBoundaryError("object ordinal must be nonnegative")
+        if not 0 <= self.object_ordinal_zero_based < 72:
+            raise RuntimeBoundaryError("object ordinal outside exact 72-object scope")
         if not self.object_key:
             raise RuntimeBoundaryError("object key is required")
         if self.expected_size_bytes <= 0:
@@ -74,22 +81,12 @@ class _MutableObjectState:
     target: RuntimeTarget
     request_count: int = 0
     request_status: str = "NOT_REQUESTED"
-    response_http_status: int | None = None
-    response_etag: str | None = None
-    response_content_length: int | None = None
-    response_requester_charged: str | None = None
-    received_body_bytes: int = 0
+    response: dict[str, object] | None = None
+    body_status: str = "NOT_STARTED"
+    body_bytes_received: int = 0
     observed_compressed_sha256: str | None = None
-    first_pass_status: str = "NOT_STARTED"
-    first_pass_decompressed_bytes: int | None = None
-    first_pass_record_count: int | None = None
-    first_pass_event_count: int | None = None
-    first_pass_stream_sha256: str | None = None
-    second_pass_status: str = "NOT_STARTED"
-    second_pass_decompressed_bytes: int | None = None
-    second_pass_record_count: int | None = None
-    second_pass_event_count: int | None = None
-    second_pass_stream_sha256: str | None = None
+    first_pass: dict[str, object] | None = None
+    second_pass: dict[str, object] | None = None
     terminal_status: str = "PENDING"
     terminal_error_code: str | None = None
 
@@ -97,6 +94,7 @@ class _MutableObjectState:
 @dataclasses.dataclass(frozen=True, slots=True)
 class StopEntry:
     sequence_zero_based: int
+    diagnostic_id: str
     stop_code: str
     phase: str
     object_ordinal_zero_based: int | None
@@ -107,35 +105,52 @@ class StopEntry:
 
 
 class ExecutionEvidenceState:
-    """Exact lifecycle evidence for all 72 selected objects and ordered stops."""
+    """Phase-truthful exact lifecycle evidence for all selected objects."""
 
     def __init__(self, targets: Sequence[RuntimeTarget], limits: R11ALimits) -> None:
         limits.validate()
-        if len(targets) != limits.maximum_get_object_requests:
-            raise RuntimeBoundaryError("runtime target count must equal the exact 72-object selection")
-        ordered = sorted(targets, key=lambda row: row.object_ordinal_zero_based)
-        if [row.object_ordinal_zero_based for row in ordered] != list(range(len(ordered))):
+        if len(targets) != 72:
+            raise RuntimeBoundaryError("runtime target count must equal exact 72-object scope")
+        ordered = sorted(targets, key=lambda value: value.object_ordinal_zero_based)
+        if [value.object_ordinal_zero_based for value in ordered] != list(range(72)):
             raise RuntimeBoundaryError("object ordinals must be contiguous from zero")
-        if len({row.object_key for row in ordered}) != len(ordered):
+        if len({value.object_key for value in ordered}) != 72:
             raise RuntimeBoundaryError("object keys must be unique")
         self._limits = limits
-        self._objects = [_MutableObjectState(row) for row in ordered]
+        self._objects = [_MutableObjectState(value) for value in ordered]
         self._stops: list[StopEntry] = []
         self._network_request_count = 0
+        self._current_phase = "PRE_OIDC_STATIC_GATE"
 
     @property
     def network_request_count(self) -> int:
         return self._network_request_count
 
+    @property
+    def current_phase(self) -> str:
+        return self._current_phase
+
+    def mark_phase(self, phase: str) -> None:
+        if phase not in PHASES:
+            raise RuntimeBoundaryError(f"unknown execution phase: {phase}")
+        current = PHASES.index(self._current_phase)
+        requested = PHASES.index(phase)
+        if requested < current:
+            raise RuntimeBoundaryError("execution phase moved backwards")
+        self._current_phase = phase
+
     def _state(self, ordinal: int) -> _MutableObjectState:
-        if ordinal < 0 or ordinal >= len(self._objects):
-            raise RuntimeBoundaryError("object ordinal outside exact selection")
+        if not 0 <= ordinal < 72:
+            raise RuntimeBoundaryError("object ordinal outside exact scope")
         return self._objects[ordinal]
 
     def request_sent(self, ordinal: int) -> None:
+        self.mark_phase("S3_DOWNLOAD")
         state = self._state(ordinal)
-        if state.request_status != "NOT_REQUESTED":
+        if state.request_count != 0:
             raise RuntimeBoundaryError("object request attempted more than once")
+        if ordinal != self._network_request_count:
+            raise RuntimeBoundaryError("request order differs from path-hour ascending selection")
         if self._network_request_count >= self._limits.maximum_get_object_requests:
             raise RuntimeBoundaryError("global request cap exceeded")
         state.request_count = 1
@@ -153,34 +168,37 @@ class ExecutionEvidenceState:
     ) -> None:
         state = self._state(ordinal)
         if state.request_status != "REQUEST_SENT":
-            raise RuntimeBoundaryError("response metadata arrived outside request lifecycle")
-        state.response_http_status = http_status
-        state.response_etag = etag
-        state.response_content_length = content_length
-        state.response_requester_charged = requester_charged
-        state.request_status = "METADATA_RECEIVED"
+            raise RuntimeBoundaryError("response metadata outside request lifecycle")
+        state.response = {
+            "http_status": http_status,
+            "etag": etag,
+            "content_length": content_length,
+            "requester_charged": requester_charged,
+        }
+        state.request_status = "RESPONSE_METADATA_RECEIVED"
 
     def body_progress(self, ordinal: int, received_total: int) -> None:
         state = self._state(ordinal)
-        if state.request_status not in {"METADATA_RECEIVED", "BODY_STREAMING"}:
-            raise RuntimeBoundaryError("body bytes arrived before verified response metadata")
-        if received_total < state.received_body_bytes:
+        if state.request_status != "RESPONSE_METADATA_RECEIVED" or state.response is None:
+            raise RuntimeBoundaryError("body arrived before response metadata")
+        if received_total < state.body_bytes_received:
             raise RuntimeBoundaryError("received body byte count decreased")
         if received_total > state.target.expected_size_bytes:
-            raise RuntimeBoundaryError("received body exceeds expected Content-Length")
-        state.received_body_bytes = received_total
-        state.request_status = "BODY_STREAMING"
+            raise RuntimeBoundaryError("received body exceeds verified size")
+        state.body_bytes_received = received_total
+        state.body_status = "STREAMING"
 
     def body_complete(self, ordinal: int, observed_sha256: str) -> None:
         state = self._state(ordinal)
-        if state.request_status != "BODY_STREAMING":
+        if state.body_status != "STREAMING":
             raise RuntimeBoundaryError("body completion outside streaming state")
-        if state.received_body_bytes != state.target.expected_size_bytes:
-            raise RuntimeBoundaryError("body completion with short byte count")
+        if state.body_bytes_received != state.target.expected_size_bytes:
+            raise RuntimeBoundaryError("body completion with short bytes")
         if observed_sha256 != state.target.expected_compressed_sha256:
             raise RuntimeBoundaryError("compressed SHA-256 mismatch")
         state.observed_compressed_sha256 = observed_sha256
-        state.request_status = "BODY_COMPLETE"
+        state.body_status = "COMPLETE"
+        state.request_status = "COMPLETE"
 
     def pass_complete(
         self,
@@ -191,37 +209,35 @@ class ExecutionEvidenceState:
         record_count: int,
         event_count: int,
         stream_sha256: str,
+        conservation: Mapping[str, object],
     ) -> None:
         state = self._state(ordinal)
-        if state.request_status != "BODY_COMPLETE":
-            raise RuntimeBoundaryError("local parse started before complete integrity-bound body")
+        if state.body_status != "COMPLETE":
+            raise RuntimeBoundaryError("local parse before integrity-bound body")
         if min(decompressed_bytes, record_count, event_count) < 0:
             raise RuntimeBoundaryError("negative local parse evidence")
         if len(stream_sha256) != 64:
-            raise RuntimeBoundaryError("decompressed stream SHA-256 is malformed")
+            raise RuntimeBoundaryError("decompressed stream SHA-256 malformed")
+        value = {
+            "status": "COMPLETE",
+            "decompressed_bytes": decompressed_bytes,
+            "record_count": record_count,
+            "event_count": event_count,
+            "decompressed_stream_sha256": stream_sha256,
+            "conservation": dict(conservation),
+        }
         if pass_number == 1:
-            if state.first_pass_status != "NOT_STARTED":
-                raise RuntimeBoundaryError("first pass recorded more than once")
-            state.first_pass_status = "COMPLETE"
-            state.first_pass_decompressed_bytes = decompressed_bytes
-            state.first_pass_record_count = record_count
-            state.first_pass_event_count = event_count
-            state.first_pass_stream_sha256 = stream_sha256
+            self.mark_phase("FIRST_LOCAL_PASS")
+            if state.first_pass is not None:
+                raise RuntimeBoundaryError("first pass recorded twice")
+            state.first_pass = value
         elif pass_number == 2:
-            if state.first_pass_status != "COMPLETE" or state.second_pass_status != "NOT_STARTED":
-                raise RuntimeBoundaryError("second pass lifecycle is invalid")
-            if (
-                decompressed_bytes != state.first_pass_decompressed_bytes
-                or record_count != state.first_pass_record_count
-                or event_count != state.first_pass_event_count
-                or stream_sha256 != state.first_pass_stream_sha256
-            ):
-                raise RuntimeBoundaryError("independent local passes do not match exactly")
-            state.second_pass_status = "COMPLETE"
-            state.second_pass_decompressed_bytes = decompressed_bytes
-            state.second_pass_record_count = record_count
-            state.second_pass_event_count = event_count
-            state.second_pass_stream_sha256 = stream_sha256
+            self.mark_phase("SECOND_LOCAL_PASS")
+            if state.first_pass is None or state.second_pass is not None:
+                raise RuntimeBoundaryError("second pass lifecycle invalid")
+            if value != state.first_pass:
+                raise RuntimeBoundaryError("independent local passes differ")
+            state.second_pass = value
             state.terminal_status = "COMPLETE_TWO_LOCAL_PASSES"
         else:
             raise RuntimeBoundaryError("pass number must be one or two")
@@ -230,19 +246,22 @@ class ExecutionEvidenceState:
         self,
         stop_code: str,
         *,
-        phase: str,
+        phase: str | None = None,
         object_ordinal_zero_based: int | None = None,
         evidence: Mapping[str, object] | None = None,
     ) -> None:
+        observed_phase = self._current_phase if phase is None else phase
         payload = {} if evidence is None else dict(evidence)
-        digest = hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
         self._stops.append(
             StopEntry(
                 sequence_zero_based=len(self._stops),
+                diagnostic_id=DIAGNOSTIC_ID,
                 stop_code=stop_code,
-                phase=phase,
+                phase=observed_phase,
                 object_ordinal_zero_based=object_ordinal_zero_based,
-                evidence_sha256=digest,
+                evidence_sha256=hashlib.sha256(
+                    canonical_json_bytes(payload, final_newline=False)
+                ).hexdigest(),
             )
         )
         if object_ordinal_zero_based is not None:
@@ -253,66 +272,60 @@ class ExecutionEvidenceState:
     def object_rows(self) -> tuple[dict[str, object], ...]:
         rows: list[dict[str, object]] = []
         for state in self._objects:
-            rows.append(
-                {
-                    "record_type": "OBJECT_EXECUTION_EVIDENCE",
-                    "object_ordinal_zero_based": state.target.object_ordinal_zero_based,
-                    "object_key": state.target.object_key,
-                    "source_path_hour_utc": state.target.source_path_hour_utc,
-                    "expected_size_bytes": state.target.expected_size_bytes,
-                    "expected_etag": state.target.expected_etag,
-                    "expected_compressed_sha256": state.target.expected_compressed_sha256,
-                    "request_count": state.request_count,
-                    "request_status": state.request_status,
-                    "response_http_status": state.response_http_status,
-                    "response_etag": state.response_etag,
-                    "response_content_length": state.response_content_length,
-                    "response_requester_charged": state.response_requester_charged,
-                    "received_body_bytes": state.received_body_bytes,
+            row = {
+                "record_type": "R11A_V2_OBJECT_EXECUTION_EVIDENCE",
+                "diagnostic_id": DIAGNOSTIC_ID,
+                "object_ordinal_zero_based": state.target.object_ordinal_zero_based,
+                "object_key": state.target.object_key,
+                "source_path_hour_utc": state.target.source_path_hour_utc,
+                "expected_identity": {
+                    "size_bytes": state.target.expected_size_bytes,
+                    "etag": state.target.expected_etag,
+                    "compressed_sha256": state.target.expected_compressed_sha256,
+                },
+                "request": {"count": state.request_count, "status": state.request_status},
+                "response": state.response,
+                "body": {
+                    "status": state.body_status,
+                    "bytes_received": state.body_bytes_received,
                     "observed_compressed_sha256": state.observed_compressed_sha256,
-                    "first_pass_status": state.first_pass_status,
-                    "first_pass_decompressed_bytes": state.first_pass_decompressed_bytes,
-                    "first_pass_record_count": state.first_pass_record_count,
-                    "first_pass_event_count": state.first_pass_event_count,
-                    "first_pass_stream_sha256": state.first_pass_stream_sha256,
-                    "second_pass_status": state.second_pass_status,
-                    "second_pass_decompressed_bytes": state.second_pass_decompressed_bytes,
-                    "second_pass_record_count": state.second_pass_record_count,
-                    "second_pass_event_count": state.second_pass_event_count,
-                    "second_pass_stream_sha256": state.second_pass_stream_sha256,
-                    "terminal_status": state.terminal_status,
-                    "terminal_error_code": state.terminal_error_code,
-                }
-            )
+                },
+                "first_pass": state.first_pass,
+                "second_pass": state.second_pass,
+                "terminal_status": state.terminal_status,
+                "terminal_error_code": state.terminal_error_code,
+            }
+            validate_object_row_shape(row)
+            rows.append(row)
         return tuple(rows)
 
     def stop_rows(self) -> tuple[dict[str, object], ...]:
-        return tuple(entry.as_mapping() for entry in self._stops)
+        return tuple(value.as_mapping() for value in self._stops)
 
     def exact_scope_complete(self) -> bool:
         return (
-            len(self._objects) == 72
-            and self._network_request_count == 72
-            and all(state.terminal_status == "COMPLETE_TWO_LOCAL_PASSES" for state in self._objects)
+            self._network_request_count == 72
+            and all(value.terminal_status == "COMPLETE_TWO_LOCAL_PASSES" for value in self._objects)
         )
 
     def aggregate_counts(self) -> dict[str, int]:
-        first_decompressed = sum(state.first_pass_decompressed_bytes or 0 for state in self._objects)
-        second_decompressed = sum(state.second_pass_decompressed_bytes or 0 for state in self._objects)
+        def total(pass_name: str, field: str) -> int:
+            result = 0
+            for state in self._objects:
+                value = getattr(state, pass_name)
+                if value is not None:
+                    result += int(value[field])
+            return result
+
         return {
-            "selected_object_count": len(self._objects),
+            "selected_object_count": 72,
             "get_object_request_count": self._network_request_count,
-            "first_pass_completed_object_count": sum(
-                state.first_pass_status == "COMPLETE" for state in self._objects
-            ),
-            "second_pass_completed_object_count": sum(
-                state.second_pass_status == "COMPLETE" for state in self._objects
-            ),
-            "first_pass_decompressed_bytes": first_decompressed,
-            "second_pass_decompressed_bytes": second_decompressed,
-            "total_decompressed_processing_bytes": first_decompressed + second_decompressed,
-            "first_pass_record_count": sum(state.first_pass_record_count or 0 for state in self._objects),
-            "second_pass_record_count": sum(state.second_pass_record_count or 0 for state in self._objects),
-            "first_pass_event_count": sum(state.first_pass_event_count or 0 for state in self._objects),
-            "second_pass_event_count": sum(state.second_pass_event_count or 0 for state in self._objects),
+            "first_pass_completed_object_count": sum(value.first_pass is not None for value in self._objects),
+            "second_pass_completed_object_count": sum(value.second_pass is not None for value in self._objects),
+            "first_pass_decompressed_bytes": total("first_pass", "decompressed_bytes"),
+            "second_pass_decompressed_bytes": total("second_pass", "decompressed_bytes"),
+            "first_pass_record_count": total("first_pass", "record_count"),
+            "second_pass_record_count": total("second_pass", "record_count"),
+            "first_pass_event_count": total("first_pass", "event_count"),
+            "second_pass_event_count": total("second_pass", "event_count"),
         }

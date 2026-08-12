@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 from typing import Final, TypeAlias
@@ -22,12 +22,6 @@ class CanonicalJSONError(ValueError):
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class NumberToken:
-    """A lossless JSON number token.
-
-    `is_integer_token` describes the lexical JSON production, not whether a decimal
-    or exponent token happens to be mathematically integral.
-    """
-
     token: str
     is_integer_token: bool
 
@@ -113,8 +107,6 @@ def _freeze_decoded(value: object) -> FrozenValue:
 
 
 def strict_json_loads(raw: bytes) -> FrozenValue:
-    """Decode one UTF-8 JSON value without lossy numeric coercion."""
-
     try:
         text = raw.decode("utf-8", "strict")
     except UnicodeDecodeError as exc:
@@ -135,8 +127,6 @@ def strict_json_loads(raw: bytes) -> FrozenValue:
 
 
 def deep_freeze(value: object) -> FrozenValue:
-    """Create a deep immutable canonical snapshot of a generated JSON value."""
-
     if isinstance(value, FrozenObject):
         return value
     if isinstance(value, Mapping):
@@ -168,23 +158,17 @@ def _encode_string(value: str) -> bytes:
 def _encode(value: FrozenValue, output: bytearray) -> None:
     if value is None:
         output.extend(b"null")
-        return
-    if value is True:
+    elif value is True:
         output.extend(b"true")
-        return
-    if value is False:
+    elif value is False:
         output.extend(b"false")
-        return
-    if isinstance(value, str):
+    elif isinstance(value, str):
         output.extend(_encode_string(value))
-        return
-    if isinstance(value, int):
+    elif isinstance(value, int):
         output.extend(str(value).encode("ascii"))
-        return
-    if isinstance(value, NumberToken):
+    elif isinstance(value, NumberToken):
         output.extend(value.token.encode("ascii"))
-        return
-    if isinstance(value, FrozenObject):
+    elif isinstance(value, FrozenObject):
         output.append(ord("{"))
         for index, (key, child) in enumerate(value.items_tuple):
             if index:
@@ -193,16 +177,15 @@ def _encode(value: FrozenValue, output: bytearray) -> None:
             output.append(ord(":"))
             _encode(child, output)
         output.append(ord("}"))
-        return
-    if isinstance(value, tuple):
+    elif isinstance(value, tuple):
         output.append(ord("["))
         for index, child in enumerate(value):
             if index:
                 output.append(ord(","))
             _encode(child, output)
         output.append(ord("]"))
-        return
-    raise CanonicalJSONError(f"cannot encode canonical value: {type(value).__name__}")
+    else:
+        raise CanonicalJSONError(f"cannot encode canonical value: {type(value).__name__}")
 
 
 def canonical_json_bytes(value: object, *, final_newline: bool = True) -> bytes:
@@ -215,23 +198,32 @@ def canonical_json_bytes(value: object, *, final_newline: bool = True) -> bytes:
 
 
 def mathematically_integral_number(token: NumberToken) -> str | None:
-    """Return an exact context-independent base-10 integer string when integral.
+    """Return an exact bounded base-10 integer string when mathematically integral.
 
-    The implementation never calls ``quantize()`` and therefore does not depend on
-    the active Decimal precision. Very large exponent expansions remain bounded.
+    Exponent bounds are checked before allocation. Integral zero is normalized to
+    ``0`` for every finite exponent representation. ``Decimal.quantize`` is never
+    used, so the result is independent of the active decimal context.
     """
 
     if token.is_integer_token:
-        return str(int(token.token, 10))
+        normalized = str(int(token.token, 10))
+        if len(normalized.lstrip("-")) > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise CanonicalJSONError("integral JSON number exceeds the frozen bound")
+        return normalized
     try:
         decimal_value = Decimal(token.token)
     except InvalidOperation:
         return None
     if not decimal_value.is_finite():
         return None
+    if decimal_value.is_zero():
+        return "0"
     sign, digits_tuple, exponent = decimal_value.as_tuple()
     digits = "".join(str(digit) for digit in digits_tuple) or "0"
     if exponent >= 0:
+        normalized_length = len(digits) + exponent
+        if normalized_length > _MAX_NORMALIZED_INTEGER_DIGITS:
+            raise CanonicalJSONError("integral JSON number expansion exceeds the frozen bound")
         expanded = digits + ("0" * exponent)
     else:
         fractional_digits = -exponent
@@ -245,19 +237,11 @@ def mathematically_integral_number(token: NumberToken) -> str | None:
     expanded = expanded.lstrip("0") or "0"
     if len(expanded) > _MAX_NORMALIZED_INTEGER_DIGITS:
         raise CanonicalJSONError("integral JSON number expansion exceeds the frozen bound")
-    if sign and expanded != "0":
-        return "-" + expanded
-    return expanded
-
-
+    return ("-" if sign and expanded != "0" else "") + expanded
 
 
 def historical_legacy_typed_tid(value: FrozenValue) -> bytes:
-    """Reproduce the historical weak-key projection without defining identity.
-
-    This output is diagnostic only. It is deliberately type-tagged and may never be
-    used as protocol-trade or wallet-fill identity.
-    """
+    """Reproduce the historical weak-key projection without defining identity."""
 
     if isinstance(value, NumberToken):
         integral = mathematically_integral_number(value)
