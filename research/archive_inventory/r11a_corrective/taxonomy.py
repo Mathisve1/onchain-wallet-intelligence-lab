@@ -6,8 +6,9 @@ import hashlib
 import sqlite3
 import struct
 from collections import Counter
-from collections.abc import Iterator, Mapping, Protocol, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
+from typing import Protocol
 
 from .artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
@@ -141,7 +142,6 @@ class TaxonomyResult:
     @property
     def unclassifiable_occurrence_count(self) -> int:
         return sum(int(row["unclassifiable_occurrence_count"]) for row in self.universe_rows)
-
 
 
 def _object(value: object, label: str) -> FrozenObject:
@@ -635,7 +635,6 @@ def _classify_blocks(
             ):
                 scratch.reset()
                 block_rows: list[FrozenObject] = []
-                # Repeated-block retention is capped at 250k; a single group spool is 64 MiB.
                 for row in _rows(group.path, meter, "read block group"):
                     block_rows.append(row)
                     if len(block_rows) > meter.limits.maximum_repeated_observations_retained:
@@ -659,9 +658,7 @@ def _classify_blocks(
                     )
                     for row in block_rows
                 }
-                source_objects = {
-                    _raw_locator(row)[1] for row in block_rows
-                }
+                source_objects = {_raw_locator(row)[1] for row in block_rows}
                 if len(invariants) > 1:
                     taxon = Taxon.CONFLICTING_BLOCK_REPLAY
                 elif len(source_objects) >= 2:
@@ -811,11 +808,7 @@ def _classify_protocol(
                     and int(summary[6]) == 2
                     and int(summary[7]) == 0
                 )
-                taxon = (
-                    Taxon.EXPECTED_COUNTERPARTY_PAIR
-                    if expected
-                    else Taxon.UNCLASSIFIABLE
-                )
+                taxon = Taxon.EXPECTED_COUNTERPARTY_PAIR if expected else Taxon.UNCLASSIFIABLE
                 ordered_projection = hashlib.sha256()
                 raw_block_key: bytes | None = None
                 protocol_key: bytes | None = None
@@ -976,14 +969,10 @@ def _wallet_fill_metrics(connection: sqlite3.Connection, wallet_fill_key: bytes)
         "distinct_proof_count": int(summary[5]),
         "missing_exact_proof_count": int(summary[6] or 0),
         "intra_block_repeat": intra is not None,
-        "proof": (
-            None
-            if proof_row is None
-            else ProofReference(
-                "R11A_V2_EXACT_BLOCK_REPLAY_PROOF",
-                str(proof_row[0]),
-                bytes(proof_row[1]),
-            )
+        "proof": None if proof_row is None else ProofReference(
+            "R11A_V2_EXACT_BLOCK_REPLAY_PROOF",
+            str(proof_row[0]),
+            bytes(proof_row[1]),
         ),
     }
 
@@ -1110,13 +1099,9 @@ def _classify_legacy(
                         supporting[Taxon.EXPECTED_COUNTERPARTY_PAIR.value] += 1
                         if protocol_proof is not None:
                             proof_references.append(protocol_proof)
-                wallet_fill_key = (
-                    None if row["wallet_fill_key"] is None else bytes(row["wallet_fill_key"])
-                )
-                metrics = (
-                    None
-                    if wallet_fill_key is None
-                    else _wallet_fill_metrics(connection, wallet_fill_key)
+                wallet_fill_key = None if row["wallet_fill_key"] is None else bytes(row["wallet_fill_key"])
+                metrics = None if wallet_fill_key is None else _wallet_fill_metrics(
+                    connection, wallet_fill_key
                 )
                 if not tid_valid:
                     taxon = Taxon.TID_SCHEMA_VIOLATION
@@ -1148,11 +1133,7 @@ def _classify_legacy(
                     "legacy_weak_key_sha256": hashlib.sha256(group.equality_key).hexdigest(),
                     "raw_locator": source["raw_locator"],
                     "complete_group_observation_count": count,
-                    "complete_wallet_fill_group_key_sha256": (
-                        None
-                        if wallet_fill_key is None
-                        else hashlib.sha256(wallet_fill_key).hexdigest()
-                    ),
+                    "complete_wallet_fill_group_key_sha256": None if wallet_fill_key is None else hashlib.sha256(wallet_fill_key).hexdigest(),
                 }
                 unit_id, unit_projection = _emit_unit(
                     emitter=emitter,
