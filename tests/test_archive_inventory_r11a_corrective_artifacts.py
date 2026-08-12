@@ -247,7 +247,7 @@ class CorrectiveWorkflowTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         candidate = root / "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r6.yml"
         text = candidate.read_text(encoding="utf-8")
-        self.assertIn("validate_r11a_corrective_implementation_r5.py --canonical-bytes", text)
+        self.assertIn("validate_r11a_corrective_implementation_r6.py --canonical-bytes", text)
         self.assertNotIn("validate_r11a_implementation.py", text)
         self.assertEqual(text.count("aws sts get-caller-identity --output json"), 1)
         self.assertNotIn("aws s3 ", text.lower())

@@ -373,7 +373,14 @@ def main() -> int:
         closed = contract.get("red_findings_closed")
         require(isinstance(closed, dict), "RED finding closure map absent")
         require(set(closed) == {f"R11A-RED-{index:03d}" for index in range(1, 22)}, "RED finding closure set incomplete")
-        require(all(value is True for value in closed.values()), "one or more RED findings remain implementation-open")
+        if mode == "review" and pricing.get("status") != "BOUND_CURRENT_OFFICIAL_SNAPSHOT":
+            remaining = {key for key, value in closed.items() if value is not True}
+            require(
+                remaining == {"R11A-RED-009"},
+                "review-stage implementation may leave only the official pricing binding pending",
+            )
+        else:
+            require(all(value is True for value in closed.values()), "one or more RED findings remain implementation-open")
         validate_hash_set(contract)
 
         if mode == "review":

@@ -164,15 +164,17 @@ def patch_runtime_bindings() -> None:
     )
     for relative in TEST_FILES:
         path = ROOT / relative
-        if path.is_file():
-            replace_required(
-                path,
-                "validate_r11a_corrective_implementation_r5.py",
-                "validate_r11a_corrective_implementation_r6.py",
-            )
+        if not path.is_file():
+            continue
+        value = path.read_text(encoding="utf-8")
+        old_name = "validate_r11a_corrective_implementation_r5.py"
+        new_name = "validate_r11a_corrective_implementation_r6.py"
+        if old_name in value:
+            path.write_text(value.replace(old_name, new_name), encoding="utf-8")
     old_validator = ROOT / "governance/validate_r11a_corrective_implementation_r5.py"
     if old_validator.exists():
         old_validator.unlink()
+
 
 
 def patch_review_mode() -> None:

@@ -302,7 +302,7 @@ All release-scoped R2 execution flags are false after consumption of release 002
 ## Exact next gate
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
-2. Review and merge a fully inert R11A implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
-3. After exact-head CI and clean-context review of the inert implementation, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
+2. Validate and independently review the cryptographically sealed corrective R11A V2 R6 implementation. Its workflow candidate must remain outside `.github/workflows`; no OIDC, S3 request or release may appear at this stage.
+3. After exact-head CI, clean-context review and official pricing/EUR binding, request one new hash-bound owner approval for the dedicated successor role, exact 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
 4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
 5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.

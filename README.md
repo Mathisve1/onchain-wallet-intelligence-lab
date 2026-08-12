@@ -28,11 +28,12 @@ This repository is research-only.
 ## Current archive gate
 
 R11 is canonically `CONSUMED_UNRESOLVED`; its exact artifact is retained and its
-single-use release has zero remaining request budget. R11A is
-`PREREGISTERED_NO_EXECUTION` over exactly the same 72 objects. It may diagnose
-identity scope, archive-block overlap and repeat provenance only. No owner
-approval, installed workflow, release, AWS/S3 authority, empirical root-cause
-claim, deduplication, repair, wallet ranking or R12 promotion exists.
+single-use release has zero remaining request budget. The corrective R11A V2
+preregistration is sealed over exactly the same 72 objects, and its R6
+implementation is sealed but still awaiting independent clean-context review.
+The workflow candidate remains outside `.github/workflows`; owner approval,
+role creation, release, AWS/S3 authority, empirical root-cause claims,
+deduplication, repair, wallet ranking and R12 promotion remain absent.
 
 ## Current study
 

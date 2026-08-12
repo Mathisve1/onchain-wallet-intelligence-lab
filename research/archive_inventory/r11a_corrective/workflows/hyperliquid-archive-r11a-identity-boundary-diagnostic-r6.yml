@@ -88,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           python governance/validate_r11a_preregistration.py
-          python governance/validate_r11a_corrective_implementation_r5.py --canonical-bytes
+          python governance/validate_r11a_corrective_implementation_r6.py --canonical-bytes
           python governance/validate_r11a_approval_r4.py
           python governance/validate_r11a_role_attestation_r4.py
           python governance/validate_r11a_role_preflight_evidence_r4.py

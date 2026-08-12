@@ -1,0 +1,39 @@
+{
+  "apt_install_authorized": false,
+  "dependency_declaration_id": "R11A-CORRECTIVE-R6-STDLIB-DEPENDENCIES-001",
+  "dependency_resolution_performed_by_this_stage": false,
+  "network_dependency_installation_authorized": false,
+  "pip_install_authorized": false,
+  "python_runtime": {
+    "exact_version": "3.12.13",
+    "implementation": "CPython",
+    "third_party_python_packages_required": []
+  },
+  "repository_local_runtime_dependencies": [],
+  "schema_version": "1.0",
+  "standard_library_modules": [
+    "argparse",
+    "collections",
+    "dataclasses",
+    "datetime",
+    "decimal",
+    "enum",
+    "hashlib",
+    "heapq",
+    "hmac",
+    "json",
+    "os",
+    "pathlib",
+    "re",
+    "shutil",
+    "struct",
+    "tempfile",
+    "time",
+    "types",
+    "typing",
+    "urllib"
+  ],
+  "status": "FROZEN_CORRECTIVE_IMPLEMENTATION_NO_INSTALLATION",
+  "system_executables_required_by_collector": [],
+  "unlocked_dependency_authorized": false
+}
