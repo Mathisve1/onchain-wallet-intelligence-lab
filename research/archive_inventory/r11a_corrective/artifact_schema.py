@@ -51,6 +51,43 @@ TAXA: Final[tuple[str, ...]] = (
     "UNCLASSIFIABLE",
 )
 
+PARSE_CONSERVATION_FIELDS: Final[tuple[str, ...]] = (
+    "raw_block_observation_count",
+    "raw_event_observation_count",
+    "valid_wallet_occurrence_count",
+    "invalid_wallet_occurrence_count",
+    "valid_coin_occurrence_count",
+    "invalid_coin_occurrence_count",
+    "valid_tid_occurrence_count",
+    "invalid_tid_occurrence_count",
+    "protocol_trade_identity_occurrence_count",
+    "wallet_fill_identity_occurrence_count",
+    "local_time_path_prefix_match_count",
+    "block_time_path_prefix_match_count",
+    "block_time_previous_prefix_match_count",
+    "block_time_other_prefix_count",
+)
+
+TERMINAL_GATE_NAMES: Final[tuple[str, ...]] = (
+    "exact_72_object_scope_complete",
+    "exact_three_complete_utc_days",
+    "all_objects_parsed_twice_with_equal_counts_and_commitments",
+    "all_primary_reducer_partitions_preserve_exact_multiplicity",
+    "raw_block_count_conserves_to_singleton_plus_repeated_observations",
+    "raw_event_count_conserves_separately_for_tid_coin_and_wallet_validation",
+    "legacy_repeat_occurrence_count_conserves_to_valid_plus_invalid_tid_repeat_occurrences",
+    "authoritative_unit_universes_are_exact_and_ordered",
+    "every_authoritative_unit_receives_exactly_one_primary_taxon",
+    "supporting_taxa_do_not_increment_primary_counts",
+    "all_nonnull_proof_and_provenance_foreign_keys_resolve_exactly_once",
+    "all_retained_rows_reference_exactly_one_unit",
+    "all_retained_row_counts_match_unit_occurrence_counts",
+    "all_referenced_projections_are_byte_equal",
+    "all_taxonomy_counts_recomputed_from_retained_rows",
+    "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences",
+    "all_caps_respected",
+)
+
 SCIENCE_CONTAINERS: Final[tuple[str, ...]] = (
     "r11a-v2-taxonomy-units.ndjson",
     "r11a-v2-block-overlap-matrix.ndjson",
@@ -156,6 +193,97 @@ def validate_sha256(value: object, label: str) -> str:
     return value
 
 
+def _exact_nonnegative_int(value: object, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ArtifactSchemaError(f"{label} must be a nonnegative exact integer")
+    return value
+
+
+def zero_taxon_counts() -> dict[str, int]:
+    return {taxon: 0 for taxon in TAXA}
+
+
+def validate_parse_conservation(
+    value: object,
+    *,
+    record_count: int,
+    event_count: int,
+    label: str,
+) -> None:
+    if not isinstance(value, Mapping) or set(value) != set(PARSE_CONSERVATION_FIELDS):
+        raise ArtifactSchemaError(f"{label} conservation field set drift")
+    counts = {
+        field: _exact_nonnegative_int(value[field], f"{label}.{field}")
+        for field in PARSE_CONSERVATION_FIELDS
+    }
+    if counts["raw_block_observation_count"] != record_count:
+        raise ArtifactSchemaError(f"{label} raw-block count differs from record count")
+    if counts["raw_event_observation_count"] != event_count:
+        raise ArtifactSchemaError(f"{label} raw-event count differs from event count")
+    raw_events = counts["raw_event_observation_count"]
+    for valid_field, invalid_field, dimension in (
+        ("valid_wallet_occurrence_count", "invalid_wallet_occurrence_count", "wallet"),
+        ("valid_coin_occurrence_count", "invalid_coin_occurrence_count", "coin"),
+        ("valid_tid_occurrence_count", "invalid_tid_occurrence_count", "TID"),
+    ):
+        if counts[valid_field] + counts[invalid_field] != raw_events:
+            raise ArtifactSchemaError(f"{label} {dimension} partition does not conserve events")
+    if counts["protocol_trade_identity_occurrence_count"] > min(
+        counts["valid_tid_occurrence_count"],
+        counts["valid_coin_occurrence_count"],
+    ):
+        raise ArtifactSchemaError(f"{label} protocol identities exceed valid components")
+    if (
+        counts["wallet_fill_identity_occurrence_count"]
+        > counts["protocol_trade_identity_occurrence_count"]
+    ):
+        raise ArtifactSchemaError(f"{label} wallet-fill identities exceed protocol identities")
+    raw_blocks = counts["raw_block_observation_count"]
+    if counts["local_time_path_prefix_match_count"] != raw_blocks:
+        raise ArtifactSchemaError(f"{label} local-time/path conservation failure")
+    if (
+        counts["block_time_path_prefix_match_count"]
+        + counts["block_time_previous_prefix_match_count"]
+        + counts["block_time_other_prefix_count"]
+        != raw_blocks
+    ):
+        raise ArtifactSchemaError(f"{label} block-time partition does not conserve records")
+    if counts["block_time_other_prefix_count"] != 0:
+        raise ArtifactSchemaError(f"{label} contains block-time evidence outside frozen boundary")
+
+
+def _validate_pass(value: object, name: str) -> Mapping[str, object] | None:
+    if value is None:
+        return None
+    expected = {
+        "status",
+        "decompressed_bytes",
+        "record_count",
+        "event_count",
+        "decompressed_stream_sha256",
+        "conservation",
+    }
+    if not isinstance(value, Mapping) or set(value) != expected:
+        raise ArtifactSchemaError(f"{name} evidence schema drift")
+    if value["status"] != "COMPLETE":
+        raise ArtifactSchemaError(f"{name} status is not COMPLETE")
+    decompressed = _exact_nonnegative_int(
+        value["decompressed_bytes"], f"{name}.decompressed_bytes"
+    )
+    record_count = _exact_nonnegative_int(value["record_count"], f"{name}.record_count")
+    event_count = _exact_nonnegative_int(value["event_count"], f"{name}.event_count")
+    if decompressed == 0 and (record_count != 0 or event_count != 0):
+        raise ArtifactSchemaError(f"{name} zero bytes with nonzero parsed evidence")
+    validate_sha256(value["decompressed_stream_sha256"], f"{name} stream SHA")
+    validate_parse_conservation(
+        value["conservation"],
+        record_count=record_count,
+        event_count=event_count,
+        label=name,
+    )
+    return value
+
+
 def validate_object_row_shape(row: Mapping[str, object]) -> None:
     expected = {
         "record_type",
@@ -185,6 +313,7 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
         raise ArtifactSchemaError("object ledger object key missing")
     if not isinstance(row["source_path_hour_utc"], str):
         raise ArtifactSchemaError("object ledger source hour missing")
+
     expected_identity = row["expected_identity"]
     if not isinstance(expected_identity, Mapping) or set(expected_identity) != {
         "size_bytes",
@@ -192,16 +321,31 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
         "compressed_sha256",
     }:
         raise ArtifactSchemaError("expected object identity schema drift")
-    if type(expected_identity["size_bytes"]) is not int or expected_identity["size_bytes"] <= 0:
-        raise ArtifactSchemaError("expected size invalid")
+    expected_size = _exact_nonnegative_int(
+        expected_identity["size_bytes"], "expected size"
+    )
+    if expected_size <= 0:
+        raise ArtifactSchemaError("expected size must be positive")
     if not isinstance(expected_identity["etag"], str):
         raise ArtifactSchemaError("expected etag invalid")
-    validate_sha256(expected_identity["compressed_sha256"], "expected compressed SHA")
+    expected_sha = validate_sha256(
+        expected_identity["compressed_sha256"], "expected compressed SHA"
+    )
+
     request = row["request"]
     if not isinstance(request, Mapping) or set(request) != {"count", "status"}:
         raise ArtifactSchemaError("request evidence schema drift")
-    if request["count"] not in {0, 1}:
+    request_count = request["count"]
+    if type(request_count) is not int or request_count not in {0, 1}:
         raise ArtifactSchemaError("request count outside one-request envelope")
+    if request["status"] not in {
+        "NOT_REQUESTED",
+        "REQUEST_SENT",
+        "RESPONSE_METADATA_RECEIVED",
+        "COMPLETE",
+    }:
+        raise ArtifactSchemaError("unknown request status")
+
     response = row["response"]
     if response is not None:
         if not isinstance(response, Mapping) or set(response) != {
@@ -211,6 +355,19 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
             "requester_charged",
         }:
             raise ArtifactSchemaError("response metadata schema drift")
+        if request_count != 1:
+            raise ArtifactSchemaError("response exists without one request")
+        if type(response["http_status"]) is not int:
+            raise ArtifactSchemaError("response HTTP status is not exact integer")
+        if response["etag"] is not None and not isinstance(response["etag"], str):
+            raise ArtifactSchemaError("response ETag type drift")
+        if response["content_length"] is not None:
+            _exact_nonnegative_int(response["content_length"], "response content length")
+        if response["requester_charged"] is not None and not isinstance(
+            response["requester_charged"], str
+        ):
+            raise ArtifactSchemaError("requester-charged type drift")
+
     body = row["body"]
     if not isinstance(body, Mapping) or set(body) != {
         "status",
@@ -218,29 +375,60 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
         "observed_compressed_sha256",
     }:
         raise ArtifactSchemaError("body evidence schema drift")
-    if type(body["bytes_received"]) is not int or body["bytes_received"] < 0:
-        raise ArtifactSchemaError("body byte count invalid")
-    if body["observed_compressed_sha256"] is not None:
-        validate_sha256(body["observed_compressed_sha256"], "observed compressed SHA")
-    for name in ("first_pass", "second_pass"):
-        value = row[name]
-        if value is None:
-            continue
-        if not isinstance(value, Mapping) or set(value) != {
-            "status",
-            "decompressed_bytes",
-            "record_count",
-            "event_count",
-            "decompressed_stream_sha256",
-            "conservation",
-        }:
-            raise ArtifactSchemaError(f"{name} evidence schema drift")
-        for field in ("decompressed_bytes", "record_count", "event_count"):
-            if type(value[field]) is not int or value[field] < 0:
-                raise ArtifactSchemaError(f"{name}.{field} invalid")
-        validate_sha256(value["decompressed_stream_sha256"], f"{name} stream SHA")
-        if not isinstance(value["conservation"], Mapping):
-            raise ArtifactSchemaError(f"{name}.conservation must be object")
+    if body["status"] not in {"NOT_STARTED", "STREAMING", "COMPLETE"}:
+        raise ArtifactSchemaError("unknown body status")
+    body_bytes = _exact_nonnegative_int(body["bytes_received"], "body byte count")
+    if body_bytes > expected_size:
+        raise ArtifactSchemaError("body byte count exceeds expected size")
+    observed_sha = body["observed_compressed_sha256"]
+    if observed_sha is not None:
+        validate_sha256(observed_sha, "observed compressed SHA")
+
+    first = _validate_pass(row["first_pass"], "first_pass")
+    second = _validate_pass(row["second_pass"], "second_pass")
+    terminal = row["terminal_status"]
+    if terminal not in {"PENDING", "STOPPED", "COMPLETE_TWO_LOCAL_PASSES"}:
+        raise ArtifactSchemaError("unknown object terminal status")
+    error_code = row["terminal_error_code"]
+    if error_code is not None and (not isinstance(error_code, str) or not error_code):
+        raise ArtifactSchemaError("terminal error code type drift")
+
+    if request_count == 0:
+        if (
+            request["status"] != "NOT_REQUESTED"
+            or response is not None
+            or body["status"] != "NOT_STARTED"
+            or body_bytes != 0
+            or observed_sha is not None
+            or first is not None
+            or second is not None
+        ):
+            raise ArtifactSchemaError("unrequested object contains later-phase evidence")
+    if response is None and body["status"] != "NOT_STARTED":
+        raise ArtifactSchemaError("body evidence exists before response metadata")
+    if body["status"] == "COMPLETE":
+        if (
+            request["status"] != "COMPLETE"
+            or response is None
+            or body_bytes != expected_size
+            or observed_sha != expected_sha
+        ):
+            raise ArtifactSchemaError("complete body identity does not match frozen target")
+    elif observed_sha is not None:
+        raise ArtifactSchemaError("observed compressed SHA before complete body")
+    if first is not None and body["status"] != "COMPLETE":
+        raise ArtifactSchemaError("first pass exists before complete body")
+    if second is not None:
+        if first is None or dict(second) != dict(first):
+            raise ArtifactSchemaError("second pass is absent or differs from first pass")
+    if terminal == "COMPLETE_TWO_LOCAL_PASSES":
+        if second is None or error_code is not None:
+            raise ArtifactSchemaError("complete object lacks exact two-pass evidence")
+    elif terminal == "STOPPED":
+        if error_code is None:
+            raise ArtifactSchemaError("stopped object lacks terminal error code")
+    elif error_code is not None:
+        raise ArtifactSchemaError("non-stopped object contains terminal error code")
 
 
 def validate_universe_rows(rows: Sequence[Mapping[str, object]]) -> None:
@@ -259,18 +447,42 @@ def validate_universe_rows(rows: Sequence[Mapping[str, object]]) -> None:
         }
         if set(row) != expected:
             raise ArtifactSchemaError("unit conservation row schema drift")
-        for field in (
-            "group_count",
-            "occurrence_count",
-            "unclassifiable_group_count",
+        group_count = _exact_nonnegative_int(row["group_count"], "group_count")
+        occurrence_count = _exact_nonnegative_int(
+            row["occurrence_count"], "occurrence_count"
+        )
+        unclassifiable_groups = _exact_nonnegative_int(
+            row["unclassifiable_group_count"], "unclassifiable_group_count"
+        )
+        unclassifiable_occurrences = _exact_nonnegative_int(
+            row["unclassifiable_occurrence_count"],
             "unclassifiable_occurrence_count",
-        ):
-            value = row[field]
-            if type(value) is not int or value < 0:
-                raise ArtifactSchemaError(f"invalid universe conservation count: {field}")
-        for field in ("primary_taxon_group_counts", "primary_taxon_occurrence_counts"):
-            mapping = row[field]
-            if not isinstance(mapping, Mapping) or set(mapping) - set(TAXA):
-                raise ArtifactSchemaError("taxonomy count map contains unknown taxon")
-            if any(type(value) is not int or value < 0 for value in mapping.values()):
-                raise ArtifactSchemaError("taxonomy count map contains invalid count")
+        )
+        group_taxa = row["primary_taxon_group_counts"]
+        occurrence_taxa = row["primary_taxon_occurrence_counts"]
+        if not isinstance(group_taxa, Mapping) or set(group_taxa) != set(TAXA):
+            raise ArtifactSchemaError("primary group taxon map is not exact")
+        if not isinstance(occurrence_taxa, Mapping) or set(occurrence_taxa) != set(TAXA):
+            raise ArtifactSchemaError("primary occurrence taxon map is not exact")
+        for taxon in TAXA:
+            _exact_nonnegative_int(group_taxa[taxon], f"group taxon {taxon}")
+            _exact_nonnegative_int(
+                occurrence_taxa[taxon], f"occurrence taxon {taxon}"
+            )
+        if sum(group_taxa.values()) != group_count:
+            raise ArtifactSchemaError("primary group taxon counts do not conserve units")
+        if sum(occurrence_taxa.values()) != occurrence_count:
+            raise ArtifactSchemaError(
+                "primary occurrence taxon counts do not conserve occurrences"
+            )
+        if group_taxa["UNCLASSIFIABLE"] != unclassifiable_groups:
+            raise ArtifactSchemaError("unclassifiable group count drift")
+        if occurrence_taxa["UNCLASSIFIABLE"] != unclassifiable_occurrences:
+            raise ArtifactSchemaError("unclassifiable occurrence count drift")
+
+
+def validate_terminal_gates(value: object) -> None:
+    if not isinstance(value, Mapping) or set(value) != set(TERMINAL_GATE_NAMES):
+        raise ArtifactSchemaError("terminal gate set drift")
+    if any(type(value[name]) is not bool for name in TERMINAL_GATE_NAMES):
+        raise ArtifactSchemaError("terminal gate value is not boolean")
