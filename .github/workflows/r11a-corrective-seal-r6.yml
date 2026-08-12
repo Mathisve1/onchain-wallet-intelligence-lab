@@ -41,34 +41,45 @@ jobs:
           python-version: '3.12.13'
           check-latest: false
 
-      - name: Make the sealer tolerant of test files without lifecycle references
+      - name: Make the sealer tolerant of tests without lifecycle references
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
+          import ast
           from pathlib import Path
+
           path = Path('governance/seal_r11a_corrective_r6.py')
           text = path.read_text(encoding='utf-8')
-          old = '''    for relative in TEST_FILES:
-              path = ROOT / relative
-              if path.is_file():
-                  replace_required(
-                      path,
-                      "validate_r11a_corrective_implementation_r5.py",
-                      "validate_r11a_corrective_implementation_r6.py",
-                  )'''
-          new = '''    for relative in TEST_FILES:
-              path = ROOT / relative
-              if not path.is_file():
-                  continue
-              text = path.read_text(encoding="utf-8")
-              old_validator_name = "validate_r11a_corrective_implementation_r5.py"
-              new_validator_name = "validate_r11a_corrective_implementation_r6.py"
-              if old_validator_name in text:
-                  path.write_text(text.replace(old_validator_name, new_validator_name), encoding="utf-8")'''
-          if old not in text:
-              raise SystemExit('sealer test-binding loop has unexpected bytes')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          tree = ast.parse(text, filename=str(path))
+          target = next(
+              node
+              for node in tree.body
+              if isinstance(node, ast.FunctionDef) and node.name == 'patch_runtime_bindings'
+          )
+          if target.end_lineno is None:
+              raise SystemExit('patch_runtime_bindings has no end line')
+          replacement = '''def patch_runtime_bindings() -> None:
+              replace_required(
+                  WORKFLOW,
+                  "governance/validate_r11a_corrective_implementation_r5.py --canonical-bytes",
+                  "governance/validate_r11a_corrective_implementation_r6.py --canonical-bytes",
+              )
+              for relative in TEST_FILES:
+                  path = ROOT / relative
+                  if not path.is_file():
+                      continue
+                  value = path.read_text(encoding="utf-8")
+                  old_name = "validate_r11a_corrective_implementation_r5.py"
+                  new_name = "validate_r11a_corrective_implementation_r6.py"
+                  if old_name in value:
+                      path.write_text(value.replace(old_name, new_name), encoding="utf-8")
+              old_validator = ROOT / "governance/validate_r11a_corrective_implementation_r5.py"
+              if old_validator.exists():
+                  old_validator.unlink()'''
+          lines = text.splitlines(keepends=True)
+          lines[target.lineno - 1 : target.end_lineno] = [replacement.rstrip() + '\n\n']
+          path.write_text(''.join(lines), encoding='utf-8')
           PY
 
       - name: Write and verify the exact sealed-review implementation state
