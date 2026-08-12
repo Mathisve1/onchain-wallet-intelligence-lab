@@ -25,10 +25,11 @@ class JoinValidationResult:
     all_nonnull_proof_references_resolve_exactly_once: bool
     all_retained_rows_reference_exactly_one_unit: bool
     all_referenced_projections_are_byte_equal: bool
+    all_retained_row_counts_match_unit_occurrence_counts: bool
 
 
 class DiskJoinLedger:
-    """Exact disk-backed IDs, foreign keys, and byte-equal projections."""
+    """Exact disk-backed IDs, foreign keys, byte projections and multiplicities."""
 
     def __init__(self, meter: WorkspaceMeter) -> None:
         self.database = MeteredSQLite(
@@ -43,6 +44,7 @@ class DiskJoinLedger:
                 CREATE TABLE units(
                   unit_id TEXT PRIMARY KEY,
                   universe TEXT NOT NULL,
+                  occurrence_count INTEGER NOT NULL CHECK(occurrence_count > 0),
                   projection BLOB NOT NULL
                 );
                 CREATE TABLE proofs(
@@ -63,6 +65,7 @@ class DiskJoinLedger:
                   unit_id TEXT NOT NULL,
                   unit_projection BLOB NOT NULL
                 );
+                CREATE INDEX retained_rows_by_unit ON retained_rows(unit_id);
                 """
             )
         self._units: list[tuple[object, ...]] = []
@@ -71,13 +74,18 @@ class DiskJoinLedger:
         self._rows: list[tuple[object, ...]] = []
         self._closed = False
 
+    def _require_open(self) -> None:
+        if self._closed:
+            raise JoinBoundaryError("taxonomy join ledger is closed")
+
     def _flush(self) -> None:
+        self._require_open()
         if not any((self._units, self._proofs, self._refs, self._rows)):
             return
         try:
             with self.database.transaction("flush taxonomy join rows") as connection:
                 connection.executemany(
-                    "INSERT INTO units VALUES(?,?,?)",
+                    "INSERT INTO units VALUES(?,?,?,?)",
                     self._units,
                 )
                 connection.executemany(
@@ -93,7 +101,9 @@ class DiskJoinLedger:
                     self._rows,
                 )
         except sqlite3.IntegrityError as exc:
-            raise JoinBoundaryError("duplicate unit, proof, reference, or retained row ID") from exc
+            raise JoinBoundaryError(
+                "duplicate unit, proof, reference, retained row, or invalid occurrence count"
+            ) from exc
         self._units.clear()
         self._proofs.clear()
         self._refs.clear()
@@ -103,11 +113,25 @@ class DiskJoinLedger:
         if sum(map(len, (self._units, self._proofs, self._refs, self._rows))) >= _BATCH_ROWS:
             self._flush()
 
-    def add_unit(self, unit_id: str, universe: str, projection: bytes) -> None:
-        self._units.append((unit_id, universe, sqlite3.Binary(projection)))
+    def add_unit(
+        self,
+        unit_id: str,
+        universe: str,
+        occurrence_count: int,
+        projection: bytes,
+    ) -> None:
+        self._require_open()
+        if not unit_id or not universe or occurrence_count <= 0 or not projection:
+            raise JoinBoundaryError("invalid taxonomy unit evidence")
+        self._units.append(
+            (unit_id, universe, occurrence_count, sqlite3.Binary(projection))
+        )
         self._maybe_flush()
 
     def add_proof(self, proof_id: str, proof_type: str, projection: bytes) -> None:
+        self._require_open()
+        if not proof_id or not proof_type or not projection:
+            raise JoinBoundaryError("invalid taxonomy proof evidence")
         self._proofs.append((proof_id, proof_type, sqlite3.Binary(projection)))
         self._maybe_flush()
 
@@ -119,6 +143,9 @@ class DiskJoinLedger:
         unit_projection: bytes,
         proof_projection: bytes,
     ) -> None:
+        self._require_open()
+        if not all((unit_id, proof_id, proof_type, unit_projection, proof_projection)):
+            raise JoinBoundaryError("invalid taxonomy proof reference")
         self._refs.append(
             (
                 unit_id,
@@ -130,7 +157,15 @@ class DiskJoinLedger:
         )
         self._maybe_flush()
 
-    def add_retained_row(self, row_id: str, unit_id: str, unit_projection: bytes) -> None:
+    def add_retained_row(
+        self,
+        row_id: str,
+        unit_id: str,
+        unit_projection: bytes,
+    ) -> None:
+        self._require_open()
+        if not row_id or not unit_id or not unit_projection:
+            raise JoinBoundaryError("invalid retained taxonomy row reference")
         self._rows.append((row_id, unit_id, sqlite3.Binary(unit_projection)))
         self._maybe_flush()
 
@@ -179,6 +214,19 @@ class DiskJoinLedger:
                 """
             ).fetchone()[0]
         )
+        multiplicity_mismatches = int(
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM units u
+                LEFT JOIN (
+                  SELECT unit_id,COUNT(*) AS retained_count
+                  FROM retained_rows
+                  GROUP BY unit_id
+                ) r ON r.unit_id=u.unit_id
+                WHERE COALESCE(r.retained_count,0)<>u.occurrence_count
+                """
+            ).fetchone()[0]
+        )
         return JoinValidationResult(
             unit_count=unit_count,
             proof_count=proof_count,
@@ -190,6 +238,9 @@ class DiskJoinLedger:
             all_retained_rows_reference_exactly_one_unit=dangling_rows == 0,
             all_referenced_projections_are_byte_equal=(
                 projection_ref_mismatches == 0 and projection_row_mismatches == 0
+            ),
+            all_retained_row_counts_match_unit_occurrence_counts=(
+                multiplicity_mismatches == 0
             ),
         )
 
