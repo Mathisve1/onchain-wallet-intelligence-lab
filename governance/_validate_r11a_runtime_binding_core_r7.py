@@ -28,7 +28,7 @@ BINDING = ROOT / BINDING_RELATIVE
 
 IMPLEMENTATION_RELATIVE = (
     "research/archive_inventory/r11a_corrective/"
-    "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT.json"
+    "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json"
 )
 PRICING_RELATIVE = (
     "research/archive_inventory/r11a_corrective/R11A_PRICING_EUR_SNAPSHOT.json"
@@ -76,8 +76,16 @@ PERMISSION_POLICY_RELATIVE = (
 )
 
 TRANSITIVE_CODE_PATHS = (
+    "governance/_validate_r11a_runtime_binding_core_r7.py",
+    "governance/seal_r11a_corrective_r7.py",
     "governance/validate_r11a_runtime_binding_r7.py",
     "governance/validate_r11a_execution_artifact_r7.py",
+    "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_artifact_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_artifact_schema_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_runner_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py",
+    "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
     "research/archive_inventory/r11a_corrective/artifact.py",
     "research/archive_inventory/r11a_corrective/artifact_schema.py",
     "research/archive_inventory/r11a_corrective/canonical.py",
@@ -89,6 +97,7 @@ TRANSITIVE_CODE_PATHS = (
     "research/archive_inventory/r11a_corrective/limits.py",
     "research/archive_inventory/r11a_corrective/lz4stream.py",
     "research/archive_inventory/r11a_corrective/materialize.py",
+    "research/archive_inventory/r11a_corrective/meter_r7.py",
     "research/archive_inventory/r11a_corrective/network.py",
     "research/archive_inventory/r11a_corrective/parser.py",
     "research/archive_inventory/r11a_corrective/preflight_artifact_r7.py",
@@ -98,6 +107,7 @@ TRANSITIVE_CODE_PATHS = (
     "research/archive_inventory/r11a_corrective/selection.py",
     "research/archive_inventory/r11a_corrective/storage_r7.py",
     "research/archive_inventory/r11a_corrective/taxonomy.py",
+    "research/archive_inventory/r11a_corrective/taxonomy_precedence_r7.py",
 )
 
 REQUIRED_BOUND_PATHS = tuple(

@@ -211,6 +211,16 @@ class DiskJoinLedger:
                 """
             ).fetchone()[0]
         )
+        unreferenced_proofs = int(
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM proofs p
+                LEFT JOIN refs r
+                  ON r.proof_id=p.proof_id AND r.proof_type=p.proof_type
+                WHERE r.proof_id IS NULL
+                """
+            ).fetchone()[0]
+        )
         projection_ref_mismatches = int(
             connection.execute(
                 """
@@ -259,7 +269,9 @@ class DiskJoinLedger:
             retained_row_reference_count=row_count,
             all_unit_ids_unique=True,
             all_proof_ids_unique=True,
-            all_nonnull_proof_references_resolve_exactly_once=dangling_refs == 0,
+            all_nonnull_proof_references_resolve_exactly_once=(
+                dangling_refs == 0 and unreferenced_proofs == 0
+            ),
             all_retained_rows_reference_exactly_one_unit=dangling_rows == 0,
             all_referenced_projections_are_byte_equal=(
                 projection_ref_mismatches == 0 and projection_row_mismatches == 0

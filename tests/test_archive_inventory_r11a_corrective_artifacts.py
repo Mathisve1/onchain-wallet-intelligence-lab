@@ -66,7 +66,11 @@ class CorrectiveArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "workspace"
             _, _, state, session = self.prepared(root)
-            state.stop("SYNTHETIC_PRECOLLECTOR_FAILURE", phase="PRECOLLECTOR", evidence={})
+            state.stop(
+                "SYNTHETIC_PRECOLLECTOR_FAILURE",
+                phase="PRE_OIDC_STATIC_GATE",
+                evidence={},
+            )
             outcome = session.finalize_empty(
                 state=state,
                 context=self.context(),
@@ -74,7 +78,7 @@ class CorrectiveArtifactTests(unittest.TestCase):
                 resource_rows=(
                     {
                         "record_type": "RESOURCE_MEASUREMENT",
-                        "phase": "PRECOLLECTOR",
+                        "phase": "PRE_OIDC_STATIC_GATE",
                         "elapsed_runtime_seconds_floor": 0,
                         "tracked_workspace_bytes": 0,
                         "reserved_workspace_bytes": 0,
@@ -145,7 +149,7 @@ class CorrectiveArtifactTests(unittest.TestCase):
             )
             state.stop(
                 "FULLY_MATERIALIZED_TAXONOMY_INCOMPLETE",
-                phase="FINAL_SCIENTIFIC_VALIDATION",
+                phase="TAXONOMY",
                 evidence={"unclassifiable_group_count": 1},
             )
             outcome = session.finalize_full(

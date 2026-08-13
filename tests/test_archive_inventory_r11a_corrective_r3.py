@@ -144,8 +144,8 @@ class RuntimeAndPricingTests(unittest.TestCase):
             state.request_sent(0)
         rows = state.object_rows()
         self.assertEqual(len(rows), 72)
-        self.assertEqual(rows[0]["request_count"], 1)
-        self.assertEqual(rows[1]["request_count"], 0)
+        self.assertEqual(rows[0]["request"]["count"], 1)
+        self.assertEqual(rows[1]["request"]["count"], 0)
 
     def test_unbound_pricing_snapshot_blocks_approval_and_execution(self) -> None:
         with self.assertRaises(PricingError):

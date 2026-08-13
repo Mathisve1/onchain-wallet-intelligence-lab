@@ -57,19 +57,15 @@ def main() -> int:
 
     expected = render_manifest()
     if args.write:
-        MANIFEST.write_text(expected, encoding="utf-8")
+        MANIFEST.write_bytes(expected.encode("utf-8"))
         print(
             "MANIFEST_WRITTEN:"
             f"{MANIFEST.relative_to(ROOT).as_posix()}"
         )
         return 0
     if args.check:
-        observed = (
-            MANIFEST.read_text(encoding="utf-8")
-            if MANIFEST.is_file()
-            else ""
-        )
-        if observed != expected:
+        observed = MANIFEST.read_bytes() if MANIFEST.is_file() else b""
+        if observed != expected.encode("utf-8"):
             print("REPOSITORY_MANIFEST_OUT_OF_DATE")
             print("EXPECTED_MANIFEST_BEGIN")
             print(expected, end="")

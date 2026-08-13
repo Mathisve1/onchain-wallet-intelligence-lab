@@ -123,7 +123,7 @@ jobs:
           approval_text=archive/'r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt'
           release_path=runtime/'R11A_EXECUTION_RELEASE.json'
           activation_path=runtime/'R11A_CANONICAL_ACTIVATION.json'
-          implementation_path=corrective/'R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT.json'
+          implementation_path=corrective/'R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json'
           workflow_path=root/'.github/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml'
           collector_path=corrective/'runner.py'
           validator_path=root/'governance/validate_r11a_execution_artifact_r7.py'

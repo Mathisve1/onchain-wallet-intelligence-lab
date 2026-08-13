@@ -29,11 +29,15 @@ This repository is research-only.
 
 R11 is canonically `CONSUMED_UNRESOLVED`; its exact artifact is retained and its
 single-use release has zero remaining request budget. The corrective R11A V2
-preregistration is sealed over exactly the same 72 objects, and its R6
-implementation is sealed but still awaiting independent clean-context review.
-The workflow candidate remains outside `.github/workflows`; owner approval,
-role creation, release, AWS/S3 authority, empirical root-cause claims,
-deduplication, repair, wallet ranking and R12 promotion remain absent.
+preregistration is sealed over exactly the same 72 objects. Its local R7
+implementation is separately sealed but still awaits independent clean-context
+review. The handoff-referenced `R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT_002`
+is not present locally, so the existing sealed V2 amendment remains unchanged
+and that missing authority input is an explicit approval blocker. Official
+pricing/EUR evidence is also still pending. The workflow candidate remains
+outside `.github/workflows`; owner approval, role creation, release, AWS/S3
+authority, empirical root-cause claims, deduplication, repair, wallet ranking
+and R12 promotion remain absent.
 
 ## Current study
 

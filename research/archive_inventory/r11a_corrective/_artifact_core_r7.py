@@ -86,8 +86,13 @@ class StreamingScientificEmitter(EvidenceEmitter):
         for name in SCIENCE_CONTAINERS:
             self._handles[name] = (self.staging / name).open("xb")
         self._total = 0
+        self._persisted = 0
         self._closed = False
-        meter.checkpoint(self.reservation, self.staging, phase="create scientific containers")
+        meter.checkpoint_value(
+            self.reservation,
+            0,
+            phase="create scientific containers",
+        )
 
     def _flush(self, name: str) -> None:
         buffer = self._buffers[name]
@@ -98,10 +103,11 @@ class StreamingScientificEmitter(EvidenceEmitter):
         if self._handles[name].write(payload) != len(payload):
             raise ArtifactBoundaryError("short scientific output write")
         self._handles[name].flush()
+        self._persisted += len(payload)
         buffer.clear()
-        self.meter.checkpoint(
+        self.meter.checkpoint_value(
             self.reservation,
-            self.staging,
+            self._persisted,
             phase=f"flush {name}",
         )
         self.meter.runtime_guard.check_scientific_phase(f"flush {name} after")
@@ -130,9 +136,9 @@ class StreamingScientificEmitter(EvidenceEmitter):
                 handle.flush()
                 os.fsync(handle.fileno())
                 handle.close()
-            self.meter.finalize(
+            self.meter.finalize_value(
                 self.reservation,
-                self.staging,
+                self._persisted,
                 phase="finalize scientific containers",
             )
         except Exception:
@@ -158,9 +164,8 @@ class StreamingScientificEmitter(EvidenceEmitter):
                 path = self.staging / name
                 if path.exists():
                     path.unlink()
-            self.meter.release_deleted(
+            self.meter.release_value(
                 self.reservation,
-                self.staging,
                 phase="discard scientific containers",
             )
         except BaseException as exc:
@@ -181,9 +186,9 @@ class SharedMetadataWriter:
         )
         self._written = 0
         self._closed = False
-        meter.checkpoint(
+        meter.checkpoint_value(
             self.reservation,
-            self.staging,
+            0,
             packaging=True,
             phase="create metadata reservation",
         )
@@ -200,9 +205,9 @@ class SharedMetadataWriter:
             handle.flush()
             os.fsync(handle.fileno())
         self._written += len(payload)
-        self.meter.checkpoint(
+        self.meter.checkpoint_value(
             self.reservation,
-            self.staging,
+            self._written,
             packaging=True,
             phase=f"write metadata {name}",
         )
@@ -216,9 +221,9 @@ class SharedMetadataWriter:
     def close(self) -> None:
         if self._closed:
             return
-        self.meter.finalize(
+        self.meter.finalize_value(
             self.reservation,
-            self.staging,
+            self._written,
             packaging=True,
             phase="finalize metadata containers",
         )
@@ -232,9 +237,9 @@ class SharedMetadataWriter:
             for path in sorted(self.staging.iterdir(), reverse=True):
                 if path.is_file() and path.name not in SCIENCE_CONTAINERS:
                     path.unlink()
-            self.meter.release_deleted(
+            self.meter.release_value(
                 self.reservation,
-                self.staging,
+                packaging=True,
                 phase="discard metadata containers",
             )
         except BaseException as exc:

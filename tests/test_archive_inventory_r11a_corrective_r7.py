@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from governance.validate_r11a_execution_artifact_r7 import (
     EvidenceValidationError,
@@ -16,12 +18,15 @@ from governance.validate_r11a_runtime_binding_r7 import (
     validate as validate_runtime_binding,
 )
 from research.archive_inventory.r11a_corrective.artifact import (
+    SharedMetadataWriter,
+    StreamingScientificEmitter,
     ArtifactSession,
     validate_artifact,
 )
 from research.archive_inventory.r11a_corrective.artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
     BOUNDARY_FILE,
+    CONSERVATION_FILE,
     DIAGNOSTIC_ID,
     IMPLEMENTATION_ID,
     SCIENCE_CONTAINERS,
@@ -61,8 +66,11 @@ from research.archive_inventory.r11a_corrective.selection import (
     load_selection,
 )
 from research.archive_inventory.r11a_corrective.storage_r7 import (
+    AtomicArtifactDirectory,
     ExactSQLiteMultiplicityLedger,
+    ReservedBinaryWriter,
     StorageBoundaryError,
+    directory_size,
 )
 from research.archive_inventory.r11a_corrective.taxonomy import (
     TaxonomyResult,
@@ -78,13 +86,15 @@ def fixture_unit_projection(
     *,
     occurrence_count: int = 1,
     key_value: str = "fixture",
+    unit_universe: str = "LEGACY_REPEAT_OCCURRENCE",
+    primary_taxon: str = "TID_SCOPE_FALSE_POSITIVE",
 ) -> bytes:
     return canonical_json_bytes(
         {
             "diagnostic_id": DIAGNOSTIC_ID,
-            "unit_universe": "LEGACY_REPEAT_OCCURRENCE",
+            "unit_universe": unit_universe,
             "key_projection": {"fixture": key_value},
-            "primary_taxon": "TID_SCOPE_FALSE_POSITIVE",
+            "primary_taxon": primary_taxon,
             "occurrence_count": occurrence_count,
         },
         final_newline=False,
@@ -120,6 +130,28 @@ def one_legacy_universe_rows() -> tuple[dict[str, object], ...]:
         "primary_taxon_occurrence_counts": occurrence_counts,
         "unclassifiable_group_count": 0,
         "unclassifiable_occurrence_count": 0,
+    }
+    return tuple(rows)
+
+
+def one_universe_rows(
+    unit_universe: str,
+    primary_taxon: str,
+) -> tuple[dict[str, object], ...]:
+    rows = [dict(row) for row in zero_universe_rows()]
+    ordinal = AUTHORITATIVE_UNIT_UNIVERSES.index(unit_universe)
+    group_counts = zero_taxon_counts()
+    occurrence_counts = zero_taxon_counts()
+    group_counts[primary_taxon] = 1
+    occurrence_counts[primary_taxon] = 1
+    rows[ordinal] = {
+        "unit_universe": unit_universe,
+        "group_count": 1,
+        "occurrence_count": 1,
+        "primary_taxon_group_counts": group_counts,
+        "primary_taxon_occurrence_counts": occurrence_counts,
+        "unclassifiable_group_count": int(primary_taxon == "UNCLASSIFIABLE"),
+        "unclassifiable_occurrence_count": int(primary_taxon == "UNCLASSIFIABLE"),
     }
     return tuple(rows)
 
@@ -311,6 +343,243 @@ class ExactDiskEvidenceTests(unittest.TestCase):
                 joins.validate()
             joins.database.close_delete()
 
+    def test_extra_retained_row_is_detected_for_every_unit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            joins = DiskJoinLedger(meter)
+            projection = fixture_unit_projection()
+            joins.add_unit("u", "LEGACY_REPEAT_OCCURRENCE", 1, projection)
+            joins.add_retained_row("r1", "u", projection)
+            joins.add_retained_row("r2", "u", projection)
+            result = joins.validate()
+            self.assertFalse(
+                result.all_retained_row_counts_match_unit_occurrence_counts
+            )
+            joins.close_delete()
+
+    def test_duplicate_proof_ids_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            joins = DiskJoinLedger(meter)
+            joins.add_proof("p", "proof-type", b"one")
+            joins.add_proof("p", "proof-type", b"two")
+            with self.assertRaises(JoinBoundaryError):
+                joins.validate()
+            joins.database.close_delete()
+
+    def test_duplicate_proof_foreign_keys_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            joins = DiskJoinLedger(meter)
+            projection = fixture_unit_projection()
+            joins.add_unit("u", "LEGACY_REPEAT_OCCURRENCE", 1, projection)
+            joins.add_proof("p", "proof-type", b"proof")
+            for _ in range(2):
+                joins.add_reference(
+                    "u",
+                    "p",
+                    "proof-type",
+                    projection,
+                    b"proof",
+                )
+            with self.assertRaises(JoinBoundaryError):
+                joins.validate()
+            joins.database.close_delete()
+
+    def test_wrong_proof_projection_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            joins = DiskJoinLedger(meter)
+            projection = fixture_unit_projection()
+            joins.add_unit("u", "LEGACY_REPEAT_OCCURRENCE", 1, projection)
+            joins.add_proof("p", "proof-type", b"proof")
+            joins.add_reference(
+                "u",
+                "p",
+                "proof-type",
+                projection,
+                b"wrong-proof",
+            )
+            joins.add_retained_row("r", "u", projection)
+            result = joins.validate()
+            self.assertFalse(result.all_referenced_projections_are_byte_equal)
+            joins.close_delete()
+
+    def test_unreferenced_proof_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            joins = DiskJoinLedger(meter)
+            joins.add_proof("p", "proof-type", b"proof")
+            result = joins.validate()
+            self.assertFalse(
+                result.all_nonnull_proof_references_resolve_exactly_once
+            )
+            joins.close_delete()
+
+
+class WorkspaceAccountingTests(unittest.TestCase):
+    def meter(self, root: Path) -> R7WorkspaceMeter:
+        guard = RuntimeGuard(DEFAULT_LIMITS)
+        meter = R7WorkspaceMeter(root, DEFAULT_LIMITS, guard)
+        meter.bootstrap()
+        return meter
+
+    def write_payload(
+        self,
+        meter: R7WorkspaceMeter,
+        path: Path,
+        payload: bytes = b"payload",
+    ) -> None:
+        with ReservedBinaryWriter(
+            path,
+            meter,
+            maximum_bytes=1024,
+            label="atomic fixture",
+            packaging=True,
+            buffer_bytes=1,
+        ) as writer:
+            writer.write(payload)
+
+    def test_atomic_rename_preserves_identical_bytes_and_accounting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            atomic = AtomicArtifactDirectory(meter.root, meter, "artifact")
+            staging = atomic.__enter__()
+            self.write_payload(meter, staging / "payload.bin")
+            before = (staging / "payload.bin").read_bytes()
+            tracked = meter.verify_actual_usage()
+            final = atomic.commit(
+                lambda candidate: self.assertEqual(
+                    (candidate / "payload.bin").read_bytes(),
+                    before,
+                )
+            )
+            self.assertEqual((final / "payload.bin").read_bytes(), before)
+            self.assertEqual(meter.known_bytes, tracked)
+            self.assertEqual(meter.verify_actual_usage(), directory_size(final))
+            meter.checked_rmtree(final)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_post_rename_runtime_failure_removes_final_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            atomic = AtomicArtifactDirectory(meter.root, meter, "artifact")
+            staging = atomic.__enter__()
+            self.write_payload(meter, staging / "payload.bin")
+            original = RuntimeGuard.check_packaging_phase
+
+            def fail_after_rename(guard: RuntimeGuard, phase: str) -> None:
+                if phase == "artifact rename after":
+                    raise RuntimeError("injected post-rename runtime failure")
+                original(guard, phase)
+
+            with mock.patch.object(
+                RuntimeGuard,
+                "check_packaging_phase",
+                side_effect=fail_after_rename,
+                autospec=True,
+            ):
+                with self.assertRaises(RuntimeError):
+                    atomic.commit(lambda _: None)
+            self.assertFalse(atomic.final_path.exists())
+            self.assertFalse(atomic.staging_path.exists())
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_post_rename_workspace_failure_removes_final_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            atomic = AtomicArtifactDirectory(meter.root, meter, "artifact")
+            staging = atomic.__enter__()
+            self.write_payload(meter, staging / "payload.bin")
+            tracked = meter.known_bytes
+            with mock.patch.object(
+                meter,
+                "verify_actual_usage",
+                side_effect=(
+                    tracked,
+                    StorageBoundaryError("injected post-rename workspace failure"),
+                ),
+            ):
+                with self.assertRaises(StorageBoundaryError):
+                    atomic.commit(lambda _: None)
+            self.assertFalse(atomic.final_path.exists())
+            self.assertFalse(atomic.staging_path.exists())
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_final_directory_cleanup_failure_remains_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            atomic = AtomicArtifactDirectory(meter.root, meter, "artifact")
+            staging = atomic.__enter__()
+            self.write_payload(meter, staging / "payload.bin")
+            original = RuntimeGuard.check_packaging_phase
+
+            def fail_after_rename(guard: RuntimeGuard, phase: str) -> None:
+                if phase == "artifact rename after":
+                    raise RuntimeError("injected post-rename runtime failure")
+                original(guard, phase)
+
+            with mock.patch.object(
+                RuntimeGuard,
+                "check_packaging_phase",
+                side_effect=fail_after_rename,
+                autospec=True,
+            ), mock.patch(
+                "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
+                side_effect=OSError("injected cleanup failure"),
+            ):
+                with self.assertRaises(OSError):
+                    atomic.commit(lambda _: None)
+            self.assertTrue(atomic.final_path.exists())
+            meter.checked_rmtree(atomic.final_path)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_metadata_close_and_shared_directory_reservations_are_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            staging = meter.root / "staging"
+            staging.mkdir()
+            science = StreamingScientificEmitter(staging, meter, DEFAULT_LIMITS)
+            science.emit(UNIT_FILE, {"fixture": "science"})
+            science.close()
+            metadata = SharedMetadataWriter(staging, meter, DEFAULT_LIMITS)
+            metadata.write("fixture-metadata.json", b"{}\n")
+            metadata.close()
+            self.assertEqual(meter.known_bytes, directory_size(staging))
+            self.assertEqual(meter.verify_actual_usage(), directory_size(staging))
+            meter.checked_rmtree(staging)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_fail_closed_scientific_replacement_is_exactly_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            session = ArtifactSession(
+                meter.root,
+                meter,
+                DEFAULT_LIMITS,
+                meter.runtime_guard,
+            )
+            session.emitter.emit(UNIT_FILE, {"fixture": "x" * 70_000})
+            self.assertGreater((session.staging / UNIT_FILE).stat().st_size, 0)
+            evidence = session._discard_science_and_create_empty()
+            self.assertTrue(all(item.byte_count == 0 for item in evidence))
+            self.assertTrue(
+                all((session.staging / name).read_bytes() == b"" for name in SCIENCE_CONTAINERS)
+            )
+            self.assertEqual(meter.verify_actual_usage(), 0)
+            session.abort()
+
+    def test_tracked_bytes_must_equal_actual_disk_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            payload = meter.root / "payload.bin"
+            self.write_payload(meter, payload)
+            self.assertEqual(meter.verify_actual_usage(), len(b"payload"))
+            with payload.open("ab") as handle:
+                handle.write(b"unmetered")
+            with self.assertRaises(StorageBoundaryError):
+                meter.verify_actual_usage()
+
 
 class ArtifactCompatibilityTests(unittest.TestCase):
     def build_one_unit_incomplete_artifact(
@@ -423,6 +692,108 @@ class ArtifactCompatibilityTests(unittest.TestCase):
         )
         return outcome.final_directory
 
+    def build_one_schema_incomplete_artifact(self, workspace: Path) -> Path:
+        unit_universe = "REPEAT_INTERSECTING_TID_SCHEMA_VIOLATION"
+        primary_taxon = "TID_SCHEMA_VIOLATION"
+        guard = RuntimeGuard(DEFAULT_LIMITS)
+        meter = R7WorkspaceMeter(workspace, DEFAULT_LIMITS, guard)
+        meter.bootstrap()
+        state = ExecutionEvidenceState(
+            DEFAULT_SELECTION.targets,
+            DEFAULT_LIMITS,
+        )
+        session = ArtifactSession(
+            workspace,
+            meter,
+            DEFAULT_LIMITS,
+            guard,
+        )
+        projection = fixture_unit_projection(
+            key_value="schema",
+            unit_universe=unit_universe,
+            primary_taxon=primary_taxon,
+        )
+        unit_id = hashlib.sha256(
+            frame(unit_universe.encode("ascii"), projection)
+        ).hexdigest()
+        projection_sha = hashlib.sha256(projection).hexdigest()
+        session.emitter.emit(
+            UNIT_FILE,
+            {
+                "record_type": "R11A_V2_TAXONOMY_UNIT",
+                "diagnostic_id": DIAGNOSTIC_ID,
+                "taxonomy_unit_id": unit_id,
+                "unit_universe": unit_universe,
+                "unit_projection_sha256": projection_sha,
+                "key_projection": {"fixture": "schema"},
+                "primary_taxon": primary_taxon,
+                "supporting_taxa": [],
+                "occurrence_count": 1,
+                "proof_references": [],
+            },
+        )
+        retained = {
+            "record_type": "R11A_V2_REPEAT_INTERSECTING_SCHEMA_EVIDENCE",
+            "primary_taxon": primary_taxon,
+            "schema_universe": unit_universe,
+            "raw_locator": {
+                "object_key": DEFAULT_SELECTION.targets[0].object_key,
+                "verified_compressed_sha256": (
+                    DEFAULT_SELECTION.targets[0].expected_compressed_sha256
+                ),
+                "decompressed_record_ordinal_zero_based": 0,
+                "event_ordinal_zero_based": 1,
+            },
+            "schema_errors": ["TID_NOT_STRICT_UINT50"],
+            "diagnostic_id": DIAGNOSTIC_ID,
+            "taxonomy_unit_id": unit_id,
+            "unit_projection_sha256": projection_sha,
+        }
+        retained["retained_row_id"] = hashlib.sha256(
+            canonical_json_bytes(retained, final_newline=False)
+        ).hexdigest()
+        session.emitter.emit(
+            "r11a-v2-repeat-intersecting-schema-evidence.ndjson",
+            retained,
+        )
+        joins = JoinValidationResult(
+            unit_count=1,
+            proof_count=0,
+            proof_reference_count=0,
+            retained_row_reference_count=1,
+            all_unit_ids_unique=True,
+            all_proof_ids_unique=True,
+            all_nonnull_proof_references_resolve_exactly_once=True,
+            all_retained_rows_reference_exactly_one_unit=True,
+            all_referenced_projections_are_byte_equal=True,
+            all_retained_row_counts_match_unit_occurrence_counts=True,
+        )
+        taxonomy = TaxonomyResult(
+            universe_rows=one_universe_rows(unit_universe, primary_taxon),
+            secondary_reducer_rows=(),
+            join_validation=joins,
+            repeated_block_group_count=0,
+            repeated_block_observation_count=0,
+            legacy_repeat_group_count=0,
+            legacy_repeat_observation_count=0,
+            legacy_repeat_occurrence_count=0,
+            valid_tid_legacy_repeat_occurrence_count=0,
+            invalid_tid_legacy_repeat_occurrence_count=0,
+            supporting_taxon_counts=zero_taxon_counts(),
+            exact_three_utc_days=False,
+        )
+        return session.finalize_full(
+            state=state,
+            context={"test_fixture": "one-schema-unit-incomplete"},
+            reducer_rows=(),
+            resource_rows=(),
+            terminal_class="R11A_V2_DIAGNOSTIC_INCOMPLETE",
+            research_conclusion=(
+                "ROOT_CAUSE_NOT_FULLY_PROVEN_NO_REPAIR_AUTHORIZED"
+            ),
+            taxonomy_result=taxonomy,
+        ).final_directory
+
     def test_pre_oidc_failure_artifact_passes_same_external_validator_as_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"
@@ -534,6 +905,95 @@ class ArtifactCompatibilityTests(unittest.TestCase):
             with self.assertRaises(EvidenceValidationError):
                 validate_science(artifact)
 
+    def test_external_validator_rejects_wrong_unit_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = self.build_one_unit_incomplete_artifact(
+                Path(temporary) / "workspace",
+                retain_occurrence=True,
+            )
+            unit_path = artifact / UNIT_FILE
+            unit = json.loads(unit_path.read_bytes())
+            unit["key_projection"] = {"fixture": "tampered"}
+            unit_path.write_bytes(canonical_json_bytes(unit))
+            with self.assertRaises(EvidenceValidationError):
+                validate_science(artifact)
+
+    def test_external_validator_rejects_wrong_retained_container(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = self.build_one_unit_incomplete_artifact(
+                Path(temporary) / "workspace",
+                retain_occurrence=True,
+            )
+            legacy = artifact / LEGACY_ROWS_FILE
+            protocol = artifact / "r11a-v2-protocol-trade-group-members.ndjson"
+            protocol.write_bytes(legacy.read_bytes())
+            legacy.write_bytes(b"")
+            with self.assertRaises(EvidenceValidationError):
+                validate_science(artifact)
+
+    def test_external_validator_rejects_wrong_primary_taxon(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = self.build_one_unit_incomplete_artifact(
+                Path(temporary) / "workspace",
+                retain_occurrence=True,
+            )
+            retained_path = artifact / LEGACY_ROWS_FILE
+            retained = json.loads(retained_path.read_bytes())
+            retained["primary_taxon"] = "UNCLASSIFIABLE"
+            retained_without_id = {
+                key: value
+                for key, value in retained.items()
+                if key != "retained_row_id"
+            }
+            retained["retained_row_id"] = hashlib.sha256(
+                canonical_json_bytes(retained_without_id, final_newline=False)
+            ).hexdigest()
+            retained_path.write_bytes(canonical_json_bytes(retained))
+            with self.assertRaises(EvidenceValidationError):
+                validate_science(artifact)
+
+    def test_external_validator_rejects_wrong_schema_universe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = self.build_one_schema_incomplete_artifact(
+                Path(temporary) / "workspace"
+            )
+            validate_science(artifact)
+            retained_path = (
+                artifact / "r11a-v2-repeat-intersecting-schema-evidence.ndjson"
+            )
+            retained = json.loads(retained_path.read_bytes())
+            retained["schema_universe"] = (
+                "REPEAT_INTERSECTING_COIN_SCHEMA_VIOLATION"
+            )
+            retained_without_id = {
+                key: value
+                for key, value in retained.items()
+                if key != "retained_row_id"
+            }
+            retained["retained_row_id"] = hashlib.sha256(
+                canonical_json_bytes(retained_without_id, final_newline=False)
+            ).hexdigest()
+            retained_path.write_bytes(canonical_json_bytes(retained))
+            with self.assertRaises(EvidenceValidationError):
+                validate_science(artifact)
+
+    def test_supporting_taxon_cannot_increase_primary_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = self.build_one_unit_incomplete_artifact(
+                Path(temporary) / "workspace",
+                retain_occurrence=True,
+            )
+            conservation_path = artifact / CONSERVATION_FILE
+            conservation = json.loads(conservation_path.read_bytes())
+            legacy = conservation["unit_universes"][0]
+            legacy["primary_taxon_group_counts"]["TID_SCOPE_FALSE_POSITIVE"] = 0
+            legacy["primary_taxon_occurrence_counts"]["TID_SCOPE_FALSE_POSITIVE"] = 0
+            legacy["primary_taxon_group_counts"]["EXPECTED_COUNTERPARTY_PAIR"] = 1
+            legacy["primary_taxon_occurrence_counts"]["EXPECTED_COUNTERPARTY_PAIR"] = 1
+            conservation_path.write_bytes(canonical_json_bytes(conservation))
+            with self.assertRaises(EvidenceValidationError):
+                validate_science(artifact)
+
 
 class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
     def test_exact_authoritative_universes_and_taxa(self) -> None:
@@ -565,6 +1025,7 @@ class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
         )
         self.assertIn("validate_r11a_runtime_binding_r7.py", workflow)
         self.assertIn("validate_r11a_execution_artifact_r7.py", workflow)
+        self.assertIn("R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json", workflow)
         self.assertLess(
             workflow.index("validate_r11a_execution_artifact_r7.py"),
             workflow.index("actions/upload-artifact"),
@@ -574,6 +1035,46 @@ class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
         self.assertFalse(BINDING.exists())
         with self.assertRaises(RuntimeBindingError):
             validate_runtime_binding("1" * 40, 1)
+
+    def test_r7_seal_is_distinct_fail_closed_and_covers_private_cores(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        contract = json.loads(
+            (
+                root
+                / "research/archive_inventory/r11a_corrective/"
+                "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json"
+            ).read_bytes()
+        )
+        status = json.loads(
+            (
+                root
+                / "research/archive_inventory/r11a_corrective/"
+                "R11A_CORRECTIVE_STATUS_R7.json"
+            ).read_bytes()
+        )
+        self.assertEqual(contract["implementation_id"], IMPLEMENTATION_ID)
+        self.assertFalse(contract["implementation_review_green"])
+        self.assertTrue(contract["pricing_binding_pending"])
+        self.assertFalse(contract["owner_approval_eligible"])
+        self.assertFalse(
+            contract["authority_reconciliation"][
+                "referenced_amendment_002_present"
+            ]
+        )
+        self.assertFalse(status["implementation_review_green"])
+        self.assertFalse(status["owner_approval_eligible"])
+        sealed = set(contract["implementation_file_hashes"])
+        for relative in (
+            "governance/_validate_r11a_runtime_binding_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_artifact_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_artifact_schema_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_runner_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py",
+            "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
+            "research/archive_inventory/r11a_corrective/taxonomy_precedence_r7.py",
+        ):
+            self.assertIn(relative, sealed)
 
     def test_taxonomy_uses_disk_backed_group_state_not_first_current_shortcuts(self) -> None:
         import research.archive_inventory.r11a_corrective.taxonomy as taxonomy

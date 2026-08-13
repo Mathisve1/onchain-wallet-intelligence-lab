@@ -128,6 +128,42 @@ class WorkspaceMeter:
         self._check_runtime(packaging, f"{phase} after checkpoint")
         return actual
 
+    def checkpoint_value(
+        self,
+        reservation: Reservation,
+        actual_bytes: int,
+        *,
+        packaging: bool = False,
+        phase: str,
+    ) -> int:
+        """Checkpoint the exact bytes owned by one shared-directory category.
+
+        A path checkpoint is appropriate only when a reservation exclusively
+        owns that path.  Artifact science and metadata intentionally share one
+        staging directory, so measuring the directory for both reservations
+        would count the same files twice.  Category writers instead supply the
+        exact number of bytes they have successfully persisted.
+        """
+
+        self._check_runtime(packaging, f"{phase} before checkpoint")
+        state = self._reservations.get(reservation.reservation_id)
+        if state is None or state.token != reservation:
+            raise StorageBoundaryError("unknown category reservation")
+        if (
+            type(actual_bytes) is not int
+            or actual_bytes < 0
+            or actual_bytes > reservation.maximum_bytes
+        ):
+            raise StorageBoundaryError("category bytes exceed reservation")
+        self._known_bytes += actual_bytes - state.accounted_bytes
+        state.accounted_bytes = actual_bytes
+        if self._known_bytes < 0:
+            raise StorageBoundaryError("workspace accounting became negative")
+        if self._known_bytes + self.reserved_bytes > self.limits.maximum_ephemeral_workspace_bytes:
+            raise StorageBoundaryError("workspace cap exceeded after category mutation")
+        self._check_runtime(packaging, f"{phase} after checkpoint")
+        return actual_bytes
+
     def finalize(
         self,
         reservation: Reservation,
@@ -147,6 +183,25 @@ class WorkspaceMeter:
             raise StorageBoundaryError("reservation finalization drift")
         return actual
 
+    def finalize_value(
+        self,
+        reservation: Reservation,
+        actual_bytes: int,
+        *,
+        packaging: bool = False,
+        phase: str,
+    ) -> int:
+        actual = self.checkpoint_value(
+            reservation,
+            actual_bytes,
+            packaging=packaging,
+            phase=phase,
+        )
+        state = self._reservations.pop(reservation.reservation_id, None)
+        if state is None or state.token != reservation or state.accounted_bytes != actual:
+            raise StorageBoundaryError("category reservation finalization drift")
+        return actual
+
     def release_deleted(self, reservation: Reservation, path: Path, *, phase: str) -> None:
         resolved = self._ensure_inside(path)
         if resolved.exists():
@@ -158,6 +213,26 @@ class WorkspaceMeter:
         if self._known_bytes < 0:
             raise StorageBoundaryError("workspace accounting became negative after release")
         self.runtime_guard.check_packaging_phase(f"{phase} after release")
+
+    def release_value(
+        self,
+        reservation: Reservation,
+        *,
+        packaging: bool = False,
+        phase: str,
+    ) -> None:
+        """Release a category after its owned files have been removed."""
+
+        self._check_runtime(packaging, f"{phase} before release")
+        state = self._reservations.pop(reservation.reservation_id, None)
+        if state is None or state.token != reservation:
+            raise StorageBoundaryError("unknown category reservation release")
+        self._known_bytes -= state.accounted_bytes
+        if self._known_bytes < 0:
+            raise StorageBoundaryError(
+                "workspace accounting became negative after category release"
+            )
+        self._check_runtime(packaging, f"{phase} after release")
 
     def delete_file(self, path: Path) -> None:
         resolved = self._ensure_inside(path)

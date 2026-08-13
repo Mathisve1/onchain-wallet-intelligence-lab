@@ -592,8 +592,35 @@ def validate_conservation(
         "all_referenced_projections_are_byte_equal": True,
         "all_retained_row_counts_match_unit_occurrence_counts": True,
     }
+    observed_join = {
+        key: (
+            integer(join[key], key)
+            if key
+            in {
+                "unit_count",
+                "proof_count",
+                "proof_reference_count",
+                "retained_row_reference_count",
+            }
+            else join[key]
+        )
+        for key in join
+    }
     require(
-        {key: join[key] for key in join} == expected_join,
+        all(
+            type(observed_join[key]) is bool
+            for key in set(expected_join)
+            - {
+                "unit_count",
+                "proof_count",
+                "proof_reference_count",
+                "retained_row_reference_count",
+            }
+        ),
+        "declared join validation flag is not boolean",
+    )
+    require(
+        observed_join == expected_join,
         "declared join validation differs from independent recomputation",
     )
 
