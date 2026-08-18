@@ -10,7 +10,10 @@ import re
 import sys
 from pathlib import Path
 
-from regenerate_manifest import render_manifest
+try:
+    from governance.regenerate_manifest import render_manifest
+except ModuleNotFoundError:  # direct ``python governance/...`` execution
+    from regenerate_manifest import render_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA_ROW = re.compile(r"^([0-9a-f]{64})  (.+)$")

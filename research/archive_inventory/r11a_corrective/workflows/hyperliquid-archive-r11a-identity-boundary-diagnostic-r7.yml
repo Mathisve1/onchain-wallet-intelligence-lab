@@ -27,6 +27,7 @@ env:
   R11A_BOUND_CONTEXT: ${{ runner.temp }}/r11a-r7-bound-context.json
   R11A_PRINCIPAL: ${{ runner.temp }}/r11a-r7-sts-caller-identity.json
   R11A_ARTIFACT: ${{ runner.temp }}/r11a-r7-workspace/r11a-v2-artifact
+  R11A_TERMINAL_RC: ${{ runner.temp }}/r11a-r7-terminal.rc
   AWS_EC2_METADATA_DISABLED: 'true'
   AWS_PAGER: ''
 
@@ -35,6 +36,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 370
     steps:
+      - name: Persist cross-step runtime start reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_epoch_ns="$(date +%s%N)"
+          [[ "${start_epoch_ns}" =~ ^[0-9]+$ ]]
+          test "${start_epoch_ns}" -gt 0
+          echo "R11A_START_EPOCH_NS=${start_epoch_ns}" >> "${GITHUB_ENV}"
+
       - name: Check out exact canonical dispatch SHA without persisted credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -75,6 +85,7 @@ jobs:
               "checked_out_commit": os.environ["DISPATCH_SHA"],
               "workflow_run_id": int(os.environ["CURRENT_RUN_ID"]),
               "workflow_run_attempt": int(os.environ["CURRENT_RUN_ATTEMPT"]),
+              "workflow_start_epoch_ns": int(os.environ["R11A_START_EPOCH_NS"]),
               "repository": os.environ["CURRENT_REPOSITORY"],
               "workflow_name": "Hyperliquid Archive R11A Identity Boundary Diagnostic",
           }
@@ -92,7 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python governance/validate_r11a_preregistration.py
+          python governance/validate_r11a_v2_preregistration.py
+          python governance/validate_r11a_v2_bindings.py
           python governance/validate_r11a_runtime_binding_r7.py \
             --expected-commit "${DISPATCH_SHA}" \
             --run-attempt "${CURRENT_RUN_ATTEMPT}"
@@ -143,6 +155,7 @@ jobs:
               'checked_out_commit':os.environ['DISPATCH_SHA'],
               'workflow_run_id':int(os.environ['CURRENT_RUN_ID']),
               'workflow_run_attempt':int(os.environ['CURRENT_RUN_ATTEMPT']),
+              'workflow_start_epoch_ns':int(os.environ['R11A_START_EPOCH_NS']),
               'repository':os.environ['CURRENT_REPOSITORY'],
               'workflow_name':'Hyperliquid Archive R11A Identity Boundary Diagnostic',
               'approval_id':approval['approval_id'],
@@ -315,6 +328,7 @@ jobs:
           rc=$?
           set -e
           test "${rc}" = 0 -o "${rc}" = 20 -o "${rc}" = 21
+          printf '%s\n' "${rc}" > "${R11A_TERMINAL_RC}"
 
       - name: Independently validate complete artifact before any upload
         if: steps.execute.outcome == 'success'
@@ -326,6 +340,7 @@ jobs:
 
       - name: Upload only the already validated R11A R7 artifact
         if: steps.artifact_validate.outcome == 'success'
+        id: artifact_upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: r11a-r7-identity-boundary-${{ github.run_id }}
@@ -334,8 +349,9 @@ jobs:
           retention-days: 30
           compression-level: 6
 
-      - name: Enforce retained validated terminal artifact
+      - name: Propagate validated terminal return code after retention
         if: >-
+          always() &&
           steps.static.outcome == 'success' &&
           steps.configure.outcome == 'success' &&
           steps.principal.outcome == 'success'
@@ -343,6 +359,10 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ steps.artifact_validate.outcome }}" = success
+          test "${{ steps.artifact_upload.outcome }}" = success
           test -f "${R11A_ARTIFACT}/r11a-v2-result.json"
           test -f "${R11A_ARTIFACT}/R11A_V2_FILES.sha256"
           test -f "${R11A_ARTIFACT}/r11a-v2-package-boundary.txt"
+          python -m research.archive_inventory.r11a_corrective.terminal_propagation \
+            --artifact "${R11A_ARTIFACT}" \
+            --captured-rc "${R11A_TERMINAL_RC}"

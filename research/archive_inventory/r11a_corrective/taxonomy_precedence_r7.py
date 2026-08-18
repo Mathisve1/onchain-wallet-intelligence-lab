@@ -277,7 +277,8 @@ def classify_legacy(
                 """
                 SELECT sequence
                 FROM events
-                ORDER BY object_ordinal,record_ordinal,event_ordinal
+                ORDER BY object_key_bytes,compressed_sha256,
+                         record_ordinal,event_ordinal
                 LIMIT 1
                 """
             ).fetchone()
@@ -441,6 +442,11 @@ def classify_legacy(
                             value.value for value in supporting_taxa
                         ],
                         "raw_locator": source["raw_locator"],
+                        "raw_wallet_value": source["raw_wallet_value"],
+                        "raw_fill_value": source["raw_fill_value"],
+                        "raw_record_fingerprint_sha256": source[
+                            "raw_record_fingerprint_sha256"
+                        ],
                         "block_number": source["block_number"],
                         "exact_raw_local_time": source[
                             "exact_raw_local_time"

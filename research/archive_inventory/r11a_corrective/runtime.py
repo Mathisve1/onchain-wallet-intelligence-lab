@@ -24,17 +24,40 @@ class RuntimeBoundaryError(RuntimeError):
 class RuntimeGuard:
     limits: R11ALimits
     monotonic_ns: Callable[[], int] = time.monotonic_ns
+    initial_elapsed_ns: int = 0
     _started_ns: int = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
         self.limits.validate()
+        if type(self.initial_elapsed_ns) is not int or self.initial_elapsed_ns < 0:
+            raise RuntimeBoundaryError("initial elapsed time must be nonnegative")
         self._started_ns = self.monotonic_ns()
+
+    @classmethod
+    def from_start_epoch_ns(
+        cls,
+        limits: R11ALimits,
+        start_epoch_ns: int,
+        *,
+        wall_time_ns: Callable[[], int] = time.time_ns,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    ) -> "RuntimeGuard":
+        if type(start_epoch_ns) is not int or start_epoch_ns <= 0:
+            raise RuntimeBoundaryError("workflow start epoch is absent or invalid")
+        current = wall_time_ns()
+        if type(current) is not int or current < start_epoch_ns:
+            raise RuntimeBoundaryError("workflow start epoch is in the future")
+        return cls(
+            limits,
+            monotonic_ns=monotonic_ns,
+            initial_elapsed_ns=current - start_epoch_ns,
+        )
 
     def elapsed_ns(self) -> int:
         current = self.monotonic_ns()
         if current < self._started_ns:
             raise RuntimeBoundaryError("monotonic clock moved backwards")
-        return current - self._started_ns
+        return self.initial_elapsed_ns + current - self._started_ns
 
     def elapsed_seconds_floor(self) -> int:
         return self.elapsed_ns() // 1_000_000_000
@@ -185,6 +208,18 @@ class ExecutionEvidenceState:
         state = self._state(ordinal)
         if state.request_status != "REQUEST_SENT":
             raise RuntimeBoundaryError("response metadata outside request lifecycle")
+        if http_status != 200:
+            raise RuntimeBoundaryError("object response HTTP status is not 200")
+        if etag != state.target.expected_etag:
+            raise RuntimeBoundaryError("object response ETag differs from frozen target")
+        if content_length != state.target.expected_size_bytes:
+            raise RuntimeBoundaryError(
+                "object response Content-Length differs from frozen target"
+            )
+        if requester_charged != "requester":
+            raise RuntimeBoundaryError(
+                "Requester-Pays acknowledgement is absent or noncanonical"
+            )
         state.response = {
             "http_status": http_status,
             "etag": etag,

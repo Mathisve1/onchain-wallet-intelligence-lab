@@ -52,6 +52,8 @@ def _resource_row(
         "elapsed_runtime_seconds_floor": guard.elapsed_seconds_floor(),
         "tracked_workspace_bytes": meter.known_bytes,
         "reserved_workspace_bytes": meter.reserved_bytes,
+        "peak_tracked_workspace_bytes": meter.peak_known_bytes,
+        "peak_bounded_workspace_bytes": meter.peak_bounded_bytes,
         "network_request_count": state.network_request_count,
     }
     if additional is not None:
@@ -160,7 +162,10 @@ def prepare(
 ) -> tuple[RuntimeGuard, WorkspaceMeter, ExecutionEvidenceState, ArtifactSession]:
     inputs.limits.validate()
     inputs.selection.validate()
-    guard = RuntimeGuard(inputs.limits)
+    start_epoch_ns = inputs.context.get("workflow_start_epoch_ns")
+    if type(start_epoch_ns) is not int:
+        raise RunnerBoundaryError("workflow start epoch is absent from runtime context")
+    guard = RuntimeGuard.from_start_epoch_ns(inputs.limits, start_epoch_ns)
     meter = WorkspaceMeter(inputs.workspace, inputs.limits, guard)
     meter.bootstrap()
     state = ExecutionEvidenceState(inputs.selection.targets, inputs.limits)

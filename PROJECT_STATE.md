@@ -90,7 +90,7 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | R11A exact input | same 72 R11 objects; no 73rd object or wider window |
 | R11A owner approval | `NOT_PRESENT` |
 | R11A workflow / release / activation | absent / absent / absent |
-| R11A handoff-referenced amendment 002 | `NOT_PRESENT_LOCALLY`; existing sealed V2 amendment preserved unchanged |
+| R11A canonical Amendment 002 | `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; unchanged canonical V2 path; SHA-256 `bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f`; V2-bound |
 | R11A official pricing/EUR binding | `PENDING` |
 | R11A empirical root cause | `UNKNOWN_PENDING_DIAGNOSTIC` |
 | R11A repair selected / R11B authorized | `false` / `false` |
@@ -310,6 +310,6 @@ All release-scoped R2 execution flags are false after consumption of release 002
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
 2. Independently review the separately sealed corrective R11A V2 R7 implementation. Its workflow candidate must remain outside `.github/workflows`; no OIDC, S3 request or release may appear at this stage.
-3. Reconcile the handoff-referenced but locally absent `R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT_002` without rewriting the existing sealed V2 amendment. After exact-head CI, clean-context review and official pricing/EUR binding, request one new hash-bound owner approval for the dedicated successor role, exact 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
+3. Preserve canonical Amendment 002 unchanged at its V2 path and exact binding. After exact-head CI, a new independent clean-context review and a later separate official pricing/EUR binding, request one new hash-bound owner approval for the dedicated successor role, exact 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
 4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
 5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.

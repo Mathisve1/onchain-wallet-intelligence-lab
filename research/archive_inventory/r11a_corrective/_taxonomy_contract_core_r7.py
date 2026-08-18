@@ -9,6 +9,7 @@ from pathlib import Path
 from . import _taxonomy_core_r7 as _core
 from .canonical import canonical_json_bytes, strict_json_loads
 from .join_r7 import DiskJoinLedger
+from .locator_order import raw_locator_order_key
 from .materialize import MaterializedIndexes
 from .storage_r7 import MeteredSQLite, WorkspaceMeter
 
@@ -45,6 +46,8 @@ class BlockScratch:
                   raw_block_key BLOB NOT NULL UNIQUE,
                   object_ordinal INTEGER NOT NULL,
                   object_key TEXT NOT NULL,
+                  object_key_bytes BLOB NOT NULL,
+                  compressed_sha256 BLOB NOT NULL,
                   record_ordinal INTEGER NOT NULL,
                   block_number INTEGER NOT NULL,
                   block_time TEXT NOT NULL,
@@ -52,7 +55,9 @@ class BlockScratch:
                   event_fingerprint TEXT NOT NULL,
                   record_fingerprint TEXT NOT NULL
                 );
-                CREATE INDEX block_order ON rows(object_ordinal,record_ordinal);
+                CREATE INDEX block_order ON rows(
+                  object_key_bytes,compressed_sha256,record_ordinal
+                );
                 """
             )
 
@@ -68,6 +73,15 @@ class BlockScratch:
             object_ordinal, object_key, record_ordinal, event_ordinal = _core._raw_locator(row)
             if event_ordinal is not None:
                 raise TaxonomyBoundaryError("block group row unexpectedly has event ordinal")
+            locator = _core._object(row["raw_locator"], "raw locator")
+            locator_key = raw_locator_order_key(
+                object_key=object_key,
+                verified_compressed_sha256=_core._text(
+                    locator["verified_compressed_sha256"], "compressed SHA"
+                ),
+                record_ordinal_zero_based=record_ordinal,
+                event_ordinal_zero_based=None,
+            )
             batch.append(
                 (
                     sequence,
@@ -79,6 +93,8 @@ class BlockScratch:
                     ),
                     object_ordinal,
                     object_key,
+                    sqlite3.Binary(locator_key[0]),
+                    sqlite3.Binary(locator_key[1]),
                     record_ordinal,
                     _core._integer(row["block_number"], "block number"),
                     _core._text(row["exact_raw_block_time"], "block time"),
@@ -106,7 +122,7 @@ class BlockScratch:
         try:
             with self.database.transaction("insert block equality-group rows") as connection:
                 connection.executemany(
-                    "INSERT INTO rows VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO rows VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     rows,
                 )
         except sqlite3.IntegrityError as exc:
@@ -115,12 +131,13 @@ class BlockScratch:
     def ordered_rows(self) -> Iterator[sqlite3.Row]:
         self.database.connection.row_factory = sqlite3.Row
         yield from self.database.connection.execute(
-            "SELECT * FROM rows ORDER BY object_ordinal,record_ordinal"
+            "SELECT * FROM rows ORDER BY object_key_bytes,compressed_sha256,record_ordinal"
         )
 
     def raw_keys(self) -> Iterator[bytes]:
         for row in self.database.connection.execute(
-            "SELECT raw_block_key FROM rows ORDER BY object_ordinal,record_ordinal"
+            "SELECT raw_block_key FROM rows "
+            "ORDER BY object_key_bytes,compressed_sha256,record_ordinal"
         ):
             yield bytes(row[0])
 
@@ -295,6 +312,7 @@ def _classify_blocks(
                             "raw_record_fingerprint_sha256": source[
                                 "raw_record_fingerprint_sha256"
                             ],
+                            "raw_record_value": source["raw_record_value"],
                         },
                     )
                     retained_count += 1

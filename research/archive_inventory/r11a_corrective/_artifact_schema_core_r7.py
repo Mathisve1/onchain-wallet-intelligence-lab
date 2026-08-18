@@ -30,6 +30,24 @@ ROOT_CAUSE_STATUS_BY_TERMINAL: Final[dict[str, str]] = {
     "R11A_V2_FAIL_CLOSED_EARLY_STOP": "NOT_PROVEN",
 }
 
+ALLOWED_RESEARCH_CONCLUSIONS: Final[dict[str, frozenset[str]]] = {
+    "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE": frozenset(
+        {"PROVEN_COMPLETE_TAXONOMY_ONLY"}
+    ),
+    "R11A_V2_DIAGNOSTIC_INCOMPLETE": frozenset(
+        {"ROOT_CAUSE_NOT_FULLY_PROVEN_NO_REPAIR_AUTHORIZED"}
+    ),
+    "R11A_V2_ARTIFACT_CAP_EXCEEDED": frozenset(
+        {"ROOT_CAUSE_NOT_PROVEN_EMPTY_CAP_FALLBACK"}
+    ),
+    "R11A_V2_FAIL_CLOSED_EARLY_STOP": frozenset(
+        {
+            "ROOT_CAUSE_NOT_PROVEN_FAIL_CLOSED_EMPTY_ARTIFACT",
+            "ROOT_CAUSE_NOT_PROVEN_NETWORK_FAIL_CLOSED_EMPTY_ARTIFACT",
+        }
+    ),
+}
+
 AUTHORITATIVE_UNIT_UNIVERSES: Final[tuple[str, ...]] = (
     "LEGACY_REPEAT_OCCURRENCE",
     "ARCHIVE_BLOCK_NUMBER_GROUP",
@@ -185,6 +203,14 @@ def validate_terminal_tuple(
         raise ArtifactSchemaError("terminal class and scientific status drift")
     if root_cause_claim_status != exact_root_cause_status(terminal_class):
         raise ArtifactSchemaError("terminal class and root-cause status drift")
+
+
+def validate_research_conclusion(terminal_class: str, conclusion: object) -> None:
+    allowed = ALLOWED_RESEARCH_CONCLUSIONS.get(terminal_class)
+    if allowed is None or conclusion not in allowed:
+        raise ArtifactSchemaError(
+            "research conclusion is not allowed for terminal class"
+        )
 
 
 def validate_sha256(value: object, label: str) -> str:
@@ -410,10 +436,16 @@ def validate_object_row_shape(row: Mapping[str, object]) -> None:
         if (
             request["status"] != "COMPLETE"
             or response is None
+            or response["http_status"] != 200
+            or response["etag"] != expected_identity["etag"]
+            or response["content_length"] != expected_size
+            or response["requester_charged"] != "requester"
             or body_bytes != expected_size
             or observed_sha != expected_sha
         ):
-            raise ArtifactSchemaError("complete body identity does not match frozen target")
+            raise ArtifactSchemaError(
+                "complete response/body integrity does not match frozen target"
+            )
     elif observed_sha is not None:
         raise ArtifactSchemaError("observed compressed SHA before complete body")
     if first is not None and body["status"] != "COMPLETE":

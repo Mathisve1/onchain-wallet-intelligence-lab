@@ -49,6 +49,7 @@ _core._exact_nonnegative_int = _exact_nonnegative_int
 DIAGNOSTIC_ID = _core.DIAGNOSTIC_ID
 IMPLEMENTATION_ID = _core.IMPLEMENTATION_ID
 TERMINAL_RETURN_CODES = _core.TERMINAL_RETURN_CODES
+ALLOWED_RESEARCH_CONCLUSIONS = _core.ALLOWED_RESEARCH_CONCLUSIONS
 SCIENTIFIC_STATUS_BY_TERMINAL = _core.SCIENTIFIC_STATUS_BY_TERMINAL
 ROOT_CAUSE_STATUS_BY_TERMINAL = _core.ROOT_CAUSE_STATUS_BY_TERMINAL
 AUTHORITATIVE_UNIT_UNIVERSES = _core.AUTHORITATIVE_UNIT_UNIVERSES
@@ -75,15 +76,34 @@ exact_return_code = _core.exact_return_code
 exact_scientific_status = _core.exact_scientific_status
 exact_root_cause_status = _core.exact_root_cause_status
 validate_terminal_tuple = _core.validate_terminal_tuple
+validate_research_conclusion = _core.validate_research_conclusion
 validate_sha256 = _core.validate_sha256
 zero_taxon_counts = _core.zero_taxon_counts
 
 
-def validate_parse_conservation(value: Mapping[str, object]) -> None:
+def validate_parse_conservation(
+    value: Mapping[str, object],
+    *,
+    record_count: int,
+    event_count: int,
+    label: str,
+) -> None:
+    """Validate the exact parse partition through the public runtime facade.
+
+    These arguments are deliberately part of the public ABI: callers must
+    bind the conservation counters to the independently observed pass counts.
+    Dropping them would turn this facade into a weaker validator than the
+    runtime core it exposes.
+    """
     normalized = _normalize_exact_integers(value)
     if not isinstance(normalized, Mapping):
         raise ArtifactSchemaError("parse conservation normalization failed")
-    _core.validate_parse_conservation(normalized)
+    _core.validate_parse_conservation(
+        normalized,
+        record_count=_exact_nonnegative_int(record_count, f"{label}.record_count"),
+        event_count=_exact_nonnegative_int(event_count, f"{label}.event_count"),
+        label=label,
+    )
 
 
 def validate_object_row_shape(row: Mapping[str, object]) -> None:
@@ -109,6 +129,7 @@ def validate_terminal_gates(value: object) -> None:
 
 __all__ = [
     "AUTHORITATIVE_UNIT_UNIVERSES",
+    "ALLOWED_RESEARCH_CONCLUSIONS",
     "ArtifactSchemaError",
     "BOUNDARY_FILE",
     "CONSERVATION_FILE",
@@ -138,6 +159,7 @@ __all__ = [
     "exact_scientific_status",
     "validate_object_row_shape",
     "validate_parse_conservation",
+    "validate_research_conclusion",
     "validate_sha256",
     "validate_terminal_gates",
     "validate_terminal_tuple",

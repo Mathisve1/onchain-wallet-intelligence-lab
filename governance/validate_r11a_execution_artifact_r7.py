@@ -18,6 +18,7 @@ from research.archive_inventory.r11a_corrective.artifact_schema import (
     RESULT_FILE,
     SCIENCE_CONTAINERS,
     TAXA,
+    TERMINAL_GATE_NAMES,
     validate_sha256,
 )
 from research.archive_inventory.r11a_corrective.canonical import (
@@ -28,6 +29,15 @@ from research.archive_inventory.r11a_corrective.canonical import (
 )
 from research.archive_inventory.r11a_corrective.identity import frame
 from research.archive_inventory.r11a_corrective.limits import DEFAULT_LIMITS
+from research.archive_inventory.r11a_corrective.proof_semantics_r7 import (
+    SemanticProofError,
+    validate_semantic_proofs,
+)
+from research.archive_inventory.r11a_corrective.runtime import RuntimeGuard
+from research.archive_inventory.r11a_corrective.storage_r7 import (
+    MeteredSQLite,
+    WorkspaceMeter,
+)
 
 UNIT_FILE = "r11a-v2-taxonomy-units.ndjson"
 BLOCK_PROOF_FILE = "r11a-v2-exact-block-replay-proofs.ndjson"
@@ -64,6 +74,7 @@ EXPECTED_RETAINED_FIELDS = {
         "ordered_event_count",
         "ordered_event_fingerprint_sha256",
         "raw_record_fingerprint_sha256",
+        "raw_record_value",
         "diagnostic_id",
         "taxonomy_unit_id",
         "unit_projection_sha256",
@@ -77,6 +88,9 @@ EXPECTED_RETAINED_FIELDS = {
         "block_number",
         "exact_raw_local_time",
         "exact_raw_block_time",
+        "raw_wallet_value",
+        "raw_fill_value",
+        "raw_record_fingerprint_sha256",
         "canonical_wallet",
         "exact_raw_coin_string",
         "validated_tid",
@@ -95,7 +109,15 @@ EXPECTED_RETAINED_FIELDS = {
         "primary_taxon",
         "raw_locator",
         "raw_block_key_hex",
+        "block_number",
+        "exact_raw_block_time",
+        "raw_wallet_value",
+        "raw_fill_value",
+        "raw_record_fingerprint_sha256",
+        "raw_record_value",
         "canonical_wallet",
+        "exact_raw_coin_string",
+        "validated_tid",
         "exact_raw_side_string",
         "full_event_sha256",
         "diagnostic_id",
@@ -108,7 +130,22 @@ EXPECTED_RETAINED_FIELDS = {
         "primary_taxon",
         "schema_universe",
         "raw_locator",
+        "raw_block_key_hex",
+        "raw_wallet_value",
+        "raw_fill_value",
+        "raw_record_fingerprint_sha256",
+        "raw_record_value",
+        "block_number",
+        "exact_raw_local_time",
+        "exact_raw_block_time",
+        "canonical_wallet",
+        "exact_raw_coin_string",
+        "validated_tid",
+        "exact_raw_side_string",
+        "full_event_sha256",
+        "fill_payload_sha256",
         "schema_errors",
+        "selected_fill_payload",
         "diagnostic_id",
         "taxonomy_unit_id",
         "unit_projection_sha256",
@@ -227,13 +264,16 @@ def proof_projection(row: FrozenObject, expected_type: str) -> bytes:
     return projection
 
 
-def create_database(path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(path)
-    connection.execute("PRAGMA journal_mode=DELETE")
-    connection.execute("PRAGMA synchronous=FULL")
-    connection.execute("PRAGMA temp_store=FILE")
-    connection.executescript(
-        """
+def create_database(path: Path, meter: WorkspaceMeter) -> MeteredSQLite:
+    database = MeteredSQLite(
+        path,
+        meter,
+        536_870_912,
+        "independent evidence join database",
+    )
+    with database.transaction("create independent evidence schema") as connection:
+        connection.executescript(
+            """
         CREATE TABLE units(
           id TEXT PRIMARY KEY,
           universe TEXT NOT NULL,
@@ -276,16 +316,16 @@ def create_database(path: Path) -> sqlite3.Connection:
         );
         CREATE INDEX retained_by_unit ON retained(unit_id);
         CREATE INDEX units_by_universe_taxon ON units(universe,taxon);
-        """
-    )
-    connection.commit()
-    return connection
+            """
+        )
+    return database
 
 
 def load_units(
     artifact: Path,
-    connection: sqlite3.Connection,
+    database: MeteredSQLite,
 ) -> int:
+    connection = database.connection
     expected_fields = {
         "record_type",
         "diagnostic_id",
@@ -299,7 +339,7 @@ def load_units(
         "proof_references",
     }
     count = 0
-    with connection:
+    with database.transaction("load authoritative taxonomy units"):
         for row in iter_rows(artifact / UNIT_FILE):
             require(set(row) == expected_fields, "taxonomy unit field set drift")
             require(
@@ -379,8 +419,9 @@ def load_units(
 
 def load_proofs(
     artifact: Path,
-    connection: sqlite3.Connection,
+    database: MeteredSQLite,
 ) -> int:
+    connection = database.connection
     expected_fields = {
         "record_type",
         "diagnostic_id",
@@ -389,7 +430,7 @@ def load_proofs(
         "projection",
     }
     count = 0
-    with connection:
+    with database.transaction("load proof universe"):
         for container, expected_type in EXPECTED_PROOF_TYPE_BY_CONTAINER.items():
             for row in iter_rows(artifact / container):
                 require(set(row) == expected_fields, "proof field set drift")
@@ -415,10 +456,11 @@ def load_proofs(
 
 def load_retained(
     artifact: Path,
-    connection: sqlite3.Connection,
+    database: MeteredSQLite,
 ) -> int:
+    connection = database.connection
     count = 0
-    with connection:
+    with database.transaction("load retained semantic evidence"):
         for container, expected_fields in EXPECTED_RETAINED_FIELDS.items():
             expected_record_type = EXPECTED_RECORD_TYPE_BY_CONTAINER[container]
             for row in iter_rows(artifact / container):
@@ -574,6 +616,11 @@ def validate_conservation(
     proof_count: int,
     retained_count: int,
 ) -> None:
+    result = obj(
+        strict_json_loads((artifact / RESULT_FILE).read_bytes()),
+        "result",
+    )
+    terminal = text(result["terminal_class"], "terminal class")
     conservation = obj(
         strict_json_loads((artifact / CONSERVATION_FILE).read_bytes()),
         "conservation",
@@ -631,6 +678,8 @@ def validate_conservation(
         == AUTHORITATIVE_UNIT_UNIVERSES,
         "unit universe ordering drift",
     )
+    unclassifiable_group_total = 0
+    unclassifiable_occurrence_total = 0
     for value in universe_values:
         row = obj(value, "universe row")
         universe = text(row["unit_universe"], "unit universe")
@@ -687,6 +736,66 @@ def validate_conservation(
                 == integer(declared_occurrences[taxon], taxon),
                 "primary occurrence taxon count mismatch",
             )
+        observed_unclassifiable_groups = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM units WHERE universe=? AND taxon='UNCLASSIFIABLE'",
+                (universe,),
+            ).fetchone()[0]
+        )
+        observed_unclassifiable_occurrences = int(
+            connection.execute(
+                "SELECT COALESCE(SUM(occurrences),0) FROM units "
+                "WHERE universe=? AND taxon='UNCLASSIFIABLE'",
+                (universe,),
+            ).fetchone()[0]
+        )
+        require(
+            observed_unclassifiable_groups
+            == integer(
+                row["unclassifiable_group_count"],
+                "unclassifiable group count",
+            ),
+            "unclassifiable group count mismatch",
+        )
+        require(
+            observed_unclassifiable_occurrences
+            == integer(
+                row["unclassifiable_occurrence_count"],
+                "unclassifiable occurrence count",
+            ),
+            "unclassifiable occurrence count mismatch",
+        )
+        unclassifiable_group_total += observed_unclassifiable_groups
+        unclassifiable_occurrence_total += observed_unclassifiable_occurrences
+
+    gates = obj(conservation["terminal_gates"], "terminal gates")
+    require(set(gates) == set(TERMINAL_GATE_NAMES), "terminal gate set drift")
+    require(
+        all(type(gates[name]) is bool for name in TERMINAL_GATE_NAMES),
+        "terminal gate value is not boolean",
+    )
+    scientific_gate = (
+        "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences"
+    )
+    if terminal == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE":
+        require(
+            unclassifiable_group_total == 0
+            and unclassifiable_occurrence_total == 0
+            and all(gates[name] is True for name in TERMINAL_GATE_NAMES),
+            "RC0 terminal gates contradict independently recomputed science",
+        )
+    elif terminal == "R11A_V2_DIAGNOSTIC_INCOMPLETE":
+        require(
+            unclassifiable_group_total > 0
+            and unclassifiable_occurrence_total > 0
+            and gates[scientific_gate] is False
+            and all(
+                gates[name] is True
+                for name in TERMINAL_GATE_NAMES
+                if name != scientific_gate
+            ),
+            "RC20 terminal gates contradict independently recomputed science",
+        )
 
     supporting = obj(
         conservation["supporting_taxon_counts"],
@@ -742,12 +851,19 @@ def validate_science(artifact: Path) -> None:
         return
 
     row_counts = {name: 0 for name in SCIENCE_CONTAINERS}
-    with tempfile.TemporaryDirectory(prefix="r11a-v2-evidence-") as temporary:
-        connection = create_database(Path(temporary) / "joins.sqlite")
+    with tempfile.TemporaryDirectory(
+        prefix=".r11a-v2-evidence-",
+        dir=artifact.parent,
+    ) as temporary:
+        guard = RuntimeGuard(DEFAULT_LIMITS)
+        meter = WorkspaceMeter(Path(temporary), DEFAULT_LIMITS, guard)
+        meter.bootstrap()
+        database = create_database(meter.root / "joins.sqlite", meter)
+        connection = database.connection
         try:
-            unit_count = load_units(artifact, connection)
+            unit_count = load_units(artifact, database)
             row_counts[UNIT_FILE] = unit_count
-            proof_count = load_proofs(artifact, connection)
+            proof_count = load_proofs(artifact, database)
             row_counts[BLOCK_PROOF_FILE] = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM proofs WHERE container=?",
@@ -760,7 +876,7 @@ def validate_science(artifact: Path) -> None:
                     (PAIR_PROOF_FILE,),
                 ).fetchone()[0]
             )
-            retained_count = load_retained(artifact, connection)
+            retained_count = load_retained(artifact, database)
             for name in (
                 BLOCK_ROWS_FILE,
                 LEGACY_ROWS_FILE,
@@ -787,6 +903,12 @@ def validate_science(artifact: Path) -> None:
                 "retained container count drift",
             )
             validate_foreign_keys(connection)
+            try:
+                validate_semantic_proofs(artifact)
+            except SemanticProofError as exc:
+                raise EvidenceValidationError(
+                    f"independent semantic proof recomputation failed: {exc}"
+                ) from exc
             validate_conservation(
                 artifact,
                 connection,
@@ -796,7 +918,7 @@ def validate_science(artifact: Path) -> None:
             )
             validate_result_row_counts(artifact, row_counts)
         finally:
-            connection.close()
+            database.close_delete()
 
 
 def main(argv: list[str] | None = None) -> int:

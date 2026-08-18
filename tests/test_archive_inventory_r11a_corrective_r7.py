@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import inspect
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
+from contextlib import redirect_stdout
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +26,7 @@ from governance.validate_r11a_runtime_binding_r7 import (
     validate as validate_runtime_binding,
 )
 from research.archive_inventory.r11a_corrective.artifact import (
+    ArtifactBoundaryError,
     SharedMetadataWriter,
     StreamingScientificEmitter,
     ArtifactSession,
@@ -27,9 +36,16 @@ from research.archive_inventory.r11a_corrective.artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
     BOUNDARY_FILE,
     CONSERVATION_FILE,
+    HASH_MANIFEST_FILE,
     DIAGNOSTIC_ID,
     IMPLEMENTATION_ID,
+    OBJECT_LEDGER_FILE,
+    REDUCER_LEDGER_FILE,
+    RESOURCE_LEDGER_FILE,
+    RESULT_FILE,
+    RETURN_CODE_FILE,
     SCIENCE_CONTAINERS,
+    STOP_LEDGER_FILE,
     TAXA,
     zero_taxon_counts,
 )
@@ -51,14 +67,22 @@ from research.archive_inventory.r11a_corrective.limits import (
     PREREGISTRATION_PATH,
     SELECTION_PATH,
 )
+from research.archive_inventory.r11a_corrective.locator_order import (
+    canonical_object_locator_ranks,
+    raw_locator_order_key,
+)
+from research.archive_inventory.r11a_corrective.lz4stream import xxh32
 from research.archive_inventory.r11a_corrective.meter_r7 import R7WorkspaceMeter
+from research.archive_inventory.r11a_corrective.network import AWSCredentials
 from research.archive_inventory.r11a_corrective.preflight_artifact_r7 import (
     write_preflight_failure_artifact,
 )
 from research.archive_inventory.r11a_corrective.runtime import (
     ExecutionEvidenceState,
+    RuntimeBoundaryError,
     RuntimeGuard,
 )
+from research.archive_inventory.r11a_corrective.pricing import PricingSnapshot
 from research.archive_inventory.r11a_corrective.selection import (
     DEFAULT_SELECTION,
     R11_RESULT_PATH,
@@ -68,9 +92,14 @@ from research.archive_inventory.r11a_corrective.selection import (
 from research.archive_inventory.r11a_corrective.storage_r7 import (
     AtomicArtifactDirectory,
     ExactSQLiteMultiplicityLedger,
+    MeteredSQLite,
     ReservedBinaryWriter,
     StorageBoundaryError,
     directory_size,
+)
+from research.archive_inventory.r11a_corrective.terminal_propagation import (
+    TerminalPropagationError,
+    validated_terminal_return_code,
 )
 from research.archive_inventory.r11a_corrective.taxonomy import (
     TaxonomyResult,
@@ -80,6 +109,287 @@ from research.archive_inventory.r11a_corrective.taxonomy import (
 
 UNIT_FILE = "r11a-v2-taxonomy-units.ndjson"
 LEGACY_ROWS_FILE = "r11a-v2-duplicate-observations.ndjson"
+PAIR_PROOF_FILE = "r11a-v2-expected-counterparty-pair-proofs.ndjson"
+PROTOCOL_ROWS_FILE = "r11a-v2-protocol-trade-group-members.ndjson"
+
+
+def synthetic_lz4_frame(payload: bytes) -> bytes:
+    """One standards-compliant, uncompressed LZ4 frame for synthetic transport."""
+
+    flg = 0x68  # v1, independent blocks, declared content size
+    bd = 0x40  # 64 KiB block maximum
+    descriptor = bytes((flg, bd)) + len(payload).to_bytes(8, "little")
+    header_checksum = bytes(((xxh32(descriptor) >> 8) & 0xFF,))
+    block = (0x80000000 | len(payload)).to_bytes(4, "little") + payload
+    return b"\x04\x22\x4d\x18" + descriptor + header_checksum + block + b"\0\0\0\0"
+
+
+def synthetic_object_frame(target: object, *, incomplete: bool) -> bytes:
+    ordinal = int(getattr(target, "object_ordinal_zero_based"))
+    source_hour = str(getattr(target, "source_path_hour_utc"))
+    if ordinal in {0, 1}:
+        block_time = DEFAULT_SELECTION.targets[0].source_path_hour_utc
+        events: list[object] = [
+            [
+                "0x" + "1" * 40,
+                {"coin": "BTC", "side": "A", "tid": 7},
+            ]
+        ]
+        if not incomplete:
+            events.append(
+                [
+                    "0x" + "2" * 40,
+                    {"coin": "BTC", "side": "B", "tid": 7},
+                ]
+            )
+        block_number = ordinal + 1 if incomplete else 1
+    else:
+        block_time = source_hour
+        events = []
+        block_number = 1_000 + ordinal
+    record = canonical_json_bytes(
+        {
+            "block_number": block_number,
+            "block_time": block_time,
+            "events": events,
+            "local_time": source_hour,
+        }
+    )
+    return synthetic_lz4_frame(record)
+
+
+def synthetic_pricing_snapshot() -> PricingSnapshot:
+    return PricingSnapshot(
+        status="BOUND_CURRENT_OFFICIAL_SNAPSHOT",
+        region="ap-northeast-1",
+        currency="USD",
+        get_request_usd_per_1000=Decimal(0),
+        data_transfer_out_usd_per_gib=Decimal(0),
+        usd_per_eur=Decimal(1),
+        contingency_multiplier=Decimal(1),
+        aws_pricing_source_url="https://example.invalid/aws-test-boundary",
+        aws_pricing_source_sha256="1" * 64,
+        ecb_fx_source_url="https://example.invalid/ecb-test-boundary",
+        ecb_fx_source_sha256="2" * 64,
+        snapshot_sha256="3" * 64,
+        observed_at_utc="2026-01-01T00:00:00Z",
+    )
+
+
+def execute_public_synthetic_route(
+    workspace: Path,
+    *,
+    incomplete: bool,
+) -> tuple[int, Path]:
+    """Exercise the workflow's public entrypoint; replace only external inputs.
+
+    Pricing remains a deliberately unbound future stage, so the test injects a
+    zero-cost deterministic snapshot.  The download replacement is the external
+    transport boundary; all state, storage, parsing, reducer, proof, artifact,
+    and terminal code remains production code.
+    """
+
+    from research.archive_inventory.r11a_corrective import entrypoint
+
+    workspace.parent.mkdir(parents=True, exist_ok=True)
+    context_path = workspace.parent / f"{workspace.name}-context.json"
+    principal_path = workspace.parent / f"{workspace.name}-principal.json"
+    digest = "4" * 64
+    context_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "event_name": "workflow_dispatch",
+                "dispatch_ref": "refs/heads/main",
+                "dispatch_sha": "a" * 40,
+                "checked_out_commit": "a" * 40,
+                "workflow_run_id": 1,
+                "workflow_run_attempt": 1,
+                "workflow_start_epoch_ns": time.time_ns() - 1_000_000_000,
+                "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+                "workflow_name": (
+                    "Hyperliquid Archive R11A Identity Boundary Diagnostic"
+                ),
+                "approval_id": "SYNTHETIC_TEST_ONLY",
+                "approval_text_sha256": digest,
+                "execution_release_id": "SYNTHETIC_TEST_ONLY",
+                "execution_release_blob_sha256": digest,
+                "activation_id": "SYNTHETIC_TEST_ONLY",
+                "implementation_contract_sha256": digest,
+                "workflow_sha256": digest,
+                "collector_sha256": digest,
+                "validator_sha256": digest,
+                "selection_sha256": digest,
+                "pricing_snapshot_sha256": digest,
+                "single_use_window_start_utc": "2026-01-01T00:00:00Z",
+            }
+        )
+    )
+    principal_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "Account": "630956766927",
+                "Arn": (
+                    "arn:aws:sts::630956766927:assumed-role/"
+                    "onchain-wallet-intelligence-hl-archive-identity-r11a/"
+                    "HLArchiveR11AIdentityBoundary"
+                ),
+                "UserId": "AROA:HLArchiveR11AIdentityBoundary",
+            }
+        )
+    )
+
+    def synthetic_download(
+        *,
+        target: object,
+        destination: Path,
+        credentials: AWSCredentials,
+        state: ExecutionEvidenceState,
+        meter: R7WorkspaceMeter,
+        runtime_guard: RuntimeGuard,
+        budget_guard: object,
+        **_: object,
+    ) -> Path:
+        del credentials
+        getattr(budget_guard, "authorize_request")(
+            request_ordinal_zero_based=state.network_request_count,
+            expected_response_bytes=int(getattr(target, "expected_size_bytes")),
+        )
+        ordinal = int(getattr(target, "object_ordinal_zero_based"))
+        expected_size = int(getattr(target, "expected_size_bytes"))
+        expected_etag = str(getattr(target, "expected_etag"))
+        expected_sha = str(getattr(target, "expected_compressed_sha256"))
+        state.request_sent(ordinal)
+        state.response_metadata(
+            ordinal,
+            http_status=200,
+            etag=expected_etag,
+            content_length=expected_size,
+            requester_charged="requester",
+        )
+        with ReservedBinaryWriter(
+            destination,
+            meter,
+            maximum_bytes=expected_size,
+            label=f"synthetic external transport {ordinal}",
+            buffer_bytes=1,
+        ) as writer:
+            writer.write(synthetic_object_frame(target, incomplete=incomplete))
+        # The external transport mock supplies already integrity-verified body
+        # evidence; downstream production code never receives a bypass flag.
+        state.body_progress(ordinal, expected_size)
+        state.body_complete(ordinal, expected_sha)
+        runtime_guard.check_scientific_phase("synthetic transport complete")
+        return destination
+
+    environment = {
+        "AWS_ACCESS_KEY_ID": "SYNTHETIC",
+        "AWS_SECRET_ACCESS_KEY": "SYNTHETIC",
+        "AWS_SESSION_TOKEN": "SYNTHETIC",
+    }
+    with mock.patch.object(
+        entrypoint.PricingSnapshot,
+        "load",
+        return_value=synthetic_pricing_snapshot(),
+    ), mock.patch.dict(os.environ, environment, clear=False), mock.patch(
+        "research.archive_inventory.r11a_corrective."
+        "_runner_core_r7.download_exact_object",
+        side_effect=synthetic_download,
+    ), redirect_stdout(io.StringIO()):
+        return_code = entrypoint.execute(
+            workspace,
+            context_path,
+            principal_path,
+        )
+    return return_code, workspace / "r11a-v2-artifact"
+
+
+def read_ndjson(path: Path) -> list[dict[str, object]]:
+    return [json.loads(raw) for raw in path.read_bytes().splitlines()]
+
+
+def write_ndjson(path: Path, rows: list[dict[str, object]]) -> None:
+    path.write_bytes(b"".join(canonical_json_bytes(row) for row in rows))
+
+
+def refresh_artifact_bindings(artifact: Path) -> None:
+    """Rebind a deliberately mutated artifact before adversarial validation."""
+
+    result_path = artifact / RESULT_FILE
+    result = json.loads(result_path.read_bytes())
+    scientific_files = result.get("scientific_files")
+    if isinstance(scientific_files, dict):
+        for name in SCIENCE_CONTAINERS:
+            payload = (artifact / name).read_bytes()
+            evidence = scientific_files[name]
+            evidence["byte_count"] = len(payload)
+            evidence["row_count"] = len(payload.splitlines())
+            evidence["sha256"] = hashlib.sha256(payload).hexdigest()
+    result_path.write_bytes(canonical_json_bytes(result))
+
+    names = sorted(
+        (
+            path.name
+            for path in artifact.iterdir()
+            if path.is_file()
+            and path.name not in {HASH_MANIFEST_FILE, BOUNDARY_FILE}
+        ),
+        key=lambda value: value.encode("utf-8"),
+    )
+    (artifact / HASH_MANIFEST_FILE).write_bytes(
+        (
+            "\n".join(
+                f"{hashlib.sha256((artifact / name).read_bytes()).hexdigest()}  {name}"
+                for name in names
+            )
+            + "\n"
+        ).encode("ascii")
+    )
+
+    boundary_path = artifact / BOUNDARY_FILE
+    boundary = json.loads(boundary_path.read_bytes().rstrip(b" \n") + b"\n")
+    preboundary = [
+        path for path in artifact.iterdir() if path.name != BOUNDARY_FILE
+    ]
+    boundary["preboundary_file_count"] = len(preboundary)
+    boundary["preboundary_bytes"] = sum(path.stat().st_size for path in preboundary)
+    boundary["metadata_bytes"] = sum(
+        path.stat().st_size
+        for path in preboundary
+        if path.name not in SCIENCE_CONTAINERS
+    )
+    encoded = canonical_json_bytes(boundary, final_newline=False)
+    if len(encoded) + 1 > DEFAULT_LIMITS.package_boundary_bytes:
+        raise AssertionError("mutated test boundary exceeds exact package size")
+    boundary_path.write_bytes(
+        encoded
+        + b" " * (DEFAULT_LIMITS.package_boundary_bytes - len(encoded) - 1)
+        + b"\n"
+    )
+
+
+def copy_artifact(source: Path, root: Path, name: str) -> Path:
+    destination = root / name
+    shutil.copytree(source, destination)
+    return destination
+
+
+def one_record_zero_event_conservation() -> dict[str, int]:
+    return {
+        "raw_block_observation_count": 1,
+        "raw_event_observation_count": 0,
+        "valid_wallet_occurrence_count": 0,
+        "invalid_wallet_occurrence_count": 0,
+        "valid_coin_occurrence_count": 0,
+        "invalid_coin_occurrence_count": 0,
+        "valid_tid_occurrence_count": 0,
+        "invalid_tid_occurrence_count": 0,
+        "protocol_trade_identity_occurrence_count": 0,
+        "wallet_fill_identity_occurrence_count": 0,
+        "local_time_path_prefix_match_count": 1,
+        "block_time_path_prefix_match_count": 1,
+        "block_time_previous_prefix_match_count": 0,
+        "block_time_other_prefix_count": 0,
+    }
 
 
 def fixture_unit_projection(
@@ -157,6 +467,11 @@ def one_universe_rows(
 
 
 class CanonicalR7Tests(unittest.TestCase):
+    def test_duplicate_json_keys_and_nonfinite_values_fail_closed(self) -> None:
+        for raw in (b'{"a":1,"a":2}', b'{"a":NaN}', b'{"a":Infinity}'):
+            with self.subTest(raw=raw), self.assertRaises(CanonicalJSONError):
+                strict_json_loads(raw)
+
     def test_extreme_integral_exponents_are_bounded_before_expansion(self) -> None:
         with self.assertRaises(CanonicalJSONError):
             mathematically_integral_number(
@@ -181,6 +496,39 @@ class CanonicalR7Tests(unittest.TestCase):
         self.assertEqual(canonical_json_bytes(left), canonical_json_bytes(right))
         with self.assertRaises(TypeError):
             left["a"] = "mutated"  # type: ignore[index]
+
+    def test_critical_boundaries_remain_active_under_python_optimized_mode(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        source = """
+from research.archive_inventory.r11a_corrective.canonical import CanonicalJSONError, strict_json_loads
+from research.archive_inventory.r11a_corrective.artifact_schema import validate_terminal_tuple
+for raw in (b'{\"a\":1,\"a\":2}', b'{\"a\":NaN}'):
+    try:
+        strict_json_loads(raw)
+    except CanonicalJSONError:
+        pass
+    else:
+        raise SystemExit('strict JSON boundary disappeared under -O')
+try:
+    validate_terminal_tuple(
+        terminal_class='R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE',
+        return_code=20,
+        scientific_output_status='COMPLETE',
+        root_cause_claim_status='PROVEN',
+    )
+except ValueError:
+    pass
+else:
+    raise SystemExit('terminal boundary disappeared under -O')
+"""
+        completed = subprocess.run(
+            [sys.executable, "-O", "-c", source],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 class SelectionBindingTests(unittest.TestCase):
@@ -581,418 +929,544 @@ class WorkspaceAccountingTests(unittest.TestCase):
                 meter.verify_actual_usage()
 
 
-class ArtifactCompatibilityTests(unittest.TestCase):
-    def build_one_unit_incomplete_artifact(
-        self,
-        workspace: Path,
-        *,
-        retain_occurrence: bool,
-    ) -> Path:
-        guard = RuntimeGuard(DEFAULT_LIMITS)
-        meter = R7WorkspaceMeter(workspace, DEFAULT_LIMITS, guard)
-        meter.bootstrap()
-        state = ExecutionEvidenceState(
-            DEFAULT_SELECTION.targets,
-            DEFAULT_LIMITS,
+class RuntimeEndToEndTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._temporary = tempfile.TemporaryDirectory()
+        cls.root = Path(cls._temporary.name)
+        cls.rc0, cls.complete_artifact = execute_public_synthetic_route(
+            cls.root / "complete-workspace",
+            incomplete=False,
         )
-        session = ArtifactSession(
-            workspace,
-            meter,
-            DEFAULT_LIMITS,
-            guard,
+        cls.rc20, cls.incomplete_artifact = execute_public_synthetic_route(
+            cls.root / "incomplete-workspace",
+            incomplete=True,
         )
-        projection = fixture_unit_projection()
-        unit_id = hashlib.sha256(
-            frame(b"LEGACY_REPEAT_OCCURRENCE", projection)
-        ).hexdigest()
-        projection_sha = hashlib.sha256(projection).hexdigest()
-        session.emitter.emit(
-            UNIT_FILE,
-            {
-                "record_type": "R11A_V2_TAXONOMY_UNIT",
-                "diagnostic_id": DIAGNOSTIC_ID,
-                "taxonomy_unit_id": unit_id,
-                "unit_universe": "LEGACY_REPEAT_OCCURRENCE",
-                "unit_projection_sha256": projection_sha,
-                "key_projection": {"fixture": "fixture"},
-                "primary_taxon": "TID_SCOPE_FALSE_POSITIVE",
-                "supporting_taxa": [],
-                "occurrence_count": 1,
-                "proof_references": [],
-            },
-        )
-        if retain_occurrence:
-            retained = {
-                "record_type": "R11A_V2_LEGACY_REPEAT_OCCURRENCE",
-                "primary_taxon": "TID_SCOPE_FALSE_POSITIVE",
-                "supporting_taxa": [],
-                "raw_locator": {
-                    "object_key": DEFAULT_SELECTION.targets[0].object_key,
-                    "verified_compressed_sha256": (
-                        DEFAULT_SELECTION.targets[0].expected_compressed_sha256
-                    ),
-                    "decompressed_record_ordinal_zero_based": 0,
-                    "event_ordinal_zero_based": 1,
-                },
-                "block_number": 1,
-                "exact_raw_local_time": "2025-07-28T00:00:00Z",
-                "exact_raw_block_time": "2025-07-28T00:00:00Z",
-                "canonical_wallet": "0x" + "1" * 40,
-                "exact_raw_coin_string": "BTC",
-                "validated_tid": 1,
-                "exact_raw_side_string": "A",
-                "full_event_sha256": "2" * 64,
-                "fill_payload_sha256": "3" * 64,
-                "schema_errors": [],
-                "selected_fill_payload": {},
-                "diagnostic_id": DIAGNOSTIC_ID,
-                "taxonomy_unit_id": unit_id,
-                "unit_projection_sha256": projection_sha,
-            }
-            retained["retained_row_id"] = hashlib.sha256(
-                canonical_json_bytes(retained, final_newline=False)
-            ).hexdigest()
-            session.emitter.emit(LEGACY_ROWS_FILE, retained)
-        joins = JoinValidationResult(
-            unit_count=1,
-            proof_count=0,
-            proof_reference_count=0,
-            retained_row_reference_count=1,
-            all_unit_ids_unique=True,
-            all_proof_ids_unique=True,
-            all_nonnull_proof_references_resolve_exactly_once=True,
-            all_retained_rows_reference_exactly_one_unit=True,
-            all_referenced_projections_are_byte_equal=True,
-            all_retained_row_counts_match_unit_occurrence_counts=True,
-        )
-        taxonomy = TaxonomyResult(
-            universe_rows=one_legacy_universe_rows(),
-            secondary_reducer_rows=(),
-            join_validation=joins,
-            repeated_block_group_count=0,
-            repeated_block_observation_count=0,
-            legacy_repeat_group_count=1,
-            legacy_repeat_observation_count=2,
-            legacy_repeat_occurrence_count=1,
-            valid_tid_legacy_repeat_occurrence_count=1,
-            invalid_tid_legacy_repeat_occurrence_count=0,
-            supporting_taxon_counts=zero_taxon_counts(),
-            exact_three_utc_days=False,
-        )
-        outcome = session.finalize_full(
-            state=state,
-            context={"test_fixture": "one-unit-incomplete"},
-            reducer_rows=(),
-            resource_rows=(),
-            terminal_class="R11A_V2_DIAGNOSTIC_INCOMPLETE",
-            research_conclusion=(
-                "ROOT_CAUSE_NOT_FULLY_PROVEN_NO_REPAIR_AUTHORIZED"
-            ),
-            taxonomy_result=taxonomy,
-        )
-        return outcome.final_directory
 
-    def build_one_schema_incomplete_artifact(self, workspace: Path) -> Path:
-        unit_universe = "REPEAT_INTERSECTING_TID_SCHEMA_VIOLATION"
-        primary_taxon = "TID_SCHEMA_VIOLATION"
-        guard = RuntimeGuard(DEFAULT_LIMITS)
-        meter = R7WorkspaceMeter(workspace, DEFAULT_LIMITS, guard)
-        meter.bootstrap()
-        state = ExecutionEvidenceState(
-            DEFAULT_SELECTION.targets,
-            DEFAULT_LIMITS,
-        )
-        session = ArtifactSession(
-            workspace,
-            meter,
-            DEFAULT_LIMITS,
-            guard,
-        )
-        projection = fixture_unit_projection(
-            key_value="schema",
-            unit_universe=unit_universe,
-            primary_taxon=primary_taxon,
-        )
-        unit_id = hashlib.sha256(
-            frame(unit_universe.encode("ascii"), projection)
-        ).hexdigest()
-        projection_sha = hashlib.sha256(projection).hexdigest()
-        session.emitter.emit(
-            UNIT_FILE,
-            {
-                "record_type": "R11A_V2_TAXONOMY_UNIT",
-                "diagnostic_id": DIAGNOSTIC_ID,
-                "taxonomy_unit_id": unit_id,
-                "unit_universe": unit_universe,
-                "unit_projection_sha256": projection_sha,
-                "key_projection": {"fixture": "schema"},
-                "primary_taxon": primary_taxon,
-                "supporting_taxa": [],
-                "occurrence_count": 1,
-                "proof_references": [],
-            },
-        )
-        retained = {
-            "record_type": "R11A_V2_REPEAT_INTERSECTING_SCHEMA_EVIDENCE",
-            "primary_taxon": primary_taxon,
-            "schema_universe": unit_universe,
-            "raw_locator": {
-                "object_key": DEFAULT_SELECTION.targets[0].object_key,
-                "verified_compressed_sha256": (
-                    DEFAULT_SELECTION.targets[0].expected_compressed_sha256
-                ),
-                "decompressed_record_ordinal_zero_based": 0,
-                "event_ordinal_zero_based": 1,
-            },
-            "schema_errors": ["TID_NOT_STRICT_UINT50"],
-            "diagnostic_id": DIAGNOSTIC_ID,
-            "taxonomy_unit_id": unit_id,
-            "unit_projection_sha256": projection_sha,
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._temporary.cleanup()
+
+    def fresh_complete(self, name: str) -> Path:
+        return copy_artifact(self.complete_artifact, self.root, name)
+
+    def fresh_incomplete(self, name: str) -> Path:
+        return copy_artifact(self.incomplete_artifact, self.root, name)
+
+    @staticmethod
+    def preflight_context(start_epoch_ns: int) -> dict[str, object]:
+        return {
+            "event_name": "workflow_dispatch",
+            "dispatch_ref": "refs/heads/main",
+            "dispatch_sha": "1" * 40,
+            "checked_out_commit": "1" * 40,
+            "workflow_run_id": 1,
+            "workflow_run_attempt": 1,
+            "workflow_start_epoch_ns": start_epoch_ns,
+            "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+            "workflow_name": (
+                "Hyperliquid Archive R11A Identity Boundary Diagnostic"
+            ),
+            "principal_observed": False,
         }
-        retained["retained_row_id"] = hashlib.sha256(
-            canonical_json_bytes(retained, final_newline=False)
+
+    def build_preflight(self, name: str) -> Path:
+        start = 10_000_000_000
+        return write_preflight_failure_artifact(
+            workspace=self.root / name,
+            context=self.preflight_context(start),
+            failure_code="PRE_OIDC_STATIC_GATE_FAILURE",
+            execution_phase="PRE_OIDC_STATIC_GATE",
+            wall_time_ns=lambda: start + 2_500_000_000,
+            monotonic_ns=lambda: 5_000_000_000,
+        )
+
+    def test_execution_evidence_pass_complete_reaches_public_facade(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _artifact_schema_core_r7 as schema_core,
+        )
+
+        target = DEFAULT_SELECTION.targets[0]
+        state = ExecutionEvidenceState(DEFAULT_SELECTION.targets, DEFAULT_LIMITS)
+        state.request_sent(0)
+        state.response_metadata(
+            0,
+            http_status=200,
+            etag=target.expected_etag,
+            content_length=target.expected_size_bytes,
+            requester_charged="requester",
+        )
+        state.body_progress(0, target.expected_size_bytes)
+        state.body_complete(0, target.expected_compressed_sha256)
+        conservation = one_record_zero_event_conservation()
+        with mock.patch.object(
+            schema_core,
+            "validate_parse_conservation",
+            wraps=schema_core.validate_parse_conservation,
+        ) as validator:
+            state.pass_complete(
+                0,
+                pass_number=1,
+                decompressed_bytes=10,
+                record_count=1,
+                event_count=0,
+                stream_sha256="5" * 64,
+                conservation=conservation,
+            )
+        self.assertEqual(validator.call_count, 1)
+        self.assertEqual(validator.call_args.kwargs["record_count"], 1)
+        self.assertEqual(validator.call_args.kwargs["event_count"], 0)
+        self.assertEqual(validator.call_args.kwargs["label"], "object_0_pass_1")
+        state.pass_complete(
+            0,
+            pass_number=2,
+            decompressed_bytes=10,
+            record_count=1,
+            event_count=0,
+            stream_sha256="5" * 64,
+            conservation=conservation,
+        )
+        self.assertEqual(
+            state.object_rows()[0]["terminal_status"],
+            "COMPLETE_TWO_LOCAL_PASSES",
+        )
+
+    def test_execution_evidence_rejects_mismatched_second_pass(self) -> None:
+        target = DEFAULT_SELECTION.targets[0]
+        state = ExecutionEvidenceState(DEFAULT_SELECTION.targets, DEFAULT_LIMITS)
+        state.request_sent(0)
+        state.response_metadata(
+            0,
+            http_status=200,
+            etag=target.expected_etag,
+            content_length=target.expected_size_bytes,
+            requester_charged="requester",
+        )
+        state.body_progress(0, target.expected_size_bytes)
+        state.body_complete(0, target.expected_compressed_sha256)
+        conservation = one_record_zero_event_conservation()
+        state.pass_complete(
+            0,
+            pass_number=1,
+            decompressed_bytes=10,
+            record_count=1,
+            event_count=0,
+            stream_sha256="5" * 64,
+            conservation=conservation,
+        )
+        with self.assertRaises(RuntimeBoundaryError):
+            state.pass_complete(
+                0,
+                pass_number=2,
+                decompressed_bytes=10,
+                record_count=1,
+                event_count=0,
+                stream_sha256="6" * 64,
+                conservation=conservation,
+            )
+
+    def test_public_entrypoint_real_full_synthetic_runner_path(self) -> None:
+        self.assertEqual(self.rc0, 0)
+        validate_artifact(self.complete_artifact, DEFAULT_LIMITS)
+        validate_science(self.complete_artifact)
+        result = json.loads((self.complete_artifact / RESULT_FILE).read_bytes())
+        objects = read_ndjson(self.complete_artifact / OBJECT_LEDGER_FILE)
+        reducers = read_ndjson(self.complete_artifact / REDUCER_LEDGER_FILE)
+        conservation = json.loads(
+            (self.complete_artifact / CONSERVATION_FILE).read_bytes()
+        )
+        self.assertEqual(len(objects), 72)
+        self.assertTrue(
+            all(
+                row["first_pass"] == row["second_pass"]
+                and row["terminal_status"] == "COMPLETE_TWO_LOCAL_PASSES"
+                for row in objects
+            )
+        )
+        self.assertEqual(len(reducers), 512)
+        self.assertEqual(len(conservation["secondary_reducer_rows"]), 768)
+        self.assertTrue(all(conservation["terminal_gates"].values()))
+        self.assertGreater(
+            len(read_ndjson(self.complete_artifact / UNIT_FILE)),
+            0,
+        )
+        self.assertGreater(
+            len(read_ndjson(self.complete_artifact / PAIR_PROOF_FILE)),
+            0,
+        )
+        self.assertEqual(
+            result["terminal_class"],
+            "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+        )
+        self.assertEqual(result["return_code"], 0)
+
+    def test_real_fully_materialized_incomplete_route_is_valid_rc20(self) -> None:
+        self.assertEqual(self.rc20, 20)
+        validate_artifact(self.incomplete_artifact, DEFAULT_LIMITS)
+        validate_science(self.incomplete_artifact)
+        result = json.loads((self.incomplete_artifact / RESULT_FILE).read_bytes())
+        stops = json.loads(
+            (self.incomplete_artifact / STOP_LEDGER_FILE).read_bytes()
+        )["entries"]
+        conservation = json.loads(
+            (self.incomplete_artifact / CONSERVATION_FILE).read_bytes()
+        )
+        scientific_gate = (
+            "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences"
+        )
+        self.assertEqual(result["terminal_class"], "R11A_V2_DIAGNOSTIC_INCOMPLETE")
+        self.assertEqual(result["return_code"], 20)
+        self.assertEqual(len(stops), 1)
+        self.assertEqual(stops[0]["stop_code"], "FULL_SCOPE_TAXONOMY_INCOMPLETE")
+        self.assertFalse(conservation["terminal_gates"][scientific_gate])
+        self.assertTrue(
+            all(
+                value
+                for name, value in conservation["terminal_gates"].items()
+                if name != scientific_gate
+            )
+        )
+
+    def test_rc20_zero_object_scope_is_rejected_after_rehash(self) -> None:
+        artifact = self.fresh_incomplete("rc20-zero-scope")
+        (artifact / OBJECT_LEDGER_FILE).write_bytes(b"")
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises((ArtifactBoundaryError, ValueError)):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_rc20_partial_object_scope_is_rejected_after_rehash(self) -> None:
+        artifact = self.fresh_incomplete("rc20-partial-scope")
+        rows = read_ndjson(artifact / OBJECT_LEDGER_FILE)
+        write_ndjson(artifact / OBJECT_LEDGER_FILE, rows[:-1])
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_rc20_one_pass_scope_is_rejected_after_rehash(self) -> None:
+        artifact = self.fresh_incomplete("rc20-one-pass")
+        rows = read_ndjson(artifact / OBJECT_LEDGER_FILE)
+        rows[0]["second_pass"] = None
+        rows[0]["terminal_status"] = "PENDING"
+        write_ndjson(artifact / OBJECT_LEDGER_FILE, rows)
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_rc20_mismatched_pass_is_rejected_after_rehash(self) -> None:
+        artifact = self.fresh_incomplete("rc20-mismatched-pass")
+        rows = read_ndjson(artifact / OBJECT_LEDGER_FILE)
+        rows[0]["second_pass"]["decompressed_stream_sha256"] = "f" * 64
+        write_ndjson(artifact / OBJECT_LEDGER_FILE, rows)
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises((ArtifactBoundaryError, ValueError)):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_rc20_missing_primary_reducer_is_rejected_after_rehash(self) -> None:
+        artifact = self.fresh_incomplete("rc20-missing-reducer")
+        rows = read_ndjson(artifact / REDUCER_LEDGER_FILE)
+        write_ndjson(artifact / REDUCER_LEDGER_FILE, rows[:-1])
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_rc20_false_gate_requires_real_unclassifiable_units(self) -> None:
+        artifact = self.fresh_incomplete("rc20-false-gate-without-unclassified")
+        conservation_path = artifact / CONSERVATION_FILE
+        conservation = json.loads(conservation_path.read_bytes())
+        replacement_taxon = next(taxon for taxon in TAXA if taxon != "UNCLASSIFIABLE")
+        for row in conservation["unit_universes"]:
+            groups = row["unclassifiable_group_count"]
+            occurrences = row["unclassifiable_occurrence_count"]
+            row["primary_taxon_group_counts"][replacement_taxon] += groups
+            row["primary_taxon_occurrence_counts"][replacement_taxon] += occurrences
+            row["primary_taxon_group_counts"]["UNCLASSIFIABLE"] = 0
+            row["primary_taxon_occurrence_counts"]["UNCLASSIFIABLE"] = 0
+            row["unclassifiable_group_count"] = 0
+            row["unclassifiable_occurrence_count"] = 0
+        conservation_path.write_bytes(canonical_json_bytes(conservation))
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_target_metadata_mutation_is_rejected_semantically(self) -> None:
+        artifact = self.fresh_complete("wrong-target-metadata")
+        rows = read_ndjson(artifact / OBJECT_LEDGER_FILE)
+        rows[0]["expected_identity"]["etag"] = '"self-consistent-false-etag"'
+        rows[0]["response"]["etag"] = '"self-consistent-false-etag"'
+        write_ndjson(artifact / OBJECT_LEDGER_FILE, rows)
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(artifact, DEFAULT_LIMITS)
+
+    def test_self_consistent_false_pair_proof_is_rejected(self) -> None:
+        artifact = self.fresh_complete("false-self-consistent-proof")
+        proofs = read_ndjson(artifact / PAIR_PROOF_FILE)
+        units = read_ndjson(artifact / UNIT_FILE)
+        proof = proofs[0]
+        old_id = str(proof["proof_id"])
+        proof["projection"]["member_count"] = 3
+        projection = canonical_json_bytes(
+            proof["projection"],
+            final_newline=False,
+        )
+        proof_type = str(proof["record_type"])
+        new_id = hashlib.sha256(
+            frame(proof_type.encode("ascii"), projection)
         ).hexdigest()
-        session.emitter.emit(
-            "r11a-v2-repeat-intersecting-schema-evidence.ndjson",
-            retained,
+        proof["proof_id"] = new_id
+        proof["proof_projection_sha256"] = hashlib.sha256(projection).hexdigest()
+        updated = 0
+        for unit in units:
+            for reference in unit["proof_references"]:
+                if reference["proof_id"] == old_id:
+                    reference["proof_id"] = new_id
+                    reference["proof_projection_sha256"] = hashlib.sha256(
+                        projection
+                    ).hexdigest()
+                    updated += 1
+        self.assertGreater(updated, 0)
+        write_ndjson(artifact / PAIR_PROOF_FILE, proofs)
+        write_ndjson(artifact / UNIT_FILE, units)
+        refresh_artifact_bindings(artifact)
+        validate_artifact(artifact, DEFAULT_LIMITS)
+        with self.assertRaises(EvidenceValidationError):
+            validate_science(artifact)
+
+    def test_self_consistent_missing_raw_provenance_is_rejected(self) -> None:
+        artifact = self.fresh_incomplete("missing-raw-record-provenance")
+        rows = read_ndjson(artifact / PROTOCOL_ROWS_FILE)
+        owner = next(row for row in rows if row["raw_record_value"] is not None)
+        owner["raw_record_value"] = None
+        owner["retained_row_id"] = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    key: value
+                    for key, value in owner.items()
+                    if key != "retained_row_id"
+                },
+                final_newline=False,
+            )
+        ).hexdigest()
+        write_ndjson(artifact / PROTOCOL_ROWS_FILE, rows)
+        refresh_artifact_bindings(artifact)
+        validate_artifact(artifact, DEFAULT_LIMITS)
+        with self.assertRaises(EvidenceValidationError):
+            validate_science(artifact)
+
+    def test_dangling_and_ambiguous_proof_joins_are_rejected(self) -> None:
+        dangling = self.fresh_complete("dangling-proof")
+        units = read_ndjson(dangling / UNIT_FILE)
+        reference = next(
+            reference
+            for unit in units
+            for reference in unit["proof_references"]
         )
-        joins = JoinValidationResult(
-            unit_count=1,
-            proof_count=0,
-            proof_reference_count=0,
-            retained_row_reference_count=1,
-            all_unit_ids_unique=True,
-            all_proof_ids_unique=True,
-            all_nonnull_proof_references_resolve_exactly_once=True,
-            all_retained_rows_reference_exactly_one_unit=True,
-            all_referenced_projections_are_byte_equal=True,
-            all_retained_row_counts_match_unit_occurrence_counts=True,
+        reference["proof_id"] = "f" * 64
+        write_ndjson(dangling / UNIT_FILE, units)
+        refresh_artifact_bindings(dangling)
+        validate_artifact(dangling, DEFAULT_LIMITS)
+        with self.assertRaises(EvidenceValidationError):
+            validate_science(dangling)
+
+        ambiguous = self.fresh_complete("ambiguous-proof")
+        proofs = read_ndjson(ambiguous / PAIR_PROOF_FILE)
+        proofs.append(dict(proofs[0]))
+        write_ndjson(ambiguous / PAIR_PROOF_FILE, proofs)
+        refresh_artifact_bindings(ambiguous)
+        validate_artifact(ambiguous, DEFAULT_LIMITS)
+        with self.assertRaises(EvidenceValidationError):
+            validate_science(ambiguous)
+
+    def test_shuffled_retained_input_preserves_science_and_proof_semantics(self) -> None:
+        artifact = self.fresh_complete("shuffled-retained-input")
+        unit_bytes = (artifact / UNIT_FILE).read_bytes()
+        proof_bytes = (artifact / PAIR_PROOF_FILE).read_bytes()
+        terminal_before = json.loads((artifact / RESULT_FILE).read_bytes())[
+            "terminal_class"
+        ]
+        rows = read_ndjson(artifact / PROTOCOL_ROWS_FILE)
+        self.assertGreater(len(rows), 1)
+        write_ndjson(artifact / PROTOCOL_ROWS_FILE, list(reversed(rows)))
+        refresh_artifact_bindings(artifact)
+        validate_artifact(artifact, DEFAULT_LIMITS)
+        validate_science(artifact)
+        self.assertEqual((artifact / UNIT_FILE).read_bytes(), unit_bytes)
+        self.assertEqual((artifact / PAIR_PROOF_FILE).read_bytes(), proof_bytes)
+        self.assertEqual(
+            json.loads((artifact / RESULT_FILE).read_bytes())["terminal_class"],
+            terminal_before,
         )
-        taxonomy = TaxonomyResult(
-            universe_rows=one_universe_rows(unit_universe, primary_taxon),
-            secondary_reducer_rows=(),
-            join_validation=joins,
-            repeated_block_group_count=0,
-            repeated_block_observation_count=0,
-            legacy_repeat_group_count=0,
-            legacy_repeat_observation_count=0,
-            legacy_repeat_occurrence_count=0,
-            valid_tid_legacy_repeat_occurrence_count=0,
-            invalid_tid_legacy_repeat_occurrence_count=0,
-            supporting_taxon_counts=zero_taxon_counts(),
-            exact_three_utc_days=False,
-        )
-        return session.finalize_full(
-            state=state,
-            context={"test_fixture": "one-schema-unit-incomplete"},
-            reducer_rows=(),
-            resource_rows=(),
-            terminal_class="R11A_V2_DIAGNOSTIC_INCOMPLETE",
-            research_conclusion=(
-                "ROOT_CAUSE_NOT_FULLY_PROVEN_NO_REPAIR_AUTHORIZED"
+
+    def test_frozen_locator_order_is_utf8_sha_then_numeric_ordinals(self) -> None:
+        digest = "11" * 32
+        rows = [
+            ("prefix/2.lz4", digest, 0, 0),
+            ("prefix/10.lz4", digest, 0, 0),
+            ("prefix/10.lz4", digest, 10, 0),
+            ("prefix/10.lz4", digest, 2, 0),
+        ]
+        observed = sorted(
+            rows,
+            key=lambda row: raw_locator_order_key(
+                object_key=row[0],
+                verified_compressed_sha256=row[1],
+                record_ordinal_zero_based=row[2],
+                event_ordinal_zero_based=row[3],
             ),
-            taxonomy_result=taxonomy,
-        ).final_directory
+        )
+        self.assertEqual(
+            observed,
+            [rows[1], rows[3], rows[2], rows[0]],
+        )
+        ranks = canonical_object_locator_ranks(
+            (
+                ("prefix/2.lz4", digest),
+                ("prefix/10.lz4", "22" * 32),
+                ("prefix/10.lz4", digest),
+            )
+        )
+        self.assertEqual(ranks[("prefix/10.lz4", digest)], 0)
+        self.assertEqual(ranks[("prefix/10.lz4", "22" * 32)], 1)
+        self.assertEqual(ranks[("prefix/2.lz4", digest)], 2)
 
-    def test_pre_oidc_failure_artifact_passes_same_external_validator_as_workflow(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            workspace = Path(temporary) / "workspace"
-            context = {
-                "event_name": "workflow_dispatch",
-                "dispatch_ref": "refs/heads/main",
-                "dispatch_sha": "1" * 40,
-                "checked_out_commit": "1" * 40,
-                "workflow_run_id": 1,
-                "workflow_run_attempt": 1,
-                "repository": "Mathisve1/onchain-wallet-intelligence-lab",
-                "workflow_name": (
-                    "Hyperliquid Archive R11A Identity Boundary Diagnostic"
-                ),
-                "principal_observed": False,
+    def test_preflight_artifact_uses_truthful_cross_step_time_and_meter(self) -> None:
+        artifact = self.build_preflight("truthful-preflight")
+        validate_artifact(artifact, DEFAULT_LIMITS)
+        validate_science(artifact)
+        resource = json.loads((artifact / RESOURCE_LEDGER_FILE).read_bytes())
+        measurement = resource["measurements"][0]
+        self.assertEqual(measurement["elapsed_runtime_seconds_floor"], 2)
+        self.assertEqual(resource["packaging_elapsed_seconds_floor"], 2)
+        self.assertGreater(resource["peak_bounded_workspace_bytes"], 0)
+        self.assertGreaterEqual(
+            resource["peak_tracked_workspace_bytes"],
+            resource["tracked_workspace_bytes_before_packaging"],
+        )
+        self.assertEqual((artifact / RETURN_CODE_FILE).read_text(), "21\n")
+        self.assertTrue(
+            all((artifact / name).read_bytes() == b"" for name in SCIENCE_CONTAINERS)
+        )
+
+    def test_rc21_terminal_contradictions_fail_after_full_rehash(self) -> None:
+        complete_claim = self.build_preflight("rc21-complete-claim")
+        result = json.loads((complete_claim / RESULT_FILE).read_bytes())
+        result["research_conclusion"] = "PROVEN_COMPLETE_TAXONOMY_ONLY"
+        (complete_claim / RESULT_FILE).write_bytes(canonical_json_bytes(result))
+        refresh_artifact_bindings(complete_claim)
+        with self.assertRaises((ArtifactBoundaryError, ValueError)):
+            validate_artifact(complete_claim, DEFAULT_LIMITS)
+
+        authority_claim = self.build_preflight("rc21-authority-claim")
+        result = json.loads((authority_claim / RESULT_FILE).read_bytes())
+        result["R11_CLOSED"] = True
+        (authority_claim / RESULT_FILE).write_bytes(canonical_json_bytes(result))
+        refresh_artifact_bindings(authority_claim)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(authority_claim, DEFAULT_LIMITS)
+
+        gate_claim = self.build_preflight("rc21-complete-gate-claim")
+        conservation_path = gate_claim / CONSERVATION_FILE
+        conservation = json.loads(conservation_path.read_bytes())
+        conservation["terminal_gates"][
+            "every_authoritative_unit_receives_exactly_one_primary_taxon"
+        ] = True
+        conservation_path.write_bytes(canonical_json_bytes(conservation))
+        refresh_artifact_bindings(gate_claim)
+        with self.assertRaises(ArtifactBoundaryError):
+            validate_artifact(gate_claim, DEFAULT_LIMITS)
+
+    def test_rc0_cannot_contain_rehashed_early_stop_evidence(self) -> None:
+        artifact = self.fresh_complete("rc0-with-stop")
+        stop = json.loads((artifact / STOP_LEDGER_FILE).read_bytes())
+        stop["entries"].append(
+            {
+                "sequence_zero_based": 0,
+                "diagnostic_id": DIAGNOSTIC_ID,
+                "stop_code": "CONTRADICTORY_EARLY_STOP",
+                "phase": "TAXONOMY",
+                "object_ordinal_zero_based": None,
+                "evidence_sha256": "0" * 64,
             }
-            artifact = write_preflight_failure_artifact(
-                workspace=workspace,
-                context=context,
-                failure_code="PRE_OIDC_STATIC_GATE_FAILURE",
-                execution_phase="PRE_OIDC_STATIC_GATE",
-            )
+        )
+        (artifact / STOP_LEDGER_FILE).write_bytes(canonical_json_bytes(stop))
+        refresh_artifact_bindings(artifact)
+        with self.assertRaises(ArtifactBoundaryError):
             validate_artifact(artifact, DEFAULT_LIMITS)
-            validate_science(artifact)
-            self.assertEqual(
-                (artifact / "r11a-v2.rc").read_text(),
-                "21\n",
-            )
-            self.assertEqual(
-                (artifact / BOUNDARY_FILE).stat().st_size,
-                1024,
-            )
-            for name in SCIENCE_CONTAINERS:
-                self.assertEqual((artifact / name).read_bytes(), b"")
 
-    def test_fully_materialized_incomplete_artifact_uses_rc20_and_validates(self) -> None:
+    def test_terminal_return_codes_propagate_after_validation_and_upload(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            workspace = Path(temporary) / "workspace"
-            guard = RuntimeGuard(DEFAULT_LIMITS)
-            meter = R7WorkspaceMeter(workspace, DEFAULT_LIMITS, guard)
+            root = Path(temporary)
+            rc0 = root / "rc0"
+            rc20 = root / "rc20"
+            rc21 = root / "rc21"
+            rc0.write_text("0\n", encoding="ascii")
+            rc20.write_text("20\n", encoding="ascii")
+            rc21.write_text("21\n", encoding="ascii")
+            self.assertEqual(
+                validated_terminal_return_code(self.complete_artifact, rc0),
+                0,
+            )
+            self.assertEqual(
+                validated_terminal_return_code(self.incomplete_artifact, rc20),
+                20,
+            )
+            preflight = self.build_preflight("terminal-propagation-preflight")
+            self.assertEqual(validated_terminal_return_code(preflight, rc21), 21)
+            with self.assertRaises(TerminalPropagationError):
+                validated_terminal_return_code(self.incomplete_artifact, rc0)
+
+        root = Path(__file__).resolve().parents[1]
+        workflow = (
+            root
+            / "research/archive_inventory/r11a_corrective/workflows/"
+            "hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
+        ).read_text(encoding="utf-8")
+        validation = workflow.rfind("validate_r11a_execution_artifact_r7.py")
+        upload = workflow.rfind("actions/upload-artifact")
+        propagation = workflow.rfind("terminal_propagation")
+        self.assertLess(validation, upload)
+        self.assertLess(upload, propagation)
+        self.assertIn("always()", workflow[upload:])
+
+    def test_sqlite_transient_journal_peak_is_metered(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = R7WorkspaceMeter(
+                Path(temporary) / "workspace",
+                DEFAULT_LIMITS,
+                RuntimeGuard(DEFAULT_LIMITS),
+            )
             meter.bootstrap()
-            state = ExecutionEvidenceState(
-                DEFAULT_SELECTION.targets,
-                DEFAULT_LIMITS,
-            )
-            session = ArtifactSession(
-                workspace,
+            database = MeteredSQLite(
+                meter.root / "transient.sqlite",
                 meter,
-                DEFAULT_LIMITS,
-                guard,
+                10_000_000,
+                "transient peak test",
             )
-            joins = JoinValidationResult(
-                unit_count=0,
-                proof_count=0,
-                proof_reference_count=0,
-                retained_row_reference_count=0,
-                all_unit_ids_unique=True,
-                all_proof_ids_unique=True,
-                all_nonnull_proof_references_resolve_exactly_once=True,
-                all_retained_rows_reference_exactly_one_unit=True,
-                all_referenced_projections_are_byte_equal=True,
-                all_retained_row_counts_match_unit_occurrence_counts=True,
-            )
-            taxonomy = TaxonomyResult(
-                universe_rows=zero_universe_rows(),
-                secondary_reducer_rows=(),
-                join_validation=joins,
-                repeated_block_group_count=0,
-                repeated_block_observation_count=0,
-                legacy_repeat_group_count=0,
-                legacy_repeat_observation_count=0,
-                legacy_repeat_occurrence_count=0,
-                valid_tid_legacy_repeat_occurrence_count=0,
-                invalid_tid_legacy_repeat_occurrence_count=0,
-                supporting_taxon_counts=zero_taxon_counts(),
-                exact_three_utc_days=False,
-            )
-            outcome = session.finalize_full(
-                state=state,
-                context={"test_fixture": "full-incomplete"},
-                reducer_rows=(),
-                resource_rows=(),
-                terminal_class="R11A_V2_DIAGNOSTIC_INCOMPLETE",
-                research_conclusion=(
-                    "ROOT_CAUSE_NOT_FULLY_PROVEN_NO_REPAIR_AUTHORIZED"
-                ),
-                taxonomy_result=taxonomy,
-            )
-            self.assertEqual(outcome.return_code, 20)
-            validate_artifact(outcome.final_directory, DEFAULT_LIMITS)
-            validate_science(outcome.final_directory)
-
-    def test_nonempty_incomplete_science_passes_external_recomputation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=True,
-            )
-            validate_artifact(artifact, DEFAULT_LIMITS)
-            validate_science(artifact)
-
-    def test_external_validator_rejects_claimed_but_missing_retained_occurrence(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=False,
-            )
-            validate_artifact(artifact, DEFAULT_LIMITS)
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
-
-    def test_external_validator_rejects_wrong_unit_projection(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=True,
-            )
-            unit_path = artifact / UNIT_FILE
-            unit = json.loads(unit_path.read_bytes())
-            unit["key_projection"] = {"fixture": "tampered"}
-            unit_path.write_bytes(canonical_json_bytes(unit))
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
-
-    def test_external_validator_rejects_wrong_retained_container(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=True,
-            )
-            legacy = artifact / LEGACY_ROWS_FILE
-            protocol = artifact / "r11a-v2-protocol-trade-group-members.ndjson"
-            protocol.write_bytes(legacy.read_bytes())
-            legacy.write_bytes(b"")
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
-
-    def test_external_validator_rejects_wrong_primary_taxon(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=True,
-            )
-            retained_path = artifact / LEGACY_ROWS_FILE
-            retained = json.loads(retained_path.read_bytes())
-            retained["primary_taxon"] = "UNCLASSIFIABLE"
-            retained_without_id = {
-                key: value
-                for key, value in retained.items()
-                if key != "retained_row_id"
-            }
-            retained["retained_row_id"] = hashlib.sha256(
-                canonical_json_bytes(retained_without_id, final_newline=False)
-            ).hexdigest()
-            retained_path.write_bytes(canonical_json_bytes(retained))
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
-
-    def test_external_validator_rejects_wrong_schema_universe(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_schema_incomplete_artifact(
-                Path(temporary) / "workspace"
-            )
-            validate_science(artifact)
-            retained_path = (
-                artifact / "r11a-v2-repeat-intersecting-schema-evidence.ndjson"
-            )
-            retained = json.loads(retained_path.read_bytes())
-            retained["schema_universe"] = (
-                "REPEAT_INTERSECTING_COIN_SCHEMA_VIOLATION"
-            )
-            retained_without_id = {
-                key: value
-                for key, value in retained.items()
-                if key != "retained_row_id"
-            }
-            retained["retained_row_id"] = hashlib.sha256(
-                canonical_json_bytes(retained_without_id, final_newline=False)
-            ).hexdigest()
-            retained_path.write_bytes(canonical_json_bytes(retained))
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
-
-    def test_supporting_taxon_cannot_increase_primary_counts(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifact = self.build_one_unit_incomplete_artifact(
-                Path(temporary) / "workspace",
-                retain_occurrence=True,
-            )
-            conservation_path = artifact / CONSERVATION_FILE
-            conservation = json.loads(conservation_path.read_bytes())
-            legacy = conservation["unit_universes"][0]
-            legacy["primary_taxon_group_counts"]["TID_SCOPE_FALSE_POSITIVE"] = 0
-            legacy["primary_taxon_occurrence_counts"]["TID_SCOPE_FALSE_POSITIVE"] = 0
-            legacy["primary_taxon_group_counts"]["EXPECTED_COUNTERPARTY_PAIR"] = 1
-            legacy["primary_taxon_occurrence_counts"]["EXPECTED_COUNTERPARTY_PAIR"] = 1
-            conservation_path.write_bytes(canonical_json_bytes(conservation))
-            with self.assertRaises(EvidenceValidationError):
-                validate_science(artifact)
+            try:
+                with database.transaction("create transient table") as connection:
+                    connection.execute("CREATE TABLE values_table(value BLOB)")
+                with database.transaction("seed transient table") as connection:
+                    connection.execute(
+                        "INSERT INTO values_table VALUES(?)",
+                        (b"x" * 1_000_000,),
+                    )
+                with database.transaction("rewrite transient table") as connection:
+                    connection.execute(
+                        "UPDATE values_table SET value=?",
+                        (b"y" * 1_000_000,),
+                    )
+                self.assertGreater(meter.peak_known_bytes, meter.known_bytes)
+                self.assertGreaterEqual(
+                    meter.peak_bounded_bytes,
+                    meter.peak_known_bytes,
+                )
+                self.assertEqual(
+                    database.connection.execute("PRAGMA temp_store").fetchone()[0],
+                    2,
+                )
+            finally:
+                database.close_delete()
+            self.assertEqual(meter.verify_actual_usage(), 0)
 
 
 class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
@@ -1023,6 +1497,9 @@ class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
             "validate_r11a_corrective_implementation",
             workflow,
         )
+        self.assertNotIn("validate_r11a_preregistration.py", workflow)
+        self.assertIn("validate_r11a_v2_preregistration.py", workflow)
+        self.assertIn("validate_r11a_v2_bindings.py", workflow)
         self.assertIn("validate_r11a_runtime_binding_r7.py", workflow)
         self.assertIn("validate_r11a_execution_artifact_r7.py", workflow)
         self.assertIn("R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json", workflow)
@@ -1056,13 +1533,27 @@ class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
         self.assertFalse(contract["implementation_review_green"])
         self.assertTrue(contract["pricing_binding_pending"])
         self.assertFalse(contract["owner_approval_eligible"])
-        self.assertFalse(
-            contract["authority_reconciliation"][
-                "referenced_amendment_002_present"
-            ]
+        authority = contract["authority_reconciliation"]
+        self.assertTrue(authority["canonical_amendment_002_present"])
+        self.assertTrue(authority["canonical_amendment_002_binding_valid"])
+        self.assertEqual(
+            authority["canonical_amendment_002_internal_id"],
+            "R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002",
+        )
+        self.assertEqual(
+            authority["canonical_amendment_002_sha256"],
+            "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f",
+        )
+        self.assertEqual(
+            contract["approval_blockers"],
+            [
+                "INDEPENDENT_CLEAN_CONTEXT_REVIEW_NOT_COMPLETED",
+                "CURRENT_OFFICIAL_PRICING_AND_EUR_BINDING_PENDING",
+            ],
         )
         self.assertFalse(status["implementation_review_green"])
         self.assertFalse(status["owner_approval_eligible"])
+        self.assertTrue(status["canonical_amendment_002_binding_valid"])
         sealed = set(contract["implementation_file_hashes"])
         for relative in (
             "governance/_validate_r11a_runtime_binding_core_r7.py",
@@ -1072,9 +1563,79 @@ class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
             "research/archive_inventory/r11a_corrective/_runner_core_r7.py",
             "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py",
             "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py",
+            "research/archive_inventory/r11a_corrective/locator_order.py",
+            "research/archive_inventory/r11a_corrective/proof_semantics_r7.py",
             "research/archive_inventory/r11a_corrective/taxonomy_precedence_r7.py",
+            "research/archive_inventory/r11a_corrective/terminal_propagation.py",
+            "governance/validate_repository.py",
+            "governance/regenerate_manifest.py",
         ):
             self.assertIn(relative, sealed)
+        self.assertEqual(
+            contract["repository_manifest_path"],
+            "governance/REPOSITORY_MANIFEST.sha256",
+        )
+
+    def test_missing_executed_file_seal_binding_fails_closed(self) -> None:
+        import governance.seal_r11a_corrective_r7 as seal
+
+        root = Path(__file__).resolve().parents[1]
+        contract = json.loads(
+            (
+                root
+                / "research/archive_inventory/r11a_corrective/"
+                "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json"
+            ).read_bytes()
+        )
+        contract["implementation_file_hashes"].pop(
+            "research/archive_inventory/r11a_corrective/proof_semantics_r7.py"
+        )
+        with self.assertRaises(seal.SealError):
+            seal.validate_seal_coverage(contract)
+
+    def test_executed_file_mutation_breaks_r7_seal(self) -> None:
+        import governance.seal_r11a_corrective_r7 as seal
+
+        original = seal.sha256
+
+        def mutated(relative: str) -> str:
+            if relative.endswith("proof_semantics_r7.py"):
+                return "0" * 64
+            return original(relative)
+
+        with mock.patch.object(seal, "sha256", side_effect=mutated):
+            with self.assertRaises(seal.SealError):
+                seal.check_all()
+
+    def test_manifest_mutation_breaks_repository_validation(self) -> None:
+        import governance.validate_repository as repository_validator
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            governance = root / "governance"
+            governance.mkdir()
+            payload = root / "payload.txt"
+            payload.write_text("bound\n", encoding="utf-8")
+            digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+            expected = f"{digest}  payload.txt\n"
+            manifest = governance / "REPOSITORY_MANIFEST.sha256"
+            manifest.write_text(expected, encoding="ascii")
+            with mock.patch.object(
+                repository_validator,
+                "ROOT",
+                root,
+            ), mock.patch.object(
+                repository_validator,
+                "render_manifest",
+                return_value=expected,
+            ):
+                self.assertEqual(repository_validator.validate_manifest(), 1)
+                manifest.write_text(
+                    f"{'0' * 64}  payload.txt\n",
+                    encoding="ascii",
+                )
+                with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+                    repository_validator.validate_manifest()
 
     def test_taxonomy_uses_disk_backed_group_state_not_first_current_shortcuts(self) -> None:
         import research.archive_inventory.r11a_corrective.taxonomy as taxonomy

@@ -10,6 +10,8 @@ from typing import BinaryIO, Final
 
 from .identity import BlockObservation
 from .limits import R11ALimits
+from .locator_order import canonical_object_locator_ranks
+from .selection import DEFAULT_SELECTION
 from .storage_r7 import (
     MeteredSQLite,
     SortEvidence,
@@ -225,6 +227,9 @@ class FirstPassIndexes:
     limits: R11ALimits
     block_writer: SharedPartitionWriter = dataclasses.field(init=False)
     weak_writer: SharedPartitionWriter = dataclasses.field(init=False)
+    _canonical_object_rank: dict[tuple[str, str], int] = dataclasses.field(
+        init=False
+    )
 
     def __post_init__(self) -> None:
         if (
@@ -234,6 +239,12 @@ class FirstPassIndexes:
             >= self.limits.maximum_ephemeral_workspace_bytes
         ):
             raise IndexBoundaryError("first-pass reservations leave no bounded reducer room")
+        self._canonical_object_rank = canonical_object_locator_ranks(
+            tuple(
+                (target.object_key, target.expected_compressed_sha256)
+                for target in DEFAULT_SELECTION.targets
+            )
+        )
         self.block_writer = SharedPartitionWriter(
             self.meter.root / "first-pass-block-index",
             self.meter,
@@ -250,10 +261,28 @@ class FirstPassIndexes:
     def add_block(self, block: BlockObservation, object_ordinal_zero_based: int) -> None:
         if not 0 <= object_ordinal_zero_based < 72:
             raise IndexBoundaryError("object ordinal outside exact scope")
+        target = DEFAULT_SELECTION.targets[object_ordinal_zero_based]
+        locator_identity = (
+            block.raw_locator.object_key,
+            block.raw_locator.verified_compressed_sha256,
+        )
+        if locator_identity != (
+            target.object_key,
+            target.expected_compressed_sha256,
+        ):
+            raise IndexBoundaryError(
+                "first-pass raw locator differs from frozen target identity"
+            )
+        try:
+            canonical_object_rank = self._canonical_object_rank[locator_identity]
+        except KeyError as exc:
+            raise IndexBoundaryError(
+                "first-pass raw locator is outside canonical object order"
+            ) from exc
         self.block_writer.write(
             struct.pack(">Q", block.block_number),
             _BLOCK_PAYLOAD.pack(
-                object_ordinal_zero_based,
+                canonical_object_rank,
                 block.raw_locator.decompressed_record_ordinal_zero_based,
                 hashlib.sha256(block.equality_bytes()).digest(),
             ),
@@ -262,7 +291,7 @@ class FirstPassIndexes:
             self.weak_writer.write(
                 event.legacy_weak_key_sha256,
                 _WEAK_PAYLOAD.pack(
-                    object_ordinal_zero_based,
+                    canonical_object_rank,
                     block.raw_locator.decompressed_record_ordinal_zero_based,
                     event.raw_locator.event_ordinal_zero_based,
                     block.block_number,

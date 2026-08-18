@@ -94,7 +94,18 @@ class CandidateMaterializer:
         return result
 
     @staticmethod
-    def event_mapping(event: EventObservation, object_ordinal_zero_based: int) -> dict[str, object]:
+    def event_mapping(
+        event: EventObservation,
+        object_ordinal_zero_based: int,
+        *,
+        raw_record_fingerprint_sha256: str,
+        raw_record_value: object | None = None,
+        raw_record_evidence_owner: str | None = None,
+    ) -> dict[str, object]:
+        if (raw_record_value is None) != (raw_record_evidence_owner is None):
+            raise MaterializationBoundaryError(
+                "raw record evidence and its owner must be present together"
+            )
         errors = set(event.schema_errors)
         return {
             "record_type": "R11A_V2_MATERIALIZED_EVENT_OBSERVATION",
@@ -104,6 +115,11 @@ class CandidateMaterializer:
             "block_number": event.block_number,
             "exact_raw_local_time": event.exact_raw_local_time,
             "exact_raw_block_time": event.exact_raw_block_time,
+            "raw_wallet_value": event.raw_wallet_value,
+            "raw_fill_value": event.raw_fill_value,
+            "raw_record_fingerprint_sha256": raw_record_fingerprint_sha256,
+            "raw_record_value": raw_record_value,
+            "raw_record_evidence_owner": raw_record_evidence_owner,
             "canonical_wallet": event.canonical_wallet,
             "exact_raw_coin_string": event.exact_raw_coin_string,
             "validated_tid": event.validated_tid,
@@ -141,6 +157,7 @@ class CandidateMaterializer:
             "ordered_event_count": block.ordered_event_count,
             "ordered_event_fingerprint_sha256": block.ordered_event_fingerprint,
             "raw_record_fingerprint_sha256": block.raw_record_fingerprint,
+            "raw_record_value": block.raw_record_value,
         }
 
     def _cap(self, *, additional_blocks: int = 0, additional_events: int = 0) -> bool:
@@ -191,11 +208,53 @@ class CandidateMaterializer:
                 ),
             )
             self.retained_blocks += 1
+        protocol_record_owner = (
+            protocol_events[0]
+            if not block_candidate and protocol_events
+            else None
+        )
+        weak_record_owner = (
+            weak_events[0]
+            if not block_candidate and not protocol_events and weak_events
+            else None
+        )
+        weak_record_schema_owner: str | None = None
+        if weak_record_owner is not None:
+            errors = set(weak_record_owner.schema_errors)
+            if any(value.startswith("TID_") for value in errors):
+                weak_record_schema_owner = (
+                    "REPEAT_INTERSECTING_TID_SCHEMA_VIOLATION"
+                )
+            elif "COIN_NOT_VALID_EXACT_STRING" in errors:
+                weak_record_schema_owner = (
+                    "REPEAT_INTERSECTING_COIN_SCHEMA_VIOLATION"
+                )
+            elif any(value.startswith("WALLET_") for value in errors):
+                weak_record_schema_owner = (
+                    "REPEAT_INTERSECTING_WALLET_SCHEMA_VIOLATION"
+                )
+            else:
+                raise MaterializationBoundaryError(
+                    "non-protocol weak event lacks schema provenance owner"
+                )
         for event in weak_events:
+            owns_record = event is weak_record_owner
             self.weak_writer.write(
                 event.legacy_weak_key_bytes,
                 canonical_json_bytes(
-                    self.event_mapping(event, object_ordinal_zero_based),
+                    self.event_mapping(
+                        event,
+                        object_ordinal_zero_based,
+                        raw_record_fingerprint_sha256=(
+                            block.raw_record_fingerprint
+                        ),
+                        raw_record_value=(
+                            block.raw_record_value if owns_record else None
+                        ),
+                        raw_record_evidence_owner=(
+                            weak_record_schema_owner if owns_record else None
+                        ),
+                    ),
                     final_newline=False,
                 ),
             )
@@ -205,10 +264,23 @@ class CandidateMaterializer:
             if event.protocol_trade_identity is None:
                 raise MaterializationBoundaryError("protocol context lost protocol identity")
             equality_key = frame(raw_block_key, event.protocol_trade_identity.key_bytes())
+            owns_record = event is protocol_record_owner
             self.protocol_writer.write(
                 equality_key,
                 canonical_json_bytes(
-                    self.event_mapping(event, object_ordinal_zero_based),
+                    self.event_mapping(
+                        event,
+                        object_ordinal_zero_based,
+                        raw_record_fingerprint_sha256=(
+                            block.raw_record_fingerprint
+                        ),
+                        raw_record_value=(
+                            block.raw_record_value if owns_record else None
+                        ),
+                        raw_record_evidence_owner=(
+                            "PROTOCOL" if owns_record else None
+                        ),
+                    ),
                     final_newline=False,
                 ),
             )

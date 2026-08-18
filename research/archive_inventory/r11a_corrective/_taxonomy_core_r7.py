@@ -18,6 +18,7 @@ from .artifact_schema import (
 from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_json_loads
 from .identity import frame
 from .join_r7 import DiskJoinLedger, JoinValidationResult
+from .locator_order import raw_locator_order_key
 from .materialize import MaterializedIndexes
 from .storage_r7 import (
     MeteredSQLite,
@@ -463,6 +464,8 @@ class GroupScratch:
                   row_json BLOB NOT NULL,
                   object_ordinal INTEGER NOT NULL,
                   object_key TEXT NOT NULL,
+                  object_key_bytes BLOB NOT NULL,
+                  compressed_sha256 BLOB NOT NULL,
                   record_ordinal INTEGER NOT NULL,
                   event_ordinal INTEGER NOT NULL,
                   raw_block_key BLOB NOT NULL,
@@ -482,7 +485,9 @@ class GroupScratch:
                   block_proof_projection BLOB,
                   block_locator_resolved INTEGER NOT NULL DEFAULT 1
                 );
-                CREATE INDEX event_order ON events(object_ordinal,record_ordinal,event_ordinal);
+                CREATE INDEX event_order ON events(
+                  object_key_bytes,compressed_sha256,record_ordinal,event_ordinal
+                );
                 CREATE INDEX wallet_fill ON events(wallet_fill_key);
                 CREATE INDEX raw_block ON events(raw_block_key);
                 """
@@ -505,6 +510,15 @@ class GroupScratch:
             object_ordinal, object_key, record_ordinal, event_ordinal = _raw_locator(row)
             if event_ordinal is None:
                 raise TaxonomyBoundaryError("event group row lacks event ordinal")
+            locator = _object(row["raw_locator"], "raw locator")
+            locator_key = raw_locator_order_key(
+                object_key=object_key,
+                verified_compressed_sha256=_text(
+                    locator["verified_compressed_sha256"], "compressed SHA"
+                ),
+                record_ordinal_zero_based=record_ordinal,
+                event_ordinal_zero_based=event_ordinal,
+            )
             raw_block_key = bytes.fromhex(_text(row["raw_block_key_hex"], "raw block key"))
             block_taxon: str | None = None
             block_proof_id: str | None = None
@@ -526,6 +540,8 @@ class GroupScratch:
                     sqlite3.Binary(canonical_json_bytes(row, final_newline=False)),
                     object_ordinal,
                     object_key,
+                    sqlite3.Binary(locator_key[0]),
+                    sqlite3.Binary(locator_key[1]),
                     record_ordinal,
                     event_ordinal,
                     sqlite3.Binary(raw_block_key),
@@ -558,14 +574,15 @@ class GroupScratch:
             return
         with self.database.transaction("insert taxonomy group rows") as connection:
             connection.executemany(
-                "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 rows,
             )
 
     def iter_ordered(self) -> Iterator[sqlite3.Row]:
         self.database.connection.row_factory = sqlite3.Row
         yield from self.database.connection.execute(
-            "SELECT * FROM events ORDER BY object_ordinal,record_ordinal,event_ordinal"
+            "SELECT * FROM events ORDER BY "
+            "object_key_bytes,compressed_sha256,record_ordinal,event_ordinal"
         )
 
     def close_delete(self) -> None:
@@ -674,7 +691,17 @@ def _classify_blocks(
                     }
                     for row, raw_key in sorted(
                         zip(block_rows, raw_keys, strict=True),
-                        key=lambda pair: (_raw_locator(pair[0])[0], _raw_locator(pair[0])[2]),
+                        key=lambda pair: raw_locator_order_key(
+                            object_key=_raw_locator(pair[0])[1],
+                            verified_compressed_sha256=_text(
+                                _object(pair[0]["raw_locator"], "raw locator")[
+                                    "verified_compressed_sha256"
+                                ],
+                                "compressed SHA",
+                            ),
+                            record_ordinal_zero_based=_raw_locator(pair[0])[2],
+                            event_ordinal_zero_based=None,
+                        ),
                     )
                 ]
                 locator_commitment = hashlib.sha256(
@@ -734,6 +761,7 @@ def _classify_blocks(
                             "raw_record_fingerprint_sha256": row[
                                 "raw_record_fingerprint_sha256"
                             ],
+                            "raw_record_value": row["raw_record_value"],
                         },
                     )
                 index.add_group(
@@ -820,9 +848,36 @@ def _classify_protocol(
                         protocol_key = current_protocol
                     elif raw_block_key != current_block or protocol_key != current_protocol:
                         raise TaxonomyBoundaryError("protocol-per-block equality group drift")
+                    source = _object(
+                        strict_json_loads(bytes(row["row_json"])),
+                        "protocol row",
+                    )
                     ordered_projection.update(
                         canonical_json_bytes(
-                            _object(strict_json_loads(bytes(row["row_json"])), "protocol row"),
+                            {
+                                "raw_locator": source["raw_locator"],
+                                "raw_block_key_hex": source["raw_block_key_hex"],
+                                "block_number": source["block_number"],
+                                "exact_raw_block_time": source[
+                                    "exact_raw_block_time"
+                                ],
+                                "raw_wallet_value": source["raw_wallet_value"],
+                                "raw_fill_value": source["raw_fill_value"],
+                                "raw_record_fingerprint_sha256": source[
+                                    "raw_record_fingerprint_sha256"
+                                ],
+                                "canonical_wallet": source["canonical_wallet"],
+                                "exact_raw_coin_string": source[
+                                    "exact_raw_coin_string"
+                                ],
+                                "validated_tid": source["validated_tid"],
+                                "exact_raw_side_string": source[
+                                    "exact_raw_side_string"
+                                ],
+                                "full_event_sha256": source[
+                                    "full_event_sha256"
+                                ],
+                            },
                             final_newline=False,
                         )
                     )
@@ -870,7 +925,24 @@ def _classify_protocol(
                             "primary_taxon": taxon.value,
                             "raw_locator": source["raw_locator"],
                             "raw_block_key_hex": source["raw_block_key_hex"],
+                            "block_number": source["block_number"],
+                            "exact_raw_block_time": source["exact_raw_block_time"],
+                            "raw_wallet_value": source["raw_wallet_value"],
+                            "raw_fill_value": source["raw_fill_value"],
+                            "raw_record_fingerprint_sha256": source[
+                                "raw_record_fingerprint_sha256"
+                            ],
+                            "raw_record_value": (
+                                source["raw_record_value"]
+                                if source["raw_record_evidence_owner"]
+                                == "PROTOCOL"
+                                else None
+                            ),
                             "canonical_wallet": source["canonical_wallet"],
+                            "exact_raw_coin_string": source[
+                                "exact_raw_coin_string"
+                            ],
+                            "validated_tid": source["validated_tid"],
                             "exact_raw_side_string": source["exact_raw_side_string"],
                             "full_event_sha256": source["full_event_sha256"],
                         },
@@ -921,7 +993,28 @@ def _schema_unit(
             "primary_taxon": taxon.value,
             "schema_universe": universe.value,
             "raw_locator": source["raw_locator"],
+            "raw_block_key_hex": source["raw_block_key_hex"],
+            "raw_wallet_value": source["raw_wallet_value"],
+            "raw_fill_value": source["raw_fill_value"],
+            "raw_record_fingerprint_sha256": source[
+                "raw_record_fingerprint_sha256"
+            ],
+            "raw_record_value": (
+                source["raw_record_value"]
+                if source["raw_record_evidence_owner"] == universe.value
+                else None
+            ),
+            "block_number": source["block_number"],
+            "exact_raw_local_time": source["exact_raw_local_time"],
+            "exact_raw_block_time": source["exact_raw_block_time"],
+            "canonical_wallet": source["canonical_wallet"],
+            "exact_raw_coin_string": source["exact_raw_coin_string"],
+            "validated_tid": source["validated_tid"],
+            "exact_raw_side_string": source["exact_raw_side_string"],
+            "full_event_sha256": source["full_event_sha256"],
+            "fill_payload_sha256": source["fill_payload_sha256"],
             "schema_errors": source["schema_errors"],
+            "selected_fill_payload": source["selected_fill_payload"],
         },
     )
 
@@ -1039,7 +1132,9 @@ def _classify_legacy(
             )
             first_sequence = int(
                 connection.execute(
-                    "SELECT sequence FROM events ORDER BY object_ordinal,record_ordinal,event_ordinal LIMIT 1"
+                    "SELECT sequence FROM events ORDER BY "
+                    "object_key_bytes,compressed_sha256,record_ordinal,event_ordinal "
+                    "LIMIT 1"
                 ).fetchone()[0]
             )
             for row in scratch.iter_ordered():
@@ -1159,6 +1254,11 @@ def _classify_legacy(
                         "primary_taxon": taxon.value,
                         "supporting_taxa": [value.value for value in supporting_taxa],
                         "raw_locator": source["raw_locator"],
+                        "raw_wallet_value": source["raw_wallet_value"],
+                        "raw_fill_value": source["raw_fill_value"],
+                        "raw_record_fingerprint_sha256": source[
+                            "raw_record_fingerprint_sha256"
+                        ],
                         "block_number": source["block_number"],
                         "exact_raw_local_time": source["exact_raw_local_time"],
                         "exact_raw_block_time": source["exact_raw_block_time"],

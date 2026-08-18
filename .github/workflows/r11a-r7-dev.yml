@@ -42,12 +42,23 @@ jobs:
             research/archive_inventory/r11a_corrective \
             governance/validate_r11a_execution_artifact_r7.py \
             governance/validate_r11a_runtime_binding_r7.py \
+            governance/seal_r11a_corrective_r7.py \
+            governance/validate_r11a_v2_bindings.py \
+            governance/validate_r11a_v2_preregistration.py \
             tests/test_archive_inventory_r11a_corrective_r7.py \
             tests/test_archive_inventory_r11a_corrective_r7_precedence.py
       - name: Run focused adversarial R7 tests
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest -v \
+          python governance/run_r11a_network_deny.py \
             tests.test_archive_inventory_r11a_corrective_r7 \
             tests.test_archive_inventory_r11a_corrective_r7_precedence
+      - name: Validate sealed graph and repository manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python governance/validate_r11a_v2_bindings.py
+          python governance/seal_r11a_corrective_r7.py --check
+          python governance/validate_repository.py
+          python governance/regenerate_manifest.py --check

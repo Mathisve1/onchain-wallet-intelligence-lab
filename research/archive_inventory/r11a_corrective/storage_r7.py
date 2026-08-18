@@ -46,6 +46,8 @@ class WorkspaceMeter:
         self.limits = limits
         self.runtime_guard = runtime_guard
         self._known_bytes = 0
+        self._peak_known_bytes = 0
+        self._peak_bounded_bytes = 0
         self._next_id = 0
         self._reservations: dict[int, _ReservationState] = {}
 
@@ -57,6 +59,7 @@ class WorkspaceMeter:
         if shutil.disk_usage(self.root).free < self.limits.minimum_free_workspace_bytes_before_oidc:
             raise StorageBoundaryError("pre-OIDC free workspace is below the frozen threshold")
         self._known_bytes = 0
+        self._record_peak()
         self.runtime_guard.check_scientific_phase("workspace bootstrap after")
 
     @property
@@ -68,6 +71,21 @@ class WorkspaceMeter:
         return sum(
             state.token.maximum_bytes - state.accounted_bytes
             for state in self._reservations.values()
+        )
+
+    @property
+    def peak_known_bytes(self) -> int:
+        return self._peak_known_bytes
+
+    @property
+    def peak_bounded_bytes(self) -> int:
+        return self._peak_bounded_bytes
+
+    def _record_peak(self) -> None:
+        self._peak_known_bytes = max(self._peak_known_bytes, self._known_bytes)
+        self._peak_bounded_bytes = max(
+            self._peak_bounded_bytes,
+            self._known_bytes + self.reserved_bytes,
         )
 
     def _ensure_inside(self, path: Path) -> Path:
@@ -87,6 +105,7 @@ class WorkspaceMeter:
         token = Reservation(self._next_id, maximum_bytes, label)
         self._next_id += 1
         self._reservations[token.reservation_id] = _ReservationState(token)
+        self._record_peak()
         self._check_runtime(packaging, f"reserve {label} after")
         return token
 
@@ -125,6 +144,7 @@ class WorkspaceMeter:
             raise StorageBoundaryError("workspace accounting became negative")
         if self._known_bytes + self.reserved_bytes > self.limits.maximum_ephemeral_workspace_bytes:
             raise StorageBoundaryError("workspace cap exceeded after mutation checkpoint")
+        self._record_peak()
         self._check_runtime(packaging, f"{phase} after checkpoint")
         return actual
 
@@ -161,6 +181,7 @@ class WorkspaceMeter:
             raise StorageBoundaryError("workspace accounting became negative")
         if self._known_bytes + self.reserved_bytes > self.limits.maximum_ephemeral_workspace_bytes:
             raise StorageBoundaryError("workspace cap exceeded after category mutation")
+        self._record_peak()
         self._check_runtime(packaging, f"{phase} after checkpoint")
         return actual_bytes
 
@@ -273,6 +294,8 @@ class WorkspaceMeter:
             )
         if actual + self.reserved_bytes > self.limits.maximum_ephemeral_workspace_bytes:
             raise StorageBoundaryError("actual workspace usage exceeds cap")
+        self._known_bytes = actual
+        self._record_peak()
         self.runtime_guard.check_packaging_phase("verify workspace after")
         return actual
 
@@ -458,19 +481,24 @@ class ExactSQLiteMultiplicityLedger:
         self.path = meter._ensure_inside(path)
         self.meter = meter
         maximum = maximum_source_bytes * 3 + _SQLITE_OVERHEAD_BYTES
-        self.reservation = meter.reserve(maximum, "exact SQLite multiplicity ledger")
-        self.connection = sqlite3.connect(self.path)
-        self.connection.execute("PRAGMA journal_mode=DELETE")
-        self.connection.execute("PRAGMA synchronous=FULL")
-        self.connection.execute("PRAGMA temp_store=FILE")
-        self.connection.executescript(
-            """
-            CREATE TABLE source(payload BLOB PRIMARY KEY, multiplicity INTEGER NOT NULL CHECK(multiplicity>0));
-            CREATE TABLE destination(payload BLOB PRIMARY KEY, multiplicity INTEGER NOT NULL CHECK(multiplicity>0));
-            """
+        self.database = MeteredSQLite(
+            self.path,
+            meter,
+            maximum,
+            "exact SQLite multiplicity ledger",
         )
-        self.connection.commit()
-        meter.checkpoint(self.reservation, self.path, phase="create exact SQLite ledger")
+        self.connection = self.database.connection
+        with self.database.transaction("create exact SQLite ledger") as connection:
+            connection.execute(
+                "CREATE TABLE source("
+                "payload BLOB PRIMARY KEY,"
+                "multiplicity INTEGER NOT NULL CHECK(multiplicity>0))"
+            )
+            connection.execute(
+                "CREATE TABLE destination("
+                "payload BLOB PRIMARY KEY,"
+                "multiplicity INTEGER NOT NULL CHECK(multiplicity>0))"
+            )
         self._source_count = 0
         self._destination_count = 0
         self._closed = False
@@ -481,17 +509,12 @@ class ExactSQLiteMultiplicityLedger:
         if table not in {"source", "destination"}:
             raise StorageBoundaryError("invalid multiplicity table")
         self.meter.runtime_guard.check_scientific_phase(f"SQLite {table} mutation before")
-        with self.connection:
-            self.connection.executemany(
+        with self.database.transaction(f"SQLite {table} transaction") as connection:
+            connection.executemany(
                 f"INSERT INTO {table}(payload,multiplicity) VALUES(?,1) "
                 f"ON CONFLICT(payload) DO UPDATE SET multiplicity=multiplicity+1",
                 ((sqlite3.Binary(value),) for value in values),
             )
-        self.meter.checkpoint(
-            self.reservation,
-            self.path,
-            phase=f"SQLite {table} transaction",
-        )
         if table == "source":
             self._source_count += len(values)
         else:
@@ -534,16 +557,7 @@ class ExactSQLiteMultiplicityLedger:
     def close_delete(self) -> None:
         if self._closed:
             return
-        self.connection.close()
-        if self.path.exists():
-            self.path.unlink()
-        if self.path.exists():
-            raise StorageBoundaryError("SQLite multiplicity ledger cleanup failed")
-        self.meter.release_deleted(
-            self.reservation,
-            self.path,
-            phase="delete exact SQLite multiplicity ledger",
-        )
+        self.database.close_delete()
         self._closed = True
 
 
@@ -775,33 +789,72 @@ class MeteredSQLite:
         self.connection = sqlite3.connect(self.path)
         self.connection.execute("PRAGMA journal_mode=DELETE")
         self.connection.execute("PRAGMA synchronous=FULL")
-        self.connection.execute("PRAGMA temp_store=FILE")
+        # SQLite temp state is memory-only; every persistent database and
+        # journal byte therefore remains below the one measured root.
+        self.connection.execute("PRAGMA temp_store=MEMORY")
         self._closed = False
+        self._checkpoint_sqlite_bytes("initialize metered SQLite")
+
+    def _sidecar_paths(self) -> tuple[Path, ...]:
+        return (
+            self.path,
+            Path(f"{self.path}-journal"),
+            Path(f"{self.path}-wal"),
+            Path(f"{self.path}-shm"),
+        )
+
+    def _sqlite_bytes(self) -> int:
+        total = 0
+        for path in self._sidecar_paths():
+            self.meter._ensure_inside(path)
+            if path.exists():
+                if not path.is_file() or path.is_symlink():
+                    raise StorageBoundaryError("SQLite sidecar is not a regular file")
+                total += path.stat().st_size
+        return total
+
+    def _checkpoint_sqlite_bytes(self, phase: str) -> int:
+        return self.meter.checkpoint_value(
+            self.reservation,
+            self._sqlite_bytes(),
+            phase=phase,
+        )
 
     @contextlib.contextmanager
     def transaction(self, phase: str):  # type: ignore[no-untyped-def]
         self.meter.runtime_guard.check_scientific_phase(f"{phase} before")
         try:
-            with self.connection:
-                yield self.connection
+            self.connection.execute("BEGIN IMMEDIATE")
+            yield self.connection
+            # DELETE-mode rollback journals remain present until commit.  The
+            # pre-commit checkpoint therefore records the transient peak.
+            self._checkpoint_sqlite_bytes(f"{phase} precommit")
+            self.connection.commit()
         except Exception:
+            self.connection.rollback()
+            self._checkpoint_sqlite_bytes(f"{phase} rollback")
             raise
-        self.meter.checkpoint(self.reservation, self.path, phase=phase)
+        self._checkpoint_sqlite_bytes(f"{phase} committed")
         self.meter.runtime_guard.check_scientific_phase(f"{phase} after")
 
     def checkpoint(self, phase: str) -> None:
+        self._checkpoint_sqlite_bytes(f"{phase} precommit")
         self.connection.commit()
-        self.meter.checkpoint(self.reservation, self.path, phase=phase)
+        self._checkpoint_sqlite_bytes(f"{phase} committed")
 
     def close_delete(self) -> None:
         if self._closed:
             return
         self.connection.close()
-        if self.path.exists():
-            self.path.unlink()
-        if self.path.exists():
+        for path in self._sidecar_paths():
+            if path.exists():
+                path.unlink()
+        if any(path.exists() for path in self._sidecar_paths()):
             raise StorageBoundaryError("metered SQLite cleanup failed")
-        self.meter.release_deleted(self.reservation, self.path, phase="delete metered SQLite")
+        self.meter.release_value(
+            self.reservation,
+            phase="delete metered SQLite",
+        )
         self._closed = True
 
 

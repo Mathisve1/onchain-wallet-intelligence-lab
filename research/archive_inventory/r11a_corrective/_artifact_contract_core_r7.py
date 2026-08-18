@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from .artifact_schema import (
     validate_object_row_shape,
     validate_sha256,
     validate_terminal_gates,
+    validate_research_conclusion,
     validate_terminal_tuple,
     validate_universe_rows,
     zero_taxon_counts,
@@ -40,6 +42,7 @@ from .artifact_schema import (
 from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_json_loads
 from .limits import R11ALimits
 from .runtime import ExecutionEvidenceState, RuntimeGuard
+from .selection import DEFAULT_SELECTION
 from .storage_r7 import WorkspaceMeter, directory_size
 from .taxonomy import TaxonomyResult
 
@@ -85,6 +88,139 @@ _BOUNDARY_FIELDS = {
     "preupload_runtime_within_hard_limit_after_upload_window",
     "boundary_write_within_workspace_limit",
 }
+
+_RESULT_FIELDS = {
+    "schema_version",
+    "diagnostic_id",
+    "implementation_id",
+    "terminal_class",
+    "research_conclusion",
+    "scientific_output_status",
+    "root_cause_claim_status",
+    "return_code",
+    "scientific_files",
+    "wallet_feature_rows",
+    "rerun_authorized",
+    "R11_CLOSED",
+    "R12_READY",
+}
+
+_CONTEXT_COMMON_FIELDS = {
+    "schema_version",
+    "diagnostic_id",
+    "implementation_id",
+    "execution_phase",
+    "event_name",
+    "dispatch_ref",
+    "dispatch_sha",
+    "checked_out_commit",
+    "workflow_run_id",
+    "workflow_run_attempt",
+    "workflow_start_epoch_ns",
+    "repository",
+    "workflow_name",
+    "principal_observed",
+    "s3_requests_executed",
+    "object_bytes_downloaded",
+    "rerun_authorized",
+}
+
+_CONTEXT_BOUND_FIELDS = {
+    "approval_id",
+    "approval_text_sha256",
+    "execution_release_id",
+    "execution_release_blob_sha256",
+    "activation_id",
+    "implementation_contract_sha256",
+    "workflow_sha256",
+    "collector_sha256",
+    "validator_sha256",
+    "selection_sha256",
+    "pricing_snapshot_sha256",
+    "single_use_window_start_utc",
+    "observed_account_id",
+    "observed_assumed_role_session_arn",
+    "observed_session_name",
+    "expected_role_arn",
+    "pricing_projection_eur_micros",
+    "raw_aws_credentials_retained",
+    "raw_oidc_token_retained",
+    "raw_sts_response_retained",
+}
+
+
+def _validate_context_shape(context: Mapping[str, object]) -> None:
+    optional_minimal = {"failure_exception_type_sha256"}
+    observed = set(context)
+    if observed == _CONTEXT_COMMON_FIELDS | _CONTEXT_BOUND_FIELDS:
+        if context["principal_observed"] is not True:
+            raise ArtifactBoundaryError("bound context lacks observed principal")
+        if (
+            context["observed_account_id"] != "630956766927"
+            or context["observed_session_name"]
+            != "HLArchiveR11AIdentityBoundary"
+            or context["expected_role_arn"]
+            != (
+                "arn:aws:iam::630956766927:role/"
+                "onchain-wallet-intelligence-hl-archive-identity-r11a"
+            )
+            or re.fullmatch(
+                r"arn:aws:sts::630956766927:assumed-role/"
+                r"onchain-wallet-intelligence-hl-archive-identity-r11a/"
+                r"HLArchiveR11AIdentityBoundary",
+                str(context["observed_assumed_role_session_arn"]),
+            )
+            is None
+            or context["raw_aws_credentials_retained"] is not False
+            or context["raw_oidc_token_retained"] is not False
+            or context["raw_sts_response_retained"] is not False
+            or _integer(
+                context["pricing_projection_eur_micros"],
+                "pricing projection",
+            )
+            < 0
+        ):
+            raise ArtifactBoundaryError("bound context principal or retention drift")
+        for name in (
+            "approval_text_sha256",
+            "execution_release_blob_sha256",
+            "implementation_contract_sha256",
+            "workflow_sha256",
+            "collector_sha256",
+            "validator_sha256",
+            "selection_sha256",
+            "pricing_snapshot_sha256",
+        ):
+            validate_sha256(context[name], f"context {name}")
+    elif observed not in {
+        frozenset(_CONTEXT_COMMON_FIELDS),
+        frozenset(_CONTEXT_COMMON_FIELDS | optional_minimal),
+    }:
+        raise ArtifactBoundaryError("artifact context schema drift")
+    elif type(context["principal_observed"]) is not bool:
+        raise ArtifactBoundaryError("minimal context principal flag drift")
+    if "failure_exception_type_sha256" in context:
+        validate_sha256(
+            context["failure_exception_type_sha256"],
+            "failure exception type SHA",
+        )
+    if (
+        context["schema_version"] != "2.0"
+        or context["diagnostic_id"] != DIAGNOSTIC_ID
+        or context["implementation_id"] != IMPLEMENTATION_ID
+        or context["event_name"] != "workflow_dispatch"
+        or context["dispatch_ref"] != "refs/heads/main"
+        or context["dispatch_sha"] != context["checked_out_commit"]
+        or re.fullmatch(r"[0-9a-f]{40}", str(context["dispatch_sha"])) is None
+        or _integer(context["workflow_run_id"], "workflow run ID") <= 0
+        or _integer(context["workflow_run_attempt"], "workflow run attempt") != 1
+        or _integer(context["workflow_start_epoch_ns"], "workflow start epoch") <= 0
+        or context["repository"] != "Mathisve1/onchain-wallet-intelligence-lab"
+        or context["workflow_name"]
+        != "Hyperliquid Archive R11A Identity Boundary Diagnostic"
+        or context["rerun_authorized"] is not False
+    ):
+        raise ArtifactBoundaryError("artifact context identity or authority drift")
 
 
 def _hash(path: Path) -> str:
@@ -143,6 +279,40 @@ def _validate_join_mapping(value: object) -> Mapping[str, object]:
         if type(value[field]) is not bool:
             raise ArtifactBoundaryError("join validation flag is not boolean")
     return value
+
+
+def _exact_multiplicity_matches(
+    value: object,
+    *,
+    source_count: int,
+    destination_count: int,
+) -> bool:
+    if not isinstance(value, Mapping) or set(value) != {
+        "source_record_count",
+        "destination_record_count",
+        "source_distinct_blob_count",
+        "destination_distinct_blob_count",
+        "exact_sqlite_blob_multiplicity_verified",
+    }:
+        return False
+    return bool(
+        value["exact_sqlite_blob_multiplicity_verified"] is True
+        and _integer(value["source_record_count"], "multiplicity source count")
+        == source_count
+        and _integer(
+            value["destination_record_count"],
+            "multiplicity destination count",
+        )
+        == destination_count
+        and _integer(
+            value["source_distinct_blob_count"],
+            "multiplicity source distinct count",
+        )
+        == _integer(
+            value["destination_distinct_blob_count"],
+            "multiplicity destination distinct count",
+        )
+    )
 
 
 def _reducer_summary(
@@ -227,7 +397,11 @@ def _reducer_summary(
             repeat_observations, "repeat observation count"
         )
         if (
-            exact is not True
+            not _exact_multiplicity_matches(
+                exact,
+                source_count=observed_source,
+                destination_count=observed_destination,
+            )
             or observed_source != observed_destination
             or observed_source_bytes != observed_destination_bytes
             or observed_observations > observed_source
@@ -261,6 +435,66 @@ def _reducer_summary(
     }
 
 
+def _validate_secondary_reducers(value: object) -> dict[str, int] | None:
+    if not isinstance(value, (tuple, list)):
+        raise ArtifactBoundaryError("secondary reducer rows must be an array")
+    rows = tuple(value)
+    reducer_ids = (
+        "MATERIALIZED_BLOCK_NUMBER",
+        "PROTOCOL_MATCHED_TRADE_PER_RAW_BLOCK",
+        "EXACT_LEGACY_WEAK_KEY",
+    )
+    if len(rows) != 256 * len(reducer_ids):
+        return None
+    source_totals = {reducer_id: 0 for reducer_id in reducer_ids}
+    expected_fields = {
+        "record_type",
+        "reducer_id",
+        "partition_ordinal_zero_based",
+        "source_record_count",
+        "source_logical_bytes",
+        "destination_record_count",
+        "destination_logical_bytes",
+        "exact_multiplicity",
+        "sorted_stream_sha256",
+    }
+    for position, raw in enumerate(rows):
+        if not isinstance(raw, Mapping) or set(raw) != expected_fields:
+            raise ArtifactBoundaryError("secondary reducer row schema drift")
+        expected_reducer = reducer_ids[position // 256]
+        expected_partition = position % 256
+        if (
+            raw["record_type"]
+            != "R11A_V2_SECONDARY_REDUCER_CONSERVATION"
+            or raw["reducer_id"] != expected_reducer
+            or _integer(raw["partition_ordinal_zero_based"], "secondary partition")
+            != expected_partition
+        ):
+            raise ArtifactBoundaryError("secondary reducer ordering drift")
+        source_count = _integer(raw["source_record_count"], "secondary source count")
+        destination_count = _integer(
+            raw["destination_record_count"], "secondary destination count"
+        )
+        source_bytes = _integer(raw["source_logical_bytes"], "secondary source bytes")
+        destination_bytes = _integer(
+            raw["destination_logical_bytes"], "secondary destination bytes"
+        )
+        multiplicity = raw["exact_multiplicity"]
+        if (
+            not _exact_multiplicity_matches(
+                multiplicity,
+                source_count=source_count,
+                destination_count=destination_count,
+            )
+            or source_count != destination_count
+            or source_bytes != destination_bytes
+        ):
+            return None
+        validate_sha256(raw["sorted_stream_sha256"], "secondary sorted stream SHA")
+        source_totals[expected_reducer] += source_count
+    return source_totals
+
+
 def _aggregate_from_object_rows(
     rows: Sequence[Mapping[str, object]],
 ) -> tuple[dict[str, int], bool]:
@@ -286,6 +520,20 @@ def _aggregate_from_object_rows(
         validate_object_row_shape(row)
         if _integer(row["object_ordinal_zero_based"], "object ordinal") != ordinal:
             raise ArtifactBoundaryError("object ledger ordering drift")
+        target = DEFAULT_SELECTION.targets[ordinal]
+        expected_identity = _object(row["expected_identity"], "expected identity")
+        if (
+            row["object_key"] != target.object_key
+            or row["source_path_hour_utc"] != target.source_path_hour_utc
+            or _integer(expected_identity["size_bytes"], "expected size")
+            != target.expected_size_bytes
+            or expected_identity["etag"] != target.expected_etag
+            or expected_identity["compressed_sha256"]
+            != target.expected_compressed_sha256
+        ):
+            raise ArtifactBoundaryError(
+                "object evidence does not join exactly once to frozen selection"
+            )
         request = _object(row["request"], "request")
         result["get_object_request_count"] += _integer(
             request["count"], "request count"
@@ -311,6 +559,74 @@ def _aggregate_from_object_rows(
         if row["terminal_status"] != "COMPLETE_TWO_LOCAL_PASSES":
             all_complete = False
     return result, all_complete
+
+
+def _validate_stop_ledger(
+    *,
+    entries: object,
+    terminal: str,
+    context_phase: object,
+    object_rows: Sequence[Mapping[str, object]],
+) -> None:
+    if not isinstance(entries, tuple):
+        raise ArtifactBoundaryError("stop entries must be array")
+    if context_phase not in PHASES:
+        raise ArtifactBoundaryError("context execution phase is unknown")
+    object_stops: set[tuple[int, str]] = set()
+    for sequence, row in enumerate(entries):
+        observed = _object(row, "stop row")
+        if set(observed) != {
+            "sequence_zero_based",
+            "diagnostic_id",
+            "stop_code",
+            "phase",
+            "object_ordinal_zero_based",
+            "evidence_sha256",
+        }:
+            raise ArtifactBoundaryError("stop ledger row schema drift")
+        if _integer(observed["sequence_zero_based"], "stop sequence") != sequence:
+            raise ArtifactBoundaryError("stop ledger sequence drift")
+        if observed["diagnostic_id"] != DIAGNOSTIC_ID:
+            raise ArtifactBoundaryError("stop diagnostic ID drift")
+        if (
+            not isinstance(observed["stop_code"], str)
+            or not observed["stop_code"]
+            or observed["phase"] not in PHASES
+            or PHASES.index(str(observed["phase"])) > PHASES.index(str(context_phase))
+        ):
+            raise ArtifactBoundaryError("stop evidence phase or code drift")
+        validate_sha256(observed["evidence_sha256"], "stop evidence SHA")
+        ordinal = observed["object_ordinal_zero_based"]
+        if ordinal is not None:
+            value = _integer(ordinal, "stopped object ordinal")
+            if not 0 <= value < 72:
+                raise ArtifactBoundaryError("stopped object ordinal outside scope")
+            pair = (value, str(observed["stop_code"]))
+            if pair in object_stops:
+                raise ArtifactBoundaryError("ambiguous duplicate object stop evidence")
+            object_stops.add(pair)
+    ledger_object_stops = {
+        (ordinal, str(row["terminal_error_code"]))
+        for ordinal, row in enumerate(object_rows)
+        if row["terminal_status"] == "STOPPED"
+    }
+    if ledger_object_stops != object_stops:
+        raise ArtifactBoundaryError("object terminal and stop ledger disagree")
+    if terminal == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE":
+        if entries:
+            raise ArtifactBoundaryError("RC0 must not contain stop evidence")
+    elif terminal == "R11A_V2_DIAGNOSTIC_INCOMPLETE":
+        if len(entries) != 1:
+            raise ArtifactBoundaryError("RC20 requires one scientific stop reason")
+        reason = _object(entries[0], "RC20 stop")
+        if (
+            reason["stop_code"] != "FULL_SCOPE_TAXONOMY_INCOMPLETE"
+            or reason["phase"] != "TAXONOMY"
+            or reason["object_ordinal_zero_based"] is not None
+        ):
+            raise ArtifactBoundaryError("RC20 stop evidence is not scientific-only")
+    elif not entries:
+        raise ArtifactBoundaryError("RC21 requires fail-closed stop evidence")
 
 
 def _same_two_pass_aggregate(counts: Mapping[str, int]) -> bool:
@@ -423,12 +739,19 @@ def _validate_resource(
         "measurements",
         "tracked_workspace_bytes_before_packaging",
         "reserved_workspace_bytes_before_packaging",
+        "peak_tracked_workspace_bytes",
+        "peak_bounded_workspace_bytes",
         "maximum_ephemeral_workspace_bytes",
         "packaging_elapsed_seconds_floor",
         "package_flags",
     }
     if set(value) != expected:
         raise ArtifactBoundaryError("resource ledger schema drift")
+    if (
+        value["schema_version"] != "2.0"
+        or value["diagnostic_id"] != DIAGNOSTIC_ID
+    ):
+        raise ArtifactBoundaryError("resource ledger identity drift")
     elapsed = _integer(
         value["packaging_elapsed_seconds_floor"],
         "packaging elapsed seconds",
@@ -441,12 +764,94 @@ def _validate_resource(
         value["reserved_workspace_bytes_before_packaging"],
         "reserved workspace bytes",
     )
+    peak_tracked = _integer(
+        value["peak_tracked_workspace_bytes"],
+        "peak tracked workspace bytes",
+    )
+    peak_bounded = _integer(
+        value["peak_bounded_workspace_bytes"],
+        "peak bounded workspace bytes",
+    )
     if value["maximum_ephemeral_workspace_bytes"] != (
         limits.maximum_ephemeral_workspace_bytes
     ):
         raise ArtifactBoundaryError("resource workspace cap drift")
     if tracked + reserved > limits.maximum_ephemeral_workspace_bytes:
         raise ArtifactBoundaryError("resource ledger exceeds workspace cap")
+    if not (
+        tracked <= peak_tracked <= peak_bounded
+        and tracked + reserved <= peak_bounded
+        and peak_bounded <= limits.maximum_ephemeral_workspace_bytes
+    ):
+        raise ArtifactBoundaryError("resource peak accounting is contradictory")
+    measurements = value["measurements"]
+    if not isinstance(measurements, tuple) or not measurements:
+        raise ArtifactBoundaryError("resource measurements must be a nonempty array")
+    previous_elapsed = -1
+    previous_requests = -1
+    measurement_fields = {
+        "record_type",
+        "phase",
+        "elapsed_runtime_seconds_floor",
+        "tracked_workspace_bytes",
+        "reserved_workspace_bytes",
+        "peak_tracked_workspace_bytes",
+        "peak_bounded_workspace_bytes",
+        "network_request_count",
+    }
+    for measurement_value in measurements:
+        measurement = _object(measurement_value, "resource measurement")
+        if not measurement_fields.issubset(measurement):
+            raise ArtifactBoundaryError("resource measurement base schema drift")
+        if (
+            measurement["record_type"]
+            != "R11A_V2_RESOURCE_MEASUREMENT"
+            or not isinstance(measurement["phase"], str)
+            or not measurement["phase"]
+        ):
+            raise ArtifactBoundaryError("resource measurement identity drift")
+        row_elapsed = _integer(
+            measurement["elapsed_runtime_seconds_floor"],
+            "resource measurement elapsed",
+        )
+        row_tracked = _integer(
+            measurement["tracked_workspace_bytes"],
+            "resource measurement tracked bytes",
+        )
+        row_reserved = _integer(
+            measurement["reserved_workspace_bytes"],
+            "resource measurement reserved bytes",
+        )
+        row_peak_tracked = _integer(
+            measurement["peak_tracked_workspace_bytes"],
+            "resource measurement peak tracked bytes",
+        )
+        row_peak_bounded = _integer(
+            measurement["peak_bounded_workspace_bytes"],
+            "resource measurement peak bounded bytes",
+        )
+        row_requests = _integer(
+            measurement["network_request_count"],
+            "resource measurement request count",
+        )
+        if (
+            row_elapsed < previous_elapsed
+            or row_elapsed > elapsed
+            or row_requests < previous_requests
+            or row_requests > 72
+            or min(row_tracked, row_reserved, row_peak_tracked, row_peak_bounded) < 0
+            or not (
+                row_tracked <= row_peak_tracked <= row_peak_bounded
+                and row_tracked + row_reserved <= row_peak_bounded
+                and row_peak_tracked <= peak_tracked
+                and row_peak_bounded <= peak_bounded
+            )
+        ):
+            raise ArtifactBoundaryError(
+                "resource measurement is temporally or spatially contradictory"
+            )
+        previous_elapsed = row_elapsed
+        previous_requests = row_requests
     flags = _object(value["package_flags"], "package flags")
     expected_flags = {
         "preupload_runtime_within_hard_limit_after_upload_window": (
@@ -565,6 +970,49 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         strict_json_loads((path / CONTEXT_FILE).read_bytes()),
         "context",
     )
+    if set(result) != _RESULT_FIELDS or result["schema_version"] != "2.0":
+        raise ArtifactBoundaryError("result schema drift")
+    scientific_files = _object(result["scientific_files"], "scientific files")
+    if set(scientific_files) != set(SCIENCE_CONTAINERS):
+        raise ArtifactBoundaryError("scientific file evidence set drift")
+    for name in SCIENCE_CONTAINERS:
+        evidence = _object(scientific_files[name], f"scientific file {name}")
+        if (
+            set(evidence) != {"path", "byte_count", "row_count", "sha256"}
+            or evidence["path"] != name
+            or _integer(evidence["byte_count"], f"{name} byte count") < 0
+            or _integer(evidence["row_count"], f"{name} row count") < 0
+        ):
+            raise ArtifactBoundaryError("scientific file evidence schema drift")
+        validate_sha256(evidence["sha256"], f"{name} SHA")
+        payload = (path / name).read_bytes()
+        if (
+            _integer(evidence["byte_count"], f"{name} byte count") != len(payload)
+            or _integer(evidence["row_count"], f"{name} row count")
+            != len(payload.splitlines())
+            or evidence["sha256"] != hashlib.sha256(payload).hexdigest()
+        ):
+            raise ArtifactBoundaryError("scientific file evidence is not exact")
+    _validate_context_shape(context)
+    expected_conservation_fields = {
+        "schema_version",
+        "diagnostic_id",
+        "implementation_id",
+        "aggregate_execution_counts",
+        "primary_reducer_summary",
+        "unit_universes",
+        "join_validation",
+        "secondary_reducer_rows",
+        "supporting_taxon_counts",
+        "terminal_gates",
+    }
+    if (
+        set(conservation) != expected_conservation_fields
+        or conservation["schema_version"] != "2.0"
+        or conservation["diagnostic_id"] != DIAGNOSTIC_ID
+        or conservation["implementation_id"] != IMPLEMENTATION_ID
+    ):
+        raise ArtifactBoundaryError("conservation schema or identity drift")
     terminal = str(result["terminal_class"])
     return_code = _integer(result["return_code"], "result return code")
     validate_terminal_tuple(
@@ -573,6 +1021,7 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         scientific_output_status=str(result["scientific_output_status"]),
         root_cause_claim_status=str(result["root_cause_claim_status"]),
     )
+    validate_research_conclusion(terminal, result["research_conclusion"])
     rc_file = int((path / RETURN_CODE_FILE).read_text(encoding="ascii").strip())
     if rc_file != return_code:
         raise ArtifactBoundaryError("result and detached return code differ")
@@ -611,6 +1060,17 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         raise ArtifactBoundaryError("context downloaded bytes differ from object ledger")
     if context["rerun_authorized"] is not False:
         raise ArtifactBoundaryError("context opens rerun authority")
+    measurements = resource["measurements"]
+    if not isinstance(measurements, tuple) or not measurements:
+        raise ArtifactBoundaryError("resource measurements are absent")
+    last_measurement = _object(measurements[-1], "last resource measurement")
+    if _integer(
+        last_measurement["network_request_count"],
+        "last resource request count",
+    ) != _integer(context["s3_requests_executed"], "context request count"):
+        raise ArtifactBoundaryError(
+            "resource measurement and context request count disagree"
+        )
 
     reducer_rows = _parse_ndjson(path / REDUCER_LEDGER_FILE)
     summary = _reducer_summary(reducer_rows)
@@ -640,11 +1100,74 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         raise ArtifactBoundaryError("negative supporting taxon count")
     validate_terminal_gates(conservation["terminal_gates"])
     gates = _object(conservation["terminal_gates"], "terminal gates")
+    secondary_summary = _validate_secondary_reducers(
+        conservation["secondary_reducer_rows"]
+    )
+    secondary_complete = secondary_summary is not None
 
     group_total = sum(_integer(row["group_count"], "group count") for row in universe_rows)
     occurrence_total = sum(
         _integer(row["occurrence_count"], "occurrence count")
         for row in universe_rows
+    )
+    unclassifiable_group_total = sum(
+        _integer(row["unclassifiable_group_count"], "unclassifiable group count")
+        for row in universe_rows
+    )
+    unclassifiable_occurrence_total = sum(
+        _integer(
+            row["unclassifiable_occurrence_count"],
+            "unclassifiable occurrence count",
+        )
+        for row in universe_rows
+    )
+    universe_by_name = {
+        str(row["unit_universe"]): row for row in universe_rows
+    }
+    secondary_sources_match = bool(
+        secondary_summary is not None
+        and secondary_summary["MATERIALIZED_BLOCK_NUMBER"]
+        == _integer(
+            universe_by_name["ARCHIVE_BLOCK_NUMBER_GROUP"]["occurrence_count"],
+            "block universe occurrence count",
+        )
+        and secondary_summary["PROTOCOL_MATCHED_TRADE_PER_RAW_BLOCK"]
+        == _integer(
+            universe_by_name[
+                "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE"
+            ]["occurrence_count"],
+            "protocol universe occurrence count",
+        )
+        and secondary_summary["EXACT_LEGACY_WEAK_KEY"]
+        == _integer(
+            summary["legacy_repeat_observation_count"],
+            "legacy repeated observation count",
+        )
+    )
+    block_universe = universe_by_name["ARCHIVE_BLOCK_NUMBER_GROUP"]
+    legacy_universe = universe_by_name["LEGACY_REPEAT_OCCURRENCE"]
+    primary_sources_match = bool(
+        summary["block_source_record_count"]
+        == recomputed_counts["first_pass_raw_block_observation_count"]
+        and summary["legacy_source_record_count"]
+        == recomputed_counts["first_pass_raw_event_observation_count"]
+        and summary["block_repeat_group_count"]
+        == _integer(block_universe["group_count"], "block universe group count")
+        and summary["block_repeat_observation_count"]
+        == _integer(
+            block_universe["occurrence_count"],
+            "block universe occurrence count",
+        )
+        and summary["legacy_repeat_occurrence_count"]
+        == _integer(
+            legacy_universe["occurrence_count"],
+            "legacy universe occurrence count",
+        )
+        and summary["legacy_repeat_occurrence_count"]
+        == _integer(
+            legacy_universe["group_count"],
+            "legacy universe group count",
+        )
     )
     if _integer(join["unit_count"], "join unit count") != group_total:
         raise ArtifactBoundaryError("join unit count differs from universe rows")
@@ -659,7 +1182,13 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
             "retained row reference count differs from universe occurrences"
         )
     if terminal == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE":
-        if not all_objects_complete or not _same_two_pass_aggregate(recomputed_counts):
+        if (
+            not all_objects_complete
+            or not _same_two_pass_aggregate(recomputed_counts)
+            or unclassifiable_group_total != 0
+            or unclassifiable_occurrence_total != 0
+            or not primary_sources_match
+        ):
             raise ArtifactBoundaryError("complete terminal lacks exact two-pass scope")
         if any(gates[name] is not True for name in TERMINAL_GATE_NAMES):
             raise ArtifactBoundaryError("complete terminal contains false gate")
@@ -669,6 +1198,32 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
             raise ArtifactBoundaryError("complete terminal lacks exact reducer multiplicity")
         if not _raw_event_partitions_conserve(recomputed_counts):
             raise ArtifactBoundaryError("complete terminal event partitions do not conserve")
+        if not secondary_complete or not secondary_sources_match:
+            raise ArtifactBoundaryError("complete terminal lacks secondary reducers")
+    elif terminal == "R11A_V2_DIAGNOSTIC_INCOMPLETE":
+        scientific_gate = (
+            "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences"
+        )
+        materialization_gates = tuple(
+            name for name in TERMINAL_GATE_NAMES if name != scientific_gate
+        )
+        if (
+            not all_objects_complete
+            or not _same_two_pass_aggregate(recomputed_counts)
+            or summary["all_partitions_complete_and_exact"] is not True
+            or not _raw_event_partitions_conserve(recomputed_counts)
+            or not secondary_complete
+            or not secondary_sources_match
+            or not primary_sources_match
+            or unclassifiable_group_total <= 0
+            or unclassifiable_occurrence_total <= 0
+            or any(gates[name] is not True for name in materialization_gates)
+            or gates[scientific_gate] is not False
+            or any(join[field] is not True for field in _JOIN_FIELDS[4:])
+        ):
+            raise ArtifactBoundaryError(
+                "RC20 is not a fully materialized scientific incompleteness"
+            )
     elif terminal in {
         "R11A_V2_ARTIFACT_CAP_EXCEEDED",
         "R11A_V2_FAIL_CLOSED_EARLY_STOP",
@@ -686,6 +1241,39 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         secondary = conservation["secondary_reducer_rows"]
         if not isinstance(secondary, tuple) or secondary:
             raise ArtifactBoundaryError("empty terminal contains secondary reducers")
+        if any(join[field] is not True for field in _JOIN_FIELDS[4:]):
+            raise ArtifactBoundaryError("empty terminal join truth is contradictory")
+        exact_empty_scope = bool(
+            all_objects_complete
+            and _same_two_pass_aggregate(recomputed_counts)
+        )
+        expected_empty_gates = {
+            "exact_72_object_scope_complete": exact_empty_scope,
+            "exact_three_complete_utc_days": False,
+            "all_objects_parsed_twice_with_equal_counts_and_commitments": (
+                exact_empty_scope
+            ),
+            "all_primary_reducer_partitions_preserve_exact_multiplicity": (
+                summary["all_partitions_complete_and_exact"] is True
+            ),
+            "raw_block_count_conserves_to_singleton_plus_repeated_observations": False,
+            "raw_event_count_conserves_separately_for_tid_coin_and_wallet_validation": False,
+            "legacy_repeat_occurrence_count_conserves_to_valid_plus_invalid_tid_repeat_occurrences": False,
+            "authoritative_unit_universes_are_exact_and_ordered": False,
+            "every_authoritative_unit_receives_exactly_one_primary_taxon": False,
+            "supporting_taxa_do_not_increment_primary_counts": False,
+            "all_nonnull_proof_and_provenance_foreign_keys_resolve_exactly_once": True,
+            "all_retained_rows_reference_exactly_one_unit": True,
+            "all_retained_row_counts_match_unit_occurrence_counts": True,
+            "all_referenced_projections_are_byte_equal": True,
+            "all_taxonomy_counts_recomputed_from_retained_rows": False,
+            "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences": False,
+            "all_caps_respected": True,
+        }
+        if dict(gates) != expected_empty_gates:
+            raise ArtifactBoundaryError(
+                "empty terminal gates contradict the retained execution route"
+            )
 
     _validate_resource(resource, limits)
     boundary_raw = (path / BOUNDARY_FILE).read_bytes()
@@ -699,17 +1287,39 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         strict_json_loads((path / STOP_LEDGER_FILE).read_bytes()),
         "stop ledger",
     )
-    entries = stop["entries"]
-    if not isinstance(entries, tuple):
-        raise ArtifactBoundaryError("stop entries must be array")
-    for sequence, row in enumerate(entries):
-        observed = _object(row, "stop row")
-        if _integer(observed["sequence_zero_based"], "stop sequence") != sequence:
-            raise ArtifactBoundaryError("stop ledger sequence drift")
-        if observed["diagnostic_id"] != DIAGNOSTIC_ID:
-            raise ArtifactBoundaryError("stop diagnostic ID drift")
-        if observed["phase"] not in PHASES:
-            raise ArtifactBoundaryError("stop ledger contains unknown phase")
+    if (
+        set(stop)
+        != {"schema_version", "diagnostic_id", "declared_phase_order", "entries"}
+        or stop["schema_version"] != "2.0"
+        or stop["diagnostic_id"] != DIAGNOSTIC_ID
+        or tuple(stop["declared_phase_order"]) != PHASES
+    ):
+        raise ArtifactBoundaryError("stop ledger schema or identity drift")
+    _validate_stop_ledger(
+        entries=stop["entries"],
+        terminal=terminal,
+        context_phase=context["execution_phase"],
+        object_rows=object_rows,
+    )
+    stop_entries = stop["entries"]
+    if not isinstance(stop_entries, tuple):
+        raise ArtifactBoundaryError("stop entries must be an array")
+    if terminal in {
+        "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+        "R11A_V2_DIAGNOSTIC_INCOMPLETE",
+    }:
+        if context["execution_phase"] != "ARTIFACT_PACKAGING":
+            raise ArtifactBoundaryError(
+                "fully materialized terminal context is not at artifact packaging"
+            )
+    elif (
+        not stop_entries
+        or _object(stop_entries[-1], "last stop")["phase"]
+        != context["execution_phase"]
+    ):
+        raise ArtifactBoundaryError(
+            "early terminal context does not match its final stop phase"
+        )
 
 
 class ArtifactSession(_core.ArtifactSession):
@@ -730,6 +1340,7 @@ class ArtifactSession(_core.ArtifactSession):
         return_code = exact_return_code(terminal_class)
         scientific_status = exact_scientific_status(terminal_class)
         root_cause_status = exact_root_cause_status(terminal_class)
+        validate_research_conclusion(terminal_class, research_conclusion)
         object_rows = state.object_rows()
         complete_reducers = complete_reducer_rows(
             reducer_rows,
@@ -790,6 +1401,8 @@ class ArtifactSession(_core.ArtifactSession):
         )
         legacy_conservation = bool(
             taxonomy_present
+            and reducer_summary["legacy_source_record_count"]
+            == counts["first_pass_raw_event_observation_count"]
             and reducer_summary["legacy_repeat_group_count"]
             == taxonomy_result.legacy_repeat_group_count
             and reducer_summary["legacy_repeat_observation_count"]
@@ -884,12 +1497,68 @@ class ArtifactSession(_core.ArtifactSession):
             "all_caps_respected": all_caps,
         }
         validate_terminal_gates(terminal_gates)
-        if terminal_class == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE" and any(
-            value is not True for value in terminal_gates.values()
-        ):
-            raise ArtifactBoundaryError(
-                "complete terminal requested with false gates"
+        secondary_summary = _validate_secondary_reducers(
+            ()
+            if taxonomy_result is None
+            else taxonomy_result.secondary_reducer_rows
+        )
+        secondary_complete = secondary_summary is not None
+        protocol_occurrence_count = (
+            0
+            if taxonomy_result is None
+            else int(
+                next(
+                    row["occurrence_count"]
+                    for row in universe_rows
+                    if row["unit_universe"]
+                    == "PROTOCOL_MATCHED_TRADE_GROUP_PER_RAW_BLOCK_OCCURRENCE"
+                )
             )
+        )
+        secondary_sources_match = bool(
+            taxonomy_result is not None
+            and secondary_summary is not None
+            and secondary_summary["MATERIALIZED_BLOCK_NUMBER"]
+            == taxonomy_result.repeated_block_observation_count
+            and secondary_summary["PROTOCOL_MATCHED_TRADE_PER_RAW_BLOCK"]
+            == protocol_occurrence_count
+            and secondary_summary["EXACT_LEGACY_WEAK_KEY"]
+            == taxonomy_result.legacy_repeat_observation_count
+        )
+        stop_rows = state.stop_rows()
+        if terminal_class == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE":
+            if (
+                any(value is not True for value in terminal_gates.values())
+                or not secondary_complete
+                or not secondary_sources_match
+                or stop_rows
+            ):
+                raise ArtifactBoundaryError(
+                    "RC0 requires complete materialization and no stop evidence"
+                )
+        elif terminal_class == "R11A_V2_DIAGNOSTIC_INCOMPLETE":
+            scientific_gate = (
+                "every_unit_universe_has_zero_unclassifiable_groups_and_occurrences"
+            )
+            materialization_gates = tuple(
+                name for name in TERMINAL_GATE_NAMES if name != scientific_gate
+            )
+            if (
+                any(terminal_gates[name] is not True for name in materialization_gates)
+                or terminal_gates[scientific_gate] is not False
+                or not secondary_complete
+                or not secondary_sources_match
+                or any(join_mapping[field] is not True for field in _JOIN_FIELDS[4:])
+                or len(stop_rows) != 1
+                or stop_rows[0]["stop_code"] != "FULL_SCOPE_TAXONOMY_INCOMPLETE"
+                or stop_rows[0]["phase"] != "TAXONOMY"
+                or stop_rows[0]["object_ordinal_zero_based"] is not None
+            ):
+                raise ArtifactBoundaryError(
+                    "RC20 requires fully materialized science with one unresolved taxon reason"
+                )
+        elif not stop_rows:
+            raise ArtifactBoundaryError("RC21 requires fail-closed stop evidence")
 
         conservation = {
             "schema_version": "2.0",
@@ -948,6 +1617,8 @@ class ArtifactSession(_core.ArtifactSession):
             "reserved_workspace_bytes_before_packaging": (
                 self.meter.reserved_bytes
             ),
+            "peak_tracked_workspace_bytes": self.meter.peak_known_bytes,
+            "peak_bounded_workspace_bytes": self.meter.peak_bounded_bytes,
             "maximum_ephemeral_workspace_bytes": (
                 self.limits.maximum_ephemeral_workspace_bytes
             ),
@@ -967,7 +1638,7 @@ class ArtifactSession(_core.ArtifactSession):
             "schema_version": "2.0",
             "diagnostic_id": DIAGNOSTIC_ID,
             "declared_phase_order": list(PHASES),
-            "entries": list(state.stop_rows()),
+            "entries": list(stop_rows),
         }
         metadata = SharedMetadataWriter(
             self.staging,

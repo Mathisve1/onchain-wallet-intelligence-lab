@@ -138,6 +138,7 @@ class EventObservation:
     exact_raw_local_time: str
     exact_raw_block_time: str
     raw_wallet_value: FrozenValue
+    raw_fill_value: FrozenValue
     immutable_fill_payload: FrozenObject | None
     canonical_wallet: str | None
     exact_raw_coin_string: str | None
@@ -181,6 +182,7 @@ class BlockObservation:
     ordered_event_count: int
     ordered_event_fingerprint: str
     raw_record_fingerprint: str
+    raw_record_value: FrozenObject
     events: tuple[EventObservation, ...]
 
     def equality_bytes(self) -> bytes:
@@ -299,6 +301,7 @@ def parse_block_record(
                 exact_raw_local_time=local_time,
                 exact_raw_block_time=block_time,
                 raw_wallet_value=wallet_value,
+                raw_fill_value=fill_value,
                 immutable_fill_payload=immutable_fill,
                 canonical_wallet=canonical_wallet,
                 exact_raw_coin_string=coin,
@@ -323,5 +326,6 @@ def parse_block_record(
         ordered_event_count=len(events),
         ordered_event_fingerprint=ordered_event_hasher.hexdigest(),
         raw_record_fingerprint=sha256_hex(raw_record_bytes),
+        raw_record_value=value,
         events=tuple(events),
     )

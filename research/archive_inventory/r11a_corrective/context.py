@@ -59,6 +59,7 @@ class WorkflowContext:
     checked_out_commit: str
     workflow_run_id: int
     workflow_run_attempt: int
+    workflow_start_epoch_ns: int
     repository: str
     workflow_name: str
     approval_id: str
@@ -84,6 +85,9 @@ class WorkflowContext:
             checked_out_commit=_commit(root["checked_out_commit"], "checked_out_commit"),
             workflow_run_id=_integer(root["workflow_run_id"], "workflow_run_id"),
             workflow_run_attempt=_integer(root["workflow_run_attempt"], "workflow_run_attempt"),
+            workflow_start_epoch_ns=_integer(
+                root["workflow_start_epoch_ns"], "workflow_start_epoch_ns"
+            ),
             repository=_text(root["repository"], "repository"),
             workflow_name=_text(root["workflow_name"], "workflow_name"),
             approval_id=_text(root["approval_id"], "approval_id"),
@@ -119,6 +123,8 @@ class WorkflowContext:
             raise ContextBoundaryError("checked-out commit differs from dispatch SHA")
         if self.workflow_run_id <= 0 or self.workflow_run_attempt != 1:
             raise ContextBoundaryError("R11A requires positive run ID at attempt one")
+        if self.workflow_start_epoch_ns <= 0:
+            raise ContextBoundaryError("workflow start epoch must be positive")
         if self.repository != "Mathisve1/onchain-wallet-intelligence-lab":
             raise ContextBoundaryError("repository identity drift")
         if self.workflow_name != "Hyperliquid Archive R11A Identity Boundary Diagnostic":
@@ -205,6 +211,9 @@ def minimal_context_from_pending(
         "workflow_run_id": _integer(root["workflow_run_id"], "workflow_run_id"),
         "workflow_run_attempt": _integer(
             root["workflow_run_attempt"], "workflow_run_attempt"
+        ),
+        "workflow_start_epoch_ns": _integer(
+            root["workflow_start_epoch_ns"], "workflow_start_epoch_ns"
         ),
         "repository": _text(root["repository"], "repository"),
         "workflow_name": _text(root["workflow_name"], "workflow_name"),

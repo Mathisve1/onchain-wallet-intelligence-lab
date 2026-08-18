@@ -10,7 +10,7 @@
     "research/archive_inventory/r11a_v2/README.md": "63e7e4a79f302da36818aff19ad4183335e3a80919149195028dc21d924839ad",
     "governance/R11A_V2_REVIEW_FINDINGS.md": "b1b1a717f4ee5047c459e7976bc1f74398426c66c47b1f3db87d92e203e8b8c9",
     "governance/validate_r11a_v2_preregistration.py": "2c2a7c5df641c57129f7626acfa2783c75ef3604cf1c76103fa3593d8c590553",
-    "governance/validate_r11a_v2_bindings.py": "940716f77d4f09de2a70cf68b56c1a8924c5990a348da521b27b829b18263fab",
+    "governance/validate_r11a_v2_bindings.py": "ac68cc6f07a1a0b960ed271b26f642906de1dad96d9ade009b7ba3e4243e3c93",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b"
   },

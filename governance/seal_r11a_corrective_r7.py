@@ -7,6 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+try:
+    from governance.regenerate_manifest import render_manifest
+except ModuleNotFoundError:  # direct ``python governance/...`` execution
+    from regenerate_manifest import render_manifest
+
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE = ROOT / "research/archive_inventory"
 CORRECTIVE = ARCHIVE / "r11a_corrective"
@@ -16,15 +21,24 @@ STATUS = CORRECTIVE / "R11A_CORRECTIVE_STATUS_R7.json"
 IMPLEMENTATION_ID = "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-CORRECTIVE-R7"
 DIAGNOSTIC_ID = "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002"
 ZERO_SHA256 = "0" * 64
-
-REQUESTED_BUT_ABSENT_AUTHORITY = (
-    "research/archive_inventory/r11a_corrective/"
-    "R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT_002.json"
-)
 SEALED_AMENDMENT = (
     "research/archive_inventory/r11a_v2/"
     "R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json"
 )
+SEALED_AMENDMENT_ID = "R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002"
+SEALED_AMENDMENT_SHA256 = (
+    "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f"
+)
+V2_BINDINGS = (
+    "research/archive_inventory/r11a_v2/"
+    "R11A_V2_PREREGISTRATION_BINDINGS.json"
+)
+CANDIDATE_WORKFLOW = (
+    "research/archive_inventory/r11a_corrective/workflows/"
+    "hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
+)
+DEVELOPMENT_WORKFLOW = ".github/workflows/r11a-r7-dev.yml"
+REPOSITORY_MANIFEST = "governance/REPOSITORY_MANIFEST.sha256"
 
 R7_CODE_PATHS = (
     "research/archive_inventory/r11a_corrective/__init__.py",
@@ -44,6 +58,7 @@ R7_CODE_PATHS = (
     "research/archive_inventory/r11a_corrective/index.py",
     "research/archive_inventory/r11a_corrective/join_r7.py",
     "research/archive_inventory/r11a_corrective/limits.py",
+    "research/archive_inventory/r11a_corrective/locator_order.py",
     "research/archive_inventory/r11a_corrective/lz4stream.py",
     "research/archive_inventory/r11a_corrective/materialize.py",
     "research/archive_inventory/r11a_corrective/meter_r7.py",
@@ -51,20 +66,26 @@ R7_CODE_PATHS = (
     "research/archive_inventory/r11a_corrective/parser.py",
     "research/archive_inventory/r11a_corrective/preflight_artifact_r7.py",
     "research/archive_inventory/r11a_corrective/pricing.py",
+    "research/archive_inventory/r11a_corrective/proof_semantics_r7.py",
     "research/archive_inventory/r11a_corrective/runner.py",
     "research/archive_inventory/r11a_corrective/runtime.py",
     "research/archive_inventory/r11a_corrective/selection.py",
     "research/archive_inventory/r11a_corrective/storage_r7.py",
     "research/archive_inventory/r11a_corrective/taxonomy.py",
     "research/archive_inventory/r11a_corrective/taxonomy_precedence_r7.py",
-    "research/archive_inventory/r11a_corrective/workflows/"
-    "hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml",
+    "research/archive_inventory/r11a_corrective/terminal_propagation.py",
+    CANDIDATE_WORKFLOW,
 )
 
 GOVERNANCE_PATHS = (
     "governance/_validate_r11a_runtime_binding_core_r7.py",
+    "governance/generate_r11a_corrective_policies.py",
+    "governance/regenerate_manifest.py",
+    "governance/run_r11a_network_deny.py",
     "governance/seal_r11a_corrective_r7.py",
+    "governance/seal_r11a_v2_preregistration.py",
     "governance/validate_r11a_execution_artifact_r7.py",
+    "governance/validate_repository.py",
     "governance/validate_r11a_runtime_binding_r7.py",
     "governance/validate_r11a_v2_bindings.py",
     "governance/validate_r11a_v2_preregistration.py",
@@ -72,6 +93,7 @@ GOVERNANCE_PATHS = (
 
 SUPPORTING_PATHS = (
     ".gitattributes",
+    DEVELOPMENT_WORKFLOW,
     "PROJECT_STATE.md",
     "README.md",
     "ROADMAP.md",
@@ -87,7 +109,11 @@ SUPPORTING_PATHS = (
     "research/archive_inventory/r11a_corrective/R11A_RESOURCE_FEASIBILITY_R3.json",
     "research/archive_inventory/r11a_corrective/R11A_ROLE_DECISION.json",
     SEALED_AMENDMENT,
-    "research/archive_inventory/r11a_v2/R11A_V2_PREREGISTRATION_BINDINGS.json",
+    "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.md",
+    V2_BINDINGS,
+    "research/archive_inventory/r11a_v2/R11A_V2_STATUS.json",
+    "research/archive_inventory/r11a_v2/README.md",
+    "governance/R11A_V2_REVIEW_FINDINGS.md",
 )
 
 TEST_PATHS = (
@@ -97,6 +123,19 @@ TEST_PATHS = (
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py",
     "tests/test_archive_inventory_r11a_v2_bindings.py",
     "tests/test_archive_inventory_r11a_v2_preregistration.py",
+)
+
+EXECUTED_SECURITY_PATHS = frozenset(
+    R7_CODE_PATHS
+    + GOVERNANCE_PATHS
+    + (
+        DEVELOPMENT_WORKFLOW,
+        SEALED_AMENDMENT,
+        V2_BINDINGS,
+        "research/archive_inventory/r11/R11_72H_SELECTION.json",
+        "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json",
+        "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json",
+    )
 )
 
 
@@ -156,6 +195,52 @@ def hashes(paths: tuple[str, ...]) -> dict[str, str]:
     return {relative: sha256(relative) for relative in sorted(paths)}
 
 
+def manifest_projection() -> str:
+    """Bind the full repository manifest without a cryptographic self-cycle.
+
+    The manifest contains the R7 contract and status, while the contract binds
+    this projection.  Their two manifest rows are therefore normalized to zero;
+    every other exact path and digest remains in the projection.  ``check_all``
+    separately requires the raw manifest to equal a fresh full rendering.
+    """
+
+    normalized: list[str] = []
+    self_rows = {
+        CONTRACT.relative_to(ROOT).as_posix(),
+        STATUS.relative_to(ROOT).as_posix(),
+    }
+    for row in render_manifest(ROOT).splitlines():
+        digest, relative = row.split("  ", 1)
+        if relative in self_rows:
+            digest = ZERO_SHA256
+        normalized.append(f"{digest}  {relative}")
+    raw = ("\n".join(normalized) + "\n").encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def validate_seal_coverage(contract: dict[str, Any]) -> None:
+    bound: set[str] = set()
+    for key in (
+        "implementation_file_hashes",
+        "supporting_file_hashes",
+        "test_file_hashes",
+    ):
+        value = contract.get(key)
+        require(isinstance(value, dict), f"seal {key} is not an object")
+        bound.update(str(relative) for relative in value)
+    missing = sorted(EXECUTED_SECURITY_PATHS - bound)
+    require(not missing, f"executed security-critical paths are unsealed: {missing}")
+    require(
+        contract.get("repository_manifest_path") == REPOSITORY_MANIFEST,
+        "repository manifest path is not sealed",
+    )
+    require(
+        contract.get("repository_manifest_projection_sha256")
+        == manifest_projection(),
+        "repository manifest projection is stale",
+    )
+
+
 def build_contract() -> dict[str, Any]:
     findings = strict_load(
         "research/archive_inventory/r11a_corrective/R11A_RED_REVIEW_FINDINGS.json"
@@ -172,8 +257,22 @@ def build_contract() -> dict[str, Any]:
     remediation = {str(finding_id): finding_id != "R11A-RED-009" for finding_id in finding_ids}
 
     amendment = strict_load(SEALED_AMENDMENT)
+    require(amendment.get("amendment_id") == SEALED_AMENDMENT_ID, "Amendment 002 ID drift")
+    require(sha256(SEALED_AMENDMENT) == SEALED_AMENDMENT_SHA256, "Amendment 002 SHA drift")
     terminal_rows = amendment.get("terminal_decision_table")
     require(isinstance(terminal_rows, list) and len(terminal_rows) == 4, "terminal table drift")
+    bindings = strict_load(V2_BINDINGS)
+    require(
+        bindings.get("binding_id") == "R11A-V2-PREREGISTRATION-BINDINGS-001",
+        "V2 binding ID drift",
+    )
+    require(bindings.get("status") == "SEALED_PREREGISTRATION_NO_EXECUTION", "V2 binding status drift")
+    file_sha256 = bindings.get("file_sha256")
+    require(isinstance(file_sha256, dict), "V2 file bindings are absent")
+    require(
+        file_sha256.get(SEALED_AMENDMENT) == SEALED_AMENDMENT_SHA256,
+        "V2 bindings do not bind canonical Amendment 002",
+    )
 
     contract: dict[str, Any] = {
         "schema_version": "3.0",
@@ -189,10 +288,13 @@ def build_contract() -> dict[str, Any]:
         "owner_approval_eligible": False,
         "owner_approval_present": False,
         "authority_reconciliation": {
-            "sealed_preregistration_path": SEALED_AMENDMENT,
-            "sealed_preregistration_sha256": sha256(SEALED_AMENDMENT),
-            "referenced_amendment_002_path": REQUESTED_BUT_ABSENT_AUTHORITY,
-            "referenced_amendment_002_present": (ROOT / REQUESTED_BUT_ABSENT_AUTHORITY).is_file(),
+            "canonical_amendment_002_path": SEALED_AMENDMENT,
+            "canonical_amendment_002_internal_id": SEALED_AMENDMENT_ID,
+            "canonical_amendment_002_sha256": SEALED_AMENDMENT_SHA256,
+            "canonical_amendment_002_present": True,
+            "canonical_amendment_002_bound_by": V2_BINDINGS,
+            "canonical_amendment_002_binding_id": bindings["binding_id"],
+            "canonical_amendment_002_binding_valid": True,
             "preregistration_was_modified_by_r7_seal": False,
             "terminal_vocabulary_mapping": {
                 "COMPLETE": "FULLY_MATERIALIZED_SEMANTICS",
@@ -203,7 +305,6 @@ def build_contract() -> dict[str, Any]:
         "approval_blockers": [
             "INDEPENDENT_CLEAN_CONTEXT_REVIEW_NOT_COMPLETED",
             "CURRENT_OFFICIAL_PRICING_AND_EUR_BINDING_PENDING",
-            "REFERENCED_R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT_002_ABSENT",
         ],
         "red_finding_count": 21,
         "locally_tested_remediation_claims": remediation,
@@ -212,8 +313,11 @@ def build_contract() -> dict[str, Any]:
         "implementation_file_hashes": hashes(R7_CODE_PATHS + GOVERNANCE_PATHS),
         "supporting_file_hashes": hashes(SUPPORTING_PATHS),
         "test_file_hashes": hashes(TEST_PATHS),
-        "workflow_candidate_path": R7_CODE_PATHS[-1],
-        "workflow_candidate_sha256": sha256(R7_CODE_PATHS[-1]),
+        "workflow_candidate_path": CANDIDATE_WORKFLOW,
+        "workflow_candidate_sha256": sha256(CANDIDATE_WORKFLOW),
+        "repository_manifest_path": REPOSITORY_MANIFEST,
+        "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
+        "repository_manifest_projection_sha256": manifest_projection(),
         "pricing_snapshot_status": pricing.get("status"),
         "pricing_snapshot_sha256": sha256(
             "research/archive_inventory/r11a_corrective/R11A_PRICING_EUR_SNAPSHOT.json"
@@ -266,6 +370,7 @@ def build_contract() -> dict[str, Any]:
         "empirical_result": None,
         "contract_projection_sha256": ZERO_SHA256,
     }
+    validate_seal_coverage(contract)
     contract["contract_projection_sha256"] = projection_sha256(contract)
     return contract
 
@@ -282,9 +387,11 @@ def build_status(contract: dict[str, Any]) -> dict[str, Any]:
         "pricing_binding_pending": contract["pricing_binding_pending"],
         "owner_approval_eligible": False,
         "owner_approval_present": False,
-        "referenced_amendment_002_present": contract["authority_reconciliation"][
-            "referenced_amendment_002_present"
-        ],
+        "canonical_amendment_002_path": SEALED_AMENDMENT,
+        "canonical_amendment_002_internal_id": SEALED_AMENDMENT_ID,
+        "canonical_amendment_002_sha256": SEALED_AMENDMENT_SHA256,
+        "canonical_amendment_002_present": True,
+        "canonical_amendment_002_binding_valid": True,
         "locally_tested_remediation_count": contract[
             "locally_tested_remediation_count"
         ],
@@ -313,6 +420,12 @@ def check_all() -> None:
     require(STATUS.is_file(), "R7 status is absent")
     require(CONTRACT.read_bytes() == render_json(expected_contract), "R7 contract is stale")
     require(STATUS.read_bytes() == render_json(expected_status), "R7 status is stale")
+    manifest = ROOT / REPOSITORY_MANIFEST
+    require(manifest.is_file(), "repository manifest is absent")
+    require(
+        manifest.read_text(encoding="utf-8") == render_manifest(ROOT),
+        "repository manifest is incomplete or stale",
+    )
 
 
 def main() -> int:
