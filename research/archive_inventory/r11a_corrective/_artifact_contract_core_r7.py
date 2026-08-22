@@ -1706,7 +1706,7 @@ class ArtifactSession(_core.ArtifactSession):
                 artifact_bytes=directory_size(final),
             )
         except Exception:
-            metadata.abort()
+            self._rollback_failed_finalization(metadata)
             raise
 
 

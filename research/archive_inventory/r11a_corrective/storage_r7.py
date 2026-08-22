@@ -879,30 +879,36 @@ class AtomicArtifactDirectory:
     def commit(self, validate: Callable[[Path], None]) -> Path:
         if self._committed:
             raise StorageBoundaryError("artifact directory already committed")
-        self.meter.runtime_guard.check_packaging_phase("artifact validation before")
-        validate(self.staging_path)
-        if directory_size(self.staging_path) > self.meter.limits.maximum_retained_artifact_bytes:
-            raise StorageBoundaryError("artifact staging exceeds retained cap")
-        self.meter.verify_actual_usage()
-        renamed = False
         try:
+            self.meter.runtime_guard.check_packaging_phase("artifact validation before")
+            validate(self.staging_path)
+            if directory_size(self.staging_path) > self.meter.limits.maximum_retained_artifact_bytes:
+                raise StorageBoundaryError("artifact staging exceeds retained cap")
+            self.meter.verify_actual_usage()
             self.staging_path.rename(self.final_path)
-            renamed = True
             self.meter.runtime_guard.check_packaging_phase("artifact rename after")
             self.meter.verify_actual_usage()
-        except Exception:
-            if renamed and self.final_path.exists():
-                self.meter.checked_rmtree(self.final_path)
-            elif self.staging_path.exists():
-                self.meter.checked_rmtree(self.staging_path)
+        except Exception as failure:
+            try:
+                self.rollback()
+            except BaseException as rollback_failure:
+                raise rollback_failure from failure
             raise
         self._committed = True
         return self.final_path
 
+    def rollback(self) -> None:
+        """Remove every path owned by this transaction with exact accounting."""
+
+        for path in (self.final_path, self.staging_path):
+            if path.exists():
+                self.meter.checked_rmtree(path)
+        self._committed = False
+        if self.final_path.exists() or self.staging_path.exists():
+            raise StorageBoundaryError("atomic artifact rollback left transaction paths")
+        self.meter.verify_actual_usage()
+
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         if self._committed:
             return
-        if self.staging_path.exists():
-            self.meter.checked_rmtree(self.staging_path)
-        if self.final_path.exists():
-            self.meter.checked_rmtree(self.final_path)
+        self.rollback()

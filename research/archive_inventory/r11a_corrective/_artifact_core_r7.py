@@ -230,6 +230,8 @@ class SharedMetadataWriter:
         self._closed = True
 
     def abort(self) -> None:
+        # Once close() succeeds, these bytes belong to the artifact transaction;
+        # ArtifactSession.rollback() is responsible for removing that full tree.
         if self._closed:
             return
         errors: list[BaseException] = []
@@ -708,8 +710,26 @@ class ArtifactSession:
                 artifact_bytes=directory_size(final),
             )
         except Exception:
-            metadata.abort()
+            self._rollback_failed_finalization(metadata)
             raise
+
+    def _rollback_failed_finalization(
+        self,
+        metadata: SharedMetadataWriter,
+    ) -> None:
+        errors: list[BaseException] = []
+        try:
+            metadata.abort()
+        except BaseException as exc:
+            errors.append(exc)
+        try:
+            self.rollback()
+        except BaseException as exc:
+            errors.append(exc)
+        if errors:
+            raise ArtifactBoundaryError(
+                "artifact finalization transaction rollback failed"
+            ) from errors[0]
 
     def finalize_empty(
         self,
@@ -775,3 +795,20 @@ class ArtifactSession:
         self._closed = True
         if errors:
             raise ArtifactBoundaryError("artifact session abort failed") from errors[0]
+
+    def rollback(self) -> None:
+        """Force the full artifact transaction back to a verified clean state."""
+
+        errors: list[BaseException] = []
+        if not self._closed:
+            try:
+                self.emitter.abort()
+            except BaseException as exc:
+                errors.append(exc)
+        try:
+            self.atomic.rollback()
+        except BaseException as exc:
+            errors.append(exc)
+        self._closed = True
+        if errors:
+            raise ArtifactBoundaryError("artifact session rollback failed") from errors[0]

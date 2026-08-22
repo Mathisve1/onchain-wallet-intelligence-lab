@@ -36,6 +36,7 @@ from research.archive_inventory.r11a_corrective.artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
     BOUNDARY_FILE,
     CONSERVATION_FILE,
+    CONTEXT_FILE,
     HASH_MANIFEST_FILE,
     DIAGNOSTIC_ID,
     IMPLEMENTATION_ID,
@@ -47,6 +48,7 @@ from research.archive_inventory.r11a_corrective.artifact_schema import (
     SCIENCE_CONTAINERS,
     STOP_LEDGER_FILE,
     TAXA,
+    WALLET_FEATURE_FILE,
     zero_taxon_counts,
 )
 from research.archive_inventory.r11a_corrective.canonical import (
@@ -846,6 +848,7 @@ class WorkspaceAccountingTests(unittest.TestCase):
                 side_effect=(
                     tracked,
                     StorageBoundaryError("injected post-rename workspace failure"),
+                    0,
                 ),
             ):
                 with self.assertRaises(StorageBoundaryError):
@@ -880,6 +883,39 @@ class WorkspaceAccountingTests(unittest.TestCase):
                     atomic.commit(lambda _: None)
             self.assertTrue(atomic.final_path.exists())
             meter.checked_rmtree(atomic.final_path)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_failed_validation_cleanup_failure_preserves_exact_accounting(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            atomic = AtomicArtifactDirectory(meter.root, meter, "artifact")
+            staging = atomic.__enter__()
+            self.write_payload(meter, staging / "payload.bin")
+            validations = 0
+
+            def reject(_: Path) -> None:
+                nonlocal validations
+                validations += 1
+                raise ArtifactBoundaryError("injected artifact validation failure")
+
+            with mock.patch(
+                "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
+                side_effect=OSError("injected validation rollback cleanup failure"),
+            ):
+                with self.assertRaises(OSError):
+                    atomic.commit(reject)
+            self.assertEqual(validations, 1)
+            self.assertFalse(atomic.final_path.exists())
+            self.assertTrue(atomic.staging_path.exists())
+            self.assertEqual(meter.known_bytes, directory_size(meter.root))
+            self.assertEqual(
+                meter.verify_actual_usage(),
+                directory_size(atomic.staging_path),
+            )
+            atomic.rollback()
+            self.assertFalse(atomic.staging_path.exists())
             self.assertEqual(meter.verify_actual_usage(), 0)
 
     def test_metadata_close_and_shared_directory_reservations_are_exact(self) -> None:
@@ -952,6 +988,59 @@ class RuntimeEndToEndTests(unittest.TestCase):
 
     def fresh_incomplete(self, name: str) -> Path:
         return copy_artifact(self.incomplete_artifact, self.root, name)
+
+    def assert_valid_rc21_recovery(
+        self,
+        *,
+        workspace: Path,
+        artifact: Path,
+        return_code: int,
+    ) -> None:
+        self.assertEqual(return_code, 21)
+        self.assertTrue(artifact.is_dir())
+        validate_artifact(artifact, DEFAULT_LIMITS)
+        validate_science(artifact)
+        result = json.loads((artifact / RESULT_FILE).read_bytes())
+        self.assertEqual(
+            result["terminal_class"],
+            "R11A_V2_FAIL_CLOSED_EARLY_STOP",
+        )
+        self.assertEqual(
+            result["research_conclusion"],
+            "ROOT_CAUSE_NOT_PROVEN_FAIL_CLOSED_EMPTY_ARTIFACT",
+        )
+        self.assertEqual(result["scientific_output_status"], "EMPTY")
+        self.assertEqual(result["root_cause_claim_status"], "NOT_PROVEN")
+        self.assertEqual(result["return_code"], 21)
+        self.assertEqual(result["wallet_feature_rows"], 0)
+        self.assertFalse(result["rerun_authorized"])
+        self.assertFalse(result["R11_CLOSED"])
+        self.assertFalse(result["R12_READY"])
+        self.assertEqual(len(SCIENCE_CONTAINERS), 7)
+        self.assertTrue(
+            all((artifact / name).read_bytes() == b"" for name in SCIENCE_CONTAINERS)
+        )
+        self.assertEqual((artifact / WALLET_FEATURE_FILE).read_bytes(), b"")
+        self.assertEqual((artifact / RETURN_CODE_FILE).read_text(encoding="ascii"), "21\n")
+        self.assertEqual(
+            {path.name for path in workspace.iterdir()},
+            {"r11a-v2-artifact"},
+        )
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        forbidden_suffixes = (
+            "-journal",
+            "-wal",
+            "-shm",
+            ".tmp",
+            ".temp",
+            ".sidecar",
+        )
+        self.assertFalse(
+            any(
+                path.name.endswith(forbidden_suffixes)
+                for path in workspace.rglob("*")
+            )
+        )
 
     @staticmethod
     def preflight_context(start_epoch_ns: int) -> dict[str, object]:
@@ -1099,6 +1188,161 @@ class RuntimeEndToEndTests(unittest.TestCase):
             "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
         )
         self.assertEqual(result["return_code"], 0)
+
+    def test_first_internal_validation_failure_recovers_publicly_to_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _artifact_contract_core_r7 as contract_core,
+            _runner_core_r7 as runner_core,
+        )
+
+        workspace = self.root / "first-validation-recovery-workspace"
+        real_validate = contract_core.validate_artifact
+        real_meter_type = runner_core.WorkspaceMeter
+        validation_terminals: list[str] = []
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def fail_first_validation(path: Path, limits: object) -> None:
+            terminal = json.loads((path / RESULT_FILE).read_bytes())[
+                "terminal_class"
+            ]
+            validation_terminals.append(terminal)
+            if len(validation_terminals) == 1:
+                raise ArtifactBoundaryError(
+                    "injected first internal artifact validation failure"
+                )
+            real_validate(path, limits)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            contract_core,
+            "validate_artifact",
+            side_effect=fail_first_validation,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(
+            validation_terminals,
+            [
+                "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+                "R11A_V2_FAIL_CLOSED_EARLY_STOP",
+            ],
+        )
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        stops = json.loads((artifact / STOP_LEDGER_FILE).read_bytes())["entries"]
+        self.assertEqual(len(stops), 1)
+        self.assertEqual(
+            stops[0]["stop_code"],
+            "R11A_FAIL_CLOSED_ARTIFACTBOUNDARYERROR",
+        )
+        self.assertEqual(stops[0]["phase"], "ARTIFACT_PACKAGING")
+        self.assertIsNone(stops[0]["object_ordinal_zero_based"])
+        context = json.loads((artifact / CONTEXT_FILE).read_bytes())
+        self.assertEqual(context["execution_phase"], "ARTIFACT_PACKAGING")
+        self.assertEqual(context["s3_requests_executed"], 72)
+        self.assertTrue(context["principal_observed"])
+        self.assertFalse(context["rerun_authorized"])
+        self.assertFalse(context["raw_aws_credentials_retained"])
+        self.assertFalse(context["raw_oidc_token_retained"])
+        self.assertFalse(context["raw_sts_response_retained"])
+        resource = json.loads((artifact / RESOURCE_LEDGER_FILE).read_bytes())
+        recovery = resource["measurements"][-1]
+        self.assertEqual(recovery["phase"], "FAIL_CLOSED_BEFORE_MINIMAL_ARTIFACT")
+        self.assertTrue(recovery["cleanup_completed"])
+        self.assertEqual(recovery["tracked_workspace_bytes"], 0)
+        self.assertEqual(recovery["reserved_workspace_bytes"], 0)
+        self.assertEqual(resource["tracked_workspace_bytes_before_packaging"], 0)
+        self.assertEqual(resource["reserved_workspace_bytes_before_packaging"], 0)
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(workspace)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+        self.assertEqual(actual, directory_size(artifact))
+        meter.checked_rmtree(artifact)
+        self.assertEqual(meter.verify_actual_usage(), 0)
+        self.assertEqual(list(workspace.iterdir()), [])
+
+    def test_metadata_finalization_failure_recovers_to_valid_rc21(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _artifact_contract_core_r7 as contract_core,
+        )
+
+        workspace = self.root / "metadata-finalization-recovery-workspace"
+        real_close = contract_core.SharedMetadataWriter.close
+        closes = 0
+
+        def close_then_fail(writer: SharedMetadataWriter) -> None:
+            nonlocal closes
+            real_close(writer)
+            closes += 1
+            if closes == 1:
+                raise ArtifactBoundaryError(
+                    "injected completed metadata finalization failure"
+                )
+
+        with mock.patch.object(
+            contract_core.SharedMetadataWriter,
+            "close",
+            autospec=True,
+            side_effect=close_then_fail,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+        self.assertEqual(closes, 2)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+
+    def test_post_rename_failure_recovers_to_valid_rc21(self) -> None:
+        workspace = self.root / "post-rename-recovery-workspace"
+        real_check = RuntimeGuard.check_packaging_phase
+        injections = 0
+
+        def fail_first_post_rename(guard: RuntimeGuard, phase: str) -> None:
+            nonlocal injections
+            if phase == "artifact rename after" and injections == 0:
+                injections += 1
+                raise RuntimeError("injected first post-rename failure")
+            real_check(guard, phase)
+
+        with mock.patch.object(
+            RuntimeGuard,
+            "check_packaging_phase",
+            autospec=True,
+            side_effect=fail_first_post_rename,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+        self.assertEqual(injections, 1)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
 
     def test_real_fully_materialized_incomplete_route_is_valid_rc20(self) -> None:
         self.assertEqual(self.rc20, 20)

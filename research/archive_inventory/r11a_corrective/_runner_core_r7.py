@@ -23,6 +23,10 @@ class RunnerBoundaryError(RuntimeError):
     pass
 
 
+class RecoveryBoundaryError(RunnerBoundaryError):
+    pass
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class RunInputs:
     workspace: Path
@@ -194,6 +198,41 @@ def _checked_cleanup(
             errors.append(exc)
     if errors:
         raise RunnerBoundaryError("checked processing cleanup failed") from errors[0]
+
+
+def _rollback_for_recovery(
+    *,
+    session: ArtifactSession,
+    meter: WorkspaceMeter,
+) -> None:
+    """End the failed transaction before any terminal recovery is attempted."""
+
+    try:
+        session.rollback()
+        _checked_cleanup(meter, preserve_artifact_paths=False)
+        actual = meter.verify_actual_usage()
+        if actual != 0 or meter.reserved_bytes != 0 or any(meter.root.iterdir()):
+            raise RunnerBoundaryError(
+                "artifact recovery requires an empty unreserved workspace"
+            )
+    except BaseException as exc:
+        raise RecoveryBoundaryError(
+            "artifact transaction rollback did not reach a clean recovery boundary"
+        ) from exc
+
+
+def _recovery_session(
+    *,
+    inputs: RunInputs,
+    guard: RuntimeGuard,
+    meter: WorkspaceMeter,
+) -> ArtifactSession:
+    try:
+        return ArtifactSession(inputs.workspace, meter, inputs.limits, guard)
+    except BaseException as exc:
+        raise RecoveryBoundaryError(
+            "fresh artifact recovery transaction could not be created"
+        ) from exc
 
 
 def _empty_failure(
@@ -390,9 +429,9 @@ def run_with_compressed_paths(
             _safe_stop_code(exc),
             evidence={"exception_type_sha256": hashlib.sha256(type(exc).__name__.encode()).hexdigest()},
         )
-        _checked_cleanup(meter)
+        _rollback_for_recovery(session=session, meter=meter)
         return _empty_failure(
-            session=session,
+            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
             state=state,
             context=inputs.context,
             reducer_rows=reducer_rows,
@@ -407,29 +446,21 @@ def run_with_compressed_paths(
         )
         if discovery is not None:
             discovery.candidates.close_delete()
-        cleanup_error: BaseException | None = None
-        try:
-            _checked_cleanup(meter)
-        except BaseException as observed:
-            cleanup_error = observed
-            state.stop(
-                "CHECKED_CLEANUP_FAILURE",
-                evidence={"exception_type_sha256": hashlib.sha256(type(observed).__name__.encode()).hexdigest()},
-            )
+        _rollback_for_recovery(session=session, meter=meter)
         resources.append(
             _resource_row(
                 meter=meter,
                 guard=guard,
                 state=state,
                 phase="FAIL_CLOSED_BEFORE_MINIMAL_ARTIFACT",
-                additional={"cleanup_completed": cleanup_error is None},
+                additional={"cleanup_completed": True},
             )
         )
         return _empty_failure(
-            session=session,
+            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
             state=state,
             context=inputs.context,
-            reducer_rows=reducer_rows,
+            reducer_rows=(),
             resources=resources,
             terminal_class="R11A_V2_FAIL_CLOSED_EARLY_STOP",
             conclusion="ROOT_CAUSE_NOT_PROVEN_FAIL_CLOSED_EMPTY_ARTIFACT",
@@ -485,18 +516,14 @@ def run_network(
             session=session,
             initial_resource_rows=resources,
         )
+    except RecoveryBoundaryError:
+        raise
     except Exception as exc:
         state.stop(
             _safe_stop_code(exc),
             evidence={"exception_type_sha256": hashlib.sha256(type(exc).__name__.encode()).hexdigest()},
         )
-        try:
-            _checked_cleanup(meter)
-        except BaseException as cleanup_exc:
-            state.stop(
-                "CHECKED_NETWORK_CLEANUP_FAILURE",
-                evidence={"exception_type_sha256": hashlib.sha256(type(cleanup_exc).__name__.encode()).hexdigest()},
-            )
+        _rollback_for_recovery(session=session, meter=meter)
         resources.append(
             _resource_row(
                 meter=meter,
@@ -506,7 +533,7 @@ def run_network(
             )
         )
         return _empty_failure(
-            session=session,
+            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
             state=state,
             context=inputs.context,
             reducer_rows=(),
