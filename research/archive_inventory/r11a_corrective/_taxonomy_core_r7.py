@@ -1449,7 +1449,12 @@ def classify_materialized_candidates(
             if value is None:
                 continue
             try:
-                value.close_delete()  # type: ignore[attr-defined]
+                if value is joins and original_failure is not None:
+                    # Exceptional unwind discards buffered semantic evidence;
+                    # physical abort failures remain sticky and fatal.
+                    joins.abort()
+                else:
+                    value.close_delete()  # type: ignore[attr-defined]
             except BaseException as exc:
                 errors.append(exc)
         if errors:

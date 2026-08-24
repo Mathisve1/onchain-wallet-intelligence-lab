@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "c1f141d458221836bb9c91d67193f4056c62d1b56cd9a6e49d1268788b0f1dcc",
+  "contract_projection_sha256": "1c01dde0fe347b8c74e7e8c9ba6694745aaf0b29f3e06a67850696900ccb703e",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -56,8 +56,8 @@
     "research/archive_inventory/r11a_corrective/_artifact_core_r7.py": "6a5317ac950ea18c22bdae680d2a188ec69dd57e2a55c583258f83e6a7d4e3ff",
     "research/archive_inventory/r11a_corrective/_artifact_schema_core_r7.py": "0ee4a1a787dc8720d87b1a8a796ac7f3dff55b65cb9aa56d2c2f329c67ffb843",
     "research/archive_inventory/r11a_corrective/_runner_core_r7.py": "d2d9b211a8b5ad82a7aef51f05fe063b175975df640904e023a8798eb54f252d",
-    "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py": "d24e86d292265496e4eb1ef911218812d8f45ad06a9f42635716ac753a895561",
-    "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py": "b4f0f8e6f325cfd3f3ca37d4c4f6ab7181a1dc7515952286c767572555f77804",
+    "research/archive_inventory/r11a_corrective/_taxonomy_contract_core_r7.py": "d8ef9c04ef82eb2b1f11116e4a1085da0e3586285989bda2ed27e7515fb732b4",
+    "research/archive_inventory/r11a_corrective/_taxonomy_core_r7.py": "b146c29b72450f75469a5e1209762a0b0a9e8615e83f74994b657bb97629d2e3",
     "research/archive_inventory/r11a_corrective/activity.py": "ac23b78681889fada810b67a02789ee1b8cad631f084a6f4f78b9328ccce3bee",
     "research/archive_inventory/r11a_corrective/artifact.py": "2e152aac475843bcd0fcbd306d94ef95b25f982c4f625d982d46dc408d4f9a03",
     "research/archive_inventory/r11a_corrective/artifact_schema.py": "780ec74161fb532f6d8d2baef9f6660228c32fd6d499585fdadb878e355aef6c",
@@ -127,7 +127,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "c593aa173b30d37b8860e1eb34afc787265dbdaf896738b3f1ead00287c42c36",
+  "repository_manifest_projection_sha256": "b8d436836e725cd24455c5c82f574debfa346b3f693987222d4499b680b2d4e2",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -172,7 +172,7 @@
   "test_file_hashes": {
     "tests/test_archive_inventory_r11a_corrective_artifacts.py": "aa04a39cc26b4837162bf772ce217fb12ca1aa08af824d1b4384fe4ba32fcd59",
     "tests/test_archive_inventory_r11a_corrective_r3.py": "2e31a00be21d5ee8578d07bc8b2e761398ad84ac2aac5190880c0772ba682427",
-    "tests/test_archive_inventory_r11a_corrective_r7.py": "0aeeffd841d1cfa7a8f87ec92933c65259a9ba6a772cebe5f0bcd6d286d3aa3e",
+    "tests/test_archive_inventory_r11a_corrective_r7.py": "3ce146ee2933d4574a7f95a1c47ce14a484c14ed36aa117788f3074c654e865a",
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py": "13f58570211a5df4b8ce247b01ebe67c534473936fdc5e9ffc5d650b36740b56",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988"

@@ -712,7 +712,7 @@ class ExactDiskEvidenceTests(unittest.TestCase):
             )
             with self.assertRaises(JoinBoundaryError):
                 joins.validate()
-            joins.database.close_delete()
+            joins.abort()
 
     def test_extra_retained_row_is_detected_for_every_unit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -736,7 +736,7 @@ class ExactDiskEvidenceTests(unittest.TestCase):
             joins.add_proof("p", "proof-type", b"two")
             with self.assertRaises(JoinBoundaryError):
                 joins.validate()
-            joins.database.close_delete()
+            joins.abort()
 
     def test_duplicate_proof_foreign_keys_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -755,7 +755,7 @@ class ExactDiskEvidenceTests(unittest.TestCase):
                 )
             with self.assertRaises(JoinBoundaryError):
                 joins.validate()
-            joins.database.close_delete()
+            joins.abort()
 
     def test_wrong_proof_projection_is_detected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2562,6 +2562,139 @@ class RuntimeEndToEndTests(unittest.TestCase):
             any(
                 str(value) == "injected taxonomy cleanup failure"
                 for value in exception_graph(raised.exception)
+            )
+        )
+
+    def test_duplicate_join_validation_recovers_publicly_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            join_r7 as join_core,
+        )
+
+        workspace = self.root / "duplicate-join-recovery-workspace"
+        real_add_unit = join_core.DiskJoinLedger.add_unit
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+        duplicate_injections = 0
+
+        def duplicate_first_unit(
+            owner: object,
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            nonlocal duplicate_injections
+            real_add_unit(owner, *args, **kwargs)  # type: ignore[arg-type]
+            if duplicate_injections == 0:
+                duplicate_injections += 1
+                real_add_unit(owner, *args, **kwargs)  # type: ignore[arg-type]
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            join_core.DiskJoinLedger,
+            "add_unit",
+            autospec=True,
+            side_effect=duplicate_first_unit,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(duplicate_injections, 1)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        stops = json.loads((artifact / STOP_LEDGER_FILE).read_bytes())["entries"]
+        self.assertEqual(len(stops), 1)
+        self.assertEqual(
+            stops[0]["stop_code"],
+            "R11A_FAIL_CLOSED_JOINBOUNDARYERROR",
+        )
+        self.assertEqual(stops[0]["phase"], "TAXONOMY")
+        self.assertIsNone(stops[0]["object_ordinal_zero_based"])
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(workspace)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+        self.assertEqual(actual, directory_size(artifact))
+
+    def test_duplicate_join_abort_cleanup_failure_remains_fatal_publicly(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            join_r7 as join_core,
+        )
+
+        workspace = self.root / "fatal-duplicate-join-abort-workspace"
+        real_add_unit = join_core.DiskJoinLedger.add_unit
+        real_unlink = Path.unlink
+        duplicate_injections = 0
+        delete_failures = 0
+
+        def duplicate_first_unit(
+            owner: object,
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            nonlocal duplicate_injections
+            real_add_unit(owner, *args, **kwargs)  # type: ignore[arg-type]
+            if duplicate_injections == 0:
+                duplicate_injections += 1
+                real_add_unit(owner, *args, **kwargs)  # type: ignore[arg-type]
+
+        def fail_first_join_database_delete(
+            path: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            nonlocal delete_failures
+            if path.name == "taxonomy-joins.sqlite" and delete_failures == 0:
+                delete_failures += 1
+                raise OSError("injected taxonomy join database delete failure")
+            real_unlink(path, *args, **kwargs)  # type: ignore[arg-type]
+
+        with mock.patch.object(
+            join_core.DiskJoinLedger,
+            "add_unit",
+            autospec=True,
+            side_effect=duplicate_first_unit,
+        ), mock.patch.object(
+            Path,
+            "unlink",
+            autospec=True,
+            side_effect=fail_first_join_database_delete,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(duplicate_injections, 1)
+        self.assertEqual(delete_failures, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        graph = exception_graph(raised.exception)
+        self.assertTrue(
+            any(isinstance(value, join_core.JoinCleanupError) for value in graph)
+        )
+        self.assertTrue(
+            any(
+                str(value) == "injected taxonomy join database delete failure"
+                for value in graph
             )
         )
 
