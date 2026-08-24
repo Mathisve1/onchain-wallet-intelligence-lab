@@ -19,6 +19,24 @@ class R11AStorageError(ValueError):
 _LENGTH = struct.Struct(">I")
 
 
+def _windows_file_allocation(path: Path) -> int:
+    """Return the exact allocated file bytes reported by Windows."""
+
+    import ctypes
+    from ctypes import wintypes
+
+    get_size = ctypes.WinDLL("kernel32", use_last_error=True).GetCompressedFileSizeW
+    get_size.argtypes = (wintypes.LPCWSTR, ctypes.POINTER(wintypes.DWORD))
+    get_size.restype = wintypes.DWORD
+    high = wintypes.DWORD()
+    ctypes.set_last_error(0)
+    low = get_size(str(path), ctypes.byref(high))
+    error = ctypes.get_last_error()
+    if low == 0xFFFFFFFF and error:
+        raise OSError(error, f"cannot measure allocated bytes: {path}")
+    return (high.value << 32) | low
+
+
 def allocated_bytes(path: Path) -> int:
     if not path.exists():
         return 0
@@ -28,13 +46,22 @@ def allocated_bytes(path: Path) -> int:
             stat = current.stat(follow_symlinks=False)
         except FileNotFoundError:
             continue
-        total += stat.st_blocks * 512
+        blocks = getattr(stat, "st_blocks", None)
+        if blocks is not None:
+            total += blocks * 512
+        elif current.is_file():
+            if os.name == "nt":
+                total += _windows_file_allocation(current)
+            else:
+                raise R11AStorageError("allocated-byte measurement is unavailable")
     return total
 
 
 def free_bytes(path: Path) -> int:
-    stat = os.statvfs(path)
-    return stat.f_bavail * stat.f_frsize
+    if hasattr(os, "statvfs"):
+        stat = os.statvfs(path)
+        return stat.f_bavail * stat.f_frsize
+    return shutil.disk_usage(path).free
 
 
 @dataclass(slots=True)

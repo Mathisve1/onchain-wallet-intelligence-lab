@@ -26,8 +26,8 @@
 - [x] Retain the exact consumed R11 artifact and release-consumption record; preserve the unresolved duplicate-count deviation.
 - [x] Record R10D as byte-exact under its legacy reducer but uncertain under canonical identity and event-time activity.
 - [x] Freeze the four-layer R11A identity model and exact-same-72-object diagnostic as `PREREGISTERED_NO_EXECUTION`.
-- [ ] Merge the separately reviewed inert R11A implementation and workflow candidate outside `.github/workflows`.
-- [ ] Obtain one exact hash-bound owner approval for role reuse and the frozen diagnostic envelope.
+- [ ] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding.
+- [ ] Bind current official pricing/EUR evidence and obtain one exact hash-bound owner approval for the dedicated successor role and frozen diagnostic envelope.
 - [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
 - [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
 

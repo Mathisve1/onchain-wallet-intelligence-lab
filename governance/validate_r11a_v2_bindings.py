@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,6 +22,18 @@ def require(condition: bool, message: str) -> None:
         raise BindingValidationError(message)
 
 
+def _pairs(values: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in values:
+        require(key not in result, f"duplicate JSON key in V2 bindings: {key}")
+        result[key] = value
+    return result
+
+
+def _constant(token: str) -> Any:
+    raise BindingValidationError(f"non-finite V2 binding value: {token}")
+
+
 def main() -> int:
     if not BINDING.is_file():
         raise BindingValidationError("R11A V2 preregistration binding file absent")
@@ -28,7 +41,11 @@ def main() -> int:
 
     expected = seal.expected()
     try:
-        observed = json.loads(BINDING.read_text(encoding="utf-8"))
+        observed = json.loads(
+            BINDING.read_text(encoding="utf-8", errors="strict"),
+            object_pairs_hook=_pairs,
+            parse_constant=_constant,
+        )
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise BindingValidationError(f"binding file parse failed: {exc}") from exc
     require(observed == expected, "R11A V2 preregistration bindings drift")

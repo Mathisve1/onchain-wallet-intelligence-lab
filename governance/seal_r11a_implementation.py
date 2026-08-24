@@ -61,7 +61,7 @@ def expected_hashes() -> dict[str, str]:
 
 
 def load_contract() -> dict:
-    value = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    value = json.loads(CONTRACT.read_bytes().decode("utf-8"))
     if not isinstance(value, dict):
         raise SealError("R11A implementation contract root must be object")
     return value
@@ -82,12 +82,12 @@ def main() -> int:
     args = parser.parse_args()
     expected = render_sealed()
     if args.write:
-        CONTRACT.write_text(expected, encoding="utf-8")
+        CONTRACT.write_bytes(expected.encode("utf-8"))
         print("R11A_IMPLEMENTATION_SEAL_WRITTEN")
         return 0
     if args.check:
-        observed = CONTRACT.read_text(encoding="utf-8")
-        if observed != expected:
+        observed = CONTRACT.read_bytes()
+        if observed != expected.encode("utf-8"):
             print("R11A_IMPLEMENTATION_SEAL_OUT_OF_DATE")
             return 1
         print("R11A_IMPLEMENTATION_SEAL_VALID")

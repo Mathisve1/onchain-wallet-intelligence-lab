@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "report_id": "R11A-CORRECTIVE-RESOURCE-FEASIBILITY-R3",
+  "status": "CAUTIOUS_BOUNDED_FAILURE_FEASIBILITY_NOT_FULL_SCALE_SUCCESS_PROOF",
+  "maximum_ephemeral_workspace_bytes": 5368709120,
+  "minimum_free_workspace_bytes_before_oidc": 6442450944,
+  "maximum_retained_artifact_bytes": 134217728,
+  "maximum_total_compressed_bytes": 2107738436,
+  "maximum_total_decompressed_processing_bytes": 21079958490,
+  "maximum_runtime_seconds": 21600,
+  "first_pass_reservations": {
+    "compressed_objects_bytes": 2107738436,
+    "compact_block_index_reservation_bytes": 300000000,
+    "compact_legacy_weak_index_reservation_bytes": 2500000000,
+    "artifact_reservation_bytes": 134217728,
+    "total_bytes": 5041956164,
+    "remaining_workspace_margin_bytes": 326752956
+  },
+  "second_pass_and_taxonomy_reservations": {
+    "compressed_objects_bytes": 2107738436,
+    "materialized_candidate_index_reservation_bytes": 1400000000,
+    "disk_join_ledger_reservation_bytes": 700000000,
+    "artifact_reservation_bytes": 134217728,
+    "total_bytes": 4341956164,
+    "remaining_workspace_margin_bytes": 1026752956
+  },
+  "bounded_memory_components": {
+    "maximum_lz4_decoded_block_bytes": 4194304,
+    "maximum_equality_group_spool_bytes": 268435456,
+    "maximum_compact_group_keys": 100000,
+    "maximum_join_keys_per_partition": 250000,
+    "scientific_ndjson_streamed": true,
+    "complete_decompressed_object_retained": false,
+    "complete_scientific_container_materialized_in_memory": false
+  },
+  "fail_closed_conditions": [
+    "PRE_OIDC_FREE_SPACE_BELOW_6_GIB",
+    "PREWRITE_WORKSPACE_RESERVATION_FAILURE",
+    "PRIMARY_INDEX_RESERVATION_OR_PARTITION_SORT_MARGIN_EXCEEDED",
+    "EQUALITY_GROUP_SPOOL_CAP_EXCEEDED",
+    "MATERIALIZED_CANDIDATE_CAP_EXCEEDED",
+    "DISK_JOIN_LEDGER_OR_PARTITION_KEY_CAP_EXCEEDED",
+    "SCIENTIFIC_OUTPUT_CAP_EXCEEDED_BEFORE_ROW_WRITE",
+    "RUNTIME_RESERVATION_REACHED",
+    "ATOMIC_ARTIFACT_VALIDATION_FAILURE"
+  ],
+  "full_scale_live_benchmark_executed": false,
+  "successful_completion_within_caps_claimed": false,
+  "bounded_empty_artifact_on_preregistered_cap_failure_required": true,
+  "network_requests_executed_by_report": 0,
+  "empirical_result": null
+}
