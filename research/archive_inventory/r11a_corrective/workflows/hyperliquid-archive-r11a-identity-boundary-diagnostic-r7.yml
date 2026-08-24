@@ -115,12 +115,20 @@ jobs:
           print(value['single_use_window_start_utc'])
           PY
           )"
+          set +e
           python -m research.archive_inventory.r11a_corrective.network verify-history \
             --repository "${CURRENT_REPOSITORY}" \
             --workflow-file "${R11A_WORKFLOW_FILE}" \
             --current-run-id "${CURRENT_RUN_ID}" \
             --current-run-attempt "${CURRENT_RUN_ATTEMPT}" \
             --window-start "${window_start}"
+          history_rc=$?
+          set -e
+          if test "${history_rc}" = 70; then
+            echo "fatal_cleanup=true" >> "${GITHUB_OUTPUT}"
+            exit 70
+          fi
+          test "${history_rc}" = 0
           python - <<'PY'
           import hashlib
           import json
@@ -178,7 +186,7 @@ jobs:
           PY
 
       - name: Produce and validate phase-truthful pre-OIDC failure artifact
-        if: steps.static.outcome != 'success'
+        if: steps.static.outcome != 'success' && steps.static.outputs.fatal_cleanup != 'true'
         id: pre_oidc_failure
         shell: bash
         run: |
@@ -195,7 +203,7 @@ jobs:
           python governance/validate_r11a_execution_artifact_r7.py "${R11A_ARTIFACT}"
 
       - name: Upload only validated pre-OIDC failure evidence
-        if: steps.static.outcome != 'success' && steps.pre_oidc_failure.outcome == 'success'
+        if: steps.static.outcome != 'success' && steps.static.outputs.fatal_cleanup != 'true' && steps.pre_oidc_failure.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: r11a-r7-pre-oidc-failure-${{ github.run_id }}

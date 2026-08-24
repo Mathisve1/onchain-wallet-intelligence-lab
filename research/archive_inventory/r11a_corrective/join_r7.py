@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from .canonical import FrozenObject, NumberToken, strict_json_loads
-from .storage_r7 import MeteredSQLite, WorkspaceMeter
+from .storage_r7 import CleanupBoundaryError, MeteredSQLite, WorkspaceMeter
 
 _JOIN_DB_MAX_BYTES = 512_000_000
 _BATCH_ROWS = 512
@@ -13,6 +13,10 @@ _BATCH_ROWS = 512
 
 class JoinBoundaryError(RuntimeError):
     pass
+
+
+class JoinCleanupError(JoinBoundaryError, CleanupBoundaryError):
+    """A join-ledger cleanup failure is fatal to terminal recovery."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -46,13 +50,21 @@ class DiskJoinLedger:
     """Exact disk-backed IDs, foreign keys, byte projections and multiplicities."""
 
     def __init__(self, meter: WorkspaceMeter) -> None:
+        self._units: list[tuple[object, ...]] = []
+        self._proofs: list[tuple[object, ...]] = []
+        self._refs: list[tuple[object, ...]] = []
+        self._rows: list[tuple[object, ...]] = []
+        self._closed = False
+        self._cleanup_failure: JoinCleanupError | None = None
         self.database = MeteredSQLite(
             meter.root / "taxonomy-joins.sqlite",
             meter,
             _JOIN_DB_MAX_BYTES,
             "taxonomy exact join ledger",
         )
-        with self.database.transaction("create taxonomy join ledger") as connection:
+        with self.database.initializing_transaction(
+            "create taxonomy join ledger"
+        ) as connection:
             connection.executescript(
                 """
                 CREATE TABLE units(
@@ -82,11 +94,6 @@ class DiskJoinLedger:
                 CREATE INDEX retained_rows_by_unit ON retained_rows(unit_id);
                 """
             )
-        self._units: list[tuple[object, ...]] = []
-        self._proofs: list[tuple[object, ...]] = []
-        self._refs: list[tuple[object, ...]] = []
-        self._rows: list[tuple[object, ...]] = []
-        self._closed = False
 
     def _require_open(self) -> None:
         if self._closed:
@@ -283,10 +290,34 @@ class DiskJoinLedger:
 
     def close_delete(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
-        self._flush()
-        self.database.close_delete()
+        errors: list[BaseException] = []
+        try:
+            self._flush()
+        except BaseException as exc:
+            errors.append(exc)
+        try:
+            self.database.close_delete()
+        except BaseException as exc:
+            errors.append(exc)
         self._closed = True
+        if errors:
+            failure = JoinCleanupError("join-ledger cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
     def abort(self) -> None:
-        self.close_delete()
+        if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
+            return
+        try:
+            self.database.close_delete()
+        except BaseException as exc:
+            self._closed = True
+            failure = JoinCleanupError("join-ledger abort failed")
+            self._cleanup_failure = failure
+            raise failure from exc
+        self._closed = True

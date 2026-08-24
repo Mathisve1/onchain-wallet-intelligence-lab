@@ -7,6 +7,7 @@ from typing import Final
 
 from .canonical import FrozenObject, NumberToken, strict_json_loads
 from .limits import R11ALimits
+from .storage_r7 import cleanup_checked_read_bytes
 
 SNAPSHOT_PATH: Final[Path] = Path(__file__).with_name("R11A_PRICING_EUR_SNAPSHOT.json")
 _DECIMAL_MICROS: Final[Decimal] = Decimal(1_000_000)
@@ -63,7 +64,15 @@ class PricingSnapshot:
 
     @classmethod
     def load(cls, path: Path = SNAPSHOT_PATH) -> "PricingSnapshot":
-        root = _object(strict_json_loads(path.read_bytes()), "pricing snapshot")
+        root = _object(
+            strict_json_loads(
+                cleanup_checked_read_bytes(
+                    path,
+                    label="pricing snapshot",
+                )
+            ),
+            "pricing snapshot",
+        )
         values = cls(
             status=_text(root["status"], "status"),
             region=_text(root["region"], "region"),

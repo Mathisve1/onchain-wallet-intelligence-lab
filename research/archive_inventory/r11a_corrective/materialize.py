@@ -8,7 +8,7 @@ from .canonical import canonical_json_bytes
 from .identity import BlockObservation, EventObservation, frame
 from .index import CandidateDatabase, CandidateDiscovery, SharedPartitionWriter
 from .limits import R11ALimits
-from .storage_r7 import WorkspaceMeter
+from .storage_r7 import CleanupBoundaryError, WorkspaceMeter
 
 _BLOCK_MAX_BYTES = 250_000_000
 _WEAK_MAX_BYTES = 700_000_000
@@ -18,6 +18,13 @@ _MAX_PROTOCOL_KEYS_PER_BLOCK = 100_000
 
 class MaterializationBoundaryError(RuntimeError):
     pass
+
+
+class MaterializationCleanupError(
+    MaterializationBoundaryError,
+    CleanupBoundaryError,
+):
+    """A failed materializer cleanup is fatal to terminal recovery."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -49,29 +56,52 @@ class CandidateMaterializer:
         self.block_directory = meter.root / "materialized-blocks"
         self.weak_directory = meter.root / "materialized-legacy-repeats"
         self.protocol_directory = meter.root / "materialized-protocol-per-block"
-        self.block_writer = SharedPartitionWriter(
-            self.block_directory,
-            meter,
-            maximum_total_bytes=_BLOCK_MAX_BYTES,
-            label="materialized repeated block observations",
-        )
-        self.weak_writer = SharedPartitionWriter(
-            self.weak_directory,
-            meter,
-            maximum_total_bytes=_WEAK_MAX_BYTES,
-            label="materialized legacy repeat observations",
-        )
-        self.protocol_writer = SharedPartitionWriter(
-            self.protocol_directory,
-            meter,
-            maximum_total_bytes=_PROTOCOL_MAX_BYTES,
-            label="materialized protocol groups per raw block",
-        )
+        self.block_writer: SharedPartitionWriter | None = None
+        self.weak_writer: SharedPartitionWriter | None = None
+        self.protocol_writer: SharedPartitionWriter | None = None
         self.retained_blocks = 0
         self.retained_legacy = 0
         self.retained_protocol = 0
         self.cap_fallback = discovery.cap_fallback_required
         self._closed = False
+        try:
+            self.block_writer = SharedPartitionWriter(
+                self.block_directory,
+                meter,
+                maximum_total_bytes=_BLOCK_MAX_BYTES,
+                label="materialized repeated block observations",
+            )
+            self.weak_writer = SharedPartitionWriter(
+                self.weak_directory,
+                meter,
+                maximum_total_bytes=_WEAK_MAX_BYTES,
+                label="materialized legacy repeat observations",
+            )
+            self.protocol_writer = SharedPartitionWriter(
+                self.protocol_directory,
+                meter,
+                maximum_total_bytes=_PROTOCOL_MAX_BYTES,
+                label="materialized protocol groups per raw block",
+            )
+        except BaseException:
+            errors: list[BaseException] = []
+            for writer in (
+                self.protocol_writer,
+                self.weak_writer,
+                self.block_writer,
+            ):
+                if writer is None:
+                    continue
+                try:
+                    writer.abort()
+                except BaseException as exc:
+                    errors.append(exc)
+            self._closed = True
+            if errors:
+                raise MaterializationCleanupError(
+                    "materializer construction cleanup failed"
+                ) from errors[0]
+            raise
 
     @staticmethod
     def _selected_fill(event: EventObservation) -> dict[str, object] | None:
@@ -169,6 +199,12 @@ class CandidateMaterializer:
     def add_block(self, block: BlockObservation, object_ordinal_zero_based: int) -> None:
         if self._closed:
             raise MaterializationBoundaryError("materializer is closed")
+        if (
+            self.block_writer is None
+            or self.weak_writer is None
+            or self.protocol_writer is None
+        ):
+            raise MaterializationBoundaryError("materializer writer is absent")
         if self.cap_fallback:
             return
         self.meter.runtime_guard.check_scientific_phase("materialize block before")
@@ -290,6 +326,12 @@ class CandidateMaterializer:
     def close(self) -> MaterializedIndexes:
         if self._closed:
             raise MaterializationBoundaryError("materializer already closed")
+        if (
+            self.block_writer is None
+            or self.weak_writer is None
+            or self.protocol_writer is None
+        ):
+            raise MaterializationBoundaryError("materializer writer is absent")
         self.block_writer.close()
         self.weak_writer.close()
         self.protocol_writer.close()
@@ -311,11 +353,17 @@ class CandidateMaterializer:
         if self._closed:
             return
         errors: list[BaseException] = []
-        for writer in (self.block_writer, self.weak_writer, self.protocol_writer):
+        for writer in (
+            self.protocol_writer,
+            self.weak_writer,
+            self.block_writer,
+        ):
+            if writer is None:
+                continue
             try:
                 writer.abort()
             except BaseException as exc:
                 errors.append(exc)
         self._closed = True
         if errors:
-            raise MaterializationBoundaryError("materializer cleanup failed") from errors[0]
+            raise MaterializationCleanupError("materializer cleanup failed") from errors[0]

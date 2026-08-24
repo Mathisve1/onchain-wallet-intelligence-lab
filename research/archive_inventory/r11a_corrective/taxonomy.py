@@ -9,6 +9,7 @@ from .artifact_schema import AUTHORITATIVE_UNIT_UNIVERSES, TAXA
 _precedence.install()
 
 TaxonomyBoundaryError = _core.TaxonomyBoundaryError
+TaxonomyCleanupError = _core.TaxonomyCleanupError
 Taxon = _core.Taxon
 UnitUniverse = _core.UnitUniverse
 EvidenceEmitter = _core.EvidenceEmitter

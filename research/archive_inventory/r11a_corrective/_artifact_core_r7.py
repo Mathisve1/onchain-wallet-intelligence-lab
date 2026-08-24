@@ -35,7 +35,16 @@ from .artifact_schema import (
 from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_json_loads
 from .limits import R11ALimits
 from .runtime import ExecutionEvidenceState, RuntimeGuard
-from .storage_r7 import AtomicArtifactDirectory, WorkspaceMeter, directory_size
+from .storage_r7 import (
+    AtomicArtifactDirectory,
+    CleanupBoundaryError,
+    WorkspaceMeter,
+    cleanup_checked_binary_reader,
+    cleanup_checked_binary_writer,
+    cleanup_checked_read_bytes,
+    cleanup_checked_read_text,
+    directory_size,
+)
 from .taxonomy import EvidenceEmitter, TaxonomyResult
 
 _BUFFER_BYTES = 64 * 1024
@@ -43,6 +52,10 @@ _BUFFER_BYTES = 64 * 1024
 
 class ArtifactBoundaryError(RuntimeError):
     pass
+
+
+class ArtifactCleanupError(ArtifactBoundaryError, CleanupBoundaryError):
+    """A failed cleanup is fatal and cannot be converted into RC21 evidence."""
 
 
 class ScientificCapExceeded(ArtifactBoundaryError):
@@ -74,25 +87,36 @@ class StreamingScientificEmitter(EvidenceEmitter):
     def __init__(self, staging: Path, meter: WorkspaceMeter, limits: R11ALimits) -> None:
         self.staging = meter._ensure_inside(staging)
         self.meter = meter
-        self.reservation = meter.reserve(
-            limits.maximum_retained_scientific_output_bytes,
-            "all scientific containers",
-        )
+        self.reservation = None
         self._handles: dict[str, BinaryIO] = {}
         self._buffers = {name: bytearray() for name in SCIENCE_CONTAINERS}
         self._hashes = {name: hashlib.sha256() for name in SCIENCE_CONTAINERS}
         self._bytes = {name: 0 for name in SCIENCE_CONTAINERS}
         self._rows = {name: 0 for name in SCIENCE_CONTAINERS}
-        for name in SCIENCE_CONTAINERS:
-            self._handles[name] = (self.staging / name).open("xb")
         self._total = 0
         self._persisted = 0
         self._closed = False
-        meter.checkpoint_value(
-            self.reservation,
-            0,
-            phase="create scientific containers",
-        )
+        self._cleanup_failure: ArtifactCleanupError | None = None
+        try:
+            self.reservation = meter.reserve(
+                limits.maximum_retained_scientific_output_bytes,
+                "all scientific containers",
+            )
+            for name in SCIENCE_CONTAINERS:
+                self._handles[name] = (self.staging / name).open("xb")
+            meter.checkpoint_value(
+                self.reservation,
+                0,
+                phase="create scientific containers",
+            )
+        except BaseException:
+            try:
+                self.abort()
+            except BaseException as cleanup_failure:
+                raise ArtifactCleanupError(
+                    "scientific emitter construction cleanup failed"
+                ) from cleanup_failure
+            raise
 
     def _flush(self, name: str) -> None:
         buffer = self._buffers[name]
@@ -113,7 +137,11 @@ class StreamingScientificEmitter(EvidenceEmitter):
         self.meter.runtime_guard.check_scientific_phase(f"flush {name} after")
 
     def emit(self, container: str, row: Mapping[str, object]) -> None:
-        if self._closed or container not in self._handles:
+        if (
+            self._closed
+            or self.reservation is None
+            or container not in self._handles
+        ):
             raise ArtifactBoundaryError("invalid scientific emitter state or container")
         encoded = canonical_json_bytes(row)
         if self._total + len(encoded) > self.reservation.maximum_bytes:
@@ -128,6 +156,10 @@ class StreamingScientificEmitter(EvidenceEmitter):
 
     def close(self) -> tuple[FileEvidence, ...]:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
+            raise ArtifactBoundaryError("scientific emitter already closed")
+        if self.reservation is None:
             raise ArtifactBoundaryError("scientific emitter already closed")
         try:
             for name in SCIENCE_CONTAINERS:
@@ -135,14 +167,26 @@ class StreamingScientificEmitter(EvidenceEmitter):
                 handle = self._handles[name]
                 handle.flush()
                 os.fsync(handle.fileno())
-                handle.close()
+                try:
+                    handle.close()
+                except BaseException as exc:
+                    raise ArtifactCleanupError(
+                        "scientific handle cleanup failed"
+                    ) from exc
             self.meter.finalize_value(
                 self.reservation,
                 self._persisted,
                 phase="finalize scientific containers",
             )
-        except Exception:
-            self.abort()
+        except BaseException as failure:
+            try:
+                self.abort()
+            except BaseException as cleanup_failure:
+                raise ArtifactCleanupError(
+                    "scientific finalization cleanup failed"
+                ) from cleanup_failure
+            if isinstance(failure, ArtifactCleanupError):
+                self._cleanup_failure = failure
             raise
         self._closed = True
         return tuple(
@@ -152,54 +196,95 @@ class StreamingScientificEmitter(EvidenceEmitter):
 
     def abort(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
         errors: list[BaseException] = []
         for handle in self._handles.values():
             try:
                 handle.close()
-            except OSError as exc:
+            except BaseException as exc:
                 errors.append(exc)
-        try:
-            for name in SCIENCE_CONTAINERS:
+        for name in SCIENCE_CONTAINERS:
+            try:
                 path = self.staging / name
                 if path.exists():
                     path.unlink()
-            self.meter.release_value(
-                self.reservation,
-                phase="discard scientific containers",
+            except BaseException as exc:
+                errors.append(exc)
+        try:
+            science_paths_remain = any(
+                (self.staging / name).exists() for name in SCIENCE_CONTAINERS
             )
         except BaseException as exc:
             errors.append(exc)
+            science_paths_remain = True
+        if science_paths_remain:
+            errors.append(
+                ArtifactBoundaryError(
+                    "scientific cleanup left one or more containers"
+                )
+            )
+        elif self.reservation is not None:
+            try:
+                self.meter.release_value(
+                    self.reservation,
+                    phase="discard scientific containers",
+                )
+            except BaseException as exc:
+                errors.append(exc)
         self._closed = True
         if errors:
-            raise ArtifactBoundaryError("scientific cleanup failed") from errors[0]
+            failure = ArtifactCleanupError("scientific cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
 
 class SharedMetadataWriter:
     def __init__(self, staging: Path, meter: WorkspaceMeter, limits: R11ALimits) -> None:
         self.staging = meter._ensure_inside(staging)
         self.meter = meter
-        self.reservation = meter.reserve(
-            limits.reserved_non_scientific_package_metadata_bytes,
-            "all metadata containers",
-            packaging=True,
-        )
+        self.reservation = None
         self._written = 0
         self._closed = False
-        meter.checkpoint_value(
-            self.reservation,
-            0,
-            packaging=True,
-            phase="create metadata reservation",
-        )
+        self._cleanup_failure: ArtifactCleanupError | None = None
+        try:
+            self.reservation = meter.reserve(
+                limits.reserved_non_scientific_package_metadata_bytes,
+                "all metadata containers",
+                packaging=True,
+            )
+            meter.checkpoint_value(
+                self.reservation,
+                0,
+                packaging=True,
+                phase="create metadata reservation",
+            )
+        except BaseException:
+            try:
+                self.abort()
+            except BaseException as cleanup_failure:
+                raise ArtifactCleanupError(
+                    "metadata writer construction cleanup failed"
+                ) from cleanup_failure
+            raise
 
     def write(self, name: str, payload: bytes) -> FileEvidence:
-        if self._closed or not name or "/" in name or ".." in name:
+        if (
+            self._closed
+            or self.reservation is None
+            or not name
+            or "/" in name
+            or ".." in name
+        ):
             raise ArtifactBoundaryError("invalid metadata path or writer state")
         if self._written + len(payload) > self.reservation.maximum_bytes:
             raise ArtifactBoundaryError("metadata reservation exceeded before write")
         path = self.staging / name
-        with path.open("xb") as handle:
+        with cleanup_checked_binary_writer(
+            path,
+            label=f"artifact metadata {name}",
+        ) as handle:
             if handle.write(payload) != len(payload):
                 raise ArtifactBoundaryError("short metadata write")
             handle.flush()
@@ -220,7 +305,11 @@ class SharedMetadataWriter:
 
     def close(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
+        if self.reservation is None:
+            raise ArtifactBoundaryError("metadata reservation is absent")
         self.meter.finalize_value(
             self.reservation,
             self._written,
@@ -233,22 +322,49 @@ class SharedMetadataWriter:
         # Once close() succeeds, these bytes belong to the artifact transaction;
         # ArtifactSession.rollback() is responsible for removing that full tree.
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
         errors: list[BaseException] = []
+        metadata_paths: list[Path] = []
         try:
-            for path in sorted(self.staging.iterdir(), reverse=True):
-                if path.is_file() and path.name not in SCIENCE_CONTAINERS:
-                    path.unlink()
-            self.meter.release_value(
-                self.reservation,
-                packaging=True,
-                phase="discard metadata containers",
+            metadata_paths = [
+                path
+                for path in sorted(self.staging.iterdir(), reverse=True)
+                if path.is_file() and path.name not in SCIENCE_CONTAINERS
+            ]
+        except BaseException as exc:
+            errors.append(exc)
+        for path in metadata_paths:
+            try:
+                path.unlink()
+            except BaseException as exc:
+                errors.append(exc)
+        try:
+            metadata_remains = bool(errors) or any(
+                path.exists() for path in metadata_paths
             )
         except BaseException as exc:
             errors.append(exc)
+            metadata_remains = True
+        if metadata_remains:
+            errors.append(
+                ArtifactBoundaryError("metadata cleanup left containers")
+            )
+        elif self.reservation is not None:
+            try:
+                self.meter.release_value(
+                    self.reservation,
+                    packaging=True,
+                    phase="discard metadata containers",
+                )
+            except BaseException as exc:
+                errors.append(exc)
         self._closed = True
         if errors:
-            raise ArtifactBoundaryError("metadata cleanup failed") from errors[0]
+            failure = ArtifactCleanupError("metadata cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
 
 def _ndjson(rows: Sequence[Mapping[str, object]]) -> bytes:
@@ -257,7 +373,7 @@ def _ndjson(rows: Sequence[Mapping[str, object]]) -> bytes:
 
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
+    with cleanup_checked_binary_reader(path, label="artifact hashing") as handle:
         while chunk := handle.read(1 << 20):
             digest.update(chunk)
     return digest.hexdigest()
@@ -383,7 +499,10 @@ def _integer(value: object, label: str) -> int:
 
 def _parse_ndjson(path: Path) -> tuple[FrozenObject, ...]:
     rows: list[FrozenObject] = []
-    for raw in path.read_bytes().splitlines():
+    for raw in cleanup_checked_read_bytes(
+        path,
+        label="artifact NDJSON validation",
+    ).splitlines():
         rows.append(_object(strict_json_loads(raw), path.name))
     return tuple(rows)
 
@@ -397,14 +516,36 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         raise ArtifactBoundaryError("artifact contains directory or symlink")
     if directory_size(path) > limits.maximum_retained_artifact_bytes:
         raise ArtifactBoundaryError("artifact exceeds retained cap")
-    context = _object(strict_json_loads((path / CONTEXT_FILE).read_bytes()), "context")
-    result = _object(strict_json_loads((path / RESULT_FILE).read_bytes()), "result")
+    context = _object(
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / CONTEXT_FILE,
+                label="artifact context validation",
+            )
+        ),
+        "context",
+    )
+    result = _object(
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / RESULT_FILE,
+                label="artifact result validation",
+            )
+        ),
+        "result",
+    )
     if context["diagnostic_id"] != DIAGNOSTIC_ID or result["diagnostic_id"] != DIAGNOSTIC_ID:
         raise ArtifactBoundaryError("diagnostic ID drift")
     if context["implementation_id"] != IMPLEMENTATION_ID or result["implementation_id"] != IMPLEMENTATION_ID:
         raise ArtifactBoundaryError("implementation ID drift")
     terminal = str(result["terminal_class"])
-    return_code = int((path / RETURN_CODE_FILE).read_text(encoding="ascii").strip())
+    return_code = int(
+        cleanup_checked_read_text(
+            path / RETURN_CODE_FILE,
+            encoding="ascii",
+            label="artifact return-code validation",
+        ).strip()
+    )
     validate_terminal_tuple(
         terminal_class=terminal,
         return_code=return_code,
@@ -438,7 +579,12 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
     else:
         raise ArtifactBoundaryError("unknown scientific output status")
     conservation = _object(
-        strict_json_loads((path / CONSERVATION_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / CONSERVATION_FILE,
+                label="artifact conservation validation",
+            )
+        ),
         "conservation",
     )
     universe_rows_raw = conservation["unit_universes"]
@@ -451,14 +597,30 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
     if terminal == "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE":
         if not gates or any(value is not True for value in gates.values()):
             raise ArtifactBoundaryError("complete terminal has false conservation gate")
-    stop_ledger = _object(strict_json_loads((path / STOP_LEDGER_FILE).read_bytes()), "stop ledger")
+    stop_ledger = _object(
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / STOP_LEDGER_FILE,
+                label="artifact stop-ledger validation",
+            )
+        ),
+        "stop ledger",
+    )
     if tuple(stop_ledger["declared_phase_order"]) != PHASES:
         raise ArtifactBoundaryError("stop phase order drift")
     resource = _object(
-        strict_json_loads((path / RESOURCE_LEDGER_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / RESOURCE_LEDGER_FILE,
+                label="artifact resource-ledger validation",
+            )
+        ),
         "resource ledger",
     )
-    boundary_raw = (path / BOUNDARY_FILE).read_bytes()
+    boundary_raw = cleanup_checked_read_bytes(
+        path / BOUNDARY_FILE,
+        label="artifact boundary validation",
+    )
     if len(boundary_raw) != limits.package_boundary_bytes or not boundary_raw.endswith(b"\n"):
         raise ArtifactBoundaryError("boundary size drift")
     boundary = _object(
@@ -492,7 +654,11 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         raise ArtifactBoundaryError("boundary final artifact cap mismatch")
     if resource["package_flags"]["preupload_runtime_within_hard_limit_after_upload_window"] is not True:
         raise ArtifactBoundaryError("resource ledger does not support runtime boundary")
-    manifest_lines = (path / HASH_MANIFEST_FILE).read_text(encoding="ascii").splitlines()
+    manifest_lines = cleanup_checked_read_text(
+        path / HASH_MANIFEST_FILE,
+        encoding="ascii",
+        label="artifact hash-manifest validation",
+    ).splitlines()
     expected_manifest_names = sorted(
         EXPECTED_ARTIFACT_FILES - {HASH_MANIFEST_FILE, BOUNDARY_FILE},
         key=lambda value: value.encode("utf-8"),
@@ -521,8 +687,23 @@ class ArtifactSession:
         self.runtime_guard = runtime_guard
         self.atomic = AtomicArtifactDirectory(workspace, meter, "r11a-v2-artifact")
         self.staging = self.atomic.__enter__()
-        self.emitter = StreamingScientificEmitter(self.staging, meter, limits)
         self._closed = False
+        self._rollback_complete = False
+        self._rollback_failure: BaseException | None = None
+        try:
+            self.emitter = StreamingScientificEmitter(self.staging, meter, limits)
+        except BaseException:
+            try:
+                self.atomic.rollback()
+            except BaseException as cleanup_failure:
+                self._closed = True
+                self._rollback_failure = cleanup_failure
+                raise ArtifactCleanupError(
+                    "artifact session construction cleanup failed"
+                ) from cleanup_failure
+            self._closed = True
+            self._rollback_complete = True
+            raise
 
     def _discard_science_and_create_empty(self) -> tuple[FileEvidence, ...]:
         self.emitter.abort()
@@ -692,8 +873,7 @@ class ArtifactSession:
             metadata.write(BOUNDARY_FILE, boundary)
             metadata.close()
             final = self.atomic.commit(lambda path: validate_artifact(path, self.limits))
-            self._closed = True
-            return ArtifactOutcome(
+            outcome = ArtifactOutcome(
                 final_directory=final,
                 terminal_class=terminal_class,
                 research_conclusion=research_conclusion,
@@ -709,6 +889,8 @@ class ArtifactSession:
                 ).hexdigest(),
                 artifact_bytes=directory_size(final),
             )
+            self._closed = True
+            return outcome
         except Exception:
             self._rollback_failed_finalization(metadata)
             raise
@@ -727,7 +909,9 @@ class ArtifactSession:
         except BaseException as exc:
             errors.append(exc)
         if errors:
-            raise ArtifactBoundaryError(
+            self._rollback_failure = errors[0]
+            self._rollback_complete = False
+            raise ArtifactCleanupError(
                 "artifact finalization transaction rollback failed"
             ) from errors[0]
 
@@ -781,34 +965,35 @@ class ArtifactSession:
         )
 
     def abort(self) -> None:
-        if self._closed:
+        try:
+            self.rollback()
+        except BaseException as exc:
+            raise ArtifactCleanupError("artifact session abort failed") from exc
+
+    def rollback(self) -> None:
+        """Force the full artifact transaction back to a verified clean state."""
+
+        if self._rollback_failure is not None:
+            raise ArtifactCleanupError(
+                "artifact session rollback previously failed"
+            ) from self._rollback_failure
+        if self._rollback_complete or self._closed:
             return
         errors: list[BaseException] = []
         try:
             self.emitter.abort()
         except BaseException as exc:
             errors.append(exc)
-        try:
-            self.atomic.__exit__(Exception, ArtifactBoundaryError("abort"), None)
-        except BaseException as exc:
-            errors.append(exc)
-        self._closed = True
-        if errors:
-            raise ArtifactBoundaryError("artifact session abort failed") from errors[0]
-
-    def rollback(self) -> None:
-        """Force the full artifact transaction back to a verified clean state."""
-
-        errors: list[BaseException] = []
-        if not self._closed:
+        if self.atomic.rollback_attempted:
+            if self.atomic.rollback_failure is not None:
+                errors.append(self.atomic.rollback_failure)
+        else:
             try:
-                self.emitter.abort()
+                self.atomic.rollback()
             except BaseException as exc:
                 errors.append(exc)
-        try:
-            self.atomic.rollback()
-        except BaseException as exc:
-            errors.append(exc)
         self._closed = True
         if errors:
-            raise ArtifactBoundaryError("artifact session rollback failed") from errors[0]
+            self._rollback_failure = errors[0]
+            raise ArtifactCleanupError("artifact session rollback failed") from errors[0]
+        self._rollback_complete = True

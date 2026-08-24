@@ -13,9 +13,12 @@ from .limits import R11ALimits
 from .locator_order import canonical_object_locator_ranks
 from .selection import DEFAULT_SELECTION
 from .storage_r7 import (
+    CleanupBoundaryError,
     MeteredSQLite,
     SortEvidence,
     WorkspaceMeter,
+    cleanup_checked_binary_writer,
+    cleanup_checked_iterator,
     encode_keyed_record,
     external_sort_partition,
     iter_equality_group_spools,
@@ -35,6 +38,10 @@ class IndexBoundaryError(RuntimeError):
     pass
 
 
+class IndexCleanupError(IndexBoundaryError, CleanupBoundaryError):
+    """A failed index cleanup is fatal and cannot be retried as recovery."""
+
+
 class SharedPartitionWriter:
     """One bounded directory reservation across exactly 256 partition files."""
 
@@ -47,10 +54,9 @@ class SharedPartitionWriter:
         label: str,
     ) -> None:
         self.directory = meter._ensure_inside(directory)
-        self.directory.mkdir(parents=True, exist_ok=False)
         self.meter = meter
         self.label = label
-        self.reservation = meter.reserve(maximum_total_bytes, label)
+        self.reservation = None
         self.maximum_total_bytes = maximum_total_bytes
         self._handles: dict[int, BinaryIO] = {}
         self._buffers = [bytearray() for _ in range(256)]
@@ -58,7 +64,41 @@ class SharedPartitionWriter:
         self._logical_bytes = [0] * 256
         self._written = 0
         self._closed = False
-        meter.checkpoint(self.reservation, self.directory, phase=f"create {label}")
+        self._cleanup_failure: IndexCleanupError | None = None
+        directory_created = False
+        try:
+            self.reservation = meter.reserve(maximum_total_bytes, label)
+            self.directory.mkdir(parents=True, exist_ok=False)
+            directory_created = True
+            meter.checkpoint(
+                self.reservation,
+                self.directory,
+                phase=f"create {label}",
+            )
+        except BaseException:
+            errors: list[BaseException] = []
+            try:
+                if directory_created and self.directory.exists():
+                    import shutil
+
+                    shutil.rmtree(self.directory)
+            except BaseException as exc:
+                errors.append(exc)
+            if self.reservation is not None:
+                try:
+                    meter.release_deleted(
+                        self.reservation,
+                        self.directory,
+                        phase=f"abort construction {label}",
+                    )
+                except BaseException as exc:
+                    errors.append(exc)
+            self._closed = True
+            if errors:
+                raise IndexCleanupError(
+                    "partition writer construction cleanup failed"
+                ) from errors[0]
+            raise
 
     def _handle(self, partition: int) -> BinaryIO:
         if not 0 <= partition < 256:
@@ -91,6 +131,8 @@ class SharedPartitionWriter:
     def write(self, equality_key: bytes, payload: bytes) -> None:
         if self._closed:
             raise IndexBoundaryError("partition writer is closed")
+        if self.reservation is None:
+            raise IndexBoundaryError("partition writer reservation is absent")
         route = hashlib.sha256(equality_key).digest()[0]
         record = encode_keyed_record(equality_key, payload)
         framed = _FRAME_HEADER.pack(len(record)) + record
@@ -105,7 +147,11 @@ class SharedPartitionWriter:
 
     def close(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
+        if self.reservation is None:
+            raise IndexBoundaryError("partition writer reservation is absent")
         try:
             for partition in range(256):
                 self._flush(partition)
@@ -114,27 +160,49 @@ class SharedPartitionWriter:
                 if handle is not None:
                     handle.flush()
                     os.fsync(handle.fileno())
-                    handle.close()
+                    try:
+                        handle.close()
+                    except BaseException as exc:
+                        raise IndexCleanupError(
+                            "partition handle cleanup failed"
+                        ) from exc
                 else:
-                    (self.directory / f"part-{partition:03d}.frames").touch(exist_ok=False)
+                    with cleanup_checked_binary_writer(
+                        self.directory / f"part-{partition:03d}.frames",
+                        label="empty partition",
+                    ):
+                        pass
             self.meter.finalize(
                 self.reservation,
                 self.directory,
                 phase=f"finalize {self.label}",
             )
-        except Exception:
-            self.abort()
+        except BaseException as failure:
+            try:
+                self.abort()
+            except BaseException as cleanup_failure:
+                raise IndexCleanupError(
+                    "partition writer finalization cleanup failed"
+                ) from cleanup_failure
+            if isinstance(failure, CleanupBoundaryError):
+                sticky_failure = IndexCleanupError(
+                    "partition writer finalization cleanup failed"
+                )
+                self._cleanup_failure = sticky_failure
+                raise sticky_failure from failure
             raise
         self._closed = True
 
     def abort(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
         errors: list[BaseException] = []
         for handle in self._handles.values():
             try:
                 handle.close()
-            except OSError as exc:
+            except BaseException as exc:
                 errors.append(exc)
         try:
             if self.directory.exists():
@@ -143,16 +211,19 @@ class SharedPartitionWriter:
                 shutil.rmtree(self.directory)
             if self.directory.exists():
                 raise IndexBoundaryError("partition directory cleanup failed")
-            self.meter.release_deleted(
-                self.reservation,
-                self.directory,
-                phase=f"abort {self.label}",
-            )
+            if self.reservation is not None:
+                self.meter.release_deleted(
+                    self.reservation,
+                    self.directory,
+                    phase=f"abort {self.label}",
+                )
         except BaseException as exc:
             errors.append(exc)
         self._closed = True
         if errors:
-            raise IndexBoundaryError("partition writer cleanup failed") from errors[0]
+            failure = IndexCleanupError("partition writer cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
     def partition_stats(self) -> tuple[tuple[int, int], ...]:
         if not self._closed:
@@ -170,13 +241,24 @@ class CandidateDatabase:
             _CANDIDATE_DB_MAX_BYTES,
             "candidate membership database",
         )
-        with self.database.transaction("create candidate database") as connection:
-            connection.executescript(
-                """
-                CREATE TABLE repeated_blocks(key BLOB PRIMARY KEY);
-                CREATE TABLE repeated_weak(key BLOB PRIMARY KEY);
-                """
-            )
+        try:
+            with self.database.initializing_transaction(
+                "create candidate database"
+            ) as connection:
+                connection.executescript(
+                    """
+                    CREATE TABLE repeated_blocks(key BLOB PRIMARY KEY);
+                    CREATE TABLE repeated_weak(key BLOB PRIMARY KEY);
+                    """
+                )
+        except BaseException:
+            try:
+                self.database.close_delete()
+            except BaseException as cleanup_failure:
+                raise IndexCleanupError(
+                    "candidate database construction cleanup failed"
+                ) from cleanup_failure
+            raise
 
     def add(self, table: str, key: bytes) -> None:
         if table not in {"repeated_blocks", "repeated_weak"}:
@@ -225,8 +307,14 @@ class CandidateDiscovery:
 class FirstPassIndexes:
     meter: WorkspaceMeter
     limits: R11ALimits
-    block_writer: SharedPartitionWriter = dataclasses.field(init=False)
-    weak_writer: SharedPartitionWriter = dataclasses.field(init=False)
+    block_writer: SharedPartitionWriter | None = dataclasses.field(
+        init=False,
+        default=None,
+    )
+    weak_writer: SharedPartitionWriter | None = dataclasses.field(
+        init=False,
+        default=None,
+    )
     _canonical_object_rank: dict[tuple[str, str], int] = dataclasses.field(
         init=False
     )
@@ -245,20 +333,37 @@ class FirstPassIndexes:
                 for target in DEFAULT_SELECTION.targets
             )
         )
-        self.block_writer = SharedPartitionWriter(
-            self.meter.root / "first-pass-block-index",
-            self.meter,
-            maximum_total_bytes=_BLOCK_INDEX_MAX_BYTES,
-            label="compact block-number index",
-        )
-        self.weak_writer = SharedPartitionWriter(
-            self.meter.root / "first-pass-weak-index",
-            self.meter,
-            maximum_total_bytes=_WEAK_INDEX_MAX_BYTES,
-            label="compact legacy weak-key index",
-        )
+        try:
+            self.block_writer = SharedPartitionWriter(
+                self.meter.root / "first-pass-block-index",
+                self.meter,
+                maximum_total_bytes=_BLOCK_INDEX_MAX_BYTES,
+                label="compact block-number index",
+            )
+            self.weak_writer = SharedPartitionWriter(
+                self.meter.root / "first-pass-weak-index",
+                self.meter,
+                maximum_total_bytes=_WEAK_INDEX_MAX_BYTES,
+                label="compact legacy weak-key index",
+            )
+        except BaseException:
+            errors: list[BaseException] = []
+            for writer in (self.weak_writer, self.block_writer):
+                if writer is None:
+                    continue
+                try:
+                    writer.abort()
+                except BaseException as exc:
+                    errors.append(exc)
+            if errors:
+                raise IndexCleanupError(
+                    "first-pass index construction cleanup failed"
+                ) from errors[0]
+            raise
 
     def add_block(self, block: BlockObservation, object_ordinal_zero_based: int) -> None:
+        if self.block_writer is None or self.weak_writer is None:
+            raise IndexBoundaryError("first-pass index writer is absent")
         if not 0 <= object_ordinal_zero_based < 72:
             raise IndexBoundaryError("object ordinal outside exact scope")
         target = DEFAULT_SELECTION.targets[object_ordinal_zero_based]
@@ -299,30 +404,33 @@ class FirstPassIndexes:
             )
 
     def close(self) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+        if self.block_writer is None or self.weak_writer is None:
+            raise IndexBoundaryError("first-pass index writer is absent")
         self.block_writer.close()
         self.weak_writer.close()
         return self.block_writer.partition_stats(), self.weak_writer.partition_stats()
 
     def abort(self) -> None:
         errors: list[BaseException] = []
-        for writer in (self.block_writer, self.weak_writer):
+        for writer in (self.weak_writer, self.block_writer):
+            if writer is None:
+                continue
             try:
                 writer.abort()
             except BaseException as exc:
                 errors.append(exc)
         if errors:
-            raise IndexBoundaryError("first-pass index cleanup failed") from errors[0]
+            raise IndexCleanupError("first-pass index cleanup failed") from errors[0]
 
 
 def _count_group(path: Path, meter: WorkspaceMeter) -> int:
-    return sum(
-        1
-        for _ in iter_frames(
-            path,
-            runtime_guard=meter.runtime_guard,
-            phase="count exact reducer group",
-        )
+    reader = iter_frames(
+        path,
+        runtime_guard=meter.runtime_guard,
+        phase="count exact reducer group",
     )
+    with cleanup_checked_iterator(reader, label="reducer group reader"):
+        return sum(1 for _ in reader)
 
 
 def _discover(
@@ -357,23 +465,28 @@ def _discover(
         partition_groups = 0
         partition_observations = 0
         spool = meter.root / f"groups-{reducer_id.lower()}-{partition:03d}"
-        for group in iter_equality_group_spools(
+        groups = iter_equality_group_spools(
             destination,
             spool,
             meter,
             maximum_group_spool_bytes=meter.limits.maximum_equality_group_spool_bytes,
-        ):
-            count = _count_group(group.path, meter)
-            if count <= 1:
-                continue
-            partition_groups += 1
-            partition_observations += count
-            total_groups += 1
-            total_observations += count
-            if total_groups > maximum_groups or total_observations > maximum_observations:
-                fallback = True
-            elif not fallback:
-                candidates.add(candidate_table, group.equality_key)
+        )
+        with cleanup_checked_iterator(groups, label="candidate group spools"):
+            for group in groups:
+                count = _count_group(group.path, meter)
+                if count <= 1:
+                    continue
+                partition_groups += 1
+                partition_observations += count
+                total_groups += 1
+                total_observations += count
+                if (
+                    total_groups > maximum_groups
+                    or total_observations > maximum_observations
+                ):
+                    fallback = True
+                elif not fallback:
+                    candidates.add(candidate_table, group.equality_key)
         rows.append(
             {
                 "record_type": "R11A_V2_REDUCER_PARTITION_CONSERVATION",
@@ -393,8 +506,7 @@ def _discover(
         )
         meter.delete_file(destination)
         meter.delete_file(source)
-    if source_directory.exists():
-        source_directory.rmdir()
+    meter.delete_empty_directory(source_directory)
     return total_groups, total_observations, fallback, tuple(rows)
 
 
@@ -435,5 +547,8 @@ def discover_candidates(
             reducer_rows=block_rows + weak_rows,
         )
     except Exception:
-        candidates.close_delete()
+        try:
+            candidates.close_delete()
+        except BaseException as cleanup_failure:
+            raise IndexCleanupError("candidate discovery cleanup failed") from cleanup_failure
         raise

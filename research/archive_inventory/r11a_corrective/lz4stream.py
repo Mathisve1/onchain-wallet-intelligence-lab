@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import BinaryIO, Final
 
 from .runtime import RuntimeGuard
+from .storage_r7 import cleanup_checked_binary_reader
 
 _MAGIC: Final[bytes] = b"\x04\x22\x4d\x18"
 _P1: Final[int] = 0x9E3779B1
@@ -215,7 +216,10 @@ class LZ4LineReader:
     def __iter__(self) -> Iterator[bytes]:
         line_buffer = bytearray()
         content_checksum_state: XXH32 | None = None
-        with self.path.open("rb") as handle:
+        with cleanup_checked_binary_reader(
+            self.path,
+            label="LZ4 object",
+        ) as handle:
             if _read_exact(handle, 4, "magic") != _MAGIC:
                 raise LZ4StreamError("unsupported LZ4 magic")
             flg = _read_exact(handle, 1, "FLG")[0]

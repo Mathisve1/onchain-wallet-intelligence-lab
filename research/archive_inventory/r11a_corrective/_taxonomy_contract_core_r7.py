@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import sys
 from collections import Counter
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -11,9 +12,10 @@ from .canonical import canonical_json_bytes, strict_json_loads
 from .join_r7 import DiskJoinLedger
 from .locator_order import raw_locator_order_key
 from .materialize import MaterializedIndexes
-from .storage_r7 import MeteredSQLite, WorkspaceMeter
+from .storage_r7 import MeteredSQLite, WorkspaceMeter, cleanup_checked_iterator
 
 TaxonomyBoundaryError = _core.TaxonomyBoundaryError
+TaxonomyCleanupError = _core.TaxonomyCleanupError
 Taxon = _core.Taxon
 UnitUniverse = _core.UnitUniverse
 EvidenceEmitter = _core.EvidenceEmitter
@@ -31,13 +33,17 @@ class BlockScratch:
     """Reusable, bounded, disk-backed state for one complete block-number group."""
 
     def __init__(self, meter: WorkspaceMeter) -> None:
+        self._owned_iterators: list[tuple[str, Iterator[object]]] = []
+        self._cleanup_failure: TaxonomyCleanupError | None = None
         self.database = MeteredSQLite(
             meter.root / "taxonomy-block-scratch.sqlite",
             meter,
             _SCRATCH_DB_MAX_BYTES,
             "taxonomy block equality-group scratch",
         )
-        with self.database.transaction("create block equality-group scratch") as connection:
+        with self.database.initializing_transaction(
+            "create block equality-group scratch"
+        ) as connection:
             connection.executescript(
                 """
                 CREATE TABLE rows(
@@ -129,20 +135,106 @@ class BlockScratch:
             raise TaxonomyBoundaryError("duplicate raw block locator") from exc
 
     def ordered_rows(self) -> Iterator[sqlite3.Row]:
+        return self._own_iterator(
+            self._ordered_rows(),
+            label="block scratch ordered-row SQLite cursor",
+        )  # type: ignore[return-value]
+
+    def _ordered_rows(self) -> Iterator[sqlite3.Row]:
         self.database.connection.row_factory = sqlite3.Row
-        yield from self.database.connection.execute(
-            "SELECT * FROM rows ORDER BY object_key_bytes,compressed_sha256,record_ordinal"
-        )
+        cursor: sqlite3.Cursor | None = None
+        try:
+            cursor = self.database.connection.execute(
+                "SELECT * FROM rows ORDER BY "
+                "object_key_bytes,compressed_sha256,record_ordinal"
+            )
+            for row in cursor:
+                yield row
+        finally:
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except BaseException as exc:
+                    raise TaxonomyCleanupError(
+                        "block scratch ordered-row SQLite cursor cleanup failed"
+                    ) from exc
 
     def raw_keys(self) -> Iterator[bytes]:
-        for row in self.database.connection.execute(
-            "SELECT raw_block_key FROM rows "
-            "ORDER BY object_key_bytes,compressed_sha256,record_ordinal"
-        ):
-            yield bytes(row[0])
+        return self._own_iterator(
+            self._raw_keys(),
+            label="block scratch raw-key SQLite cursor",
+        )  # type: ignore[return-value]
+
+    def _own_iterator(
+        self,
+        iterator: Iterator[object],
+        *,
+        label: str,
+    ) -> Iterator[object]:
+        if self._cleanup_failure is not None:
+            raise self._cleanup_failure
+        owned: Iterator[object]
+
+        def _owned() -> Iterator[object]:
+            try:
+                with cleanup_checked_iterator(iterator, label=label) as values:
+                    for value in values:
+                        yield value
+            finally:
+                self._owned_iterators = [
+                    entry for entry in self._owned_iterators if entry[1] is not owned
+                ]
+
+        owned = _owned()
+        self._owned_iterators.append((label, owned))
+        return owned
+
+    def _raw_keys(self) -> Iterator[bytes]:
+        cursor: sqlite3.Cursor | None = None
+        try:
+            cursor = self.database.connection.execute(
+                "SELECT raw_block_key FROM rows "
+                "ORDER BY object_key_bytes,compressed_sha256,record_ordinal"
+            )
+            for row in cursor:
+                yield bytes(row[0])
+        finally:
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except BaseException as exc:
+                    raise TaxonomyCleanupError(
+                        "block scratch raw-key SQLite cursor cleanup failed"
+                    ) from exc
 
     def close_delete(self) -> None:
-        self.database.close_delete()
+        if self._cleanup_failure is not None:
+            raise self._cleanup_failure
+        original_failure = sys.exception()
+        owned = self._owned_iterators
+        self._owned_iterators = []
+        errors: list[BaseException] = []
+        for _, iterator in reversed(owned):
+            try:
+                iterator.close()
+            except BaseException as exc:
+                errors.append(exc)
+        try:
+            self.database.close_delete()
+        except BaseException as exc:
+            errors.append(exc)
+        if errors:
+            tail = original_failure
+            for error in reversed(errors):
+                if tail is not None and (
+                    error.__context__ is None
+                    or isinstance(error.__context__, GeneratorExit)
+                ):
+                    error.__context__ = tail
+                tail = error
+            failure = TaxonomyCleanupError("block scratch cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
 
 class EventScratch(_core.GroupScratch):
@@ -332,8 +424,7 @@ def _classify_blocks(
             meter.delete_file(
                 materialized.block_directory / f"part-{partition:03d}.frames"
             )
-        if materialized.block_directory.exists():
-            materialized.block_directory.rmdir()
+        meter.delete_empty_directory(materialized.block_directory)
         return index, reducer_rows, group_count, observation_count
     except Exception:
         index.close_delete()
@@ -351,15 +442,18 @@ def classify_materialized_candidates(
         raise TaxonomyBoundaryError(
             "truncated materialization cannot enter taxonomy"
         )
-    joins = DiskJoinLedger(meter)
-    block_scratch = BlockScratch(meter)
-    event_scratch = EventScratch(meter)
+    joins: DiskJoinLedger | None = None
+    block_scratch: BlockScratch | None = None
+    event_scratch: EventScratch | None = None
     conservations = {
         universe: UniverseConservation() for universe in UnitUniverse
     }
     block_index: BlockProofIndex | None = None
     protocol_index: ProtocolProofIndex | None = None
     try:
+        joins = DiskJoinLedger(meter)
+        block_scratch = BlockScratch(meter)
+        event_scratch = EventScratch(meter)
         (
             block_index,
             block_reducer_rows,
@@ -433,6 +527,7 @@ def classify_materialized_candidates(
             exact_three_utc_days=exact_three_utc_days,
         )
     finally:
+        original_failure = sys.exception()
         errors: list[BaseException] = []
         for value in (
             protocol_index,
@@ -448,7 +543,12 @@ def classify_materialized_candidates(
             except BaseException as exc:
                 errors.append(exc)
         if errors:
-            raise TaxonomyBoundaryError(
+            tail = original_failure
+            for error in reversed(errors):
+                if tail is not None and error.__context__ is None:
+                    error.__context__ = tail
+                tail = error
+            raise TaxonomyCleanupError(
                 "taxonomy cleanup failed"
             ) from errors[0]
 
@@ -459,6 +559,7 @@ __all__ = [
     "EvidenceEmitter",
     "ProofReference",
     "Taxon",
+    "TaxonomyCleanupError",
     "TaxonomyBoundaryError",
     "TaxonomyResult",
     "UnitUniverse",

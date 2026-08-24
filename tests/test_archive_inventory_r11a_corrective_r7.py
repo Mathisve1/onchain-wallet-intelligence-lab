@@ -97,7 +97,12 @@ from research.archive_inventory.r11a_corrective.storage_r7 import (
     MeteredSQLite,
     ReservedBinaryWriter,
     StorageBoundaryError,
+    StorageCleanupError,
     directory_size,
+    encode_keyed_record,
+    external_sort_partition,
+    iter_equality_group_spools,
+    write_frame,
 )
 from research.archive_inventory.r11a_corrective.terminal_propagation import (
     TerminalPropagationError,
@@ -307,6 +312,22 @@ def execute_public_synthetic_route(
 
 def read_ndjson(path: Path) -> list[dict[str, object]]:
     return [json.loads(raw) for raw in path.read_bytes().splitlines()]
+
+
+def exception_graph(root: BaseException) -> tuple[BaseException, ...]:
+    pending = [root]
+    observed: list[BaseException] = []
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop(0)
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        observed.append(current)
+        for child in (current.__cause__, current.__context__):
+            if child is not None:
+                pending.append(child)
+    return tuple(observed)
 
 
 def write_ndjson(path: Path, rows: list[dict[str, object]]) -> None:
@@ -879,13 +900,13 @@ class WorkspaceAccountingTests(unittest.TestCase):
                 "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
                 side_effect=OSError("injected cleanup failure"),
             ):
-                with self.assertRaises(OSError):
+                with self.assertRaises(StorageCleanupError):
                     atomic.commit(lambda _: None)
             self.assertTrue(atomic.final_path.exists())
             meter.checked_rmtree(atomic.final_path)
             self.assertEqual(meter.verify_actual_usage(), 0)
 
-    def test_failed_validation_cleanup_failure_preserves_exact_accounting(
+    def test_failed_validation_cleanup_failure_remains_fatal_and_accounted(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -904,7 +925,7 @@ class WorkspaceAccountingTests(unittest.TestCase):
                 "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
                 side_effect=OSError("injected validation rollback cleanup failure"),
             ):
-                with self.assertRaises(OSError):
+                with self.assertRaises(StorageCleanupError) as raised:
                     atomic.commit(reject)
             self.assertEqual(validations, 1)
             self.assertFalse(atomic.final_path.exists())
@@ -914,8 +935,24 @@ class WorkspaceAccountingTests(unittest.TestCase):
                 meter.verify_actual_usage(),
                 directory_size(atomic.staging_path),
             )
-            atomic.rollback()
-            self.assertFalse(atomic.staging_path.exists())
+            with self.assertRaises(StorageCleanupError) as retry:
+                atomic.rollback()
+            self.assertTrue(
+                any(
+                    str(value)
+                    == "injected validation rollback cleanup failure"
+                    for value in exception_graph(raised.exception)
+                )
+            )
+            self.assertTrue(atomic.staging_path.exists())
+            self.assertTrue(
+                any(
+                    str(value)
+                    == "injected validation rollback cleanup failure"
+                    for value in exception_graph(retry.exception)
+                )
+            )
+            meter.checked_rmtree(atomic.staging_path)
             self.assertEqual(meter.verify_actual_usage(), 0)
 
     def test_metadata_close_and_shared_directory_reservations_are_exact(self) -> None:
@@ -964,6 +1001,324 @@ class WorkspaceAccountingTests(unittest.TestCase):
             with self.assertRaises(StorageBoundaryError):
                 meter.verify_actual_usage()
 
+    def test_sqlite_rollback_failure_is_fatal_and_cleanup_is_sticky(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            database = MeteredSQLite(
+                meter.root / "rollback.sqlite",
+                meter,
+                1_000_000,
+                "rollback fault injection",
+            )
+            real_connection = database.connection
+            self.assertIsNotNone(real_connection)
+
+            class RollbackFailingConnection:
+                def __getattr__(self, name: str) -> object:
+                    return getattr(real_connection, name)
+
+                def rollback(self) -> None:
+                    real_connection.rollback()  # type: ignore[union-attr]
+                    raise OSError("injected SQLite rollback cleanup failure")
+
+            database.connection = RollbackFailingConnection()  # type: ignore[assignment]
+            with self.assertRaises(StorageCleanupError) as raised:
+                with database.transaction("rollback fault"):
+                    raise RuntimeError("injected transaction failure")
+            graph = exception_graph(raised.exception)
+            self.assertTrue(
+                any(
+                    str(value) == "injected SQLite rollback cleanup failure"
+                    for value in graph
+                )
+            )
+            self.assertTrue(
+                any(str(value) == "injected transaction failure" for value in graph)
+            )
+
+            database.connection = real_connection
+
+            class CloseFailingConnection:
+                def __getattr__(self, name: str) -> object:
+                    return getattr(real_connection, name)
+
+                def close(self) -> None:
+                    real_connection.close()  # type: ignore[union-attr]
+                    raise OSError("injected SQLite close cleanup failure")
+
+            database.connection = CloseFailingConnection()  # type: ignore[assignment]
+            with self.assertRaises(StorageCleanupError) as first:
+                database.close_delete()
+            with self.assertRaises(StorageCleanupError) as second:
+                database.close_delete()
+            self.assertIs(first.exception, second.exception)
+            self.assertEqual(meter.reserved_bytes, 0)
+            self.assertEqual(meter.known_bytes, 0)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_external_sort_surfaces_abandoned_reader_cleanup_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            source = meter.root / "source.frames"
+            destination = meter.root / "destination.frames"
+            scratch = meter.root / "sort-scratch"
+            record = encode_keyed_record(b"key", b"payload")
+            with ReservedBinaryWriter(
+                source,
+                meter,
+                maximum_bytes=1024,
+                label="external sort source fixture",
+                buffer_bytes=1,
+            ) as writer:
+                write_frame(writer, record)
+
+            real_open = Path.open
+            real_write = ReservedBinaryWriter.write
+            close_faults = 0
+            unraisable: list[object] = []
+
+            class CloseFailingReader:
+                def __init__(self, handle: object) -> None:
+                    self.handle = handle
+
+                def read(self, size: int = -1) -> bytes:
+                    return self.handle.read(size)  # type: ignore[no-any-return,union-attr]
+
+                def close(self) -> None:
+                    nonlocal close_faults
+                    self.handle.close()  # type: ignore[union-attr]
+                    if close_faults == 0:
+                        close_faults += 1
+                        raise OSError("injected sort reader cleanup failure")
+
+            def wrap_run_reader(
+                path: Path,
+                mode: str = "r",
+                *args: object,
+                **kwargs: object,
+            ) -> object:
+                handle = real_open(path, mode, *args, **kwargs)
+                if path.name == "run-000000.frames" and mode == "rb":
+                    return CloseFailingReader(handle)
+                return handle
+
+            def fail_destination_write(
+                writer: ReservedBinaryWriter,
+                data: bytes,
+            ) -> None:
+                if writer.path == destination:
+                    raise RuntimeError("injected destination write failure")
+                real_write(writer, data)
+
+            with mock.patch.object(
+                Path,
+                "open",
+                autospec=True,
+                side_effect=wrap_run_reader,
+            ), mock.patch.object(
+                ReservedBinaryWriter,
+                "write",
+                autospec=True,
+                side_effect=fail_destination_write,
+            ), mock.patch.object(
+                sys,
+                "unraisablehook",
+                side_effect=lambda value: unraisable.append(value),
+            ):
+                with self.assertRaises(StorageCleanupError) as raised:
+                    external_sort_partition(
+                        source,
+                        destination,
+                        scratch,
+                        meter,
+                        source_record_count=1,
+                        source_logical_bytes=len(record),
+                        maximum_source_bytes=source.stat().st_size,
+                    )
+
+            graph = exception_graph(raised.exception)
+            self.assertEqual(close_faults, 1)
+            self.assertEqual(unraisable, [])
+            self.assertTrue(
+                any(
+                    str(value) == "injected sort reader cleanup failure"
+                    for value in graph
+                )
+            )
+            self.assertTrue(
+                any(
+                    str(value) == "injected destination write failure"
+                    for value in graph
+                )
+            )
+            self.assertFalse(destination.exists())
+            self.assertFalse(scratch.exists())
+            self.assertEqual(meter.reserved_bytes, 0)
+            meter.delete_file(source)
+            self.assertEqual(meter.known_bytes, 0)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_abandoned_group_spool_cleanup_is_synchronous_and_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            meter = self.meter(Path(temporary) / "workspace")
+            sorted_path = meter.root / "sorted.frames"
+            spool = meter.root / "groups"
+            record = encode_keyed_record(b"key", b"payload")
+            with ReservedBinaryWriter(
+                sorted_path,
+                meter,
+                maximum_bytes=1024,
+                label="group spool source fixture",
+                buffer_bytes=1,
+            ) as writer:
+                write_frame(writer, record)
+
+            groups = iter_equality_group_spools(
+                sorted_path,
+                spool,
+                meter,
+                maximum_group_spool_bytes=1024,
+            )
+            group = next(groups)
+            real_unlink = Path.unlink
+            cleanup_faults = 0
+            unraisable: list[object] = []
+
+            def fail_group_cleanup(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> None:
+                nonlocal cleanup_faults
+                if path == group.path and cleanup_faults == 0:
+                    cleanup_faults += 1
+                    raise OSError("injected group spool cleanup failure")
+                real_unlink(path, *args, **kwargs)
+
+            with mock.patch.object(
+                Path,
+                "unlink",
+                autospec=True,
+                side_effect=fail_group_cleanup,
+            ), mock.patch.object(
+                sys,
+                "unraisablehook",
+                side_effect=lambda value: unraisable.append(value),
+            ):
+                with self.assertRaises(StorageCleanupError) as raised:
+                    try:
+                        raise RuntimeError("injected group consumer failure")
+                    finally:
+                        meter.close_owned_iterators()
+
+            graph = exception_graph(raised.exception)
+            self.assertEqual(cleanup_faults, 1)
+            self.assertEqual(unraisable, [])
+            self.assertTrue(
+                any(
+                    str(value) == "injected group spool cleanup failure"
+                    for value in graph
+                )
+            )
+            self.assertTrue(
+                any(
+                    str(value) == "injected group consumer failure"
+                    for value in graph
+                )
+            )
+            self.assertEqual(meter.reserved_bytes, 0)
+            meter.delete_file(group.path)
+            meter.delete_empty_directory(spool)
+            meter.delete_file(sorted_path)
+            self.assertEqual(meter.known_bytes, 0)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_abandoned_taxonomy_cursors_close_before_scratch_database(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _taxonomy_contract_core_r7 as contract_core,
+        )
+        from research.archive_inventory.r11a_corrective import (
+            _taxonomy_core_r7 as taxonomy_core,
+        )
+
+        cases = (
+            (taxonomy_core.GroupScratch, "iter_ordered", {"value": 1}),
+            (contract_core.BlockScratch, "ordered_rows", {"value": 1}),
+            (contract_core.BlockScratch, "raw_keys", (b"raw-key",)),
+        )
+        for scratch_type, method_name, row in cases:
+            with self.subTest(method=method_name), tempfile.TemporaryDirectory() as temporary:
+                meter = self.meter(Path(temporary) / "workspace")
+                close_order: list[str] = []
+                unraisable: list[object] = []
+
+                class Cursor:
+                    def __init__(self) -> None:
+                        self.rows = iter((row,))
+
+                    def __iter__(self) -> object:
+                        return self
+
+                    def __next__(self) -> object:
+                        return next(self.rows)
+
+                    def close(self) -> None:
+                        close_order.append("cursor")
+                        raise OSError("injected taxonomy cursor cleanup failure")
+
+                cursor = Cursor()
+
+                class Connection:
+                    row_factory: object = None
+
+                    def execute(self, statement: str) -> Cursor:
+                        del statement
+                        return cursor
+
+                class Database:
+                    def __init__(self) -> None:
+                        self.connection = Connection()
+
+                    def close_delete(self) -> None:
+                        close_order.append("database")
+
+                scratch = object.__new__(scratch_type)
+                scratch._owned_iterators = []
+                scratch._cleanup_failure = None
+                scratch.database = Database()
+                iterator = getattr(scratch, method_name)()
+                next(iterator)
+
+                with mock.patch.object(
+                    sys,
+                    "unraisablehook",
+                    side_effect=lambda value: unraisable.append(value),
+                ):
+                    with self.assertRaises(taxonomy_core.TaxonomyCleanupError) as raised:
+                        try:
+                            raise RuntimeError("injected taxonomy consumer failure")
+                        finally:
+                            scratch.close_delete()
+
+                graph = exception_graph(raised.exception)
+                self.assertEqual(close_order, ["cursor", "database"])
+                self.assertEqual(unraisable, [])
+                self.assertTrue(
+                    any(
+                        str(value) == "injected taxonomy cursor cleanup failure"
+                        for value in graph
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        str(value) == "injected taxonomy consumer failure"
+                        for value in graph
+                    )
+                )
+                self.assertEqual(meter.reserved_bytes, 0)
+                self.assertEqual(meter.known_bytes, 0)
+                self.assertEqual(meter.verify_actual_usage(), 0)
+
 
 class RuntimeEndToEndTests(unittest.TestCase):
     @classmethod
@@ -995,6 +1350,7 @@ class RuntimeEndToEndTests(unittest.TestCase):
         workspace: Path,
         artifact: Path,
         return_code: int,
+        conclusion: str = "ROOT_CAUSE_NOT_PROVEN_FAIL_CLOSED_EMPTY_ARTIFACT",
     ) -> None:
         self.assertEqual(return_code, 21)
         self.assertTrue(artifact.is_dir())
@@ -1007,7 +1363,7 @@ class RuntimeEndToEndTests(unittest.TestCase):
         )
         self.assertEqual(
             result["research_conclusion"],
-            "ROOT_CAUSE_NOT_PROVEN_FAIL_CLOSED_EMPTY_ARTIFACT",
+            conclusion,
         )
         self.assertEqual(result["scientific_output_status"], "EMPTY")
         self.assertEqual(result["root_cause_claim_status"], "NOT_PROVEN")
@@ -1279,6 +1635,974 @@ class RuntimeEndToEndTests(unittest.TestCase):
         meter.checked_rmtree(artifact)
         self.assertEqual(meter.verify_actual_usage(), 0)
         self.assertEqual(list(workspace.iterdir()), [])
+
+    def test_one_shot_validation_rollback_cleanup_failure_is_fatal_publicly(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _artifact_contract_core_r7 as contract_core,
+            _runner_core_r7 as runner_core,
+            storage_r7 as storage_core,
+        )
+
+        workspace = self.root / "fatal-validation-rollback-workspace"
+        real_validate = contract_core.validate_artifact
+        real_rmtree = storage_core.shutil.rmtree
+        real_meter_type = runner_core.WorkspaceMeter
+        real_atomic_rollback = storage_core.AtomicArtifactDirectory.rollback
+        validation_calls = 0
+        staging_cleanup_attempts = 0
+        atomic_rollback_calls = 0
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def reject_first(path: Path, limits: object) -> None:
+            nonlocal validation_calls
+            validation_calls += 1
+            if validation_calls == 1:
+                raise ArtifactBoundaryError(
+                    "injected first artifact validation rejection"
+                )
+            real_validate(path, limits)
+
+        def fail_first_staging_cleanup(
+            path: object,
+            *args: object,
+            **kwargs: object,
+        ) -> object:
+            nonlocal staging_cleanup_attempts
+            if Path(path).name == ".r11a-v2-artifact.staging":
+                staging_cleanup_attempts += 1
+                if staging_cleanup_attempts == 1:
+                    raise OSError(
+                        "injected one-shot rollback cleanup failure"
+                    )
+            return real_rmtree(path, *args, **kwargs)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        def track_atomic_rollback(owner: object) -> None:
+            nonlocal atomic_rollback_calls
+            atomic_rollback_calls += 1
+            real_atomic_rollback(owner)  # type: ignore[arg-type]
+
+        with mock.patch.object(
+            contract_core,
+            "validate_artifact",
+            side_effect=reject_first,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch(
+            "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
+            side_effect=fail_first_staging_cleanup,
+        ), mock.patch.object(
+            storage_core.AtomicArtifactDirectory,
+            "rollback",
+            autospec=True,
+            side_effect=track_atomic_rollback,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(validation_calls, 1)
+        self.assertEqual(staging_cleanup_attempts, 2)
+        self.assertEqual(atomic_rollback_calls, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        self.assertEqual(meter.known_bytes, 0)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.verify_actual_usage(), 0)
+        self.assertTrue(
+            any(
+                str(value) == "injected one-shot rollback cleanup failure"
+                for value in exception_graph(raised.exception)
+            )
+        )
+
+    def test_first_pass_parse_failure_recovers_publicly_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import _runner_core_r7 as runner_core
+
+        workspace = self.root / "first-pass-parse-recovery-workspace"
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch.object(
+            runner_core,
+            "parse_object_pass",
+            side_effect=RuntimeError("injected first-pass parse failure"),
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        context = json.loads((artifact / CONTEXT_FILE).read_bytes())
+        self.assertEqual(context["execution_phase"], "FIRST_LOCAL_PASS")
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+
+    def test_second_pass_parse_failure_recovers_publicly_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import _runner_core_r7 as runner_core
+
+        workspace = self.root / "second-pass-parse-recovery-workspace"
+        real_meter_type = runner_core.WorkspaceMeter
+        real_parse = runner_core.parse_object_pass
+        captured_meters: list[R7WorkspaceMeter] = []
+        parse_calls = 0
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        def fail_first_second_pass(*args: object, **kwargs: object) -> object:
+            nonlocal parse_calls
+            parse_calls += 1
+            if parse_calls == 73:
+                raise RuntimeError("injected first second-pass parse failure")
+            return real_parse(*args, **kwargs)
+
+        with mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch.object(
+            runner_core,
+            "parse_object_pass",
+            side_effect=fail_first_second_pass,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(parse_calls, 73)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        context = json.loads((artifact / CONTEXT_FILE).read_bytes())
+        self.assertEqual(context["execution_phase"], "SECOND_LOCAL_PASS")
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+
+    def test_partial_first_pass_index_construction_recovers_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            index as index_core,
+        )
+
+        workspace = self.root / "partial-index-construction-workspace"
+        real_writer = index_core.SharedPartitionWriter
+        real_meter_type = runner_core.WorkspaceMeter
+        writer_calls = 0
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def fail_second_writer(*args: object, **kwargs: object) -> object:
+            nonlocal writer_calls
+            writer_calls += 1
+            if writer_calls == 2:
+                raise RuntimeError("injected second index writer construction failure")
+            return real_writer(*args, **kwargs)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch.object(
+            index_core,
+            "SharedPartitionWriter",
+            side_effect=fail_second_writer,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(writer_calls, 2)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+
+    def test_partial_materializer_construction_recovers_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            materialize as materialize_core,
+        )
+
+        workspace = self.root / "partial-materializer-construction-workspace"
+        real_writer = materialize_core.SharedPartitionWriter
+        real_meter_type = runner_core.WorkspaceMeter
+        writer_calls = 0
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def fail_third_writer(*args: object, **kwargs: object) -> object:
+            nonlocal writer_calls
+            writer_calls += 1
+            if writer_calls == 3:
+                raise RuntimeError("injected third materializer writer construction failure")
+            return real_writer(*args, **kwargs)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch.object(
+            materialize_core,
+            "SharedPartitionWriter",
+            side_effect=fail_third_writer,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(writer_calls, 3)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+
+    def test_partial_candidate_database_construction_recovers_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            storage_r7 as storage_core,
+        )
+
+        workspace = self.root / "partial-candidate-database-workspace"
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ), mock.patch.object(
+            storage_core.sqlite3,
+            "connect",
+            side_effect=RuntimeError("injected candidate SQLite construction failure"),
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        self.assertEqual(len(captured_meters), 1)
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+        self.assertEqual(meter.verify_actual_usage(), actual)
+
+    def test_owner_cleanup_error_remains_fatal_after_physical_cleanup(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            index as index_core,
+        )
+
+        workspace = self.root / "fatal-owner-cleanup-workspace"
+        real_abort = index_core.FirstPassIndexes.abort
+        abort_calls = 0
+
+        def abort_then_fail(owner: object) -> None:
+            nonlocal abort_calls
+            abort_calls += 1
+            real_abort(owner)  # type: ignore[arg-type]
+            raise index_core.IndexCleanupError(
+                "injected owner cleanup failure after physical cleanup"
+            )
+
+        with mock.patch.object(
+            runner_core,
+            "parse_object_pass",
+            side_effect=RuntimeError("injected first-pass parse failure"),
+        ), mock.patch.object(
+            index_core.FirstPassIndexes,
+            "abort",
+            autospec=True,
+            side_effect=abort_then_fail,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(abort_calls, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        self.assertIsInstance(
+            raised.exception.__cause__,
+            index_core.IndexCleanupError,
+        )
+        self.assertEqual(
+            str(raised.exception.__cause__),
+            "injected owner cleanup failure after physical cleanup",
+        )
+
+    def test_processed_object_cleanup_failure_is_fatal_publicly(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+        )
+
+        workspace = self.root / "fatal-processed-object-cleanup-workspace"
+        real_unlink = Path.unlink
+        injected = 0
+
+        def fail_first_processed_object_unlink(
+            path: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            nonlocal injected
+            if path.name == "object-000.lz4" and injected == 0:
+                injected += 1
+                raise OSError("injected processed object cleanup failure")
+            real_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(
+            Path,
+            "unlink",
+            autospec=True,
+            side_effect=fail_first_processed_object_unlink,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(injected, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        self.assertTrue(
+            any(
+                str(value) == "injected processed object cleanup failure"
+                for value in exception_graph(raised.exception)
+            )
+        )
+
+    def test_framed_reader_close_failure_is_fatal_publicly(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+        )
+
+        workspace = self.root / "fatal-framed-reader-cleanup-workspace"
+        real_open = Path.open
+        injected = 0
+
+        class CloseFailingReader:
+            def __init__(self, handle: object) -> None:
+                self.handle = handle
+
+            def read(self, size: int = -1) -> bytes:
+                return self.handle.read(size)  # type: ignore[no-any-return,union-attr]
+
+            def close(self) -> None:
+                nonlocal injected
+                self.handle.close()  # type: ignore[union-attr]
+                if injected == 0:
+                    injected += 1
+                    raise OSError("injected framed reader cleanup failure")
+
+        def wrap_sorted_partition_reader(
+            path: Path,
+            mode: str = "r",
+            *args: object,
+            **kwargs: object,
+        ) -> object:
+            handle = real_open(path, mode, *args, **kwargs)
+            if path.name == "sorted-block_number-000.frames" and mode == "rb":
+                return CloseFailingReader(handle)
+            return handle
+
+        with mock.patch.object(
+            Path,
+            "open",
+            autospec=True,
+            side_effect=wrap_sorted_partition_reader,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(injected, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        self.assertTrue(
+            any(
+                str(value) == "injected framed reader cleanup failure"
+                for value in exception_graph(raised.exception)
+            )
+        )
+
+    def test_entrypoint_setup_reader_cleanup_failures_are_fatal(self) -> None:
+        from research.archive_inventory.r11a_corrective import entrypoint
+        from research.archive_inventory.r11a_corrective.pricing import SNAPSHOT_PATH
+
+        context_path = self.root / "complete-workspace-context.json"
+        principal_path = self.root / "complete-workspace-principal.json"
+        real_open = Path.open
+
+        class CloseFailingReader:
+            def __init__(self, handle: object, message: str) -> None:
+                self.handle = handle
+                self.message = message
+                self.injected = False
+
+            def read(self, size: int = -1) -> bytes:
+                return self.handle.read(size)  # type: ignore[no-any-return,union-attr]
+
+            def close(self) -> None:
+                self.handle.close()  # type: ignore[union-attr]
+                if not self.injected:
+                    self.injected = True
+                    raise OSError(self.message)
+
+        for label, target in (
+            ("principal", principal_path),
+            ("pricing", SNAPSHOT_PATH),
+        ):
+            with self.subTest(label=label):
+                workspace = self.root / f"fatal-{label}-reader-cleanup-workspace"
+                message = f"injected {label} reader cleanup failure"
+                injected = 0
+
+                def wrap_setup_reader(
+                    path: Path,
+                    mode: str = "r",
+                    *args: object,
+                    **kwargs: object,
+                ) -> object:
+                    nonlocal injected
+                    handle = real_open(path, mode, *args, **kwargs)
+                    if path == target and mode == "rb" and injected == 0:
+                        injected += 1
+                        return CloseFailingReader(handle, message)
+                    return handle
+
+                with mock.patch.object(
+                    Path,
+                    "open",
+                    autospec=True,
+                    side_effect=wrap_setup_reader,
+                ):
+                    with self.assertRaises(StorageCleanupError) as raised:
+                        entrypoint.execute(workspace, context_path, principal_path)
+
+                self.assertEqual(injected, 1)
+                self.assertFalse(workspace.exists())
+                self.assertTrue(
+                    any(
+                        str(value) == message
+                        for value in exception_graph(raised.exception)
+                    )
+                )
+
+    def test_file_handle_cleanup_failures_are_fatal_across_runtime_layers(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+        )
+
+        real_open = Path.open
+        scenarios = (
+            (
+                "compressed-reader",
+                lambda path, mode: path.name == "object-000.lz4" and mode == "rb",
+            ),
+            (
+                "transport-writer",
+                lambda path, mode: path.name == "object-000.lz4" and mode == "xb",
+            ),
+            (
+                "partition-writer",
+                lambda path, mode: (
+                    "first-pass-block-index" in path.parts and mode == "xb"
+                ),
+            ),
+            (
+                "scientific-writer",
+                lambda path, mode: (
+                    path.name == UNIT_FILE and mode == "xb"
+                ),
+            ),
+            (
+                "metadata-writer",
+                lambda path, mode: (
+                    path.name == CONTEXT_FILE and mode == "xb"
+                ),
+            ),
+            (
+                "artifact-validator-reader",
+                lambda path, mode: (
+                    path.name == CONTEXT_FILE and mode == "rb"
+                ),
+            ),
+        )
+
+        class CloseFailingHandle:
+            def __init__(self, handle: object, inject: object) -> None:
+                self.handle = handle
+                self.inject = inject
+                self.closed_once = False
+
+            def __getattr__(self, name: str) -> object:
+                return getattr(self.handle, name)
+
+            def close(self) -> None:
+                self.handle.close()  # type: ignore[union-attr]
+                if not self.closed_once:
+                    self.closed_once = True
+                    self.inject()  # type: ignore[operator]
+
+        for label, matches in scenarios:
+            with self.subTest(label=label):
+                workspace = self.root / f"fatal-{label}-cleanup-workspace"
+                wrapped = 0
+                faults = 0
+                message = f"injected {label} cleanup failure"
+
+                def inject() -> None:
+                    nonlocal faults
+                    faults += 1
+                    raise OSError(message)
+
+                def wrap_handle(
+                    path: Path,
+                    mode: str = "r",
+                    *args: object,
+                    **kwargs: object,
+                ) -> object:
+                    nonlocal wrapped
+                    handle = real_open(path, mode, *args, **kwargs)
+                    if wrapped == 0 and matches(path, mode):
+                        wrapped += 1
+                        return CloseFailingHandle(handle, inject)
+                    return handle
+
+                with mock.patch.object(
+                    Path,
+                    "open",
+                    autospec=True,
+                    side_effect=wrap_handle,
+                ):
+                    with self.assertRaises(
+                        runner_core.RecoveryBoundaryError
+                    ) as raised:
+                        execute_public_synthetic_route(workspace, incomplete=False)
+
+                self.assertEqual(wrapped, 1)
+                self.assertEqual(faults, 1)
+                self.assertFalse((workspace / "r11a-v2-artifact").exists())
+                self.assertFalse(
+                    (workspace / ".r11a-v2-artifact.staging").exists()
+                )
+                self.assertEqual(list(workspace.iterdir()), [])
+                self.assertTrue(
+                    any(
+                        str(value) == message
+                        for value in exception_graph(raised.exception)
+                    )
+                )
+
+    def test_fresh_rc21_validation_cleanup_failure_is_fatal_without_retry(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _artifact_contract_core_r7 as contract_core,
+            _runner_core_r7 as runner_core,
+            storage_r7 as storage_core,
+        )
+
+        workspace = self.root / "fatal-fresh-rc21-workspace"
+        real_rmtree = storage_core.shutil.rmtree
+        validation_terminals: list[str] = []
+        cleanup_injections = 0
+        reject_fresh = False
+
+        def reject_initial_and_fresh(path: Path, limits: object) -> None:
+            nonlocal reject_fresh
+            terminal = json.loads((path / RESULT_FILE).read_bytes())[
+                "terminal_class"
+            ]
+            validation_terminals.append(terminal)
+            if len(validation_terminals) == 2:
+                reject_fresh = True
+            raise ArtifactBoundaryError(
+                f"injected validation rejection {len(validation_terminals)}"
+            )
+
+        def fail_fresh_cleanup(
+            path: object,
+            *args: object,
+            **kwargs: object,
+        ) -> object:
+            nonlocal cleanup_injections
+            if (
+                reject_fresh
+                and Path(path).name == ".r11a-v2-artifact.staging"
+                and cleanup_injections == 0
+            ):
+                cleanup_injections += 1
+                raise OSError("injected fresh RC21 cleanup failure")
+            return real_rmtree(path, *args, **kwargs)
+
+        with mock.patch.object(
+            contract_core,
+            "validate_artifact",
+            side_effect=reject_initial_and_fresh,
+        ), mock.patch(
+            "research.archive_inventory.r11a_corrective.storage_r7.shutil.rmtree",
+            side_effect=fail_fresh_cleanup,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(
+            validation_terminals,
+            [
+                "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+                "R11A_V2_FAIL_CLOSED_EARLY_STOP",
+            ],
+        )
+        self.assertEqual(cleanup_injections, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        graph = exception_graph(raised.exception)
+        self.assertTrue(
+            any(str(value) == "injected validation rejection 2" for value in graph)
+        )
+        self.assertTrue(
+            any(str(value) == "injected fresh RC21 cleanup failure" for value in graph)
+        )
+
+    def test_reserved_writer_open_failure_recovers_to_valid_rc21(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+        )
+
+        workspace = self.root / "reserved-writer-construction-workspace"
+        real_open = Path.open
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+        injected = 0
+
+        def fail_first_object_open(
+            path: Path,
+            mode: str = "r",
+            *args: object,
+            **kwargs: object,
+        ) -> object:
+            nonlocal injected
+            if path.name == "object-000.lz4" and mode == "xb" and injected == 0:
+                injected += 1
+                raise OSError("injected reserved writer open failure")
+            return real_open(path, mode, *args, **kwargs)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            Path,
+            "open",
+            autospec=True,
+            side_effect=fail_first_object_open,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(injected, 1)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+            conclusion="ROOT_CAUSE_NOT_PROVEN_NETWORK_FAIL_CLOSED_EMPTY_ARTIFACT",
+        )
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+
+    def test_partial_scientific_emitter_construction_recovers_to_valid_rc21(
+        self,
+    ) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+        )
+
+        workspace = self.root / "partial-science-construction-workspace"
+        real_open = Path.open
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+        injected = 0
+        target_name = SCIENCE_CONTAINERS[2]
+
+        def fail_third_science_open(
+            path: Path,
+            mode: str = "r",
+            *args: object,
+            **kwargs: object,
+        ) -> object:
+            nonlocal injected
+            if path.name == target_name and mode == "xb" and injected == 0:
+                injected += 1
+                raise OSError("injected science constructor open failure")
+            return real_open(path, mode, *args, **kwargs)
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            Path,
+            "open",
+            autospec=True,
+            side_effect=fail_third_science_open,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(injected, 1)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+            conclusion="ROOT_CAUSE_NOT_PROVEN_NETWORK_FAIL_CLOSED_EMPTY_ARTIFACT",
+        )
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+
+    def test_metadata_constructor_failure_recovers_to_valid_rc21(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            storage_r7 as storage_core,
+        )
+
+        workspace = self.root / "metadata-construction-workspace"
+        real_checkpoint = storage_core.WorkspaceMeter.checkpoint_value
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+        injected = 0
+
+        def fail_after_metadata_checkpoint(
+            meter: R7WorkspaceMeter,
+            reservation: object,
+            actual_bytes: int,
+            *,
+            packaging: bool = False,
+            phase: str,
+        ) -> int:
+            nonlocal injected
+            result = real_checkpoint(
+                meter,
+                reservation,  # type: ignore[arg-type]
+                actual_bytes,
+                packaging=packaging,
+                phase=phase,
+            )
+            if phase == "create metadata reservation" and injected == 0:
+                injected += 1
+                raise RuntimeError("injected metadata constructor checkpoint failure")
+            return result
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            storage_core.WorkspaceMeter,
+            "checkpoint_value",
+            autospec=True,
+            side_effect=fail_after_metadata_checkpoint,
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assertEqual(injected, 1)
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
+
+    def test_taxonomy_cleanup_error_remains_fatal_publicly(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            join_r7 as join_core,
+        )
+
+        workspace = self.root / "fatal-taxonomy-cleanup-workspace"
+        real_close = join_core.DiskJoinLedger.close_delete
+        cleanup_calls = 0
+
+        def close_then_fail(owner: object) -> None:
+            nonlocal cleanup_calls
+            cleanup_calls += 1
+            real_close(owner)  # type: ignore[arg-type]
+            raise StorageCleanupError("injected taxonomy cleanup failure")
+
+        with mock.patch.object(
+            join_core.DiskJoinLedger,
+            "close_delete",
+            autospec=True,
+            side_effect=close_then_fail,
+        ):
+            with self.assertRaises(runner_core.RecoveryBoundaryError) as raised:
+                execute_public_synthetic_route(workspace, incomplete=False)
+
+        self.assertEqual(cleanup_calls, 1)
+        self.assertFalse((workspace / "r11a-v2-artifact").exists())
+        self.assertFalse((workspace / ".r11a-v2-artifact.staging").exists())
+        self.assertEqual(list(workspace.iterdir()), [])
+        self.assertTrue(
+            any(
+                str(value) == "injected taxonomy cleanup failure"
+                for value in exception_graph(raised.exception)
+            )
+        )
+
+    def test_partial_taxonomy_construction_recovers_to_valid_rc21(self) -> None:
+        from research.archive_inventory.r11a_corrective import (
+            _runner_core_r7 as runner_core,
+            _taxonomy_contract_core_r7 as taxonomy_core,
+        )
+
+        workspace = self.root / "partial-taxonomy-construction-workspace"
+        real_meter_type = runner_core.WorkspaceMeter
+        captured_meters: list[R7WorkspaceMeter] = []
+
+        def capture_meter(*args: object, **kwargs: object) -> R7WorkspaceMeter:
+            meter = real_meter_type(*args, **kwargs)
+            captured_meters.append(meter)
+            return meter
+
+        with mock.patch.object(
+            taxonomy_core,
+            "EventScratch",
+            side_effect=RuntimeError("injected event scratch construction failure"),
+        ), mock.patch.object(
+            runner_core,
+            "WorkspaceMeter",
+            side_effect=capture_meter,
+        ):
+            return_code, artifact = execute_public_synthetic_route(
+                workspace,
+                incomplete=False,
+            )
+
+        self.assert_valid_rc21_recovery(
+            workspace=workspace,
+            artifact=artifact,
+            return_code=return_code,
+        )
+        meter = captured_meters[0]
+        actual = directory_size(artifact)
+        self.assertEqual(meter.reserved_bytes, 0)
+        self.assertEqual(meter.known_bytes, actual)
 
     def test_metadata_finalization_failure_recovers_to_valid_rc21(self) -> None:
         from research.archive_inventory.r11a_corrective import (
@@ -1714,6 +3038,284 @@ class RuntimeEndToEndTests(unittest.TestCase):
 
 
 class FrozenTaxonomyAndWorkflowTests(unittest.TestCase):
+    def test_late_http_error_closes_every_distinct_transport_owner(self) -> None:
+        import urllib.error
+
+        from research.archive_inventory.r11a_corrective import network
+
+        class LateHTTPError(urllib.error.HTTPError):
+            def __init__(self) -> None:
+                super().__init__(
+                    "https://example.invalid/late-error",
+                    503,
+                    "late read failure",
+                    {},
+                    io.BytesIO(b"late-error"),
+                )
+                self.close_calls = 0
+
+            def close(self) -> None:
+                self.close_calls += 1
+                super().close()
+
+        class Response:
+            status = 200
+
+            def __init__(self, headers: dict[str, str], late_error: LateHTTPError) -> None:
+                self.headers = headers
+                self.late_error = late_error
+                self.close_calls = 0
+
+            def getcode(self) -> int:
+                return self.status
+
+            def read(self, size: int = -1) -> bytes:
+                del size
+                raise self.late_error
+
+            def close(self) -> None:
+                self.close_calls += 1
+                try:
+                    raise ValueError("injected nested response cleanup cause")
+                except ValueError as exc:
+                    raise OSError(
+                        "injected acquired response cleanup failure"
+                    ) from exc
+
+        class Opener:
+            def __init__(self, response: Response) -> None:
+                self.response = response
+
+            def open(self, request: object, timeout: int) -> Response:
+                del request, timeout
+                return self.response
+
+        history_error = LateHTTPError()
+        history_response = Response(
+            {"Content-Length": "1"},
+            history_error,
+        )
+        with self.assertRaises(network.TransportCleanupError) as history_raised:
+            network.validate_single_use_history(
+                repository="Mathisve1/onchain-wallet-intelligence-lab",
+                workflow_file=(
+                    "hyperliquid-archive-r11a-identity-boundary-diagnostic.yml"
+                ),
+                current_run_id=41,
+                current_run_attempt=1,
+                single_use_window_start_utc="2026-01-01T00:00:00Z",
+                token="synthetic",
+                opener=Opener(history_response),  # type: ignore[arg-type]
+            )
+        history_graph = exception_graph(history_raised.exception)
+        self.assertEqual(history_response.close_calls, 1)
+        self.assertEqual(history_error.close_calls, 1)
+        self.assertTrue(any(value is history_error for value in history_graph))
+        self.assertTrue(
+            any(
+                str(value) == "injected nested response cleanup cause"
+                for value in history_graph
+            )
+        )
+        self.assertTrue(
+            any(
+                str(value) == "injected acquired response cleanup failure"
+                for value in history_graph
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            guard = RuntimeGuard(DEFAULT_LIMITS)
+            meter = R7WorkspaceMeter(
+                Path(temporary) / "workspace",
+                DEFAULT_LIMITS,
+                guard,
+            )
+            meter.bootstrap()
+            target = DEFAULT_SELECTION.targets[0]
+            state = ExecutionEvidenceState(DEFAULT_SELECTION.targets, DEFAULT_LIMITS)
+            download_error = LateHTTPError()
+            download_response = Response(
+                {
+                    "ETag": target.expected_etag,
+                    "Content-Length": str(target.expected_size_bytes),
+                    "x-amz-request-charged": "requester",
+                },
+                download_error,
+            )
+
+            class Budget:
+                def authorize_request(
+                    self,
+                    *,
+                    request_ordinal_zero_based: int,
+                    expected_response_bytes: int,
+                ) -> None:
+                    self.observed = (
+                        request_ordinal_zero_based,
+                        expected_response_bytes,
+                    )
+
+            destination = meter.root / "download.lz4"
+            with self.assertRaises(network.TransportCleanupError) as download_raised:
+                network.download_exact_object(
+                    target=target,
+                    destination=destination,
+                    credentials=AWSCredentials(
+                        access_key_id="SYNTHETIC",
+                        secret_access_key="SYNTHETIC",
+                        session_token="SYNTHETIC",
+                    ),
+                    state=state,
+                    meter=meter,
+                    runtime_guard=guard,
+                    budget_guard=Budget(),  # type: ignore[arg-type]
+                    opener=Opener(download_response),  # type: ignore[arg-type]
+                )
+            download_graph = exception_graph(download_raised.exception)
+            self.assertEqual(download_response.close_calls, 1)
+            self.assertEqual(download_error.close_calls, 1)
+            self.assertTrue(any(value is download_error for value in download_graph))
+            self.assertTrue(
+                any(
+                    str(value) == "injected acquired response cleanup failure"
+                    for value in download_graph
+                )
+            )
+            self.assertFalse(destination.exists())
+            self.assertEqual(meter.reserved_bytes, 0)
+            self.assertEqual(meter.known_bytes, 0)
+            self.assertEqual(meter.verify_actual_usage(), 0)
+
+    def test_history_response_cleanup_is_typed_and_has_fatal_cli_code(self) -> None:
+        from research.archive_inventory.r11a_corrective import network
+
+        payload = canonical_json_bytes(
+            {
+                "workflow_runs": [
+                    {
+                        "created_at": "2026-01-02T00:00:00Z",
+                        "id": 41,
+                    }
+                ]
+            }
+        )
+
+        class Response:
+            status = 200
+            headers = {"Content-Length": str(len(payload))}
+
+            def __init__(self) -> None:
+                self.stream = io.BytesIO(payload)
+                self.injected = False
+
+            def getcode(self) -> int:
+                return self.status
+
+            def read(self, size: int = -1) -> bytes:
+                return self.stream.read(size)
+
+            def close(self) -> None:
+                self.stream.close()
+                if not self.injected:
+                    self.injected = True
+                    raise OSError("injected history response cleanup failure")
+
+        class Opener:
+            def __init__(self, response: Response) -> None:
+                self.response = response
+
+            def open(self, request: object, timeout: int) -> Response:
+                del request, timeout
+                return self.response
+
+        response = Response()
+        with self.assertRaises(network.TransportCleanupError) as raised:
+            network.validate_single_use_history(
+                repository="Mathisve1/onchain-wallet-intelligence-lab",
+                workflow_file=(
+                    "hyperliquid-archive-r11a-identity-boundary-diagnostic.yml"
+                ),
+                current_run_id=41,
+                current_run_attempt=1,
+                single_use_window_start_utc="2026-01-01T00:00:00Z",
+                token="synthetic",
+                opener=Opener(response),  # type: ignore[arg-type]
+            )
+        self.assertEqual(
+            str(raised.exception.__cause__),
+            "injected history response cleanup failure",
+        )
+
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "synthetic"}), mock.patch.object(
+            network,
+            "validate_single_use_history",
+            side_effect=network.TransportCleanupError("injected CLI cleanup failure"),
+        ):
+            self.assertEqual(
+                network.main(
+                    [
+                        "verify-history",
+                        "--repository",
+                        "Mathisve1/onchain-wallet-intelligence-lab",
+                        "--workflow-file",
+                        "hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
+                        "--current-run-id",
+                        "41",
+                        "--current-run-attempt",
+                        "1",
+                        "--window-start",
+                        "2026-01-01T00:00:00Z",
+                    ]
+                ),
+                70,
+            )
+
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "synthetic"}), mock.patch.object(
+            network,
+            "validate_single_use_history",
+            side_effect=StorageCleanupError("injected foreign cleanup marker"),
+        ):
+            self.assertEqual(
+                network.main(
+                    [
+                        "verify-history",
+                        "--repository",
+                        "Mathisve1/onchain-wallet-intelligence-lab",
+                        "--workflow-file",
+                        "hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
+                        "--current-run-id",
+                        "41",
+                        "--current-run-attempt",
+                        "1",
+                        "--window-start",
+                        "2026-01-01T00:00:00Z",
+                    ]
+                ),
+                70,
+            )
+
+    def test_history_cleanup_never_opens_pre_oidc_artifact_routes(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (
+            root
+            / "research/archive_inventory/r11a_corrective/workflows/"
+            "hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('echo "fatal_cleanup=true" >> "${GITHUB_OUTPUT}"', workflow)
+        self.assertIn('if test "${history_rc}" = 70; then', workflow)
+        self.assertEqual(
+            workflow.count("steps.static.outputs.fatal_cleanup != 'true'"),
+            2,
+        )
+        producer = workflow.index(
+            "Produce and validate phase-truthful pre-OIDC failure artifact"
+        )
+        uploader = workflow.index("Upload only validated pre-OIDC failure evidence")
+        oidc = workflow.index("Assume exact successor role")
+        self.assertLess(producer, uploader)
+        self.assertLess(uploader, oidc)
+
     def test_exact_authoritative_universes_and_taxa(self) -> None:
         self.assertEqual(
             tuple(value.value for value in UnitUniverse),

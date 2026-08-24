@@ -15,17 +15,26 @@ from pathlib import Path
 from .canonical import FrozenObject, NumberToken, strict_json_loads
 from .pricing import BudgetGuard
 from .runtime import ExecutionEvidenceState, RuntimeGuard, RuntimeTarget
-from .storage_r7 import ReservedBinaryWriter, WorkspaceMeter
+from .storage_r7 import (
+    CleanupBoundaryError,
+    ReservedBinaryWriter,
+    WorkspaceMeter,
+)
 
 _REGION = "ap-northeast-1"
 _SERVICE = "s3"
 _BUCKET = "hl-mainnet-node-data"
 _CHUNK_BYTES = 1 << 20
 _GITHUB_RESPONSE_CAP = 1 << 20
+_FATAL_CLEANUP_EXIT_CODE = 70
 
 
 class TransportBoundaryError(RuntimeError):
     pass
+
+
+class TransportCleanupError(TransportBoundaryError, CleanupBoundaryError):
+    """A transport resource cleanup failure is fatal to terminal recovery."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -130,6 +139,44 @@ def _content_length(value: str | None) -> int | None:
     return int(value)
 
 
+def _append_transport_owner(owners: list[object], owner: object | None) -> None:
+    if owner is not None and all(owner is not current for current in owners):
+        owners.append(owner)
+
+
+def _close_transport_owners(
+    owners: list[object],
+) -> list[BaseException]:
+    errors: list[BaseException] = []
+    for owner in reversed(owners):
+        try:
+            owner.close()  # type: ignore[attr-defined]
+        except BaseException as exc:
+            errors.append(exc)
+    return errors
+
+
+def _raise_transport_cleanup(
+    errors: list[BaseException],
+    *,
+    label: str,
+    original_failure: BaseException | None,
+) -> None:
+    if not errors:
+        return
+    tail = original_failure
+    for error in reversed(errors):
+        if tail is not None and error is not tail and error.__context__ is None:
+            error.__context__ = tail
+        tail = error
+    failure = TransportCleanupError(f"{label} cleanup failed")
+    if original_failure is not None:
+        # Keep the processing failure independently reachable even when a
+        # cleanup implementation arrived with its own cause/context chain.
+        failure.__context__ = original_failure
+    raise failure from errors[0]
+
+
 def download_exact_object(
     *,
     target: RuntimeTarget,
@@ -151,13 +198,16 @@ def download_exact_object(
         maximum_bytes=target.expected_size_bytes,
         label=f"compressed object {target.object_ordinal_zero_based}",
     )
-    state.request_sent(target.object_ordinal_zero_based)
-    request = build_signed_request(target, credentials)
-    client = opener or _opener()
     response = None
+    response_owners: list[object] = []
+    failure: BaseException | None = None
     try:
+        state.request_sent(target.object_ordinal_zero_based)
+        request = build_signed_request(target, credentials)
+        client = opener or _opener()
         runtime_guard.check_scientific_phase("before exact S3 GetObject")
         response = client.open(request, timeout=120)
+        _append_transport_owner(response_owners, response)
         status = int(getattr(response, "status", response.getcode()))
         etag = _header(response, "ETag")
         length = _content_length(_header(response, "Content-Length"))
@@ -197,19 +247,40 @@ def download_exact_object(
             raise TransportBoundaryError("compressed SHA-256 mismatch")
         state.body_complete(target.object_ordinal_zero_based, observed)
         writer.close()
-        return destination
-    except Exception as exc:
-        writer.abort()
-        if isinstance(exc, TransportBoundaryError):
-            raise
+    except BaseException as exc:
         if isinstance(exc, urllib.error.HTTPError):
-            raise TransportBoundaryError(f"S3 HTTP failure without retry: {exc.code}") from exc
-        if isinstance(exc, urllib.error.URLError):
-            raise TransportBoundaryError("S3 transport failure without retry") from exc
-        raise TransportBoundaryError("unexpected S3 transport failure") from exc
-    finally:
-        if response is not None:
-            response.close()
+            _append_transport_owner(response_owners, exc)
+        failure = exc
+
+    cleanup_errors: list[BaseException] = []
+    cleanup_errors.extend(_close_transport_owners(response_owners))
+    if failure is not None:
+        try:
+            writer.abort()
+        except BaseException as exc:
+            cleanup_errors.append(exc)
+    _raise_transport_cleanup(
+        cleanup_errors,
+        label="S3 transport",
+        original_failure=failure,
+    )
+    if failure is not None:
+        if isinstance(failure, CleanupBoundaryError):
+            raise failure
+        if isinstance(failure, TransportBoundaryError):
+            raise failure
+        if isinstance(failure, urllib.error.HTTPError):
+            raise TransportBoundaryError(
+                f"S3 HTTP failure without retry: {failure.code}"
+            ) from failure
+        if isinstance(failure, urllib.error.URLError):
+            raise TransportBoundaryError(
+                "S3 transport failure without retry"
+            ) from failure
+        if not isinstance(failure, Exception):
+            raise failure
+        raise TransportBoundaryError("unexpected S3 transport failure") from failure
+    return destination
 
 
 def _object(value: object, label: str) -> FrozenObject:
@@ -262,8 +333,11 @@ def validate_single_use_history(
         },
     )
     response = None
+    response_owners: list[object] = []
+    failure: BaseException | None = None
     try:
         response = (opener or _opener()).open(request, timeout=10)
+        _append_transport_owner(response_owners, response)
         if int(getattr(response, "status", response.getcode())) != 200:
             raise TransportBoundaryError("GitHub history request was not HTTP 200")
         length = _content_length(_header(response, "Content-Length"))
@@ -287,13 +361,28 @@ def validate_single_use_history(
                 eligible.append(_integer(row["id"], "workflow run ID"))
         if eligible != [current_run_id]:
             raise TransportBoundaryError("single-use R11A workflow history gate failed")
-    except urllib.error.HTTPError as exc:
-        raise TransportBoundaryError("GitHub history HTTP failure without retry") from exc
-    except urllib.error.URLError as exc:
-        raise TransportBoundaryError("GitHub history transport failure without retry") from exc
-    finally:
-        if response is not None:
-            response.close()
+    except BaseException as exc:
+        if isinstance(exc, urllib.error.HTTPError):
+            _append_transport_owner(response_owners, exc)
+        failure = exc
+
+    _raise_transport_cleanup(
+        _close_transport_owners(response_owners),
+        label="GitHub history response",
+        original_failure=failure,
+    )
+    if failure is not None:
+        if isinstance(failure, CleanupBoundaryError):
+            raise failure
+        if isinstance(failure, urllib.error.HTTPError):
+            raise TransportBoundaryError(
+                "GitHub history HTTP failure without retry"
+            ) from failure
+        if isinstance(failure, urllib.error.URLError):
+            raise TransportBoundaryError(
+                "GitHub history transport failure without retry"
+            ) from failure
+        raise failure
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -314,14 +403,17 @@ def main(argv: list[str] | None = None) -> int:
         token = os.environ.get("GH_TOKEN", "")
         if not token:
             raise SystemExit("GH_TOKEN is required for bounded history validation")
-        validate_single_use_history(
-            repository=arguments.repository,
-            workflow_file=arguments.workflow_file,
-            current_run_id=arguments.current_run_id,
-            current_run_attempt=arguments.current_run_attempt,
-            single_use_window_start_utc=arguments.window_start,
-            token=token,
-        )
+        try:
+            validate_single_use_history(
+                repository=arguments.repository,
+                workflow_file=arguments.workflow_file,
+                current_run_id=arguments.current_run_id,
+                current_run_attempt=arguments.current_run_attempt,
+                single_use_window_start_utc=arguments.window_start,
+                token=token,
+            )
+        except CleanupBoundaryError:
+            return _FATAL_CLEANUP_EXIT_CODE
         print("R11A_SINGLE_USE_HISTORY_VALID")
         return 0
     raise SystemExit("unsupported network command")

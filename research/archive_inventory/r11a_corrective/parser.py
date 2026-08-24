@@ -10,6 +10,7 @@ from .identity import BlockObservation, IdentityError, parse_block_record
 from .limits import R11ALimits
 from .lz4stream import LZ4LineReader, PassEvidence
 from .runtime import RuntimeGuard, RuntimeTarget
+from .storage_r7 import cleanup_checked_iterator
 
 
 class ParseError(RuntimeError):
@@ -115,53 +116,57 @@ def parse_object_pass(
     block_previous = 0
     block_other = 0
 
-    for record_ordinal, line in enumerate(reader):
-        runtime_guard.check_scientific_phase(
-            f"parse object {target.object_ordinal_zero_based} record {record_ordinal}"
-        )
-        try:
-            value = strict_json_loads(line)
-            block = parse_block_record(
-                value,
-                object_key=target.object_key,
-                verified_compressed_sha256=target.expected_compressed_sha256,
-                record_ordinal_zero_based=record_ordinal,
+    with cleanup_checked_iterator(
+        iter(reader),
+        label="LZ4 line reader",
+    ) as lines:
+        for record_ordinal, line in enumerate(lines):
+            runtime_guard.check_scientific_phase(
+                f"parse object {target.object_ordinal_zero_based} record {record_ordinal}"
             )
-        except (ValueError, IdentityError) as exc:
-            raise ParseError(
-                f"strict source parse failed at object {target.object_ordinal_zero_based} record {record_ordinal}"
-            ) from exc
-        raw_blocks += 1
-        if block.exact_raw_local_time.startswith(path_prefix):
-            local_match += 1
-        else:
-            raise ParseError("local_time raw prefix does not match source path hour")
-        if block.exact_raw_block_time.startswith(path_prefix):
-            block_path += 1
-        elif block.exact_raw_block_time.startswith(previous_prefix):
-            block_previous += 1
-        else:
-            block_other += 1
-        for event in block.events:
-            raw_events += 1
-            if event.canonical_wallet is None:
-                invalid_wallet += 1
+            try:
+                value = strict_json_loads(line)
+                block = parse_block_record(
+                    value,
+                    object_key=target.object_key,
+                    verified_compressed_sha256=target.expected_compressed_sha256,
+                    record_ordinal_zero_based=record_ordinal,
+                )
+            except (ValueError, IdentityError) as exc:
+                raise ParseError(
+                    f"strict source parse failed at object {target.object_ordinal_zero_based} record {record_ordinal}"
+                ) from exc
+            raw_blocks += 1
+            if block.exact_raw_local_time.startswith(path_prefix):
+                local_match += 1
             else:
-                valid_wallet += 1
-            if event.exact_raw_coin_string is None:
-                invalid_coin += 1
+                raise ParseError("local_time raw prefix does not match source path hour")
+            if block.exact_raw_block_time.startswith(path_prefix):
+                block_path += 1
+            elif block.exact_raw_block_time.startswith(previous_prefix):
+                block_previous += 1
             else:
-                valid_coin += 1
-            if event.validated_tid is None:
-                invalid_tid += 1
-            else:
-                valid_tid += 1
-            if event.protocol_trade_identity is not None:
-                protocol += 1
-            if event.wallet_fill_identity is not None:
-                wallet_fill += 1
-        reader.add_event_count(len(block.events))
-        on_block(block)
+                block_other += 1
+            for event in block.events:
+                raw_events += 1
+                if event.canonical_wallet is None:
+                    invalid_wallet += 1
+                else:
+                    valid_wallet += 1
+                if event.exact_raw_coin_string is None:
+                    invalid_coin += 1
+                else:
+                    valid_coin += 1
+                if event.validated_tid is None:
+                    invalid_tid += 1
+                else:
+                    valid_tid += 1
+                if event.protocol_trade_identity is not None:
+                    protocol += 1
+                if event.wallet_fill_identity is not None:
+                    wallet_fill += 1
+            reader.add_event_count(len(block.events))
+            on_block(block)
 
     conservation = ParseConservation(
         raw_block_observation_count=raw_blocks,

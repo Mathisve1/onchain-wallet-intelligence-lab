@@ -479,8 +479,7 @@ def classify_legacy(
             materialized.weak_directory
             / f"part-{partition:03d}.frames"
         )
-    if materialized.weak_directory.exists():
-        materialized.weak_directory.rmdir()
+    meter.delete_empty_directory(materialized.weak_directory)
     return (
         reducer_rows,
         group_count,

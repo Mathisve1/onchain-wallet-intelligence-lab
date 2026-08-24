@@ -16,6 +16,7 @@ from .preflight_artifact_r7 import write_preflight_failure_artifact
 from .pricing import PricingSnapshot
 from .runner import RunInputs, run_network
 from .selection import DEFAULT_SELECTION
+from .storage_r7 import CleanupBoundaryError, cleanup_checked_read_bytes
 
 
 class EntrypointBoundaryError(ValueError):
@@ -65,10 +66,18 @@ def _failure(
 
 
 def execute(workspace: Path, context_path: Path, principal_path: Path) -> int:
-    raw_context = context_path.read_bytes()
+    raw_context = cleanup_checked_read_bytes(
+        context_path,
+        label="workflow context",
+    )
     try:
         workflow = WorkflowContext.from_bytes(raw_context)
-        principal = PrincipalEvidence.from_bytes(principal_path.read_bytes())
+        principal = PrincipalEvidence.from_bytes(
+            cleanup_checked_read_bytes(
+                principal_path,
+                label="principal evidence",
+            )
+        )
         snapshot = PricingSnapshot.load()
         projected = snapshot.projected_eur_micros(
             72,
@@ -80,6 +89,8 @@ def execute(workspace: Path, context_path: Path, principal_path: Path) -> int:
             pricing_projection_eur_micros=projected,
         )
         credentials = AWSCredentials.from_environment()
+    except CleanupBoundaryError:
+        raise
     except Exception as exc:
         return _failure(
             workspace=workspace,
@@ -100,7 +111,10 @@ def execute(workspace: Path, context_path: Path, principal_path: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
-    raw_context = arguments.workflow_context.read_bytes()
+    raw_context = cleanup_checked_read_bytes(
+        arguments.workflow_context,
+        label="workflow context",
+    )
     if arguments.mode == "failure":
         if arguments.failure_phase is None or arguments.failure_code is None:
             raise SystemExit("failure mode requires --failure-phase and --failure-code")

@@ -43,7 +43,12 @@ from .canonical import FrozenObject, NumberToken, canonical_json_bytes, strict_j
 from .limits import R11ALimits
 from .runtime import ExecutionEvidenceState, RuntimeGuard
 from .selection import DEFAULT_SELECTION
-from .storage_r7 import WorkspaceMeter, directory_size
+from .storage_r7 import (
+    WorkspaceMeter,
+    cleanup_checked_read_bytes,
+    cleanup_checked_read_text,
+    directory_size,
+)
 from .taxonomy import TaxonomyResult
 
 ArtifactBoundaryError = _core.ArtifactBoundaryError
@@ -955,19 +960,39 @@ def _validate_boundary(
 def validate_artifact(path: Path, limits: R11ALimits) -> None:
     _core.validate_artifact(path, limits)
     result = _object(
-        strict_json_loads((path / RESULT_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / RESULT_FILE,
+                label="contract result validation",
+            )
+        ),
         "result",
     )
     conservation = _object(
-        strict_json_loads((path / CONSERVATION_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / CONSERVATION_FILE,
+                label="contract conservation validation",
+            )
+        ),
         "conservation",
     )
     resource = _object(
-        strict_json_loads((path / RESOURCE_LEDGER_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / RESOURCE_LEDGER_FILE,
+                label="contract resource validation",
+            )
+        ),
         "resource",
     )
     context = _object(
-        strict_json_loads((path / CONTEXT_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / CONTEXT_FILE,
+                label="contract context validation",
+            )
+        ),
         "context",
     )
     if set(result) != _RESULT_FIELDS or result["schema_version"] != "2.0":
@@ -985,7 +1010,10 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         ):
             raise ArtifactBoundaryError("scientific file evidence schema drift")
         validate_sha256(evidence["sha256"], f"{name} SHA")
-        payload = (path / name).read_bytes()
+        payload = cleanup_checked_read_bytes(
+            path / name,
+            label=f"contract scientific validation {name}",
+        )
         if (
             _integer(evidence["byte_count"], f"{name} byte count") != len(payload)
             or _integer(evidence["row_count"], f"{name} row count")
@@ -1022,7 +1050,13 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
         root_cause_claim_status=str(result["root_cause_claim_status"]),
     )
     validate_research_conclusion(terminal, result["research_conclusion"])
-    rc_file = int((path / RETURN_CODE_FILE).read_text(encoding="ascii").strip())
+    rc_file = int(
+        cleanup_checked_read_text(
+            path / RETURN_CODE_FILE,
+            encoding="ascii",
+            label="contract return-code validation",
+        ).strip()
+    )
     if rc_file != return_code:
         raise ArtifactBoundaryError("result and detached return code differ")
     if (
@@ -1276,7 +1310,10 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
             )
 
     _validate_resource(resource, limits)
-    boundary_raw = (path / BOUNDARY_FILE).read_bytes()
+    boundary_raw = cleanup_checked_read_bytes(
+        path / BOUNDARY_FILE,
+        label="contract boundary validation",
+    )
     boundary = _object(
         strict_json_loads(boundary_raw.rstrip(b" \n") + b"\n"),
         "boundary",
@@ -1284,7 +1321,12 @@ def validate_artifact(path: Path, limits: R11ALimits) -> None:
     _validate_boundary(path, boundary, resource, limits)
 
     stop = _object(
-        strict_json_loads((path / STOP_LEDGER_FILE).read_bytes()),
+        strict_json_loads(
+            cleanup_checked_read_bytes(
+                path / STOP_LEDGER_FILE,
+                label="contract stop-ledger validation",
+            )
+        ),
         "stop ledger",
     )
     if (
@@ -1685,8 +1727,7 @@ class ArtifactSession(_core.ArtifactSession):
                     self.limits,
                 )
             )
-            self._closed = True
-            return ArtifactOutcome(
+            outcome = ArtifactOutcome(
                 final_directory=final,
                 terminal_class=terminal_class,
                 research_conclusion=research_conclusion,
@@ -1705,6 +1746,8 @@ class ArtifactSession(_core.ArtifactSession):
                 ).hexdigest(),
                 artifact_bytes=directory_size(final),
             )
+            self._closed = True
+            return outcome
         except Exception:
             self._rollback_failed_finalization(metadata)
             raise

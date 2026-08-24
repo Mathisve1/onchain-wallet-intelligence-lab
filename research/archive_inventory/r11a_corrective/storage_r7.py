@@ -10,7 +10,7 @@ import sqlite3
 import struct
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import BinaryIO, Final
+from typing import BinaryIO, Final, TypeVar
 
 from .limits import R11ALimits
 from .runtime import RuntimeGuard
@@ -19,10 +19,19 @@ _FRAME_HEADER: Final[struct.Struct] = struct.Struct(">I")
 _KEY_HEADER: Final[struct.Struct] = struct.Struct(">I")
 _DEFAULT_BUFFER_BYTES: Final[int] = 1 << 20
 _SQLITE_OVERHEAD_BYTES: Final[int] = 16 << 20
+_T = TypeVar("_T")
 
 
 class StorageBoundaryError(RuntimeError):
     pass
+
+
+class CleanupBoundaryError(RuntimeError):
+    """Marker for cleanup failures that may never become terminal evidence."""
+
+
+class StorageCleanupError(StorageBoundaryError, CleanupBoundaryError):
+    """A cleanup failure that must never be downgraded to terminal evidence."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -50,6 +59,8 @@ class WorkspaceMeter:
         self._peak_bounded_bytes = 0
         self._next_id = 0
         self._reservations: dict[int, _ReservationState] = {}
+        self._owned_iterators: list[tuple[str, Iterator[object]]] = []
+        self._iterator_cleanup_failure: StorageCleanupError | None = None
 
     def bootstrap(self) -> None:
         self.runtime_guard.check_scientific_phase("workspace bootstrap before")
@@ -88,6 +99,55 @@ class WorkspaceMeter:
             self._known_bytes + self.reserved_bytes,
         )
 
+    def own_iterator(
+        self,
+        iterator: Iterator[_T],
+        *,
+        label: str,
+    ) -> Iterator[_T]:
+        if self._iterator_cleanup_failure is not None:
+            raise self._iterator_cleanup_failure
+        owned: Iterator[_T]
+
+        def _owned() -> Iterator[_T]:
+            try:
+                with cleanup_checked_iterator(iterator, label=label) as values:
+                    for value in values:
+                        yield value
+            finally:
+                # Exhausted iterators must not accumulate in the strong
+                # ownership registry.  Abandoned iterators remain registered
+                # until the runner reaches its synchronous cleanup boundary.
+                self._owned_iterators = [
+                    entry for entry in self._owned_iterators if entry[1] is not owned
+                ]
+
+        owned = _owned()
+        self._owned_iterators.append((label, owned))
+        return owned
+
+    def close_owned_iterators(self) -> None:
+        if self._iterator_cleanup_failure is not None:
+            raise self._iterator_cleanup_failure
+        owned = self._owned_iterators
+        self._owned_iterators = []
+        errors: list[BaseException] = []
+        for label, iterator in reversed(owned):
+            close = getattr(iterator, "close", None)
+            if close is None:
+                continue
+            try:
+                close()
+            except BaseException as exc:
+                errors.append(
+                    StorageCleanupError(f"{label} iterator cleanup failed")
+                )
+                errors[-1].__cause__ = exc
+        if errors:
+            failure = StorageCleanupError("owned iterator cleanup failed")
+            self._iterator_cleanup_failure = failure
+            raise failure from errors[0]
+
     def _ensure_inside(self, path: Path) -> Path:
         resolved = path.resolve()
         try:
@@ -105,8 +165,14 @@ class WorkspaceMeter:
         token = Reservation(self._next_id, maximum_bytes, label)
         self._next_id += 1
         self._reservations[token.reservation_id] = _ReservationState(token)
-        self._record_peak()
-        self._check_runtime(packaging, f"reserve {label} after")
+        try:
+            self._record_peak()
+            self._check_runtime(packaging, f"reserve {label} after")
+        except BaseException:
+            # The caller never receives the token when the post-reservation
+            # boundary fails, so this method must unwind its own ownership.
+            self._reservations.pop(token.reservation_id, None)
+            raise
         return token
 
     def _check_runtime(self, packaging: bool, phase: str) -> None:
@@ -256,34 +322,77 @@ class WorkspaceMeter:
         self._check_runtime(packaging, f"{phase} after release")
 
     def delete_file(self, path: Path) -> None:
-        resolved = self._ensure_inside(path)
-        self.runtime_guard.check_scientific_phase("delete file before")
-        if not resolved.exists():
-            return
-        if not resolved.is_file() or resolved.is_symlink():
-            raise StorageBoundaryError("delete_file target is not a regular file")
-        size = resolved.stat().st_size
-        resolved.unlink()
-        if resolved.exists():
-            raise StorageBoundaryError("file cleanup did not remove target")
-        self._known_bytes -= size
-        if self._known_bytes < 0:
-            raise StorageBoundaryError("workspace accounting became negative")
-        self.runtime_guard.check_scientific_phase("delete file after")
+        try:
+            resolved = self._ensure_inside(path)
+            self.runtime_guard.check_scientific_phase("delete file before")
+            if not resolved.exists():
+                return
+            if not resolved.is_file() or resolved.is_symlink():
+                raise StorageBoundaryError(
+                    "delete_file target is not a regular file"
+                )
+            size = resolved.stat().st_size
+            resolved.unlink()
+            if resolved.exists():
+                raise StorageBoundaryError("file cleanup did not remove target")
+            self._known_bytes -= size
+            if self._known_bytes < 0:
+                raise StorageBoundaryError("workspace accounting became negative")
+            self.runtime_guard.check_scientific_phase("delete file after")
+        except CleanupBoundaryError:
+            raise
+        except BaseException as exc:
+            raise StorageCleanupError("workspace file cleanup failed") from exc
 
     def checked_rmtree(self, path: Path) -> None:
-        resolved = self._ensure_inside(path)
-        self.runtime_guard.check_packaging_phase("delete directory before")
-        if not resolved.exists():
-            return
-        total = directory_size(resolved)
-        shutil.rmtree(resolved)
-        if resolved.exists():
-            raise StorageBoundaryError("workspace cleanup did not remove directory")
-        self._known_bytes -= total
-        if self._known_bytes < 0:
-            raise StorageBoundaryError("workspace accounting became negative")
-        self.runtime_guard.check_packaging_phase("delete directory after")
+        try:
+            resolved = self._ensure_inside(path)
+            self.runtime_guard.check_packaging_phase("delete directory before")
+            if not resolved.exists():
+                return
+            total = directory_size(resolved)
+            shutil.rmtree(resolved)
+            if resolved.exists():
+                raise StorageBoundaryError(
+                    "workspace cleanup did not remove directory"
+                )
+            self._known_bytes -= total
+            if self._known_bytes < 0:
+                raise StorageBoundaryError("workspace accounting became negative")
+            self.runtime_guard.check_packaging_phase("delete directory after")
+        except CleanupBoundaryError:
+            raise
+        except BaseException as exc:
+            raise StorageCleanupError("workspace directory cleanup failed") from exc
+
+    def delete_empty_directory(self, path: Path) -> None:
+        """Remove one owned empty directory through the fatal cleanup boundary."""
+
+        try:
+            resolved = self._ensure_inside(path)
+            self.runtime_guard.check_packaging_phase(
+                "delete empty directory before"
+            )
+            if not resolved.exists():
+                return
+            if not resolved.is_dir() or resolved.is_symlink():
+                raise StorageBoundaryError(
+                    "empty-directory cleanup target is not a directory"
+                )
+            resolved.rmdir()
+            if resolved.exists():
+                raise StorageBoundaryError(
+                    "empty-directory cleanup did not remove target"
+                )
+            self.runtime_guard.check_packaging_phase(
+                "delete empty directory after"
+            )
+        except CleanupBoundaryError:
+            raise
+        except BaseException as exc:
+            raise StorageCleanupError(
+                "workspace empty-directory cleanup failed"
+            ) from exc
 
     def verify_actual_usage(self) -> int:
         self.runtime_guard.check_packaging_phase("verify workspace before")
@@ -313,6 +422,81 @@ def directory_size(path: Path) -> int:
     return total
 
 
+@contextlib.contextmanager
+def cleanup_checked_binary_reader(
+    path: Path,
+    *,
+    label: str,
+) -> Iterator[BinaryIO]:
+    """Open a reader whose close failure retains fatal cleanup precedence."""
+
+    handle: BinaryIO | None = None
+    try:
+        handle = path.open("rb")
+        yield handle
+    finally:
+        if handle is not None:
+            try:
+                handle.close()
+            except BaseException as exc:
+                raise StorageCleanupError(f"{label} reader cleanup failed") from exc
+
+
+@contextlib.contextmanager
+def cleanup_checked_binary_writer(
+    path: Path,
+    *,
+    label: str,
+) -> Iterator[BinaryIO]:
+    """Open an exclusive writer whose close failure remains fatal."""
+
+    handle: BinaryIO | None = None
+    try:
+        handle = path.open("xb")
+        yield handle
+    finally:
+        if handle is not None:
+            try:
+                handle.close()
+            except BaseException as exc:
+                raise StorageCleanupError(f"{label} writer cleanup failed") from exc
+
+
+def cleanup_checked_read_bytes(path: Path, *, label: str) -> bytes:
+    with cleanup_checked_binary_reader(path, label=label) as handle:
+        return handle.read()
+
+
+def cleanup_checked_read_text(
+    path: Path,
+    *,
+    encoding: str,
+    label: str,
+) -> str:
+    return cleanup_checked_read_bytes(path, label=label).decode(encoding)
+
+
+@contextlib.contextmanager
+def cleanup_checked_iterator(
+    iterator: Iterator[_T],
+    *,
+    label: str,
+) -> Iterator[Iterator[_T]]:
+    """Own a closeable iterator and synchronously surface its cleanup errors."""
+
+    try:
+        yield iterator
+    finally:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            try:
+                close()
+            except CleanupBoundaryError:
+                raise
+            except BaseException as exc:
+                raise StorageCleanupError(f"{label} iterator cleanup failed") from exc
+
+
 class ReservedBinaryWriter:
     """Bounded buffered file writer; each disk flush is a metered mutation."""
 
@@ -332,12 +516,39 @@ class ReservedBinaryWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.meter = meter
         self.packaging = packaging
-        self.reservation = meter.reserve(maximum_bytes, label, packaging=packaging)
-        self._handle: BinaryIO = self.path.open("xb")
         self._buffer = bytearray()
         self._buffer_limit = buffer_bytes
         self._written = 0
         self._closed = False
+        self._cleanup_failure: StorageCleanupError | None = None
+        reservation = meter.reserve(maximum_bytes, label, packaging=packaging)
+        path_existed = False
+        try:
+            path_existed = self.path.exists()
+            handle = self.path.open("xb")
+        except BaseException:
+            errors: list[BaseException] = []
+            try:
+                if not path_existed and self.path.exists():
+                    self.path.unlink()
+            except BaseException as exc:
+                errors.append(exc)
+            try:
+                meter.release_value(
+                    reservation,
+                    packaging=packaging,
+                    phase=f"abort construction {label}",
+                )
+            except BaseException as exc:
+                errors.append(exc)
+            self._closed = True
+            if errors:
+                raise StorageCleanupError(
+                    "reserved writer construction cleanup failed"
+                ) from errors[0]
+            raise
+        self.reservation = reservation
+        self._handle: BinaryIO = handle
 
     @property
     def written_bytes(self) -> int:
@@ -372,42 +583,70 @@ class ReservedBinaryWriter:
 
     def close(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
-        self.flush()
-        self._handle.flush()
-        os.fsync(self._handle.fileno())
-        self._handle.close()
-        self.meter.finalize(
-            self.reservation,
-            self.path,
-            packaging=self.packaging,
-            phase=f"finalize {self.reservation.label}",
-        )
+        try:
+            self.flush()
+            self._handle.flush()
+            os.fsync(self._handle.fileno())
+            try:
+                self._handle.close()
+            except BaseException as exc:
+                raise StorageCleanupError(
+                    "reserved writer handle cleanup failed"
+                ) from exc
+            self.meter.finalize(
+                self.reservation,
+                self.path,
+                packaging=self.packaging,
+                phase=f"finalize {self.reservation.label}",
+            )
+        except BaseException as failure:
+            try:
+                self.abort()
+            except BaseException as cleanup_failure:
+                raise StorageCleanupError(
+                    "reserved writer close cleanup failed"
+                ) from cleanup_failure
+            if isinstance(failure, StorageCleanupError):
+                self._cleanup_failure = failure
+            raise
         self._closed = True
 
     def abort(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
         errors: list[BaseException] = []
         try:
             self._handle.close()
-        except OSError as exc:
+        except BaseException as exc:
             errors.append(exc)
+        path_absent = False
         try:
             if self.path.exists():
                 self.path.unlink()
             if self.path.exists():
                 raise StorageBoundaryError("writer abort did not remove file")
-            self.meter.release_deleted(
-                self.reservation,
-                self.path,
-                phase=f"abort {self.reservation.label}",
-            )
+            path_absent = True
         except BaseException as exc:
             errors.append(exc)
+        if path_absent:
+            try:
+                self.meter.release_value(
+                    self.reservation,
+                    packaging=self.packaging,
+                    phase=f"abort {self.reservation.label}",
+                )
+            except BaseException as exc:
+                errors.append(exc)
         self._closed = True
         if errors:
-            raise StorageBoundaryError("writer cleanup failed") from errors[0]
+            failure = StorageCleanupError("writer cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
     def __enter__(self) -> "ReservedBinaryWriter":
         return self
@@ -444,7 +683,7 @@ def write_frame(writer: ReservedBinaryWriter, record: bytes) -> None:
 
 def iter_frames(path: Path, *, runtime_guard: RuntimeGuard, phase: str) -> Iterator[bytes]:
     runtime_guard.check_scientific_phase(f"{phase} before open")
-    with path.open("rb") as handle:
+    with cleanup_checked_binary_reader(path, label="framed stream") as handle:
         while True:
             runtime_guard.check_scientific_phase(phase)
             header = handle.read(_FRAME_HEADER.size)
@@ -488,7 +727,9 @@ class ExactSQLiteMultiplicityLedger:
             "exact SQLite multiplicity ledger",
         )
         self.connection = self.database.connection
-        with self.database.transaction("create exact SQLite ledger") as connection:
+        with self.database.initializing_transaction(
+            "create exact SQLite ledger"
+        ) as connection:
             connection.execute(
                 "CREATE TABLE source("
                 "payload BLOB PRIMARY KEY,"
@@ -609,13 +850,10 @@ def external_sort_partition(
 ) -> SortEvidence:
     guard = meter.runtime_guard
     temporary_directory = meter._ensure_inside(temporary_directory)
-    temporary_directory.mkdir(parents=True, exist_ok=False)
-    ledger = ExactSQLiteMultiplicityLedger(
-        temporary_directory / "exact-multiplicity.sqlite",
-        meter,
-        maximum_source_bytes,
-    )
+    temporary_created = False
+    ledger: ExactSQLiteMultiplicityLedger | None = None
     runs: list[Path] = []
+    readers: list[Iterator[bytes]] = []
     batch: list[bytes] = []
     batch_bytes = 0
 
@@ -623,6 +861,8 @@ def external_sort_partition(
         nonlocal batch, batch_bytes
         if not batch:
             return
+        if ledger is None:
+            raise StorageBoundaryError("external sort ledger is absent")
         guard.check_scientific_phase("sort chunk before")
         ledger.add_source_batch(batch)
         batch.sort(key=_record_sort_key)
@@ -637,7 +877,20 @@ def external_sort_partition(
         guard.check_scientific_phase("sort chunk after")
 
     try:
-        for record in iter_frames(source, runtime_guard=guard, phase="read unsorted partition"):
+        temporary_directory.mkdir(parents=True, exist_ok=False)
+        temporary_created = True
+        ledger = ExactSQLiteMultiplicityLedger(
+            temporary_directory / "exact-multiplicity.sqlite",
+            meter,
+            maximum_source_bytes,
+        )
+        source_reader = iter_frames(
+            source,
+            runtime_guard=guard,
+            phase="read unsorted partition",
+        )
+        readers.append(source_reader)
+        for record in source_reader:
             batch.append(record)
             batch_bytes += _FRAME_HEADER.size + len(record)
             if batch_bytes >= meter.limits.maximum_sort_chunk_bytes:
@@ -658,6 +911,7 @@ def external_sort_partition(
                 iter_frames(path, runtime_guard=guard, phase="merge sort runs")
                 for path in runs
             ]
+            readers.extend(iterators)
             heap: list[_HeapItem] = []
             for index, iterator in enumerate(iterators):
                 try:
@@ -700,12 +954,33 @@ def external_sort_partition(
         evidence.validate()
         return evidence
     finally:
-        for path in runs:
-            if path.exists():
-                meter.delete_file(path)
-        ledger.close_delete()
-        if temporary_directory.exists():
-            temporary_directory.rmdir()
+        errors: list[BaseException] = []
+        for reader in reversed(readers):
+            close = getattr(reader, "close", None)
+            if close is None:
+                continue
+            try:
+                close()
+            except BaseException as exc:
+                errors.append(exc)
+        for path in reversed(runs):
+            try:
+                if path.exists():
+                    meter.delete_file(path)
+            except BaseException as exc:
+                errors.append(exc)
+        if ledger is not None:
+            try:
+                ledger.close_delete()
+            except BaseException as exc:
+                errors.append(exc)
+        if temporary_created:
+            try:
+                meter.delete_empty_directory(temporary_directory)
+            except BaseException as exc:
+                errors.append(exc)
+        if errors:
+            raise StorageCleanupError("external sort cleanup failed") from errors[0]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -723,11 +998,31 @@ def iter_equality_group_spools(
     *,
     maximum_group_spool_bytes: int,
 ) -> Iterator[EqualityGroupSpool]:
+    return meter.own_iterator(
+        _iter_equality_group_spools(
+            sorted_partition,
+            spool_directory,
+            meter,
+            maximum_group_spool_bytes=maximum_group_spool_bytes,
+        ),
+        label="equality-group spools",
+    )
+
+
+def _iter_equality_group_spools(
+    sorted_partition: Path,
+    spool_directory: Path,
+    meter: WorkspaceMeter,
+    *,
+    maximum_group_spool_bytes: int,
+) -> Iterator[EqualityGroupSpool]:
     spool_directory = meter._ensure_inside(spool_directory)
-    spool_directory.mkdir(parents=True, exist_ok=True)
+    spool_created = False
     current_key: bytes | None = None
     writer: ReservedBinaryWriter | None = None
     path: Path | None = None
+    yielded_path: Path | None = None
+    source_reader: Iterator[bytes] | None = None
     count = 0
     payload_bytes = 0
     group_index = 0
@@ -744,39 +1039,77 @@ def iter_equality_group_spools(
         payload_bytes = 0
         return value
 
-    for framed in iter_frames(
-        sorted_partition,
-        runtime_guard=meter.runtime_guard,
-        phase="group sorted partition",
-    ):
-        key, payload = decode_keyed_record(framed)
-        if current_key is None or key != current_key:
-            completed = finish()
-            if completed is not None:
-                yield completed
-                if completed.path.exists():
-                    meter.delete_file(completed.path)
-            current_key = key
-            path = spool_directory / f"group-{group_index:09d}.frames"
-            group_index += 1
-            writer = ReservedBinaryWriter(
-                path,
-                meter,
-                maximum_bytes=maximum_group_spool_bytes,
-                label="equality group spool",
-            )
-        if writer is None:
-            raise StorageBoundaryError("group writer not initialized")
-        write_frame(writer, payload)
-        count += 1
-        payload_bytes += len(payload)
-    completed = finish()
-    if completed is not None:
-        yield completed
-        if completed.path.exists():
-            meter.delete_file(completed.path)
-    if spool_directory.exists():
-        spool_directory.rmdir()
+    try:
+        spool_directory.mkdir(parents=True, exist_ok=False)
+        spool_created = True
+        source_reader = iter_frames(
+            sorted_partition,
+            runtime_guard=meter.runtime_guard,
+            phase="group sorted partition",
+        )
+        for framed in source_reader:
+            key, payload = decode_keyed_record(framed)
+            if current_key is None or key != current_key:
+                completed = finish()
+                if completed is not None:
+                    yielded_path = completed.path
+                    yield completed
+                    meter.delete_file(yielded_path)
+                    yielded_path = None
+                current_key = key
+                path = spool_directory / f"group-{group_index:09d}.frames"
+                group_index += 1
+                writer = ReservedBinaryWriter(
+                    path,
+                    meter,
+                    maximum_bytes=maximum_group_spool_bytes,
+                    label="equality group spool",
+                )
+            if writer is None:
+                raise StorageBoundaryError("group writer not initialized")
+            write_frame(writer, payload)
+            count += 1
+            payload_bytes += len(payload)
+        completed = finish()
+        if completed is not None:
+            yielded_path = completed.path
+            yield completed
+            meter.delete_file(yielded_path)
+            yielded_path = None
+    finally:
+        errors: list[BaseException] = []
+        if writer is not None:
+            try:
+                writer.abort()
+            except BaseException as exc:
+                errors.append(exc)
+        for owned_path in (yielded_path, path):
+            if owned_path is None:
+                continue
+            try:
+                if owned_path.exists():
+                    meter.delete_file(owned_path)
+            except BaseException as exc:
+                errors.append(exc)
+        if source_reader is not None:
+            close = getattr(source_reader, "close", None)
+            if close is not None:
+                try:
+                    close()
+                except BaseException as exc:
+                    errors.append(exc)
+        if spool_created:
+            try:
+                if spool_directory.exists() and any(spool_directory.iterdir()):
+                    meter.checked_rmtree(spool_directory)
+                else:
+                    meter.delete_empty_directory(spool_directory)
+            except BaseException as exc:
+                errors.append(exc)
+        if errors:
+            raise StorageCleanupError(
+                "equality-group spool cleanup failed"
+            ) from errors[0]
 
 
 class MeteredSQLite:
@@ -785,15 +1118,60 @@ class MeteredSQLite:
     def __init__(self, path: Path, meter: WorkspaceMeter, maximum_bytes: int, label: str) -> None:
         self.path = meter._ensure_inside(path)
         self.meter = meter
+        if any(sidecar.exists() for sidecar in self._sidecar_paths()):
+            raise StorageBoundaryError("metered SQLite path already exists")
         self.reservation = meter.reserve(maximum_bytes, label)
-        self.connection = sqlite3.connect(self.path)
-        self.connection.execute("PRAGMA journal_mode=DELETE")
-        self.connection.execute("PRAGMA synchronous=FULL")
-        # SQLite temp state is memory-only; every persistent database and
-        # journal byte therefore remains below the one measured root.
-        self.connection.execute("PRAGMA temp_store=MEMORY")
+        self.connection: sqlite3.Connection | None = None
         self._closed = False
-        self._checkpoint_sqlite_bytes("initialize metered SQLite")
+        self._cleanup_failure: StorageCleanupError | None = None
+        try:
+            self.connection = sqlite3.connect(self.path)
+            self.connection.execute("PRAGMA journal_mode=DELETE")
+            self.connection.execute("PRAGMA synchronous=FULL")
+            # SQLite temp state is memory-only; every persistent database and
+            # journal byte therefore remains below the one measured root.
+            self.connection.execute("PRAGMA temp_store=MEMORY")
+            self._checkpoint_sqlite_bytes("initialize metered SQLite")
+        except BaseException:
+            errors: list[BaseException] = []
+            if self.connection is not None:
+                try:
+                    self.connection.close()
+                except BaseException as exc:
+                    errors.append(exc)
+            for sidecar in self._sidecar_paths():
+                try:
+                    if sidecar.exists():
+                        sidecar.unlink()
+                except BaseException as exc:
+                    errors.append(exc)
+            try:
+                sidecars_remain = any(
+                    sidecar.exists() for sidecar in self._sidecar_paths()
+                )
+            except BaseException as exc:
+                errors.append(exc)
+                sidecars_remain = True
+            if sidecars_remain:
+                errors.append(
+                    StorageBoundaryError(
+                        "metered SQLite initialization cleanup left sidecars"
+                    )
+                )
+            else:
+                try:
+                    self.meter.release_value(
+                        self.reservation,
+                        phase="abort metered SQLite initialization",
+                    )
+                except BaseException as exc:
+                    errors.append(exc)
+            self._closed = True
+            if errors:
+                raise StorageCleanupError(
+                    "metered SQLite initialization cleanup failed"
+                ) from errors[0]
+            raise
 
     def _sidecar_paths(self) -> tuple[Path, ...]:
         return (
@@ -822,6 +1200,8 @@ class MeteredSQLite:
 
     @contextlib.contextmanager
     def transaction(self, phase: str):  # type: ignore[no-untyped-def]
+        if self.connection is None:
+            raise StorageBoundaryError("metered SQLite connection is unavailable")
         self.meter.runtime_guard.check_scientific_phase(f"{phase} before")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
@@ -830,32 +1210,88 @@ class MeteredSQLite:
             # pre-commit checkpoint therefore records the transient peak.
             self._checkpoint_sqlite_bytes(f"{phase} precommit")
             self.connection.commit()
-        except Exception:
-            self.connection.rollback()
-            self._checkpoint_sqlite_bytes(f"{phase} rollback")
+        except BaseException:
+            errors: list[BaseException] = []
+            try:
+                self.connection.rollback()
+            except BaseException as exc:
+                errors.append(exc)
+            try:
+                self._checkpoint_sqlite_bytes(f"{phase} rollback")
+            except BaseException as exc:
+                errors.append(exc)
+            if errors:
+                raise StorageCleanupError(
+                    "metered SQLite transaction rollback failed"
+                ) from errors[0]
             raise
         self._checkpoint_sqlite_bytes(f"{phase} committed")
         self.meter.runtime_guard.check_scientific_phase(f"{phase} after")
 
+    @contextlib.contextmanager
+    def initializing_transaction(self, phase: str):  # type: ignore[no-untyped-def]
+        """Construct a schema or delete the newly acquired database on failure."""
+
+        try:
+            with self.transaction(phase) as connection:
+                yield connection
+        except BaseException:
+            try:
+                self.close_delete()
+            except BaseException as cleanup_failure:
+                raise StorageCleanupError(
+                    "metered SQLite schema construction cleanup failed"
+                ) from cleanup_failure
+            raise
+
     def checkpoint(self, phase: str) -> None:
+        if self.connection is None:
+            raise StorageBoundaryError("metered SQLite connection is unavailable")
         self._checkpoint_sqlite_bytes(f"{phase} precommit")
         self.connection.commit()
         self._checkpoint_sqlite_bytes(f"{phase} committed")
 
     def close_delete(self) -> None:
         if self._closed:
+            if self._cleanup_failure is not None:
+                raise self._cleanup_failure
             return
-        self.connection.close()
+        errors: list[BaseException] = []
+        if self.connection is not None:
+            try:
+                self.connection.close()
+            except BaseException as exc:
+                errors.append(exc)
         for path in self._sidecar_paths():
-            if path.exists():
-                path.unlink()
-        if any(path.exists() for path in self._sidecar_paths()):
-            raise StorageBoundaryError("metered SQLite cleanup failed")
-        self.meter.release_value(
-            self.reservation,
-            phase="delete metered SQLite",
-        )
+            try:
+                if path.exists():
+                    path.unlink()
+            except BaseException as exc:
+                errors.append(exc)
+        try:
+            sidecars_remain = any(
+                path.exists() for path in self._sidecar_paths()
+            )
+        except BaseException as exc:
+            errors.append(exc)
+            sidecars_remain = True
+        if sidecars_remain:
+            errors.append(
+                StorageBoundaryError("metered SQLite cleanup left sidecars")
+            )
+        else:
+            try:
+                self.meter.release_value(
+                    self.reservation,
+                    phase="delete metered SQLite",
+                )
+            except BaseException as exc:
+                errors.append(exc)
         self._closed = True
+        if errors:
+            failure = StorageCleanupError("metered SQLite cleanup failed")
+            self._cleanup_failure = failure
+            raise failure from errors[0]
 
 
 class AtomicArtifactDirectory:
@@ -869,6 +1305,17 @@ class AtomicArtifactDirectory:
         self.final_path = meter._ensure_inside(self.workspace / final_name)
         self.staging_path = meter._ensure_inside(self.workspace / f".{final_name}.staging")
         self._committed = False
+        self._rollback_attempted = False
+        self._rollback_complete = False
+        self._rollback_failure: BaseException | None = None
+
+    @property
+    def rollback_attempted(self) -> bool:
+        return self._rollback_attempted
+
+    @property
+    def rollback_failure(self) -> BaseException | None:
+        return self._rollback_failure
 
     def __enter__(self) -> Path:
         if self.final_path.exists() or self.staging_path.exists():
@@ -892,21 +1339,41 @@ class AtomicArtifactDirectory:
             try:
                 self.rollback()
             except BaseException as rollback_failure:
-                raise rollback_failure from failure
+                raise StorageCleanupError(
+                    "atomic artifact commit rollback failed"
+                ) from rollback_failure
             raise
         self._committed = True
         return self.final_path
 
     def rollback(self) -> None:
-        """Remove every path owned by this transaction with exact accounting."""
+        """Retry physical cleanup without erasing a prior rollback failure."""
 
-        for path in (self.final_path, self.staging_path):
-            if path.exists():
-                self.meter.checked_rmtree(path)
+        if self._rollback_failure is not None:
+            raise StorageCleanupError(
+                "atomic artifact rollback previously failed"
+            ) from self._rollback_failure
+        if self._rollback_complete:
+            return
+        if self._rollback_attempted:
+            raise StorageCleanupError("atomic artifact rollback state is invalid")
+        self._rollback_attempted = True
         self._committed = False
-        if self.final_path.exists() or self.staging_path.exists():
-            raise StorageBoundaryError("atomic artifact rollback left transaction paths")
-        self.meter.verify_actual_usage()
+        try:
+            for path in (self.final_path, self.staging_path):
+                if path.exists():
+                    self.meter.checked_rmtree(path)
+            if self.final_path.exists() or self.staging_path.exists():
+                raise StorageBoundaryError(
+                    "atomic artifact rollback left transaction paths"
+                )
+            self.meter.verify_actual_usage()
+        except BaseException as failure:
+            self._rollback_failure = failure
+            raise StorageCleanupError(
+                "atomic artifact rollback failed"
+            ) from failure
+        self._rollback_complete = True
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         if self._committed:

@@ -7,7 +7,11 @@ from pathlib import Path
 
 from .artifact import ArtifactOutcome, ArtifactSession, ScientificCapExceeded
 from .artifact_schema import AUTHORITATIVE_UNIT_UNIVERSES
-from .index import CandidateDiscovery, FirstPassIndexes, discover_candidates
+from .index import (
+    CandidateDiscovery,
+    FirstPassIndexes,
+    discover_candidates,
+)
 from .limits import DEFAULT_LIMITS, R11ALimits
 from .materialize import CandidateMaterializer
 from .network import AWSCredentials, download_exact_object
@@ -15,7 +19,12 @@ from .parser import ObjectPassResult, parse_object_pass
 from .pricing import BudgetGuard, PricingSnapshot
 from .runtime import ExecutionEvidenceState, RuntimeGuard
 from .selection import DEFAULT_SELECTION, Selection
-from .storage_r7 import StorageBoundaryError, WorkspaceMeter
+from .storage_r7 import (
+    CleanupBoundaryError,
+    StorageBoundaryError,
+    StorageCleanupError,
+    WorkspaceMeter,
+)
 from .taxonomy import TaxonomyBoundaryError, TaxonomyResult, classify_materialized_candidates
 
 
@@ -161,9 +170,9 @@ def _taxonomy_complete(
     )
 
 
-def prepare(
+def _prepare_state(
     inputs: RunInputs,
-) -> tuple[RuntimeGuard, WorkspaceMeter, ExecutionEvidenceState, ArtifactSession]:
+) -> tuple[RuntimeGuard, WorkspaceMeter, ExecutionEvidenceState]:
     inputs.limits.validate()
     inputs.selection.validate()
     start_epoch_ns = inputs.context.get("workflow_start_epoch_ns")
@@ -173,6 +182,13 @@ def prepare(
     meter = WorkspaceMeter(inputs.workspace, inputs.limits, guard)
     meter.bootstrap()
     state = ExecutionEvidenceState(inputs.selection.targets, inputs.limits)
+    return guard, meter, state
+
+
+def prepare(
+    inputs: RunInputs,
+) -> tuple[RuntimeGuard, WorkspaceMeter, ExecutionEvidenceState, ArtifactSession]:
+    guard, meter, state = _prepare_state(inputs)
     session = ArtifactSession(inputs.workspace, meter, inputs.limits, guard)
     return guard, meter, state, session
 
@@ -184,7 +200,20 @@ def _checked_cleanup(
 ) -> None:
     protected = {".r11a-v2-artifact.staging", "r11a-v2-artifact"} if preserve_artifact_paths else set()
     errors: list[BaseException] = []
-    for path in sorted(meter.root.iterdir(), key=lambda value: value.name.encode("utf-8"), reverse=True):
+    try:
+        meter.close_owned_iterators()
+    except BaseException as exc:
+        errors.append(exc)
+    try:
+        paths = sorted(
+            meter.root.iterdir(),
+            key=lambda value: value.name.encode("utf-8"),
+            reverse=True,
+        )
+    except BaseException as exc:
+        errors.append(exc)
+        paths = []
+    for path in paths:
         if path.name in protected:
             continue
         try:
@@ -197,28 +226,65 @@ def _checked_cleanup(
         except BaseException as exc:
             errors.append(exc)
     if errors:
-        raise RunnerBoundaryError("checked processing cleanup failed") from errors[0]
+        raise StorageCleanupError("checked processing cleanup failed") from errors[0]
 
 
 def _rollback_for_recovery(
     *,
-    session: ArtifactSession,
+    session: ArtifactSession | None,
     meter: WorkspaceMeter,
+    indexes: FirstPassIndexes | None = None,
+    discovery: CandidateDiscovery | None = None,
+    materializer: CandidateMaterializer | None = None,
+    prior_cleanup_error: BaseException | None = None,
 ) -> None:
     """End the failed transaction before any terminal recovery is attempted."""
 
+    errors: list[BaseException] = []
+    if prior_cleanup_error is not None:
+        errors.append(prior_cleanup_error)
+
+    if materializer is not None:
+        try:
+            materializer.abort()
+        except BaseException as exc:
+            errors.append(exc)
+    if discovery is not None:
+        try:
+            discovery.candidates.close_delete()
+        except BaseException as exc:
+            errors.append(exc)
+    if indexes is not None:
+        try:
+            indexes.abort()
+        except BaseException as exc:
+            errors.append(exc)
+    if session is not None:
+        try:
+            session.rollback()
+        except BaseException as exc:
+            errors.append(exc)
     try:
-        session.rollback()
         _checked_cleanup(meter, preserve_artifact_paths=False)
+    except BaseException as exc:
+        errors.append(exc)
+    try:
         actual = meter.verify_actual_usage()
-        if actual != 0 or meter.reserved_bytes != 0 or any(meter.root.iterdir()):
+        if (
+            actual != 0
+            or meter.known_bytes != actual
+            or meter.reserved_bytes != 0
+            or any(meter.root.iterdir())
+        ):
             raise RunnerBoundaryError(
                 "artifact recovery requires an empty unreserved workspace"
             )
     except BaseException as exc:
+        errors.append(exc)
+    if errors:
         raise RecoveryBoundaryError(
             "artifact transaction rollback did not reach a clean recovery boundary"
-        ) from exc
+        ) from errors[0]
 
 
 def _recovery_session(
@@ -254,6 +320,64 @@ def _empty_failure(
         research_conclusion=conclusion,
     )
     return RunResult(artifact, terminal_class, conclusion)
+
+
+def _guarded_empty_failure(
+    *,
+    session: ArtifactSession,
+    meter: WorkspaceMeter,
+    state: ExecutionEvidenceState,
+    context: Mapping[str, object],
+    reducer_rows: Sequence[Mapping[str, object]],
+    resources: Sequence[Mapping[str, object]],
+    terminal_class: str,
+    conclusion: str,
+) -> RunResult:
+    """Attempt one terminal artifact; any failure of that attempt is fatal."""
+
+    try:
+        return _empty_failure(
+            session=session,
+            state=state,
+            context=context,
+            reducer_rows=reducer_rows,
+            resources=resources,
+            terminal_class=terminal_class,
+            conclusion=conclusion,
+        )
+    except BaseException as failure:
+        _rollback_for_recovery(
+            session=session,
+            meter=meter,
+            prior_cleanup_error=failure,
+        )
+        raise RecoveryBoundaryError(
+            "terminal artifact failure unexpectedly returned"
+        ) from failure
+
+
+def _fresh_empty_failure(
+    *,
+    inputs: RunInputs,
+    guard: RuntimeGuard,
+    meter: WorkspaceMeter,
+    state: ExecutionEvidenceState,
+    context: Mapping[str, object],
+    reducer_rows: Sequence[Mapping[str, object]],
+    resources: Sequence[Mapping[str, object]],
+    terminal_class: str,
+    conclusion: str,
+) -> RunResult:
+    return _guarded_empty_failure(
+        session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
+        meter=meter,
+        state=state,
+        context=context,
+        reducer_rows=reducer_rows,
+        resources=resources,
+        terminal_class=terminal_class,
+        conclusion=conclusion,
+    )
 
 
 def run_with_compressed_paths(
@@ -302,6 +426,7 @@ def run_with_compressed_paths(
         block_stats, weak_stats = indexes.close()
         state.mark_phase("PRIMARY_REDUCERS")
         discovery = discover_candidates(indexes, block_stats, weak_stats)
+        meter.close_owned_iterators()
         reducer_rows = discovery.reducer_rows
         resources.append(
             _resource_row(
@@ -322,8 +447,9 @@ def run_with_compressed_paths(
             discovery.candidates.close_delete()
             discovery = None
             _checked_cleanup(meter)
-            return _empty_failure(
+            return _guarded_empty_failure(
                 session=session,
+                meter=meter,
                 state=state,
                 context=inputs.context,
                 reducer_rows=reducer_rows,
@@ -362,8 +488,9 @@ def run_with_compressed_paths(
         if materialized.cap_fallback_required:
             state.stop("MATERIALIZATION_RETENTION_CAP_EXCEEDED")
             _checked_cleanup(meter)
-            return _empty_failure(
+            return _guarded_empty_failure(
                 session=session,
+                meter=meter,
                 state=state,
                 context=inputs.context,
                 reducer_rows=reducer_rows,
@@ -379,6 +506,7 @@ def run_with_compressed_paths(
             session.emitter,
             exact_three_utc_days=inputs.selection.complete_utc_day_count == 3,
         )
+        meter.close_owned_iterators()
         complete = _taxonomy_complete(
             state=state,
             taxonomy=taxonomy,
@@ -424,14 +552,32 @@ def run_with_compressed_paths(
             taxonomy_result=taxonomy,
         )
         return RunResult(artifact, terminal, conclusion)
+    except CleanupBoundaryError as exc:
+        _rollback_for_recovery(
+            session=session,
+            meter=meter,
+            indexes=indexes,
+            discovery=discovery,
+            materializer=materializer,
+            prior_cleanup_error=exc,
+        )
+        raise RecoveryBoundaryError("fatal cleanup unexpectedly returned") from exc
     except ScientificCapExceeded as exc:
         state.stop(
             _safe_stop_code(exc),
             evidence={"exception_type_sha256": hashlib.sha256(type(exc).__name__.encode()).hexdigest()},
         )
-        _rollback_for_recovery(session=session, meter=meter)
-        return _empty_failure(
-            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
+        _rollback_for_recovery(
+            session=session,
+            meter=meter,
+            indexes=indexes,
+            discovery=discovery,
+            materializer=materializer,
+        )
+        return _fresh_empty_failure(
+            inputs=inputs,
+            guard=guard,
+            meter=meter,
             state=state,
             context=inputs.context,
             reducer_rows=reducer_rows,
@@ -444,9 +590,13 @@ def run_with_compressed_paths(
             _safe_stop_code(exc),
             evidence={"exception_type_sha256": hashlib.sha256(type(exc).__name__.encode()).hexdigest()},
         )
-        if discovery is not None:
-            discovery.candidates.close_delete()
-        _rollback_for_recovery(session=session, meter=meter)
+        _rollback_for_recovery(
+            session=session,
+            meter=meter,
+            indexes=indexes,
+            discovery=discovery,
+            materializer=materializer,
+        )
         resources.append(
             _resource_row(
                 meter=meter,
@@ -456,8 +606,10 @@ def run_with_compressed_paths(
                 additional={"cleanup_completed": True},
             )
         )
-        return _empty_failure(
-            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
+        return _fresh_empty_failure(
+            inputs=inputs,
+            guard=guard,
+            meter=meter,
             state=state,
             context=inputs.context,
             reducer_rows=(),
@@ -473,17 +625,19 @@ def run_network(
     credentials: AWSCredentials,
     pricing_snapshot: PricingSnapshot,
 ) -> RunResult:
-    guard, meter, state, session = prepare(inputs)
+    guard, meter, state = _prepare_state(inputs)
+    session: ArtifactSession | None = None
     objects = meter.root / "objects"
-    objects.mkdir(exist_ok=False)
-    budget = BudgetGuard(
-        inputs.limits,
-        pricing_snapshot,
-        inputs.selection.aggregate_expected_compressed_bytes,
-    )
     paths: dict[str, Path] = {}
     resources: list[dict[str, object]] = []
     try:
+        session = ArtifactSession(inputs.workspace, meter, inputs.limits, guard)
+        objects.mkdir(exist_ok=False)
+        budget = BudgetGuard(
+            inputs.limits,
+            pricing_snapshot,
+            inputs.selection.aggregate_expected_compressed_bytes,
+        )
         for target in inputs.selection.targets:
             path = objects / f"object-{target.object_ordinal_zero_based:03d}.lz4"
             paths[target.object_key] = download_exact_object(
@@ -518,6 +672,13 @@ def run_network(
         )
     except RecoveryBoundaryError:
         raise
+    except CleanupBoundaryError as exc:
+        _rollback_for_recovery(
+            session=session,
+            meter=meter,
+            prior_cleanup_error=exc,
+        )
+        raise RecoveryBoundaryError("fatal cleanup unexpectedly returned") from exc
     except Exception as exc:
         state.stop(
             _safe_stop_code(exc),
@@ -532,8 +693,10 @@ def run_network(
                 phase="NETWORK_FAILURE_BEFORE_MINIMAL_ARTIFACT",
             )
         )
-        return _empty_failure(
-            session=_recovery_session(inputs=inputs, guard=guard, meter=meter),
+        return _fresh_empty_failure(
+            inputs=inputs,
+            guard=guard,
+            meter=meter,
             state=state,
             context=inputs.context,
             reducer_rows=(),
