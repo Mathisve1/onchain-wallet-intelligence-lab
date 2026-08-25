@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "status_id": "R11A-G1-POST-GREEN-READINESS-STATUS-001",
   "status": "OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_RUNTIME",
   "decision": "OWNER_APPROVAL_READY",
@@ -31,6 +31,7 @@
     "runtime_pricing_candidate_sha256": "d5043062386b3d70f695f09c917f11719512918c56f318cace1e0530b709ac43",
     "owner_approval_package_path": "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_PACKAGE.json",
     "owner_approval_package_sha256": "a31c09cb73b3c176c360a8218aa1eae2faf6e02772b2ca1ff35cfd0babedb24f",
+    "proposed_owner_statement_path": "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt",
     "proposed_owner_statement_sha256": "16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3"
   },
   "pricing": {

@@ -20,6 +20,7 @@ SELECTION_SHA = "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb
 PRIOR_RESULT_SHA = "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862"
 JOINED_ROWS_SHA = "1d9e41c058471f85e6478565034320727137f210383d5a3f23eb1531d14b4970"
 GREEN_CONTRACT_SHA = "0cf3515c3af12401e3c8381b180ed9122fdf0923979a156891e5e8e22308cddd"
+GREEN_STATUS_SHA = "855a052b22e0b471eb0433205f71b227b5c8baeb7c70cd4d8a563f8007462c6b"
 PENDING_RUNTIME_PRICING_SHA = "5e5a6469b921a15cbac1e2f03184e2dfcf6ffee51dc2e86833e9556a5c23c226"
 PERMISSION_SHA = "2769afe520efff6f0b619fff352d2cf13d412d96d6c4642fcfc61a8165787e6a"
 TRUST_SHA = "375e224b269a62873afb4516651a259483feed4f211e9184272cb2af91513668"
@@ -38,6 +39,7 @@ BINDINGS = "research/archive_inventory/r11a_v2/R11A_V2_PREREGISTRATION_BINDINGS.
 SELECTION = "research/archive_inventory/r11/R11_72H_SELECTION.json"
 PRIOR_RESULT = "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json"
 CONTRACT = "research/archive_inventory/r11a_corrective/R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json"
+R7_STATUS = "research/archive_inventory/r11a_corrective/R11A_CORRECTIVE_STATUS_R7.json"
 PENDING_PRICING = "research/archive_inventory/r11a_corrective/R11A_PRICING_EUR_SNAPSHOT.json"
 PERMISSION = "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json"
 TRUST = "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json"
@@ -51,6 +53,98 @@ RUNTIME_PRICING_CANDIDATE = "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_
 STATEMENT = "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt"
 PACKAGE = "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_PACKAGE.json"
 STATUS = "research/archive_inventory/r11a_g1/R11A_G1_STATUS.json"
+
+# A = independently derived/recomputed; B = projected from an exact-byte-bound
+# authoritative source; C = fixed governance literal checked exactly; D =
+# proven immaterial informational data.  Every scalar status field is assigned
+# individually, and this registry is checked against the constructed schema.
+STATUS_FIELD_CLASSIFICATION = {
+    ("schema_version",): "C",
+    ("status_id",): "C",
+    ("status",): "C",
+    ("decision",): "C",
+    ("repository",): "C",
+    ("software_anchor", "review_id"): "B",
+    ("software_anchor", "review_event"): "B",
+    ("software_anchor", "review_verdict"): "B",
+    ("software_anchor", "reviewed_head"): "B",
+    ("software_anchor", "reviewed_tree"): "C",
+    ("software_anchor", "base_sha"): "B",
+    ("software_anchor", "sha_drift"): "A",
+    ("software_anchor", "superseding_red_review_present"): "B",
+    ("software_anchor", "verified_against_live_github_on_date_utc"): "C",
+    ("historical_r7_seal", "semantics"): "C",
+    ("historical_r7_seal", "reviewed_head_contract_sha256"): "B",
+    ("historical_r7_seal", "reviewed_head_status_sha256"): "B",
+    ("historical_r7_seal", "historical_semantics_rewritten"): "C",
+    (
+        "historical_r7_seal",
+        "successor_manifest_projection_may_be_mechanically_resealed",
+    ): "C",
+    ("current_bindings", "execution_envelope_path"): "C",
+    ("current_bindings", "execution_envelope_sha256"): "B",
+    ("current_bindings", "pricing_eur_binding_path"): "C",
+    ("current_bindings", "pricing_eur_binding_sha256"): "B",
+    ("current_bindings", "runtime_pricing_candidate_path"): "C",
+    ("current_bindings", "runtime_pricing_candidate_sha256"): "B",
+    ("current_bindings", "owner_approval_package_path"): "C",
+    ("current_bindings", "owner_approval_package_sha256"): "B",
+    ("current_bindings", "proposed_owner_statement_path"): "C",
+    ("current_bindings", "proposed_owner_statement_sha256"): "B",
+    ("pricing", "current_official_binding"): "A",
+    ("pricing", "pricing_binding_pending"): "B",
+    ("pricing", "raw_max_eur_ceil_6dp"): "A",
+    ("pricing", "projected_with_contingency_eur_ceil_6dp"): "A",
+    ("pricing", "owner_approval_max_eur"): "B",
+    ("pricing", "monthly_recurring_budget_eur"): "B",
+    ("iam_workflow_readiness", "status"): "A",
+    (
+        "iam_workflow_readiness",
+        "permission_policy_exact_72_getobject_resources",
+    ): "A",
+    (
+        "iam_workflow_readiness",
+        "oidc_repository_owner_ref_and_workflow_restricted",
+    ): "A",
+    ("iam_workflow_readiness", "workflow_exact_hash_bound"): "A",
+    ("iam_workflow_readiness", "workflow_candidate_outside_dot_github"): "A",
+    ("iam_workflow_readiness", "secrets_or_reusable_credentials"): "A",
+    ("iam_workflow_readiness", "external_infrastructure_created"): "A",
+    ("owner_approval", "approval_id"): "B",
+    ("owner_approval", "approval_status"): "B",
+    ("owner_approval", "owner_approval_ready"): "A",
+    ("owner_approval", "owner_approval_present"): "A",
+    ("owner_approval", "canonical_approval_record_present"): "A",
+    ("runtime_authority", "successor_role_created"): "A",
+    ("runtime_authority", "aws_iam_mutation"): "A",
+    ("runtime_authority", "aws_oidc"): "A",
+    ("runtime_authority", "sts"): "A",
+    ("runtime_authority", "workflow_installed"): "A",
+    ("runtime_authority", "runtime_binding_present"): "A",
+    ("runtime_authority", "runtime_release"): "A",
+    ("runtime_authority", "runtime_activation"): "A",
+    ("runtime_authority", "requester_pays"): "A",
+    ("runtime_authority", "get_object"): "A",
+    ("runtime_authority", "object_body_download"): "A",
+    ("runtime_authority", "decompression"): "A",
+    ("runtime_authority", "diagnostic_execution"): "A",
+    ("runtime_authority", "diagnostic_artifact_retention"): "A",
+    ("science_state", "empirical_root_cause"): "B",
+    ("science_state", "deduplication"): "A",
+    ("science_state", "replay_suppression"): "A",
+    ("science_state", "r11b_repair"): "A",
+    ("science_state", "wallet_ranking"): "A",
+    ("science_state", "copyability"): "A",
+    ("science_state", "r11_closed"): "A",
+    ("science_state", "r12_ready"): "A",
+    ("trading_authorizations", "integration"): "A",
+    ("trading_authorizations", "paper"): "A",
+    ("trading_authorizations", "shadow"): "A",
+    ("trading_authorizations", "live"): "A",
+    ("trading_authorizations", "leverage"): "A",
+    ("trading_authorizations", "capital_allocation"): "A",
+}
+STATUS_INFORMATIONAL_FIELDS: frozenset[tuple[str, ...]] = frozenset()
 
 
 class G1ReadinessError(AssertionError):
@@ -98,6 +192,45 @@ def sha256(root: Path, relative: str) -> str:
 def require_all_false(value: object, label: str) -> None:
     require(isinstance(value, dict) and value, f"{label} must be nonempty object")
     require(all(observed is False for observed in value.values()), f"{label} opens authority")
+
+
+def require_exact(observed: object, expected: object, label: str) -> None:
+    require(type(observed) is type(expected), f"{label} type mismatch")
+    if type(expected) is dict:
+        observed_dict = observed
+        expected_dict = expected
+        require(
+            set(observed_dict) == set(expected_dict),
+            f"{label} key set mismatch",
+        )
+        for key, expected_value in expected_dict.items():
+            require_exact(observed_dict[key], expected_value, f"{label}.{key}")
+        return
+    if type(expected) is list:
+        observed_list = observed
+        expected_list = expected
+        require(len(observed_list) == len(expected_list), f"{label} length mismatch")
+        for index, expected_value in enumerate(expected_list):
+            require_exact(observed_list[index], expected_value, f"{label}[{index}]")
+        return
+    require(observed == expected, f"{label} value mismatch")
+
+
+def scalar_leaf_paths(
+    value: object,
+    prefix: tuple[str, ...] = (),
+) -> set[tuple[str, ...]]:
+    if type(value) is dict:
+        paths: set[tuple[str, ...]] = set()
+        for key, nested_value in value.items():
+            paths.update(scalar_leaf_paths(nested_value, prefix + (key,)))
+        return paths
+    if type(value) is list:
+        paths = set()
+        for index, nested_value in enumerate(value):
+            paths.update(scalar_leaf_paths(nested_value, prefix + (str(index),)))
+        return paths
+    return {prefix}
 
 
 def canonical_joined_rows(selection: dict[str, Any], prior: dict[str, Any]) -> list[dict[str, Any]]:
@@ -160,6 +293,7 @@ def validate(root: Path = ROOT) -> None:
         BINDINGS: BINDINGS_SHA,
         SELECTION: SELECTION_SHA,
         PRIOR_RESULT: PRIOR_RESULT_SHA,
+        R7_STATUS: GREEN_STATUS_SHA,
         PENDING_PRICING: PENDING_RUNTIME_PRICING_SHA,
         PERMISSION: PERMISSION_SHA,
         TRUST: TRUST_SHA,
@@ -415,40 +549,48 @@ def validate(root: Path = ROOT) -> None:
     require(package.get("science_state", {}).get("r11_closed") is False, "package closes R11")
     require(package.get("science_state", {}).get("r12_ready") is False, "package opens R12")
 
-    status = load(root, STATUS)
-    require(status.get("decision") == "OWNER_APPROVAL_READY", "G1 readiness decision drift")
-    require(status.get("status") == "OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_RUNTIME", "G1 status drift")
-    status_anchor = status.get("software_anchor", {})
-    require(status_anchor.get("reviewed_head") == GREEN_HEAD and status_anchor.get("reviewed_tree") == GREEN_TREE, "status software anchor drift")
-    require(status_anchor.get("base_sha") == BASE_SHA and status_anchor.get("sha_drift") is False, "status base/drift truth mismatch")
-    current = status.get("current_bindings", {})
-    require(current.get("execution_envelope_sha256") == ENVELOPE_SHA, "status envelope binding drift")
-    require(current.get("pricing_eur_binding_sha256") == PRICING_SHA, "status pricing binding drift")
-    require(current.get("runtime_pricing_candidate_sha256") == RUNTIME_PRICING_CANDIDATE_SHA, "status runtime pricing binding drift")
-    require(current.get("owner_approval_package_sha256") == PACKAGE_SHA, "status package binding drift")
-    require(current.get("proposed_owner_statement_sha256") == STATEMENT_SHA, "status statement binding drift")
-    owner = status.get("owner_approval", {})
-    require(owner.get("owner_approval_ready") is True, "owner approval is not ready")
-    require(owner.get("owner_approval_present") is False, "owner approval falsely present")
-    require(owner.get("approval_status") == "AWAITING_EXPLICIT_OWNER_APPROVAL", "owner approval status drift")
-    require_all_false(status.get("runtime_authority"), "status runtime authority")
-    science = status.get("science_state", {})
-    require(science.get("empirical_root_cause") == "UNKNOWN_PENDING_DIAGNOSTIC", "empirical root cause falsely claimed")
-    require(all(value is False for key, value in science.items() if key != "empirical_root_cause"), "science authority opened")
-    require_all_false(status.get("trading_authorizations"), "status trading authority")
+    candidate_identity = package.get("candidate_identity")
+    package_runtime = package.get("runtime_state")
+    package_science = package.get("science_state")
+    not_authorized = package.get("not_authorized")
+    require(isinstance(candidate_identity, dict), "package candidate identity absent")
+    require(isinstance(package_runtime, dict), "package runtime state absent")
+    require(isinstance(package_science, dict), "package science state absent")
+    require(isinstance(not_authorized, dict), "package prohibited authority absent")
 
-    canonical_approval_json = root / "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json"
-    canonical_approval_text = root / "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt"
-    require(not canonical_approval_json.exists() and not canonical_approval_text.exists(), "canonical owner approval record already exists")
-    for relative in (
-        "research/archive_inventory/r11a_runtime/R11A_RUNTIME_BINDING_R7.json",
-        "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json",
-        "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
-        "research/archive_inventory/r11a_role_attestation/R11A_DEDICATED_ROLE_OPERATOR_ATTESTATION.json",
-        "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_EVIDENCE.json",
-        "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION.json",
-    ):
-        require(not (root / relative).exists(), f"external/runtime authority unexpectedly present: {relative}")
+    canonical_approval_json = root / (
+        "research/archive_inventory/r11a_approval/"
+        "APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json"
+    )
+    canonical_approval_text = root / (
+        "research/archive_inventory/r11a_approval/"
+        "APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt"
+    )
+    canonical_approval_record_present = (
+        canonical_approval_json.exists() or canonical_approval_text.exists()
+    )
+    require(
+        not canonical_approval_record_present,
+        "canonical owner approval record already exists",
+    )
+
+    runtime_evidence_paths = {
+        "runtime_binding": "research/archive_inventory/r11a_runtime/R11A_RUNTIME_BINDING_R7.json",
+        "runtime_release": "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json",
+        "runtime_activation": "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
+        "role_attestation": "research/archive_inventory/r11a_role_attestation/R11A_DEDICATED_ROLE_OPERATOR_ATTESTATION.json",
+        "sts_preflight": "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_EVIDENCE.json",
+        "workflow_installation": "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION.json",
+    }
+    runtime_evidence = {
+        key: (root / relative).exists()
+        for key, relative in runtime_evidence_paths.items()
+    }
+    for key, relative in runtime_evidence_paths.items():
+        require(
+            not runtime_evidence[key],
+            f"external/runtime authority unexpectedly present: {relative}",
+        )
 
     contract = load(root, CONTRACT)
     require(contract.get("implementation_id") == "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-CORRECTIVE-R7", "R7 contract identity drift")
@@ -456,6 +598,307 @@ def validate(root: Path = ROOT) -> None:
     require(contract.get("owner_approval_present") is False, "historical R7 contract claims approval")
     require(contract.get("runtime_authority") and all(value is False for value in contract["runtime_authority"].values()), "R7 contract opens runtime")
     require(contract.get("r11_closed") is False and contract.get("r12_ready") is False, "R7 contract changes scientific gate")
+
+    contract_runtime = contract.get("runtime_authority")
+    contract_trading = contract.get("trading_authorizations")
+    role_authority = role.get("current_authority")
+    envelope_science = envelope.get("prohibited_scientific_scope")
+    envelope_authority = envelope.get("authority_state")
+    require(isinstance(contract_runtime, dict), "R7 runtime authority absent")
+    require(isinstance(contract_trading, dict), "R7 trading authority absent")
+    require(isinstance(role_authority, dict), "role current authority absent")
+    require(isinstance(envelope_science, dict), "envelope science scope absent")
+    require(isinstance(envelope_authority, dict), "envelope authority state absent")
+
+    permission_exact_72 = (
+        candidate_identity.get("permission_policy_least_privilege") is True
+        and isinstance(resources_allowed, list)
+        and len(resources_allowed) == 72
+        and set(resources_allowed) == expected_arns
+    )
+    oidc_restricted = (
+        candidate_identity.get("oidc_repository_restricted") is True
+        and candidate_identity.get("oidc_branch_ref_restricted") is True
+        and candidate_identity.get("oidc_workflow_name_restricted") is True
+        and condition == expected_condition
+    )
+    workflow_exact_hash_bound = (
+        candidate_identity.get("workflow_exact_byte_hash_bound_by_package") is True
+        and bound_files.get(WORKFLOW) == sha256(root, WORKFLOW)
+        and bound_files.get(WORKFLOW) == WORKFLOW_SHA
+    )
+    workflow_candidate_outside_dot_github = (
+        Path(WORKFLOW).parts[:2] != (".github", "workflows")
+        and not installed_workflow.exists()
+    )
+    workflow_lower = workflow_text.lower()
+    reusable_credential_tokens = (
+        "secrets.",
+        "persist-credentials: true",
+        "aws-access-key-id:",
+        "aws-secret-access-key:",
+        "aws-session-token:",
+    )
+    secrets_or_reusable_credentials = (
+        candidate_identity.get("reusable_credentials_or_secrets") is True
+        or any(token in workflow_lower for token in reusable_credential_tokens)
+    )
+    external_infrastructure_created = (
+        candidate_identity.get("identity_created") is True
+        or role.get("new_role_created_by_this_decision") is True
+        or any(value is True for value in role_authority.values())
+        or installed_workflow.exists()
+        or runtime_evidence["role_attestation"]
+        or runtime_evidence["sts_preflight"]
+        or runtime_evidence["workflow_installation"]
+    )
+    iam_ready = (
+        permission_exact_72
+        and oidc_restricted
+        and workflow_exact_hash_bound
+        and workflow_candidate_outside_dot_github
+        and not secrets_or_reusable_credentials
+        and not external_infrastructure_created
+    )
+
+    runtime_authority = {
+        "successor_role_created": role.get("new_role_created_by_this_decision") is True,
+        "aws_iam_mutation": (
+            role_authority.get("iam_role_creation") is True
+            or role_authority.get("iam_policy_application") is True
+            or contract_runtime.get("aws_iam_mutation") is True
+            or contract.get("aws_iam_mutations_executed_by_implementation") != 0
+        ),
+        "aws_oidc": (
+            role_authority.get("aws_oidc") is True
+            or contract_runtime.get("aws_oidc") is True
+            or runtime_evidence["sts_preflight"]
+        ),
+        "sts": (
+            role_authority.get("sts") is True
+            or contract_runtime.get("sts") is True
+            or runtime_evidence["sts_preflight"]
+        ),
+        "workflow_installed": (
+            package_runtime.get("workflow_installed") is True
+            or installed_workflow.exists()
+            or runtime_evidence["workflow_installation"]
+        ),
+        "runtime_binding_present": (
+            package_runtime.get("runtime_binding_present") is True
+            or runtime_evidence["runtime_binding"]
+        ),
+        "runtime_release": (
+            package_runtime.get("execution_release_present") is True
+            or runtime_evidence["runtime_release"]
+        ),
+        "runtime_activation": (
+            package_runtime.get("runtime_activation_present") is True
+            or runtime_evidence["runtime_activation"]
+        ),
+        "requester_pays": contract_runtime.get("requester_pays") is True,
+        "get_object": (
+            contract_runtime.get("get_object") is True
+            or role_authority.get("s3") is True
+        ),
+        "object_body_download": contract_runtime.get("object_body_download") is True,
+        "decompression": contract_runtime.get("decompression") is True,
+        "diagnostic_execution": (
+            package_runtime.get("diagnostic_execution") is True
+            or contract_runtime.get("diagnostic_processing") is True
+            or contract.get("network_requests_executed_by_implementation") != 0
+            or contract.get("diagnostic_rows_created_by_implementation") != 0
+        ),
+        "diagnostic_artifact_retention": (
+            contract_runtime.get("diagnostic_artifact_retention") is True
+        ),
+    }
+
+    science_state = {
+        "empirical_root_cause": package_science.get("empirical_root_cause"),
+        "deduplication": (
+            not_authorized.get("deduplication") is True
+            or envelope_science.get("deduplication") is True
+        ),
+        "replay_suppression": (
+            not_authorized.get("replay_suppression") is True
+            or envelope_science.get("block_replay_suppression") is True
+        ),
+        "r11b_repair": (
+            not_authorized.get("r11b_repair") is True
+            or envelope_science.get("r11b_repair") is True
+        ),
+        "wallet_ranking": (
+            not_authorized.get("wallet_ranking") is True
+            or envelope_science.get("wallet_ranking") is True
+        ),
+        "copyability": (
+            not_authorized.get("copyability_analysis") is True
+            or envelope_science.get("copyability_analysis") is True
+        ),
+        "r11_closed": (
+            package_science.get("r11_closed") is True
+            or envelope_authority.get("r11_closed") is True
+            or contract.get("r11_closed") is True
+        ),
+        "r12_ready": (
+            package_science.get("r12_ready") is True
+            or envelope_authority.get("r12_ready") is True
+            or contract.get("r12_ready") is True
+        ),
+    }
+    trading_authorizations = {
+        "integration": (
+            not_authorized.get("trading_integration") is True
+            or contract_trading.get("integration") is True
+        ),
+        "paper": (
+            not_authorized.get("paper_trading") is True
+            or contract_trading.get("paper") is True
+        ),
+        "shadow": (
+            not_authorized.get("shadow_trading") is True
+            or contract_trading.get("shadow") is True
+        ),
+        "live": (
+            not_authorized.get("live_orders") is True
+            or contract_trading.get("live") is True
+        ),
+        "leverage": (
+            not_authorized.get("leverage") is True
+            or contract_trading.get("leverage") is True
+        ),
+        "capital_allocation": (
+            not_authorized.get("capital_allocation") is True
+            or contract_trading.get("capital_allocation") is True
+        ),
+    }
+
+    package_approval_record = package.get("canonical_approval_record", {})
+    owner_approval_present = (
+        package.get("owner_approval_present") is True
+        or package_approval_record.get("present_now") is True
+        or canonical_approval_record_present
+    )
+    pricing_ready = (
+        pricing.get("status") == "PASS_CURRENT_OFFICIAL_PRICING_BOUND_NO_EXECUTION"
+        and pricing.get("pricing_binding_pending") is False
+        and calculation.get("total_raw_max_eur_ceil_6dp") == ceil_six(total_eur)
+        and calculation.get("projected_with_contingency_eur_ceil_6dp")
+        == ceil_six(projected_eur)
+        and calculation.get("owner_approval_max_eur") == "0.500000"
+        and calculation.get("monthly_recurring_budget_eur") == "0.000000"
+    )
+    owner_approval_ready = (
+        pricing_ready
+        and iam_ready
+        and package.get("approval_status") == "AWAITING_EXPLICIT_OWNER_APPROVAL"
+        and not owner_approval_present
+        and not any(runtime_authority.values())
+    )
+
+    envelope_anchor = envelope.get("software_anchor", {})
+    sha_drift = (
+        anchor.get("reviewed_head") != envelope_anchor.get("reviewed_head")
+        or anchor.get("reviewed_head") != GREEN_HEAD
+        or anchor.get("base_sha") != BASE_SHA
+    )
+
+    expected_status = {
+        "schema_version": "1.1",
+        "status_id": "R11A-G1-POST-GREEN-READINESS-STATUS-001",
+        "status": "OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_RUNTIME",
+        "decision": "OWNER_APPROVAL_READY",
+        "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+        "software_anchor": {
+            "review_id": anchor.get("authoritative_review_id"),
+            "review_event": anchor.get("review_event"),
+            "review_verdict": anchor.get("review_verdict"),
+            "reviewed_head": anchor.get("reviewed_head"),
+            "reviewed_tree": GREEN_TREE,
+            "base_sha": anchor.get("base_sha"),
+            "sha_drift": sha_drift,
+            "superseding_red_review_present": anchor.get(
+                "superseding_red_review_present"
+            ),
+            "verified_against_live_github_on_date_utc": "2026-08-25",
+        },
+        "historical_r7_seal": {
+            "semantics": "PRE_REVIEW_IMPLEMENTATION_STAGE_HISTORICAL_SEAL",
+            "reviewed_head_contract_sha256": anchor.get(
+                "reviewed_head_contract_sha256"
+            ),
+            "reviewed_head_status_sha256": sha256(root, R7_STATUS),
+            "historical_semantics_rewritten": False,
+            "successor_manifest_projection_may_be_mechanically_resealed": True,
+        },
+        "current_bindings": {
+            "execution_envelope_path": ENVELOPE,
+            "execution_envelope_sha256": sha256(root, ENVELOPE),
+            "pricing_eur_binding_path": PRICING,
+            "pricing_eur_binding_sha256": sha256(root, PRICING),
+            "runtime_pricing_candidate_path": RUNTIME_PRICING_CANDIDATE,
+            "runtime_pricing_candidate_sha256": sha256(
+                root, RUNTIME_PRICING_CANDIDATE
+            ),
+            "owner_approval_package_path": PACKAGE,
+            "owner_approval_package_sha256": sha256(root, PACKAGE),
+            "proposed_owner_statement_path": STATEMENT,
+            "proposed_owner_statement_sha256": sha256(root, STATEMENT),
+        },
+        "pricing": {
+            "current_official_binding": "PASS" if pricing_ready else "FAIL",
+            "pricing_binding_pending": pricing.get("pricing_binding_pending"),
+            "raw_max_eur_ceil_6dp": calculation.get(
+                "total_raw_max_eur_ceil_6dp"
+            ),
+            "projected_with_contingency_eur_ceil_6dp": calculation.get(
+                "projected_with_contingency_eur_ceil_6dp"
+            ),
+            "owner_approval_max_eur": calculation.get("owner_approval_max_eur"),
+            "monthly_recurring_budget_eur": calculation.get(
+                "monthly_recurring_budget_eur"
+            ),
+        },
+        "iam_workflow_readiness": {
+            "status": "PASS_INERT_LEAST_PRIVILEGE" if iam_ready else "FAIL",
+            "permission_policy_exact_72_getobject_resources": permission_exact_72,
+            "oidc_repository_owner_ref_and_workflow_restricted": oidc_restricted,
+            "workflow_exact_hash_bound": workflow_exact_hash_bound,
+            "workflow_candidate_outside_dot_github": workflow_candidate_outside_dot_github,
+            "secrets_or_reusable_credentials": secrets_or_reusable_credentials,
+            "external_infrastructure_created": external_infrastructure_created,
+        },
+        "owner_approval": {
+            "approval_id": package.get("proposed_approval_id"),
+            "approval_status": package.get("approval_status"),
+            "owner_approval_ready": owner_approval_ready,
+            "owner_approval_present": owner_approval_present,
+            "canonical_approval_record_present": canonical_approval_record_present,
+        },
+        "runtime_authority": runtime_authority,
+        "science_state": science_state,
+        "trading_authorizations": trading_authorizations,
+    }
+    classified_paths = set(STATUS_FIELD_CLASSIFICATION)
+    require(
+        len(classified_paths) == 75,
+        "status classification registry does not contain exact 75 leaves",
+    )
+    require(
+        set(STATUS_FIELD_CLASSIFICATION.values()) == {"A", "B", "C"},
+        "status classification registry has invalid or missing categories",
+    )
+    require(
+        not STATUS_INFORMATIONAL_FIELDS,
+        "authoritative G1 status unexpectedly contains D fields",
+    )
+    require(
+        classified_paths == scalar_leaf_paths(expected_status),
+        "status classification registry does not match exact status schema",
+    )
+    status = load(root, STATUS)
+    require_exact(status, expected_status, "G1 status projection")
 
 
 def main() -> int:

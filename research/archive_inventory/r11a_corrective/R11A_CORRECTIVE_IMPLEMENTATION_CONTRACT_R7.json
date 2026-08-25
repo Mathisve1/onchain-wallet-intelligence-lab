@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "778bbab5c2bdc588dd63249c97a8828cf20cc2e148b1b3553196c1518125c657",
+  "contract_projection_sha256": "96e9b22b85067e44bddef9f425a83c4593342ea42055fc93e84bf72915b4be82",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -127,7 +127,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "e0acf150b4a15fbfbf25bfd612b6fbfabb064553a74e8e8298fda02d8ac69d29",
+  "repository_manifest_projection_sha256": "822e6a7e5de14ca660aa23e0906e5c8f9ce9af64f62b3f205d2902f1bed20466",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
