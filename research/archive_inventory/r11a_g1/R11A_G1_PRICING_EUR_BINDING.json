@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "binding_id": "R11A-G1-PRICING-EUR-BINDING-001",
+  "status": "PASS_CURRENT_OFFICIAL_PRICING_BOUND_NO_EXECUTION",
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "region": "ap-northeast-1",
+  "aws_region_name": "Asia Pacific (Tokyo)",
+  "currency": "USD",
+  "retrieval_completed_at_utc": "2026-08-25T13:28:53Z",
+  "software_anchor": {
+    "reviewed_head": "443500de54917417276c39a635ae444458d03b0b",
+    "authoritative_review_id": 5019067044,
+    "review_verdict": "GREEN"
+  },
+  "canonical_amendment": {
+    "path": "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json",
+    "id": "R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002",
+    "sha256": "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f"
+  },
+  "execution_envelope": {
+    "path": "research/archive_inventory/r11a_g1/R11A_G1_EXECUTION_ENVELOPE.json",
+    "sha256": "89631f04394805bdf80be0a3784b1cc174eb0fe20e0627bc4eff63cc5f649b2e",
+    "maximum_get_object_requests": 72,
+    "maximum_total_downloaded_bytes": 2107738436,
+    "storage_class": "STANDARD"
+  },
+  "pricing_sources": [
+    {
+      "authority": "Amazon Web Services AmazonS3 Price List Bulk API",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/20260818181113/ap-northeast-1/index.json",
+      "retrieved_at_utc": "2026-08-25T13:28:50Z",
+      "effective_date": "2026-08-01",
+      "sha256": "8c2d57d8c2fe01c026a7c7c7796d25535d54e0004460b55b50ac8e48d9c3011e",
+      "sku": "9C7873KU3ZQBD6BJ",
+      "rate_description": "GET and all other requests",
+      "quoted_rate_usd": "0.0037",
+      "quoted_unit": "10000 requests",
+      "normalized_rate_usd_per_1000_requests": "0.00037",
+      "applicability": "72 S3 GetObject requests in ap-northeast-1"
+    },
+    {
+      "authority": "Amazon Web Services AWSDataTransfer Price List Bulk API",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/20260720184645/ap-northeast-1/index.json",
+      "retrieved_at_utc": "2026-08-25T13:28:53Z",
+      "effective_date": "2026-06-01",
+      "sha256": "0cdc27bd57f32449ed94bc2cefab87b69c49882c4f52e541b984affe65f83dcf",
+      "sku": "9ESU2G5WSY6FMZR3",
+      "rate_description": "Data transfer from Asia Pacific (Tokyo) to External, first 10 TB per month",
+      "quoted_rate_usd": "0.114",
+      "quoted_unit": "GB",
+      "applicability": "2,107,738,436 downloaded bytes to an external GitHub-hosted runner with zero free-tier availability assumed"
+    }
+  ],
+  "fx_sources": [
+    {
+      "authority": "European Central Bank Data Portal",
+      "url": "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?startPeriod=2026-08-24&endPeriod=2026-08-24&format=csvdata",
+      "retrieved_at_utc": "2026-08-25T13:27:10Z",
+      "reference_date": "2026-08-24",
+      "sha256": "0b167b88f66d44a3d568769065979a2dbeaaf35c83014c3ca2be60961685fb6f",
+      "series": "EXR.D.USD.EUR.SP00.A",
+      "quote": "EUR 1 = USD 1.1664",
+      "usd_per_eur": "1.1664"
+    },
+    {
+      "authority": "European Central Bank daily reference-rate XML",
+      "url": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+      "retrieved_at_utc": "2026-08-25T13:21:35Z",
+      "reference_date": "2026-08-24",
+      "sha256": "a6c08efb01d2b9d2cb585be766562c3b31e212ebe1cd895f70b57d027b24272a",
+      "quote": "EUR 1 = USD 1.1664",
+      "applicability": "independent confirmation of the latest official ECB rate available at retrieval"
+    }
+  ],
+  "applicability_assumptions": {
+    "requester_pays_account_pays_request_and_download_transfer": true,
+    "requester_pays_separate_surcharge_usd": "0",
+    "aws_global_free_transfer_allowance_assumed_available_bytes": 0,
+    "data_retrieval_charge_for_standard_storage_usd_per_gib": "0",
+    "iam_oidc_sts_additional_charge_usd": "0",
+    "s3_transfer_gib_bytes": 1073741824,
+    "billing_address_tax_status_known": false,
+    "tax_uncertainty_covered_by_contingency_and_approval_ceiling": true
+  },
+  "calculation": {
+    "request_cost_formula": "72 * (0.0037 / 10000)",
+    "aws_request_cost_usd": "0.00002664",
+    "transfer_gib_formula": "2107738436 / 1073741824",
+    "transfer_gib": "1.9629843868315219879150390625",
+    "transfer_cost_formula": "1.9629843868315219879150390625 * 0.114",
+    "aws_transfer_cost_usd": "0.2237802200987935066223144531250",
+    "aws_data_retrieval_cost_usd": "0",
+    "other_applicable_aws_cost_usd": "0",
+    "total_raw_max_usd": "0.2238068600987935066223144531250",
+    "eur_conversion_formula": "total_usd / 1.1664",
+    "aws_request_cost_eur_exact": "0.0000228395061728395061728395061728395061728395061728395061728395",
+    "aws_transfer_cost_eur_exact": "0.191855469906373033798280566808127572016460905349794238683128",
+    "total_raw_max_eur_exact": "0.191878309412545873304453406314300411522633744855967078189300",
+    "aws_request_cost_eur_ceil_6dp": "0.000023",
+    "aws_data_cost_eur_ceil_6dp": "0.000000",
+    "aws_transfer_cost_eur_ceil_6dp": "0.191856",
+    "other_applicable_aws_cost_eur_ceil_6dp": "0.000000",
+    "total_raw_max_eur_ceil_6dp": "0.191879",
+    "contingency_multiplier": "2.0",
+    "contingency_eur_exact": "0.191878309412545873304453406314300411522633744855967078189300",
+    "contingency_eur_ceil_6dp": "0.191879",
+    "projected_with_contingency_eur_exact": "0.383756618825091746608906812628600823045267489711934156378600",
+    "projected_with_contingency_eur_ceil_6dp": "0.383757",
+    "owner_approval_max_eur": "0.500000",
+    "owner_approval_max_eur_micros": 500000,
+    "monthly_recurring_budget_eur": "0.000000",
+    "monthly_recurring_budget_eur_micros": 0
+  },
+  "rounding": {
+    "arithmetic": "base-10 Decimal",
+    "reported_eur_components": "ROUND_CEILING_TO_0.000001_EUR",
+    "projected_with_contingency": "UNROUNDED_RAW_TOTAL_TIMES_2_THEN_ROUND_CEILING_TO_0.000001_EUR",
+    "approval_ceiling": "FIXED_HUMAN_FRIENDLY_CONSERVATIVE_CEILING_NOT_A_COST_ESTIMATE"
+  },
+  "pricing_binding_pending": false,
+  "owner_approval_present": false,
+  "runtime_authority_opened": false
+}

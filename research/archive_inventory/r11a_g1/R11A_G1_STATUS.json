@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "status_id": "R11A-G1-POST-GREEN-READINESS-STATUS-001",
+  "status": "OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_RUNTIME",
+  "decision": "OWNER_APPROVAL_READY",
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "software_anchor": {
+    "review_id": 5019067044,
+    "review_event": "COMMENTED",
+    "review_verdict": "GREEN",
+    "reviewed_head": "443500de54917417276c39a635ae444458d03b0b",
+    "reviewed_tree": "516d72a43545c454ef163e02ee1146005e6cfb5c",
+    "base_sha": "1d218755ead2cbf635ca0e1741f53e0184c0e239",
+    "sha_drift": false,
+    "superseding_red_review_present": false,
+    "verified_against_live_github_on_date_utc": "2026-08-25"
+  },
+  "historical_r7_seal": {
+    "semantics": "PRE_REVIEW_IMPLEMENTATION_STAGE_HISTORICAL_SEAL",
+    "reviewed_head_contract_sha256": "0cf3515c3af12401e3c8381b180ed9122fdf0923979a156891e5e8e22308cddd",
+    "reviewed_head_status_sha256": "855a052b22e0b471eb0433205f71b227b5c8baeb7c70cd4d8a563f8007462c6b",
+    "historical_semantics_rewritten": false,
+    "successor_manifest_projection_may_be_mechanically_resealed": true
+  },
+  "current_bindings": {
+    "execution_envelope_path": "research/archive_inventory/r11a_g1/R11A_G1_EXECUTION_ENVELOPE.json",
+    "execution_envelope_sha256": "89631f04394805bdf80be0a3784b1cc174eb0fe20e0627bc4eff63cc5f649b2e",
+    "pricing_eur_binding_path": "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json",
+    "pricing_eur_binding_sha256": "3459dbfe25d2e7244823344312de5025b7064928c6f436fbe751c7299ea41574",
+    "runtime_pricing_candidate_path": "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SNAPSHOT_CANDIDATE.json",
+    "runtime_pricing_candidate_sha256": "d5043062386b3d70f695f09c917f11719512918c56f318cace1e0530b709ac43",
+    "owner_approval_package_path": "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_PACKAGE.json",
+    "owner_approval_package_sha256": "a31c09cb73b3c176c360a8218aa1eae2faf6e02772b2ca1ff35cfd0babedb24f",
+    "proposed_owner_statement_sha256": "16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3"
+  },
+  "pricing": {
+    "current_official_binding": "PASS",
+    "pricing_binding_pending": false,
+    "raw_max_eur_ceil_6dp": "0.191879",
+    "projected_with_contingency_eur_ceil_6dp": "0.383757",
+    "owner_approval_max_eur": "0.500000",
+    "monthly_recurring_budget_eur": "0.000000"
+  },
+  "iam_workflow_readiness": {
+    "status": "PASS_INERT_LEAST_PRIVILEGE",
+    "permission_policy_exact_72_getobject_resources": true,
+    "oidc_repository_owner_ref_and_workflow_restricted": true,
+    "workflow_exact_hash_bound": true,
+    "workflow_candidate_outside_dot_github": true,
+    "secrets_or_reusable_credentials": false,
+    "external_infrastructure_created": false
+  },
+  "owner_approval": {
+    "approval_id": "APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001",
+    "approval_status": "AWAITING_EXPLICIT_OWNER_APPROVAL",
+    "owner_approval_ready": true,
+    "owner_approval_present": false,
+    "canonical_approval_record_present": false
+  },
+  "runtime_authority": {
+    "successor_role_created": false,
+    "aws_iam_mutation": false,
+    "aws_oidc": false,
+    "sts": false,
+    "workflow_installed": false,
+    "runtime_binding_present": false,
+    "runtime_release": false,
+    "runtime_activation": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "diagnostic_execution": false,
+    "diagnostic_artifact_retention": false
+  },
+  "science_state": {
+    "empirical_root_cause": "UNKNOWN_PENDING_DIAGNOSTIC",
+    "deduplication": false,
+    "replay_suppression": false,
+    "r11b_repair": false,
+    "wallet_ranking": false,
+    "copyability": false,
+    "r11_closed": false,
+    "r12_ready": false
+  },
+  "trading_authorizations": {
+    "integration": false,
+    "paper": false,
+    "shadow": false,
+    "live": false,
+    "leverage": false,
+    "capital_allocation": false
+  }
+}
