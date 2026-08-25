@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "envelope_id": "R11A-G1-FROZEN-EXECUTION-ENVELOPE-001",
+  "status": "FROZEN_INERT_NO_EXECUTION",
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "pull_request": 148,
+  "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
+  "software_anchor": {
+    "reviewed_head": "443500de54917417276c39a635ae444458d03b0b",
+    "authoritative_review_id": 5019067044,
+    "review_event": "COMMENTED",
+    "review_verdict": "GREEN"
+  },
+  "canonical_inputs": {
+    "amendment_path": "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json",
+    "amendment_id": "R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002",
+    "amendment_sha256": "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f",
+    "bindings_path": "research/archive_inventory/r11a_v2/R11A_V2_PREREGISTRATION_BINDINGS.json",
+    "bindings_sha256": "f60f7d6eac5f5a4633a5453c1c79bd84a54add69d1395d9048658450211bd0ba",
+    "selection_path": "research/archive_inventory/r11/R11_72H_SELECTION.json",
+    "selection_sha256": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+    "prior_result_path": "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json",
+    "prior_result_sha256": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862"
+  },
+  "object_identity_binding": {
+    "join_rule": "SELECTION_EXACT_TARGETS_JOIN_PRIOR_RESULT_PER_HOUR_SUMMARIES_ON_OBJECT_KEY_AND_PATH_HOUR_WITH_EQUAL_ETAG_AND_CONTENT_LENGTH",
+    "canonical_joined_rows_sha256": "1d9e41c058471f85e6478565034320727137f210383d5a3f23eb1531d14b4970",
+    "canonical_joined_rows_serialization": "UTF8_JSON_SORT_KEYS_COMPACT_ARRAY_PLUS_LF",
+    "selected_object_count": 72,
+    "all_object_keys_unique": true,
+    "all_path_hours_unique": true,
+    "all_compressed_sha256_values_bound": true,
+    "all_storage_classes": "STANDARD"
+  },
+  "scope": {
+    "bucket": "hl-mainnet-node-data",
+    "region": "ap-northeast-1",
+    "window_start_utc": "2025-07-28T00:00:00Z",
+    "window_end_exclusive_utc": "2025-07-31T00:00:00Z",
+    "complete_utc_days": 3,
+    "selected_hours": 72,
+    "object_key_pattern_description": "node_fills_by_block/hourly/{20250728,20250729,20250730}/{0..23}.lz4",
+    "seventy_third_object_authorized": false,
+    "other_historical_window_authorized": false
+  },
+  "network_envelope": {
+    "allowed_s3_operation": "s3:GetObject",
+    "maximum_s3_get_object_requests": 72,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "request_order": "PATH_HOUR_ASCENDING",
+    "requester_pays_required": true,
+    "if_match_etag_required": true,
+    "exact_response_etag_required": true,
+    "exact_content_length_required": true,
+    "preknown_compressed_sha256_required": true,
+    "stop_after_first_transport_integrity_or_parse_failure": true,
+    "http_redirect_following_authorized": false,
+    "pagination_authorized": false,
+    "head_object_authorized": false,
+    "range_get_authorized": false,
+    "list_objects_v2_authorized": false,
+    "list_object_versions_authorized": false,
+    "list_all_my_buckets_authorized": false,
+    "get_object_attributes_authorized": false,
+    "get_object_version_authorized": false,
+    "put_delete_restore_or_multipart_authorized": false,
+    "control_plane_caps": {
+      "maximum_github_workflow_history_requests": 1,
+      "maximum_github_history_response_bytes": 1048576,
+      "github_history_retries": 0,
+      "github_history_redirects": false,
+      "github_history_pagination": false,
+      "maximum_oidc_credential_configuration_attempts": 1,
+      "maximum_sts_get_caller_identity_requests": 1
+    }
+  },
+  "resource_envelope": {
+    "maximum_total_compressed_bytes": 2107738436,
+    "maximum_downloaded_bytes": 2107738436,
+    "maximum_individual_compressed_bytes": 76616104,
+    "maximum_total_decompressed_bytes_across_two_local_passes": 21079958490,
+    "maximum_individual_decompressed_bytes_per_pass": 536870912,
+    "maximum_ephemeral_workspace_bytes": 5368709120,
+    "minimum_free_workspace_bytes_before_oidc": 6442450944,
+    "maximum_retained_artifact_bytes": 134217728,
+    "maximum_retained_scientific_output_bytes": 130023424,
+    "reserved_non_scientific_package_metadata_bytes": 4194304,
+    "maximum_runtime_seconds": 21600,
+    "post_measurement_packaging_reservation_seconds": 300,
+    "minimum_upload_window_seconds": 60,
+    "workflow_job_timeout_minutes": 370,
+    "partition_count": 256,
+    "external_sort_memory_bytes": 67108864,
+    "maximum_single_group_spool_bytes": 67108864
+  },
+  "artifact_retention": {
+    "upload_only_after_independent_local_validation": true,
+    "github_artifact_retention_days": 30,
+    "github_artifact_compression_level": 6,
+    "wallet_feature_file_must_be_exact_zero_bytes": true,
+    "partial_scientific_prefix_authorized": false
+  },
+  "terminal_classes": [
+    {
+      "priority": 1,
+      "return_code": 21,
+      "terminal_class": "R11A_V2_ARTIFACT_CAP_EXCEEDED",
+      "scientific_output_status": "EMPTY",
+      "root_cause_claim_status": "NOT_PROVEN"
+    },
+    {
+      "priority": 2,
+      "return_code": 0,
+      "terminal_class": "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+      "scientific_output_status": "COMPLETE",
+      "root_cause_claim_status": "PROVEN_COMPLETE_TAXONOMY_ONLY"
+    },
+    {
+      "priority": 3,
+      "return_code": 20,
+      "terminal_class": "R11A_V2_DIAGNOSTIC_INCOMPLETE",
+      "scientific_output_status": "COMPLETE",
+      "root_cause_claim_status": "NOT_PROVEN"
+    },
+    {
+      "priority": 4,
+      "return_code": 21,
+      "terminal_class": "R11A_V2_FAIL_CLOSED_EARLY_STOP",
+      "scientific_output_status": "EMPTY",
+      "root_cause_claim_status": "NOT_PROVEN"
+    }
+  ],
+  "failure_behavior": {
+    "pre_oidc_oidc_or_sts_failure_returns_validated_rc21_empty_artifact": true,
+    "cleanup_error_is_fatal": true,
+    "history_gate_cleanup_failure_return_code": 70,
+    "rc20_or_rc21_must_propagate_non_green_job_status": true,
+    "only_rc0_may_finish_green": true,
+    "no_terminal_artifact_claim_after_unresolved_cleanup_failure": true
+  },
+  "prohibited_scientific_scope": {
+    "deduplication": false,
+    "block_replay_suppression": false,
+    "historical_expansion": false,
+    "r11b_repair": false,
+    "wallet_feature_publication": false,
+    "wallet_ranking": false,
+    "pnl_or_alpha_analysis": false,
+    "copyability_analysis": false,
+    "entity_clustering": false,
+    "strategy_inference": false
+  },
+  "authority_state": {
+    "owner_approval_present": false,
+    "workflow_installed": false,
+    "runtime_release": false,
+    "runtime_activation": false,
+    "diagnostic_execution": false,
+    "r11_closed": false,
+    "r12_ready": false
+  }
+}

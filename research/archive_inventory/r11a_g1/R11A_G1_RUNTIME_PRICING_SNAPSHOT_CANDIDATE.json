@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.1",
+  "snapshot_id": "R11A-G1-RUNTIME-PRICING-SNAPSHOT-CANDIDATE-001",
+  "status": "BOUND_CURRENT_OFFICIAL_SNAPSHOT",
+  "candidate_status": "INERT_NOT_INSTALLED_NOT_RUNTIME_AUTHORITY",
+  "region": "ap-northeast-1",
+  "currency": "USD",
+  "get_request_usd_per_1000": 0.00037,
+  "data_transfer_out_usd_per_gib": 0.114,
+  "usd_per_eur": 1.1664,
+  "contingency_multiplier": 2.0,
+  "aws_pricing_source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/20260818181113/ap-northeast-1/index.json",
+  "aws_pricing_source_sha256": "8c2d57d8c2fe01c026a7c7c7796d25535d54e0004460b55b50ac8e48d9c3011e",
+  "ecb_fx_source_url": "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?startPeriod=2026-08-24&endPeriod=2026-08-24&format=csvdata",
+  "ecb_fx_source_sha256": "0b167b88f66d44a3d568769065979a2dbeaaf35c83014c3ca2be60961685fb6f",
+  "snapshot_sha256": "3459dbfe25d2e7244823344312de5025b7064928c6f436fbe751c7299ea41574",
+  "observed_at_utc": "2026-08-25T13:28:53Z",
+  "comprehensive_binding_path": "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json",
+  "pricing_sources": [
+    {
+      "service": "AmazonS3",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/20260818181113/ap-northeast-1/index.json",
+      "sha256": "8c2d57d8c2fe01c026a7c7c7796d25535d54e0004460b55b50ac8e48d9c3011e"
+    },
+    {
+      "service": "AWSDataTransfer",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/20260720184645/ap-northeast-1/index.json",
+      "sha256": "0cdc27bd57f32449ed94bc2cefab87b69c49882c4f52e541b984affe65f83dcf"
+    }
+  ],
+  "projected_eur_micros_at_frozen_maximum": 383757,
+  "owner_approval_maximum_eur_micros": 500000,
+  "monthly_recurring_budget_eur_micros": 0,
+  "installed_at_runtime_snapshot_path": false,
+  "owner_approval_present": false,
+  "runtime_release": false,
+  "runtime_activation": false
+}

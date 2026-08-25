@@ -26,8 +26,9 @@
 - [x] Retain the exact consumed R11 artifact and release-consumption record; preserve the unresolved duplicate-count deviation.
 - [x] Record R10D as byte-exact under its legacy reducer but uncertain under canonical identity and event-time activity.
 - [x] Freeze the four-layer R11A identity model and exact-same-72-object diagnostic as `PREREGISTERED_NO_EXECUTION`.
-- [ ] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding.
-- [ ] Bind current official pricing/EUR evidence and obtain one exact hash-bound owner approval for the dedicated successor role and frozen diagnostic envelope.
+- [x] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`.
+- [x] Bind current official AWS pricing and ECB EUR evidence to the exact frozen diagnostic envelope with a conservative EUR 0.50 one-time / EUR 0 monthly ceiling.
+- [ ] Obtain one exact hash-bound owner approval for package `R11A-G1-OWNER-APPROVAL-PACKAGE-001`; current status is `AWAITING_EXPLICIT_OWNER_APPROVAL` and grants no authority.
 - [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
 - [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
 

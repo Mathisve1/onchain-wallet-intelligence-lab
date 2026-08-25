@@ -2,6 +2,8 @@
 
 Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`, and canonical consumed-unresolved R11 evidence closure merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`.
 
+Post-GREEN G1 governance/pricing state verified 2026-08-25 against exact software head `443500de54917417276c39a635ae444458d03b0b`, authoritative independent review `5019067044`, current official AWS/ECB evidence and the unchanged canonical Amendment 002. This reconciliation creates no owner approval, IAM resource, installed workflow, release, activation or diagnostic execution.
+
 ## Current status
 
 | Dimension | State |
@@ -10,7 +12,7 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
-| archive diagnostic gate | `R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTERED_NO_EXECUTION` |
+| archive diagnostic gate | `R11A_POST_GREEN_G1_OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_EXECUTION` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
@@ -86,12 +88,13 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | R10D backward consistency | `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY` |
 | R10D legacy reducer reproduction | byte-exact; canonical unique-fill and event-time activity equivalence remain `UNKNOWN` |
 | R11A diagnostic | `HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002` |
-| R11A status | `CORRECTIVE_R7_IMPLEMENTATION_SEALED_AWAITING_CLEAN_CONTEXT_REVIEW_NO_EXECUTION` |
+| R11A status | `POST_GREEN_G1_OWNER_APPROVAL_READY_AWAITING_EXPLICIT_OWNER_APPROVAL_NO_EXECUTION` |
+| R11A software anchor | GREEN head `443500de54917417276c39a635ae444458d03b0b`; authoritative review `5019067044` |
 | R11A exact input | same 72 R11 objects; no 73rd object or wider window |
-| R11A owner approval | `NOT_PRESENT` |
+| R11A owner approval | `NOT_PRESENT`; package `R11A-G1-OWNER-APPROVAL-PACKAGE-001` is `AWAITING_EXPLICIT_OWNER_APPROVAL` |
 | R11A workflow / release / activation | absent / absent / absent |
 | R11A canonical Amendment 002 | `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; unchanged canonical V2 path; SHA-256 `bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f`; V2-bound |
-| R11A official pricing/EUR binding | `PENDING` |
+| R11A official pricing/EUR binding | `PASS`; `R11A-G1-PRICING-EUR-BINDING-001`; raw maximum EUR `0.191879`, 2x contingency EUR `0.383757`, proposed one-time ceiling EUR `0.50`, monthly EUR `0` |
 | R11A empirical root cause | `UNKNOWN_PENDING_DIAGNOSTIC` |
 | R11A repair selected / R11B authorized | `false` / `false` |
 | R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` after consumption |
@@ -269,9 +272,12 @@ r10d_backward_consistency_class = C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY
 r11a_preregistered_no_execution = true
 r11a_corrective_implementation_id = R11A_CORRECTIVE_IMPLEMENTATION_R7
 r11a_corrective_implementation_sealed = true
-r11a_clean_context_review_complete = false
-r11a_amendment_002_present = false
-r11a_official_pricing_eur_binding_complete = false
+r11a_green_software_head = 443500de54917417276c39a635ae444458d03b0b
+r11a_authoritative_green_review = 5019067044
+r11a_clean_context_review_complete = true
+r11a_amendment_002_present = true
+r11a_official_pricing_eur_binding_complete = true
+r11a_owner_approval_ready = true
 r11a_owner_approval_present = false
 r11a_workflow_installed = false
 r11a_release_present = false
@@ -309,7 +315,7 @@ All release-scoped R2 execution flags are false after consumption of release 002
 ## Exact next gate
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
-2. Independently review the separately sealed corrective R11A V2 R7 implementation. Its workflow candidate must remain outside `.github/workflows`; no OIDC, S3 request or release may appear at this stage.
-3. Preserve canonical Amendment 002 unchanged at its V2 path and exact binding. After exact-head CI, a new independent clean-context review and a later separate official pricing/EUR binding, request one new hash-bound owner approval for the dedicated successor role, exact 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
-4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
+2. Preserve the immutable GREEN software anchor `443500de54917417276c39a635ae444458d03b0b`, authoritative review `5019067044`, canonical Amendment 002 and the exact current G1 pricing/envelope/policy/workflow hashes.
+3. Obtain, but do not infer or self-grant, the exact explicit owner statement from `research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt`. The current status remains `AWAITING_EXPLICIT_OWNER_APPROVAL`; no role, OIDC, workflow, release, activation or execution authority exists.
+4. After explicit owner approval is canonically recorded in a later task, preserve separate role-creation/configuration, workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run. Approval alone must not execute any of those stages.
 5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
