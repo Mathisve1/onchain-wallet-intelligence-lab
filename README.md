@@ -37,13 +37,16 @@ review `5019067044`. Canonical Amendment 002 is the unchanged
 with internal ID `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; its exact hash
 is bound by the V2 preregistration bindings. Current official AWS pricing and
 ECB EUR conversion are bound by the inert G1 readiness package with a
-conservative EUR 0.50 one-time ceiling and EUR 0 monthly budget. Explicit owner
-approval is still absent and the package status is
-`AWAITING_EXPLICIT_OWNER_APPROVAL`. PR #148 remains draft and is not owner
-approval or runtime authority. The workflow candidate remains outside
-`.github/workflows`; role creation, installation, release, activation, AWS/S3
-authority, diagnostic execution, empirical root-cause claims, deduplication,
-repair, wallet ranking and R12 promotion remain absent.
+conservative EUR 0.50 one-time ceiling and EUR 0 monthly budget. Mathis Van
+Eeckhout returned the package's exact owner statement on 2026-08-26; the
+byte-exact receipt is recorded as an approval-record candidate with SHA-256
+`16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`
+and awaits independent exact-head review. The historical G1 package remains an
+immutable `AWAITING_EXPLICIT_OWNER_APPROVAL` readiness snapshot. PR #148
+remains draft and is not GitHub approval or runtime authority. The workflow
+candidate remains outside `.github/workflows`; no role, installation, release,
+activation, AWS/S3 authority, diagnostic execution, empirical root-cause
+claim, deduplication, repair, wallet ranking or R12 promotion exists.
 
 ## Current study
 

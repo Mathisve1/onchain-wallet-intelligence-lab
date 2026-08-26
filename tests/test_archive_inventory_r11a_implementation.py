@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,17 +25,28 @@ class R11AImplementationTests(unittest.TestCase):
         cls.selection = validator.strict_load(validator.SELECTION)
 
     def test_dedicated_validator_passes_in_normal_and_optimized_mode(self) -> None:
-        for flags in ([], ["-O"]):
-            with self.subTest(flags=flags):
-                completed = subprocess.run(
-                    [sys.executable, *flags, "governance/validate_r11a_implementation.py"],
-                    cwd=ROOT,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-                self.assertIn("R11A_IMPLEMENTATION_VALID_INERT_NO_EXECUTION", completed.stdout)
+        with tempfile.TemporaryDirectory() as directory:
+            historical_root = Path(directory) / "repository"
+            shutil.copytree(
+                ROOT,
+                historical_root,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.pyo"),
+            )
+            shutil.rmtree(
+                historical_root / "research/archive_inventory/r11a_approval",
+                ignore_errors=True,
+            )
+            for flags in ([], ["-O"]):
+                with self.subTest(flags=flags):
+                    completed = subprocess.run(
+                        [sys.executable, *flags, "governance/validate_r11a_implementation.py"],
+                        cwd=historical_root,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertIn("R11A_IMPLEMENTATION_VALID_INERT_NO_EXECUTION", completed.stdout)
 
     def test_contract_is_sealed_and_all_runtime_authority_remains_closed(self) -> None:
         self.assertTrue(self.contract["implementation_sealed"])
