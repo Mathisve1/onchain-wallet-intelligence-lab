@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "08706d2a9fc4871529094b16ce87c6fc2e000dab9884e8cb461aa8b5106ec716",
+  "contract_projection_sha256": "c5be69dd88e98454a3a99cb44e3e7fc8c3931f0fdfaab86df3800f3dc1cb6b07",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -127,7 +127,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "f85ec08f816af21fc58829bc07969d6ee22f157710b613777dd6c4098e84098f",
+  "repository_manifest_projection_sha256": "f3414092e54669e3be777ada41b456ce91c8206405b2b2b6c96556bec803ac5d",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -172,7 +172,7 @@
   "test_file_hashes": {
     "tests/test_archive_inventory_r11a_corrective_artifacts.py": "aa04a39cc26b4837162bf772ce217fb12ca1aa08af824d1b4384fe4ba32fcd59",
     "tests/test_archive_inventory_r11a_corrective_r3.py": "2e31a00be21d5ee8578d07bc8b2e761398ad84ac2aac5190880c0772ba682427",
-    "tests/test_archive_inventory_r11a_corrective_r7.py": "3ce146ee2933d4574a7f95a1c47ce14a484c14ed36aa117788f3074c654e865a",
+    "tests/test_archive_inventory_r11a_corrective_r7.py": "d85a76b2b561e48aa195a8493ef878450e501b8a666918836adcb306ee5bf359",
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py": "13f58570211a5df4b8ce247b01ebe67c534473936fdc5e9ffc5d650b36740b56",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988"

@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -130,11 +132,13 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         return None
 
     def test_canonical_record_passes_and_text_is_exact(self) -> None:
-        record = validate(ROOT)
-        canonical = (ROOT / approval.APPROVAL_TEXT).read_bytes()
-        source = (ROOT / approval.SOURCE_STATEMENT).read_bytes()
-        receipt = (ROOT / approval.APPROVAL_JSON).read_bytes()
-        status = (ROOT / approval.STATUS).read_bytes()
+        temporary, repository = self.copy_repository()
+        self.addCleanup(temporary.cleanup)
+        record = validate(repository)
+        canonical = (repository / approval.APPROVAL_TEXT).read_bytes()
+        source = (repository / approval.SOURCE_STATEMENT).read_bytes()
+        receipt = (repository / approval.APPROVAL_JSON).read_bytes()
+        status = (repository / approval.STATUS).read_bytes()
         self.assertEqual(canonical, source)
         self.assertEqual(
             hashlib.sha256(canonical).hexdigest(), approval.APPROVAL_STATEMENT_SHA
@@ -149,6 +153,50 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         self.assertTrue(canonical.endswith(b"\n"))
         self.assertFalse(record["execution_authorized_by_this_approval"])
         self.assertTrue(record["owner_approval_present"])
+
+    def test_ci_import_bytecode_is_isolated_without_weakening_descendant_rejection(self) -> None:
+        temporary, repository = self.copy_repository()
+        self.addCleanup(temporary.cleanup)
+        corrective_cache = (
+            repository
+            / "research/archive_inventory/r11a_corrective/__pycache__"
+        )
+        import_command = (
+            "from research.archive_inventory.r11a_corrective.limits "
+            "import DEFAULT_LIMITS"
+        )
+        environment = os.environ.copy()
+        environment.pop("PYTHONPYCACHEPREFIX", None)
+        environment.pop("PYTHONDONTWRITEBYTECODE", None)
+
+        subprocess.run(
+            [sys.executable, "-c", import_command],
+            cwd=repository,
+            env=environment,
+            check=True,
+        )
+        self.assertTrue(corrective_cache.is_dir())
+        self.assertTrue(any(corrective_cache.glob("*.pyc")))
+
+        shutil.rmtree(corrective_cache)
+        self.assertFalse(corrective_cache.exists())
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        subprocess.run(
+            [sys.executable, "-B", "-c", import_command],
+            cwd=repository,
+            env=environment,
+            check=True,
+        )
+        self.assertFalse(corrective_cache.exists())
+        validate(repository)
+
+        unknown_descendant = corrective_cache.parent / "unknown-descendant"
+        unknown_descendant.mkdir()
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "unrecognized R11A authority namespace",
+        ):
+            validate(repository)
 
     def test_every_scalar_leaf_type_valid_mutation_fails_closed(self) -> None:
         temporary, repository, path, raw, canonical = self.record_copy()

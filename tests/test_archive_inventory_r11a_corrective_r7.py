@@ -545,7 +545,7 @@ else:
     raise SystemExit('terminal boundary disappeared under -O')
 """
         completed = subprocess.run(
-            [sys.executable, "-O", "-c", source],
+            [sys.executable, "-B", "-O", "-c", source],
             cwd=root,
             check=False,
             capture_output=True,
