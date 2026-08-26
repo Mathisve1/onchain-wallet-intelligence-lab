@@ -39,9 +39,12 @@ is bound by the V2 preregistration bindings. Current official AWS pricing and
 ECB EUR conversion are bound by the inert G1 readiness package with a
 conservative EUR 0.50 one-time ceiling and EUR 0 monthly budget. Mathis Van
 Eeckhout returned the package's exact owner statement on 2026-08-26; the
-byte-exact receipt is recorded as an approval-record candidate with SHA-256
+byte-exact approval text is recorded with SHA-256
 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`
-and awaits independent exact-head review. The historical G1 package remains an
+and the canonical JSON receipt with SHA-256
+`531e61130b612fd12503e60ff56d1c3d51b05a64bb2785f1e10fa9c5471c7ae6`;
+the record awaits independent exact-head rereview after validator hardening.
+The historical G1 package remains an
 immutable `AWAITING_EXPLICIT_OWNER_APPROVAL` readiness snapshot. PR #148
 remains draft and is not GitHub approval or runtime authority. The workflow
 candidate remains outside `.github/workflows`; no role, installation, release,

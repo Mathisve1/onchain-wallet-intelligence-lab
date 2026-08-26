@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "27b9c67555e2d980703e5945fdf982d8ab268bc9c7e585aac9485757f917f3f0",
+  "contract_projection_sha256": "08706d2a9fc4871529094b16ce87c6fc2e000dab9884e8cb461aa8b5106ec716",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -127,7 +127,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "c5e712fe9af0f1f7f30424591ffbd0a76f8eb10ae3917f65c6c855f232f4bbec",
+  "repository_manifest_projection_sha256": "f85ec08f816af21fc58829bc07969d6ee22f157710b613777dd6c4098e84098f",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -149,7 +149,7 @@
     ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
     ".github/workflows/r11a-r7-dev.yml": "23754917699c0f685f0164b64cc78807ab7872e7fe179982d0f0145da35f74fe",
     "PROJECT_STATE.md": "40e57e41f14cba982ec46c3cb429394edca3db4ec1ee175cc5c50dbd2a3cda45",
-    "README.md": "46a71d05339f2ee2ecc170d573a071dbbef8163cc53476a6d8b5ae1913ccfff5",
+    "README.md": "cf57dde3bd6661de2fa81b4e20a93be9cac87786215f5a825e8d488e8ac890df",
     "ROADMAP.md": "f36ee9ecd2af21ba03425d415b026419b77a0d6c12cc72d2d871a67206e9b45f",
     "governance/R11A_V2_REVIEW_FINDINGS.md": "b1b1a717f4ee5047c459e7976bc1f74398426c66c47b1f3db87d92e203e8b8c9",
     "research/archive_inventory/r11/R11_72H_SELECTION.json": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
