@@ -3,9 +3,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sqlite3
+import sys
 import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+
+# The approved workflow invokes this file directly.  Ensure that direct-script
+# execution and package imports use the same repository modules without
+# changing any artifact-validation semantics.
+_REPOSITORY_ROOT = Path(__file__).absolute().parents[1]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
 
 from research.archive_inventory.r11a_corrective.artifact import (
     validate_artifact,
@@ -13,6 +21,7 @@ from research.archive_inventory.r11a_corrective.artifact import (
 from research.archive_inventory.r11a_corrective.artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
     CONSERVATION_FILE,
+    CONTEXT_FILE,
     DIAGNOSTIC_ID,
     IMPLEMENTATION_ID,
     RESULT_FILE,
@@ -37,6 +46,10 @@ from research.archive_inventory.r11a_corrective.runtime import RuntimeGuard
 from research.archive_inventory.r11a_corrective.storage_r7 import (
     MeteredSQLite,
     WorkspaceMeter,
+)
+from governance import r11a_stage_common_r4 as _stage
+from governance.validate_r11a_runtime_binding_r7 import (
+    validate as validate_runtime_binding,
 )
 
 UNIT_FILE = "r11a-v2-taxonomy-units.ndjson"
@@ -921,14 +934,78 @@ def validate_science(artifact: Path) -> None:
             database.close_delete()
 
 
+def validate_aligned_execution_artifact(
+    artifact: Path,
+    *,
+    root: Path = _REPOSITORY_ROOT,
+) -> None:
+    """Validate an artifact and bind every post-OIDC context to R7 authority.
+
+    Minimal pre-OIDC failure artifacts deliberately remain independently
+    verifiable when the runtime-binding gate itself failed.  Any bound context
+    contains ``approval_id`` and must match the complete aligned runtime chain
+    and the exact raw repository bytes before its science is accepted.
+    """
+
+    validate_artifact(artifact, DEFAULT_LIMITS)
+    context = obj(
+        strict_json_loads((artifact / CONTEXT_FILE).read_bytes()),
+        "artifact context",
+    )
+    bound_context = "approval_id" in context
+    runtime_required = (
+        bound_context or context["execution_phase"] != "PRE_OIDC_STATIC_GATE"
+    )
+    binding: Mapping[str, object] | None = None
+    if runtime_required:
+        dispatch_sha = text(context["dispatch_sha"], "artifact dispatch SHA")
+        run_attempt = integer(
+            context["workflow_run_attempt"],
+            "artifact workflow run attempt",
+        )
+        binding = validate_runtime_binding(dispatch_sha, run_attempt, root=root)
+    if bound_context:
+        require(binding is not None, "bound artifact lacks aligned runtime binding")
+        release = _stage.load(root, _stage.RELEASE_RELATIVE)
+        activation = _stage.load(root, _stage.ACTIVATION_RELATIVE)
+        pricing = _stage.load(root, _stage.PRICING_TARGET_RELATIVE)
+        expected = {
+            "approval_id": _stage.APPROVAL_ID,
+            "approval_text_sha256": _stage.sha256(root, _stage.APPROVAL_TEXT_RELATIVE),
+            "execution_release_id": release["execution_release_id"],
+            "execution_release_blob_sha256": _stage.sha256(root, _stage.RELEASE_RELATIVE),
+            "activation_id": activation["activation_id"],
+            "implementation_contract_sha256": _stage.sha256(root, _stage.IMPLEMENTATION_RELATIVE),
+            "workflow_sha256": _stage.sha256(root, _stage.WORKFLOW_RELATIVE),
+            "collector_sha256": _stage.sha256(root, _stage.RUNNER_RELATIVE),
+            "validator_sha256": _stage.sha256(root, _stage.ARTIFACT_VALIDATOR_RELATIVE),
+            "selection_sha256": _stage.sha256(root, _stage.SELECTION_RELATIVE),
+            "pricing_snapshot_sha256": _stage.sha256(root, _stage.PRICING_TARGET_RELATIVE),
+            "single_use_window_start_utc": binding["single_use_window_start_utc"],
+        }
+        for key, expected_value in expected.items():
+            require(
+                context[key] == expected_value,
+                f"artifact bound context drift: {key}",
+            )
+        require(
+            integer(
+                context["pricing_projection_eur_micros"],
+                "artifact pricing projection",
+            )
+            == pricing["projected_eur_micros_at_frozen_maximum"],
+            "artifact bound context drift: pricing_projection_eur_micros",
+        )
+    validate_science(artifact)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Independently validate one exact R11A R7 artifact"
     )
     parser.add_argument("artifact", type=Path)
     arguments = parser.parse_args(argv)
-    validate_artifact(arguments.artifact, DEFAULT_LIMITS)
-    validate_science(arguments.artifact)
+    validate_aligned_execution_artifact(arguments.artifact)
     print("R11A_V2_EXECUTION_ARTIFACT_VALID")
     return 0
 

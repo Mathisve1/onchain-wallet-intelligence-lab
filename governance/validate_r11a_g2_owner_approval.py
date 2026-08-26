@@ -38,6 +38,8 @@ RUNTIME_PRICING = "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SN
 PERMISSION = "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json"
 TRUST = "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json"
 WORKFLOW = "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
+ALIGNMENT_DIR = "research/archive_inventory/r11a_alignment"
+ALIGNMENT_PATH = f"{ALIGNMENT_DIR}/R11A_POST_APPROVAL_VALIDATOR_ALIGNMENT.json"
 
 PACKAGE_SHA = "a31c09cb73b3c176c360a8218aa1eae2faf6e02772b2ca1ff35cfd0babedb24f"
 HISTORICAL_G1_STATUS_SHA = "675a11be85dc1f7fc8db18c59dcf7027a32da5241ed44167902767de6121995f"
@@ -63,6 +65,8 @@ EXPECTED_BOUND_FILES = {
 
 CANONICAL_FUTURE_AUTHORITY_PATHS = (
     "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
+    "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
+    "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
     "research/archive_inventory/r11a_role_preflight/R11A_SUCCESSOR_ROLE_STS_PREFLIGHT_ATTESTATION.json",
     "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE_CONSUMPTION.json",
     "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION_CONTRACT.json",
@@ -88,6 +92,7 @@ PROHIBITED_AUTHORITY_NAMESPACES = (
 ALLOWED_R11A_NAMESPACES = frozenset(
     {
         "r11a",
+        "r11a_alignment",
         "r11a_approval",
         "r11a_corrective",
         "r11a_g1",
@@ -99,6 +104,7 @@ ALLOWED_R11A_NAMESPACES = frozenset(
 ALLOWED_R11A_DIRECTORIES = frozenset(
     {
         "research/archive_inventory/r11a",
+        ALIGNMENT_DIR,
         "research/archive_inventory/r11a_approval",
         "research/archive_inventory/r11a_corrective",
         "research/archive_inventory/r11a_corrective/workflows",
@@ -114,6 +120,9 @@ PROHIBITED_INSTALLED_WORKFLOWS = (
     ".github/workflows/hyperliquid-archive-r11a-v2-identity-boundary-diagnostic.yml",
 )
 INSTALLED_WORKFLOW = PROHIBITED_INSTALLED_WORKFLOWS[0]
+KNOWN_FUTURE_STAGE_PATHS = frozenset(
+    {*CANONICAL_FUTURE_AUTHORITY_PATHS, *PROHIBITED_INSTALLED_WORKFLOWS}
+)
 
 R4_WORKFLOW_CANDIDATE = (
     "research/archive_inventory/r11a_corrective/workflows/"
@@ -137,6 +146,7 @@ CANONICAL_R11A_JSON_PATHS = frozenset(
         "research/archive_inventory/r11a/R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTRATION.json",
         "research/archive_inventory/r11a/R11A_IDENTITY_DECISION_DOSSIER.json",
         "research/archive_inventory/r11a/R11_ROOT_CAUSE_STATUS.json",
+        ALIGNMENT_PATH,
         APPROVAL_JSON,
         "research/archive_inventory/r11a_corrective/R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT.json",
         "research/archive_inventory/r11a_corrective/R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json",
@@ -257,6 +267,11 @@ APPROVAL_ID_DATA_REFERENCE_ALLOWLIST = frozenset(
         R4_WORKFLOW_CANDIDATE,
         WORKFLOW,
         "governance/REPOSITORY_MANIFEST.sha256",
+        ALIGNMENT_PATH,
+        (
+            "research/archive_inventory/r11a_corrective/"
+            "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT_R7.json"
+        ),
     }
 )
 
@@ -562,6 +577,7 @@ def _validate_approval_uniqueness(
     *,
     statement_bytes: bytes,
     receipt_bytes: bytes,
+    permitted_successor_paths: frozenset[str] = frozenset(),
 ) -> None:
     lexical_root = _checked_root(root)
     canonical_id = _normalized_name(APPROVAL_ID)
@@ -582,6 +598,7 @@ def _validate_approval_uniqueness(
 
     for relative, information in _repository_entries(lexical_root):
         path = lexical_root / PurePosixPath(relative)
+        permitted_successor = relative in permitted_successor_paths
         normalized_basename = _normalized_name(PurePosixPath(relative).name)
         canonical_record_path = relative in {APPROVAL_JSON, APPROVAL_TEXT}
 
@@ -613,12 +630,13 @@ def _validate_approval_uniqueness(
         basename = PurePosixPath(relative).name
         if _is_r11a_archive_path(relative) and _is_authority_data_name(basename):
             require(
-                relative in ALLOWED_R11A_DATA_PATHS,
+                relative in ALLOWED_R11A_DATA_PATHS or permitted_successor,
                 f"unrecognized R11A approval/authority data file: {relative}",
             )
         if _is_authority_data_name(basename) and _has_r11a_authority_name(basename):
             require(
-                relative in ALLOWED_R11A_AUTHORITY_NAMED_PATHS,
+                relative in ALLOWED_R11A_AUTHORITY_NAMED_PATHS
+                or permitted_successor,
                 f"future R11A approval/authority file alias present: {relative}",
             )
 
@@ -636,7 +654,8 @@ def _validate_approval_uniqueness(
         approval_id_bytes = APPROVAL_ID.encode("ascii")
         if approval_id_bytes in raw and _is_authority_data_name(basename):
             require(
-                relative in APPROVAL_ID_DATA_REFERENCE_ALLOWLIST,
+                relative in APPROVAL_ID_DATA_REFERENCE_ALLOWLIST
+                or permitted_successor,
                 f"unpermitted approval ID data/record alias present: {relative}",
             )
 
@@ -665,6 +684,8 @@ def _validate_approval_uniqueness(
         try:
             value = _strict_json_value(raw, relative)
         except R11AG2ApprovalError as exc:
+            if relative == ALIGNMENT_PATH:
+                raise
             invalid_alias_candidate = json_named and (
                 _is_r11a_archive_path(relative)
                 or _has_r11a_authority_name(basename)
@@ -684,11 +705,14 @@ def _validate_approval_uniqueness(
         )
         if r11a_record:
             require(
-                relative in CANONICAL_R11A_JSON_PATHS,
+                relative in CANONICAL_R11A_JSON_PATHS or permitted_successor,
                 f"unrecognized R11A approval/authority JSON alias record: {relative}",
             )
 
-        if relative not in APPROVAL_REFERENCE_JSON_ALLOWLIST:
+        if (
+            relative not in APPROVAL_REFERENCE_JSON_ALLOWLIST
+            and not permitted_successor
+        ):
             same_approval = _contains_exact_approval_id(value)
             require(not same_approval, f"conflicting approval_id alias present: {relative}")
             if _contains_positive_approval_claim(value):
@@ -707,6 +731,39 @@ def _validate_approval_uniqueness(
                     not _contains_open_authority(value),
                     f"alternate R11A authority record opens current authority: {relative}",
                 )
+
+
+def _normalize_permitted_successor_paths(
+    paths: frozenset[str],
+) -> frozenset[str]:
+    require(type(paths) is frozenset, "permitted successor paths must be frozenset")
+    for relative in paths:
+        _relative_parts(relative)
+    require(
+        paths <= KNOWN_FUTURE_STAGE_PATHS,
+        "permitted successor paths contain unknown future-stage path",
+    )
+    return paths
+
+
+def _validate_alignment_namespace(root: Path) -> None:
+    _, information = _inspect_path(root, ALIGNMENT_DIR, allow_missing=True)
+    if information is None:
+        return
+    require(
+        stat.S_ISDIR(information.st_mode),
+        f"alignment namespace is not directory: {ALIGNMENT_DIR}",
+    )
+    alignment_dir = _required_directory(root, ALIGNMENT_DIR)
+    try:
+        entries = {entry.name for entry in os.scandir(alignment_dir)}
+    except OSError as exc:
+        raise R11AG2ApprovalError("cannot inventory alignment namespace") from exc
+    require(
+        entries == {PurePosixPath(ALIGNMENT_PATH).name},
+        "alignment namespace file set drift",
+    )
+    _required_file(root, ALIGNMENT_PATH)
 
 
 def _validate_no_future_authority(root: Path) -> None:
@@ -1010,8 +1067,16 @@ def expected_record(root: Path) -> dict[str, Any]:
     }
 
 
-def validate(root: Path = ROOT) -> dict[str, Any]:
+def _validate_immutable_approval_context(
+    root: Path = ROOT,
+    *,
+    permitted_successor_paths: frozenset[str] = frozenset(),
+    validate_repository_symlinks: bool,
+) -> dict[str, Any]:
     root = _checked_root(root)
+    permitted_successor_paths = _normalize_permitted_successor_paths(
+        permitted_successor_paths
+    )
     expected_dir_files = {
         Path(APPROVAL_JSON).name,
         Path(APPROVAL_TEXT).name,
@@ -1123,10 +1188,35 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         root,
         statement_bytes=approval_bytes,
         receipt_bytes=receipt_bytes,
+        permitted_successor_paths=permitted_successor_paths,
     )
-    _validate_no_future_authority(root)
-    _validate_no_repository_symlinks(root)
+    _validate_alignment_namespace(root)
+    if validate_repository_symlinks:
+        _validate_no_repository_symlinks(root)
 
+    return record
+
+
+def validate_immutable_approval_context(
+    root: Path = ROOT,
+    *,
+    permitted_successor_paths: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    return _validate_immutable_approval_context(
+        root,
+        permitted_successor_paths=permitted_successor_paths,
+        validate_repository_symlinks=True,
+    )
+
+
+def validate(root: Path = ROOT) -> dict[str, Any]:
+    checked_root = _checked_root(root)
+    record = _validate_immutable_approval_context(
+        checked_root,
+        validate_repository_symlinks=False,
+    )
+    _validate_no_future_authority(checked_root)
+    _validate_no_repository_symlinks(checked_root)
     return record
 
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from governance import _validate_r11a_runtime_binding_core_r7 as _core
+try:
+    from governance import _validate_r11a_runtime_binding_core_r7 as _core
+except ModuleNotFoundError:
+    import _validate_r11a_runtime_binding_core_r7 as _core
 
 _EXTRA_TRANSITIVE_PATHS = (
     "governance/_validate_r11a_runtime_binding_core_r7.py",

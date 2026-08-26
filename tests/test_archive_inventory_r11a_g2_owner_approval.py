@@ -836,6 +836,8 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
     def test_complete_r4_r7_authority_inventory_is_exact(self) -> None:
         expected_paths = {
             "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
+            "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
+            "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
             "research/archive_inventory/r11a_role_preflight/R11A_SUCCESSOR_ROLE_STS_PREFLIGHT_ATTESTATION.json",
             "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE_CONSUMPTION.json",
             "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION_CONTRACT.json",
@@ -866,6 +868,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
 
         expected_directories = {
             "research/archive_inventory/r11a",
+            "research/archive_inventory/r11a_alignment",
             "research/archive_inventory/r11a_approval",
             "research/archive_inventory/r11a_corrective",
             "research/archive_inventory/r11a_corrective/workflows",
@@ -880,7 +883,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
             for path in (ROOT / "research/archive_inventory").rglob("*.json")
             if approval._is_r11a_archive_path(path.relative_to(ROOT).as_posix())
         }
-        self.assertEqual(len(observed_json), 29)
+        self.assertEqual(len(observed_json), 30)
         self.assertEqual(approval.CANONICAL_R11A_JSON_PATHS, observed_json)
 
         workflow_rows = []

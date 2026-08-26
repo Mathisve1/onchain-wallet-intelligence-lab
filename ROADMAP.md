@@ -29,7 +29,8 @@
 - [x] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`.
 - [x] Bind current official AWS pricing and ECB EUR evidence to the exact frozen diagnostic envelope with a conservative EUR 0.50 one-time / EUR 0 monthly ceiling.
 - [x] Obtain and record one exact hash-bound owner approval for package `R11A-G1-OWNER-APPROVAL-PACKAGE-001`; exact statement SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`. Approval alone grants no current runtime authority.
-- [ ] Complete an independent exact-head review of the approval-record candidate, then align the post-approval validators in a separate no-AWS stage before any identity action.
+- [x] Complete independent exact-head review `5033303996` of the byte-exact G2 approval record; owner approval is present but creates no current runtime authority.
+- [ ] Independently review the inert post-approval validator-alignment candidate before any identity action. The approved current pricing candidate remains uninstalled at the runtime snapshot path and must be projected only in its later separately reviewed installation gate.
 - [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
 - [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
 

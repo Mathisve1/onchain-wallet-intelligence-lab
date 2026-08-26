@@ -100,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         default=(
             "tests.test_archive_inventory_r11a_corrective_r7",
             "tests.test_archive_inventory_r11a_corrective_r7_precedence",
+            "tests.test_archive_inventory_r11a_post_approval_validator_alignment",
         ),
     )
     arguments = parser.parse_args(argv)

@@ -1,134 +1,399 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from r11a_stage_common_r4 import (
-    CORRECTIVE,
-    ROOT,
-    RUNTIME_DIR,
-    SELECTION_PATH,
-    WORKFLOW_PATH,
-    implementation,
-    load,
-    require,
-    require_all_false,
-    require_sha256,
-    sha256,
+from pathlib import Path
+
+try:
+    from governance.r11a_stage_common_r4 import (
+        APPROVAL_RECEIPT_SHA,
+        APPROVAL_TEXT_RELATIVE,
+        ARTIFACT_VALIDATOR_RELATIVE,
+        DIAGNOSTIC_ID,
+        IMPLEMENTATION_RELATIVE,
+        INSTALLATION_RELATIVE,
+        PREFLIGHT_CANDIDATE_RELATIVE,
+        PREFLIGHT_RELEASE_RELATIVE,
+        PRICING_TARGET_RELATIVE,
+        RELEASE_CANDIDATE_RELATIVE,
+        RELEASE_DIGEST_RELATIVE,
+        RELEASE_RELATIVE,
+        ROOT,
+        ROLE_ATTESTATION_RELATIVE,
+        RUNNER_RELATIVE,
+        SELECTION_RELATIVE,
+        WORKFLOW_RELATIVE,
+        load,
+        read_bytes,
+        require,
+        require_distinct_review,
+        require_exact,
+        require_fresh_review,
+        require_green_review,
+        require_int,
+        require_sha256,
+        sha256,
+        stage_authority,
+        successor_permissions,
+        trading_authority,
+    )
+    from governance.validate_r11a_workflow_installation_r4 import validate as validate_installation
+except ModuleNotFoundError:
+    from r11a_stage_common_r4 import (
+        APPROVAL_RECEIPT_SHA,
+        APPROVAL_TEXT_RELATIVE,
+        ARTIFACT_VALIDATOR_RELATIVE,
+        DIAGNOSTIC_ID,
+        IMPLEMENTATION_RELATIVE,
+        INSTALLATION_RELATIVE,
+        PREFLIGHT_CANDIDATE_RELATIVE,
+        PREFLIGHT_RELEASE_RELATIVE,
+        PRICING_TARGET_RELATIVE,
+        RELEASE_CANDIDATE_RELATIVE,
+        RELEASE_DIGEST_RELATIVE,
+        RELEASE_RELATIVE,
+        ROOT,
+        ROLE_ATTESTATION_RELATIVE,
+        RUNNER_RELATIVE,
+        SELECTION_RELATIVE,
+        WORKFLOW_RELATIVE,
+        load,
+        read_bytes,
+        require,
+        require_distinct_review,
+        require_exact,
+        require_fresh_review,
+        require_green_review,
+        require_int,
+        require_sha256,
+        sha256,
+        stage_authority,
+        successor_permissions,
+        trading_authority,
+    )
+    from validate_r11a_workflow_installation_r4 import validate as validate_installation
+
+RELEASE_CANDIDATE = ROOT / RELEASE_CANDIDATE_RELATIVE
+RELEASE = ROOT / RELEASE_RELATIVE
+RELEASE_DIGEST = ROOT / RELEASE_DIGEST_RELATIVE
+APPROVAL_TEXT = ROOT / APPROVAL_TEXT_RELATIVE
+ARTIFACT_VALIDATOR = ROOT / ARTIFACT_VALIDATOR_RELATIVE
+
+CAP_KEYS = frozenset(
+    {
+        "maximum_runs",
+        "bucket",
+        "region",
+        "selected_object_count",
+        "maximum_get_object_requests",
+        "maximum_requests_per_object",
+        "maximum_retries_per_request",
+        "maximum_total_compressed_bytes",
+        "maximum_total_decompressed_processing_bytes",
+        "maximum_ephemeral_workspace_bytes",
+        "maximum_retained_artifact_bytes",
+        "artifact_retention_days",
+        "maximum_runtime_seconds",
+        "maximum_one_time_budget_eur_micros",
+        "maximum_monthly_budget_eur_micros",
+        "http_redirect_following_authorized",
+        "pagination_authorized",
+        "list_authorized",
+        "head_authorized",
+        "range_get_authorized",
+        "seventy_third_object_authorized",
+        "broader_archive_access_authorized",
+        "other_historical_window_authorized",
+    }
 )
-from validate_r11a_workflow_installation_r4 import main as validate_installation
-
-RELEASE = RUNTIME_DIR / "R11A_EXECUTION_RELEASE.json"
-RELEASE_DIGEST = RUNTIME_DIR / "R11A_EXECUTION_RELEASE.sha256"
-APPROVAL_TEXT = (
-    ROOT
-    / "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt"
+CANDIDATE_KEYS = frozenset(
+    {
+        "schema_version",
+        "execution_release_candidate_id",
+        "status",
+        "diagnostic_id",
+        "installation_contract_sha256",
+        "approval_receipt_sha256",
+        "workflow_sha256",
+        "runtime_pricing_snapshot_sha256",
+        "selection_sha256",
+        "runner_sha256",
+        "validator_sha256",
+        "workflow_installation_review_completed",
+        "workflow_installation_review_id",
+        "workflow_installation_review_event",
+        "workflow_installation_review_verdict",
+        "workflow_installation_reviewed_head",
+        "workflow_installation_reviewed_tree",
+        *CAP_KEYS,
+        "single_workflow_dispatch_authorized",
+        "owner_dispatch_required",
+        "execution_release_present",
+        "runtime_binding_present",
+        "canonical_activation_present",
+        "network_requests_executed_by_candidate",
+        "aws_iam_mutations_executed_by_candidate",
+        "downstream_authorizations",
+        "trading_authorizations",
+    }
 )
-ARTIFACT_VALIDATOR = ROOT / "governance/validate_r11a_execution_artifact_r4.py"
+RELEASE_KEYS = frozenset(
+    {
+        "schema_version",
+        "execution_release_id",
+        "execution_release_candidate_id",
+        "status",
+        "release_candidate_sha256",
+        "implementation_contract_sha256",
+        "approval_receipt_sha256",
+        "approval_text_sha256",
+        "pricing_snapshot_sha256",
+        "workflow_sha256",
+        "collector_sha256",
+        "validator_sha256",
+        "selection_sha256",
+        "release_candidate_review_completed",
+        "release_candidate_review_id",
+        "release_candidate_review_event",
+        "release_candidate_review_verdict",
+        "release_candidate_reviewed_head",
+        "release_candidate_reviewed_tree",
+        *CAP_KEYS,
+        "single_workflow_dispatch_authorized_by_release",
+        "single_workflow_dispatch_eligible_after_activation",
+        "rerun_authorized",
+        "release_consumed",
+        "canonical_activation_required",
+        "canonical_activation_present",
+        "network_requests_executed_by_release",
+        "aws_iam_mutations_executed_by_release",
+        "downstream_authorizations",
+        "trading_authorizations",
+    }
+)
+EXPECTED_CAPS = {
+    "maximum_runs": 1,
+    "bucket": "hl-mainnet-node-data",
+    "region": "ap-northeast-1",
+    "selected_object_count": 72,
+    "maximum_get_object_requests": 72,
+    "maximum_requests_per_object": 1,
+    "maximum_retries_per_request": 0,
+    "maximum_total_compressed_bytes": 2107738436,
+    "maximum_total_decompressed_processing_bytes": 21079958490,
+    "maximum_ephemeral_workspace_bytes": 5368709120,
+    "maximum_retained_artifact_bytes": 134217728,
+    "artifact_retention_days": 30,
+    "maximum_runtime_seconds": 21600,
+    "maximum_one_time_budget_eur_micros": 500000,
+    "maximum_monthly_budget_eur_micros": 0,
+    "http_redirect_following_authorized": False,
+    "pagination_authorized": False,
+    "list_authorized": False,
+    "head_authorized": False,
+    "range_get_authorized": False,
+    "seventy_third_object_authorized": False,
+    "broader_archive_access_authorized": False,
+    "other_historical_window_authorized": False,
+}
 
 
-def main() -> int:
-    impl = implementation()
-    validate_installation()
-    release = load(RELEASE)
-    require(RELEASE_DIGEST.is_file(), "detached release digest is absent")
-    detached = RELEASE_DIGEST.read_text(encoding="ascii").strip()
-    require_sha256(detached, "detached release digest")
-    require(detached == sha256(RELEASE), "detached release digest mismatch")
+def _validate_caps(record: dict[str, object], label: str) -> None:
+    for key, expected in EXPECTED_CAPS.items():
+        if isinstance(expected, bool):
+            require(type(record[key]) is bool, f"{label} {key} must be boolean")
+        elif isinstance(expected, int):
+            require_int(record[key], f"{label} {key}")
+        else:
+            require(isinstance(record[key], str), f"{label} {key} must be text")
+        require(record[key] == expected, f"{label} {key} drift")
+
+
+def validate_candidate(
+    root: Path = ROOT,
+    *,
+    permitted_successor_paths: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    permitted = successor_permissions(
+        frozenset(permitted_successor_paths) | {RELEASE_CANDIDATE_RELATIVE}
+    )
+    installation_contract = validate_installation(
+        root,
+        permitted_successor_paths=permitted,
+        runtime_pricing_projection_permitted=True,
+    )
+    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
+    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
+    preflight_release = load(root, PREFLIGHT_RELEASE_RELATIVE)
+    candidate = load(
+        root,
+        RELEASE_CANDIDATE_RELATIVE,
+        missing_label="execution release candidate is absent",
+    )
+    require_exact(candidate, CANDIDATE_KEYS, "execution release candidate")
+    require(candidate["schema_version"] == "1.0", "release candidate schema drift")
+    require(
+        candidate["execution_release_candidate_id"]
+        == "CANDIDATE_RELEASE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001",
+        "release candidate ID drift",
+    )
+    require(
+        candidate["status"]
+        == "CANDIDATE_AWAITING_INDEPENDENT_EXECUTION_RELEASE_REVIEW_NO_EXECUTION",
+        "release candidate status drift",
+    )
+    require(candidate["diagnostic_id"] == DIAGNOSTIC_ID, "release candidate diagnostic ID drift")
+    bindings = {
+        "installation_contract_sha256": INSTALLATION_RELATIVE,
+        "workflow_sha256": WORKFLOW_RELATIVE,
+        "runtime_pricing_snapshot_sha256": PRICING_TARGET_RELATIVE,
+        "selection_sha256": SELECTION_RELATIVE,
+        "runner_sha256": RUNNER_RELATIVE,
+        "validator_sha256": ARTIFACT_VALIDATOR_RELATIVE,
+    }
+    for key, relative in bindings.items():
+        require_sha256(candidate[key], key)
+        require(candidate[key] == sha256(root, relative), f"release candidate {key} drift")
+    require_sha256(candidate["approval_receipt_sha256"], "approval_receipt_sha256")
+    require(candidate["approval_receipt_sha256"] == APPROVAL_RECEIPT_SHA, "release candidate approval binding drift")
+    require_green_review(
+        candidate,
+        "workflow_installation_review",
+        "workflow installation review",
+    )
+    require_distinct_review(
+        candidate,
+        "workflow_installation_review",
+        installation_contract,
+        "sts_preflight_review",
+        "workflow installation review",
+    )
+    require_fresh_review(
+        candidate,
+        "workflow_installation_review",
+        "workflow installation review",
+        ancestors=(
+            (role_attestation, "alignment_review"),
+            (role_attestation, "identity_creation_and_configuration_review"),
+            (preflight_candidate, "role_attestation_review"),
+            (preflight_release, "candidate_review"),
+            (installation_contract, "sts_preflight_review"),
+        ),
+    )
+    _validate_caps(candidate, "release candidate")
+    require(candidate["single_workflow_dispatch_authorized"] is False, "release candidate self-authorizes dispatch")
+    require(candidate["owner_dispatch_required"] is True, "release candidate omits owner dispatch gate")
+    require(candidate["execution_release_present"] is False, "release candidate snapshot rewritten after release")
+    require(candidate["runtime_binding_present"] is False, "release candidate snapshot rewritten after binding")
+    require(candidate["canonical_activation_present"] is False, "release candidate snapshot rewritten after activation")
+    require_int(candidate["network_requests_executed_by_candidate"], "release-candidate network request count")
+    require(candidate["network_requests_executed_by_candidate"] == 0, "release candidate performed network request")
+    require_int(candidate["aws_iam_mutations_executed_by_candidate"], "release-candidate IAM mutation count")
+    require(candidate["aws_iam_mutations_executed_by_candidate"] == 0, "release candidate mutated IAM")
+    stage_authority(candidate["downstream_authorizations"], "release-candidate downstream authority")
+    trading_authority(candidate["trading_authorizations"], "release-candidate trading authority")
+    return candidate
+
+
+def validate(
+    root: Path = ROOT,
+    *,
+    permitted_successor_paths: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    permitted = successor_permissions(
+        frozenset(permitted_successor_paths)
+        | {RELEASE_CANDIDATE_RELATIVE, RELEASE_RELATIVE, RELEASE_DIGEST_RELATIVE}
+    )
+    candidate = validate_candidate(root, permitted_successor_paths=permitted)
+    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
+    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
+    preflight_release = load(root, PREFLIGHT_RELEASE_RELATIVE)
+    installation_contract = load(root, INSTALLATION_RELATIVE)
+    release = load(root, RELEASE_RELATIVE, missing_label="execution release is absent")
+    require_exact(release, RELEASE_KEYS, "execution release")
+    detached_raw = read_bytes(
+        root,
+        RELEASE_DIGEST_RELATIVE,
+        missing_label="detached execution release digest is absent",
+    )
+    release_digest = sha256(root, RELEASE_RELATIVE)
+    require(detached_raw == f"{release_digest}\n".encode("ascii"), "detached release digest format or value drift")
+    require(release["schema_version"] == "1.0", "execution release schema drift")
     require(
         release["execution_release_id"]
         == "RELEASE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001",
         "release ID drift",
     )
     require(
-        release["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R11A_RUN",
-        "release status drift",
+        release["execution_release_candidate_id"]
+        == candidate["execution_release_candidate_id"],
+        "release candidate ID binding drift",
+    )
+    require(release["status"] == "RELEASED_FOR_EXACTLY_ONE_CANONICAL_R11A_RUN", "release status drift")
+    require_sha256(release["release_candidate_sha256"], "release_candidate_sha256")
+    require(release["release_candidate_sha256"] == sha256(root, RELEASE_CANDIDATE_RELATIVE), "release candidate blob binding drift")
+    bindings = {
+        "implementation_contract_sha256": IMPLEMENTATION_RELATIVE,
+        "approval_text_sha256": APPROVAL_TEXT_RELATIVE,
+        "pricing_snapshot_sha256": PRICING_TARGET_RELATIVE,
+        "workflow_sha256": WORKFLOW_RELATIVE,
+        "collector_sha256": RUNNER_RELATIVE,
+        "validator_sha256": ARTIFACT_VALIDATOR_RELATIVE,
+        "selection_sha256": SELECTION_RELATIVE,
+    }
+    for key, relative in bindings.items():
+        require_sha256(release[key], key)
+        require(release[key] == sha256(root, relative), f"release {key} drift")
+    require_sha256(release["approval_receipt_sha256"], "approval_receipt_sha256")
+    require(release["approval_receipt_sha256"] == APPROVAL_RECEIPT_SHA, "release approval receipt binding drift")
+    require_green_review(
+        release,
+        "release_candidate_review",
+        "execution release candidate review",
+    )
+    require_distinct_review(
+        release,
+        "release_candidate_review",
+        candidate,
+        "workflow_installation_review",
+        "execution release candidate review",
+    )
+    require_fresh_review(
+        release,
+        "release_candidate_review",
+        "execution release candidate review",
+        ancestors=(
+            (role_attestation, "alignment_review"),
+            (role_attestation, "identity_creation_and_configuration_review"),
+            (preflight_candidate, "role_attestation_review"),
+            (preflight_release, "candidate_review"),
+            (installation_contract, "sts_preflight_review"),
+            (candidate, "workflow_installation_review"),
+        ),
+    )
+    _validate_caps(release, "release")
+    require(
+        release["single_workflow_dispatch_authorized_by_release"] is False,
+        "release self-authorizes workflow dispatch",
     )
     require(
-        release["implementation_contract_sha256"]
-        == sha256(CORRECTIVE / "R11A_CORRECTIVE_IMPLEMENTATION_CONTRACT.json"),
-        "implementation contract binding drift",
-    )
-    require(
-        release["approval_text_sha256"] == sha256(APPROVAL_TEXT),
-        "approval text binding drift",
-    )
-    require(
-        release["pricing_snapshot_sha256"]
-        == sha256(CORRECTIVE / "R11A_PRICING_EUR_SNAPSHOT.json"),
-        "pricing snapshot binding drift",
-    )
-    require(
-        release["workflow_sha256"] == sha256(WORKFLOW_PATH),
-        "workflow binding drift",
-    )
-    require(
-        release["collector_sha256"]
-        == impl["implementation_file_hashes"][
-            "research/archive_inventory/r11a_corrective/runner_r4.py"
-        ],
-        "collector binding drift",
-    )
-    require(
-        release["validator_sha256"] == sha256(ARTIFACT_VALIDATOR),
-        "artifact validator binding drift",
-    )
-    require(
-        release["selection_sha256"] == sha256(SELECTION_PATH),
-        "selection binding drift",
-    )
-    require(release["selected_object_count"] == 72, "release object count drift")
-    require(
-        release["maximum_get_object_requests"] == 72,
-        "release request count drift",
-    )
-    require(
-        release["maximum_requests_per_object"] == 1,
-        "release per-object request cap drift",
-    )
-    require(release["maximum_retries_per_request"] == 0, "release retries drift")
-    require(
-        release["maximum_total_compressed_bytes"] == 2107738436,
-        "release compressed cap drift",
-    )
-    require(
-        release["maximum_total_decompressed_processing_bytes"] == 21079958490,
-        "release decompressed cap drift",
-    )
-    require(
-        release["maximum_ephemeral_workspace_bytes"] == 5368709120,
-        "release workspace cap drift",
-    )
-    require(
-        release["maximum_retained_artifact_bytes"] == 134217728,
-        "release artifact cap drift",
-    )
-    require(release["maximum_runtime_seconds"] == 21600, "release runtime cap drift")
-    require(
-        release["maximum_one_time_budget_eur_micros"] == 500000,
-        "release one-time budget drift",
-    )
-    require(
-        release["maximum_monthly_budget_eur_micros"] == 0,
-        "release monthly budget drift",
-    )
-    require(
-        release["single_workflow_dispatch_authorized"] is True,
-        "release does not authorize exact one dispatch",
+        release["single_workflow_dispatch_eligible_after_activation"] is True,
+        "release omits activation-contingent single-dispatch eligibility",
     )
     require(release["rerun_authorized"] is False, "release authorizes rerun")
-    require(
-        release["release_consumed"] is False,
-        "immutable pre-run release snapshot marked consumed",
-    )
-    require(
-        release["canonical_activation_required"] is True,
-        "canonical activation requirement missing",
-    )
-    require(
-        release["canonical_activation_present"] is False,
-        "historical release snapshot rewritten after activation",
-    )
-    require_all_false(release["downstream_authorizations"], "release downstream authority")
-    require_all_false(release["trading_authorizations"], "release trading authority")
+    require(release["release_consumed"] is False, "immutable pre-run release snapshot marked consumed")
+    require(release["canonical_activation_required"] is True, "canonical activation requirement missing")
+    require(release["canonical_activation_present"] is False, "historical release snapshot rewritten after activation")
+    require_int(release["network_requests_executed_by_release"], "release network request count")
+    require(release["network_requests_executed_by_release"] == 0, "release performed network request")
+    require_int(release["aws_iam_mutations_executed_by_release"], "release IAM mutation count")
+    require(release["aws_iam_mutations_executed_by_release"] == 0, "release mutated IAM")
+    stage_authority(release["downstream_authorizations"], "release downstream authority")
+    trading_authority(release["trading_authorizations"], "release trading authority")
+    return release
+
+
+def main() -> int:
+    validate()
     print("R11A_EXECUTION_RELEASE_R4_VALID_SINGLE_USE_AWAITING_ACTIVATION")
     return 0
 
