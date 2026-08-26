@@ -34,7 +34,7 @@
     "tests/test_archive_inventory_r11a_identity.py": "bb3398c114f9b50b563ebad6f1431db3549154bf7bedb18f2d174aa5ad9fead5",
     "tests/test_archive_inventory_r11a_diagnostic.py": "e8eabe450480748e3f5ea264bd3d3926919531602f73f9dc4dc8440362ed4073",
     "tests/test_archive_inventory_r11a_storage_schema.py": "767557de9372ea1688b30e4ee4e1f08fde12937ddcbcade6394899cba8ab0cf2",
-    "tests/test_archive_inventory_r11a_implementation.py": "000896e2eb59e3bf0d6fcf00f2744d3cb9837b297e13c1f28ca30a6a449552c9"
+    "tests/test_archive_inventory_r11a_implementation.py": "0961a693c37cf21b2ce840840eea6d9b0de2945518f3e8feee350bb6bdd2642c"
   },
   "workflow_candidate_git_blob_sha": "a112af46c5adf54ba0a4c890ed9d57895c25e48f",
   "workflow_candidate_path": "research/archive_inventory/r11a_implementation/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",

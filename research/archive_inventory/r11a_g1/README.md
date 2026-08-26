@@ -10,15 +10,18 @@ proposed owner statement. It does not rewrite the historical R7 implementation
 stage semantics and it is deliberately outside the runtime-recognized
 `r11a_approval` and `r11a_runtime` paths.
 
-Current state:
+Historical state frozen by this G1 snapshot:
 
 - pricing binding: `PASS`;
 - owner-approval readiness: `READY`;
-- explicit owner approval: absent;
+- explicit owner approval: absent at the reviewed G1 head;
 - role, workflow installation, release, activation and execution: absent;
 - R11: unresolved;
 - R12: blocked.
 
-The proposed statement becomes owner approval only if Mathis returns its exact
-text in a later stage. Repository presence or hashing of that text is not
-approval. Every operational step after approval remains separately governed.
+Mathis returned the exact proposed text on 2026-08-26. The successor
+`r11a_approval` directory records that explicit decision without rewriting this
+historical package, status, envelope, pricing or statement. The new receipt
+still awaits its own independent exact-head review. Every operational step
+after approval remains separately governed; no role, workflow, release,
+activation or diagnostic execution is created by the approval record.

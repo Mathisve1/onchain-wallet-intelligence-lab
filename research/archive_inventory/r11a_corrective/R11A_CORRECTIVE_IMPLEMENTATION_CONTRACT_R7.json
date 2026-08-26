@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "96e9b22b85067e44bddef9f425a83c4593342ea42055fc93e84bf72915b4be82",
+  "contract_projection_sha256": "c5be69dd88e98454a3a99cb44e3e7fc8c3931f0fdfaab86df3800f3dc1cb6b07",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -127,7 +127,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "822e6a7e5de14ca660aa23e0906e5c8f9ce9af64f62b3f205d2902f1bed20466",
+  "repository_manifest_projection_sha256": "f3414092e54669e3be777ada41b456ce91c8206405b2b2b6c96556bec803ac5d",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -148,9 +148,9 @@
   "supporting_file_hashes": {
     ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
     ".github/workflows/r11a-r7-dev.yml": "23754917699c0f685f0164b64cc78807ab7872e7fe179982d0f0145da35f74fe",
-    "PROJECT_STATE.md": "82214629a1525b8386b8c5c347467dbfb990ff95c10fce31df4718caf78a8065",
-    "README.md": "324365f6d007dd17493e642f5046917f71f2e1901c16c93c7ebe57393a936e08",
-    "ROADMAP.md": "1787c5332d48f03b7681b7bd17d2369934dfce81f3815a1f2b6482c4ef32b3b5",
+    "PROJECT_STATE.md": "40e57e41f14cba982ec46c3cb429394edca3db4ec1ee175cc5c50dbd2a3cda45",
+    "README.md": "cf57dde3bd6661de2fa81b4e20a93be9cac87786215f5a825e8d488e8ac890df",
+    "ROADMAP.md": "f36ee9ecd2af21ba03425d415b026419b77a0d6c12cc72d2d871a67206e9b45f",
     "governance/R11A_V2_REVIEW_FINDINGS.md": "b1b1a717f4ee5047c459e7976bc1f74398426c66c47b1f3db87d92e203e8b8c9",
     "research/archive_inventory/r11/R11_72H_SELECTION.json": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
     "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
@@ -172,7 +172,7 @@
   "test_file_hashes": {
     "tests/test_archive_inventory_r11a_corrective_artifacts.py": "aa04a39cc26b4837162bf772ce217fb12ca1aa08af824d1b4384fe4ba32fcd59",
     "tests/test_archive_inventory_r11a_corrective_r3.py": "2e31a00be21d5ee8578d07bc8b2e761398ad84ac2aac5190880c0772ba682427",
-    "tests/test_archive_inventory_r11a_corrective_r7.py": "3ce146ee2933d4574a7f95a1c47ce14a484c14ed36aa117788f3074c654e865a",
+    "tests/test_archive_inventory_r11a_corrective_r7.py": "d85a76b2b561e48aa195a8493ef878450e501b8a666918836adcb306ee5bf359",
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py": "13f58570211a5df4b8ce247b01ebe67c534473936fdc5e9ffc5d650b36740b56",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988"

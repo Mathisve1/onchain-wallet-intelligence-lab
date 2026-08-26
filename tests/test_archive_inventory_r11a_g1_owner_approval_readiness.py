@@ -238,6 +238,12 @@ class R11AG1OwnerApprovalReadinessTests(unittest.TestCase):
             destination,
             ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
         )
+        # G1 is the immutable pre-approval readiness snapshot. Successor owner
+        # records must be absent whenever its historical semantics are tested.
+        shutil.rmtree(
+            destination / "research/archive_inventory/r11a_approval",
+            ignore_errors=True,
+        )
         return temporary, destination
 
     def copied_status(self) -> tuple[Path, Path, bytes]:
@@ -249,7 +255,13 @@ class R11AG1OwnerApprovalReadinessTests(unittest.TestCase):
         return repository, path, original
 
     def test_canonical_g1_readiness_passes_without_owner_or_runtime(self) -> None:
-        validate(ROOT)
+        temporary, repository = self.copy_repository()
+        self.addCleanup(temporary.cleanup)
+        validate(repository)
+
+    def test_live_post_approval_tree_is_rejected_by_consumed_g1_gate(self) -> None:
+        with self.assertRaisesRegex(G1ReadinessError, "canonical owner approval record"):
+            validate(ROOT)
 
     def test_status_leaf_registry_is_complete(self) -> None:
         status = json.loads((ROOT / STATUS_RELATIVE).read_text(encoding="utf-8"))
