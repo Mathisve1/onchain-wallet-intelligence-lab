@@ -6,11 +6,13 @@ import hashlib
 import json
 import os
 import shutil
+import stat
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 from governance import r11a_post_approval_context as context
@@ -35,6 +37,225 @@ VALIDATION_ERRORS = (
     context.PostApprovalContextError,
     runtime_binding.RuntimeBindingError,
 )
+BYTECODE_SUFFIXES = frozenset({".pyc", ".pyo"})
+
+
+class RepositoryIsolationError(RuntimeError):
+    pass
+
+
+def is_bytecode_residue_path(relative: str) -> bool:
+    path = PurePosixPath(relative)
+    return any(part.casefold() == "__pycache__" for part in path.parts) or (
+        path.suffix.casefold() in BYTECODE_SUFFIXES
+    )
+
+
+def require_no_tracked_bytecode(paths: frozenset[str]) -> None:
+    residue = sorted(
+        (relative for relative in paths if is_bytecode_residue_path(relative)),
+        key=lambda relative: relative.encode("utf-8"),
+    )
+    if residue:
+        raise RepositoryIsolationError(
+            "tracked Python bytecode/cache residue prohibited: " + ", ".join(residue)
+        )
+
+
+def require_safe_source_metadata(root: Path) -> None:
+    stack: list[tuple[Path, PurePosixPath | None]] = [(root, None)]
+    while stack:
+        directory, prefix = stack.pop()
+        try:
+            entries = sorted(
+                os.scandir(directory),
+                key=lambda entry: entry.name.encode("utf-8"),
+                reverse=True,
+            )
+        except OSError as exc:
+            raise RepositoryIsolationError(
+                f"cannot scan isolation source: {directory}"
+            ) from exc
+        for entry in entries:
+            if entry.name == ".git":
+                if prefix is None:
+                    continue
+                relative_git = (prefix / entry.name).as_posix()
+                raise RepositoryIsolationError(
+                    f"nested repository metadata prohibited: {relative_git}"
+                )
+            relative_path = (
+                PurePosixPath(entry.name) if prefix is None else prefix / entry.name
+            )
+            relative = relative_path.as_posix()
+            try:
+                information = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise RepositoryIsolationError(
+                    f"cannot lstat isolation source entry: {relative}"
+                ) from exc
+            cache_ancestors = tuple(
+                part
+                for part in relative_path.parts[:-1]
+                if part.casefold() == "__pycache__"
+            )
+            if stat.S_ISLNK(information.st_mode):
+                raise RepositoryIsolationError(
+                    f"symlink prohibited in isolation source: {relative}"
+                )
+            if stat.S_ISDIR(information.st_mode):
+                if cache_ancestors:
+                    raise RepositoryIsolationError(
+                        f"nested directory prohibited in process cache: {relative}"
+                    )
+                stack.append((Path(entry.path), relative_path))
+                continue
+            if not stat.S_ISREG(information.st_mode):
+                raise RepositoryIsolationError(
+                    f"special file prohibited in isolation source: {relative}"
+                )
+            if information.st_nlink != 1:
+                raise RepositoryIsolationError(
+                    f"hard-link prohibited in isolation source: {relative}"
+                )
+            if cache_ancestors and (
+                PurePosixPath(relative).suffix.casefold() not in BYTECODE_SUFFIXES
+            ):
+                raise RepositoryIsolationError(
+                    f"non-bytecode entry prohibited in process cache: {relative}"
+                )
+            if (
+                PurePosixPath(relative).suffix.casefold() in BYTECODE_SUFFIXES
+                and not cache_ancestors
+            ):
+                raise RepositoryIsolationError(
+                    f"standalone bytecode prohibited in isolation source: {relative}"
+                )
+
+
+def tracked_repository_paths(root: Path) -> frozenset[str]:
+    index_path = root / ".git/index"
+    try:
+        raw = index_path.read_bytes()
+    except OSError as exc:
+        raise RepositoryIsolationError("cannot read Git index") from exc
+    if len(raw) < 32 or raw[:4] != b"DIRC":
+        raise RepositoryIsolationError("malformed Git index header")
+    version, entry_count = struct.unpack(">II", raw[4:12])
+    if version not in {2, 3}:
+        raise RepositoryIsolationError(f"unsupported Git index version: {version}")
+    if hashlib.sha1(raw[:-20]).digest() != raw[-20:]:
+        raise RepositoryIsolationError("Git index checksum mismatch")
+
+    offset = 12
+    content_end = len(raw) - 20
+    paths: set[str] = set()
+    for _ in range(entry_count):
+        entry_start = offset
+        fixed_end = offset + 62
+        if fixed_end > content_end:
+            raise RepositoryIsolationError("truncated Git index entry")
+        fixed = struct.unpack(">10I20sH", raw[offset:fixed_end])
+        mode = fixed[6]
+        flags = fixed[-1]
+        offset = fixed_end
+        if flags & 0x3000:
+            raise RepositoryIsolationError("unmerged Git index entry prohibited")
+        if flags & 0x4000:
+            if version != 3 or offset + 2 > content_end:
+                raise RepositoryIsolationError("malformed extended Git index entry")
+            offset += 2
+
+        encoded_length = flags & 0x0FFF
+        if encoded_length < 0x0FFF:
+            name_end = offset + encoded_length
+            if name_end >= content_end or raw[name_end] != 0:
+                raise RepositoryIsolationError("malformed Git index path length")
+        else:
+            name_end = raw.find(b"\0", offset, content_end)
+            if name_end < 0:
+                raise RepositoryIsolationError("unterminated Git index path")
+        try:
+            relative = raw[offset:name_end].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise RepositoryIsolationError("Git index path is not UTF-8") from exc
+        if not relative or relative in paths:
+            raise RepositoryIsolationError("empty or duplicate Git index path")
+        file_type = stat.S_IFMT(mode)
+        if file_type != stat.S_IFREG or mode not in {0o100644, 0o100755}:
+            raise RepositoryIsolationError(
+                f"tracked symlink, submodule, or unsupported mode prohibited: {relative}"
+            )
+        paths.add(relative)
+
+        offset = name_end + 1
+        padding = (8 - ((offset - entry_start) % 8)) % 8
+        if offset + padding > content_end or any(raw[offset : offset + padding]):
+            raise RepositoryIsolationError("malformed Git index entry padding")
+        offset += padding
+
+    while offset < content_end:
+        if offset + 8 > content_end:
+            raise RepositoryIsolationError("truncated Git index extension")
+        signature = raw[offset : offset + 4]
+        extension_length = struct.unpack(">I", raw[offset + 4 : offset + 8])[0]
+        offset += 8
+        if offset + extension_length > content_end:
+            raise RepositoryIsolationError("truncated Git index extension data")
+        if signature == b"link":
+            raise RepositoryIsolationError("split Git index prohibited")
+        offset += extension_length
+    return frozenset(paths)
+
+
+def manifest_bound_repository_paths(root: Path) -> frozenset[str]:
+    manifest = root / "governance/REPOSITORY_MANIFEST.sha256"
+    try:
+        rows = manifest.read_bytes().splitlines()
+    except OSError as exc:
+        raise RepositoryIsolationError("cannot read repository manifest") from exc
+    paths: set[str] = set()
+    for row in rows:
+        digest, separator, encoded_path = row.partition(b"  ")
+        if (
+            separator != b"  "
+            or len(digest) != 64
+            or any(character not in b"0123456789abcdef" for character in digest)
+            or not encoded_path
+        ):
+            raise RepositoryIsolationError("malformed repository manifest row")
+        try:
+            relative = encoded_path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise RepositoryIsolationError(
+                "repository manifest path is not UTF-8"
+            ) from exc
+        if relative in paths:
+            raise RepositoryIsolationError(
+                f"duplicate repository manifest path: {relative}"
+            )
+        paths.add(relative)
+    return frozenset(paths)
+
+
+def require_reconciled_repository_inventory(root: Path) -> None:
+    tracked = tracked_repository_paths(root)
+    require_no_tracked_bytecode(tracked)
+    manifest_paths = manifest_bound_repository_paths(root)
+    expected_manifest_paths = tracked - {
+        "governance/REPOSITORY_MANIFEST.sha256"
+    }
+    if manifest_paths != expected_manifest_paths:
+        raise RepositoryIsolationError("repository manifest path coverage drift")
+
+
+def ignore_process_bytecode(_directory: str, names: list[str]) -> set[str]:
+    return {
+        name
+        for name in names
+        if name == ".git"
+        or name.casefold() == "__pycache__"
+    }
 
 
 def canonical_json(value: object) -> bytes:
@@ -60,12 +281,15 @@ def green_review(prefix: str, review_id: int, oid_digit: str) -> dict[str, objec
 
 class PostApprovalValidatorAlignmentTests(unittest.TestCase):
     def copy_repository(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
+        require_reconciled_repository_inventory(ROOT)
+        require_safe_source_metadata(ROOT)
         temporary = tempfile.TemporaryDirectory()
         destination = Path(temporary.name) / "repository"
         shutil.copytree(
             ROOT,
             destination,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.pyo"),
+            symlinks=True,
+            ignore=ignore_process_bytecode,
         )
         return temporary, destination
 
@@ -673,8 +897,12 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
         return value
 
     def test_live_alignment_and_approval_pass_then_each_future_gate_is_absent(self) -> None:
-        record = g2.validate(ROOT)
+        temporary, repository = self.copy_repository()
+        self.addCleanup(temporary.cleanup)
+
+        record = g2.validate(repository)
         self.assertTrue(record["owner_approval_present"])
+        self.assertTrue(record["canonical_approval_record_present"])
         self.assertFalse(record["execution_authorized_by_this_approval"])
         self.assertTrue(
             all(value is False for value in record["current_authority"].values())
@@ -693,38 +921,220 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
         self.assertTrue(
             all(value is False for value in record["trading_authorizations"].values())
         )
-        aligned = alignment.validate_alignment(ROOT)
+        aligned = alignment.validate_alignment(repository)
         self.assertEqual(aligned["alignment_id"], context.ALIGNMENT_ID)
-        approval_r4.validate(ROOT)
+        approval_r4.validate(repository)
+
+        for relative in (
+            common.ROLE_ATTESTATION_RELATIVE,
+            common.PREFLIGHT_CANDIDATE_RELATIVE,
+            common.PREFLIGHT_RELEASE_RELATIVE,
+            common.PREFLIGHT_EVIDENCE_RELATIVE,
+            common.PREFLIGHT_CONSUMPTION_RELATIVE,
+            common.INSTALLATION_RELATIVE,
+            common.WORKFLOW_RELATIVE,
+            common.RELEASE_CANDIDATE_RELATIVE,
+            common.RELEASE_RELATIVE,
+            common.ACTIVATION_RELATIVE,
+            common.BINDING_RELATIVE,
+        ):
+            with self.subTest(absent=relative):
+                self.assertFalse((repository / relative).exists())
 
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            role.validate(ROOT)
+            role.validate(repository)
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            preflight.validate(ROOT)
+            preflight.validate(repository)
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            installation.validate(ROOT)
+            installation.validate(repository)
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            release.validate_candidate(ROOT)
+            release.validate_candidate(repository)
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            release.validate(ROOT)
+            release.validate(repository)
         with self.assertRaisesRegex(
             common.StageValidationError, "successor role attestation is absent"
         ):
-            activation.validate(ROOT)
+            activation.validate(repository)
         with self.assertRaisesRegex(
             runtime_binding.RuntimeBindingError, "successor role attestation is absent"
         ):
-            runtime_binding.validate(SYNTHETIC_COMMIT, 1, root=ROOT)
+            runtime_binding.validate(SYNTHETIC_COMMIT, 1, root=repository)
+
+    def test_cache_free_validation_is_import_order_invariant(self) -> None:
+        modules = (
+            "tests.test_archive_inventory_r11a_g2_owner_approval",
+            "tests.test_archive_inventory_r11a_g1_owner_approval_readiness",
+            "tests.test_archive_inventory_r11a_implementation",
+            "tests.test_archive_inventory_r11a_corrective_r7",
+            "tests.test_archive_inventory_r11a_corrective_r7_precedence",
+            "tests.test_archive_inventory_r11a_post_approval_validator_alignment",
+        )
+        import_and_validate = (
+            "import importlib, sys\n"
+            "from pathlib import Path\n"
+            "for module in sys.argv[1:]:\n"
+            "    importlib.import_module(module)\n"
+            "from governance import validate_r11a_g2_owner_approval as g2\n"
+            "from governance import "
+            "validate_r11a_post_approval_validator_alignment as alignment\n"
+            "root = Path.cwd()\n"
+            "record = g2.validate(root)\n"
+            "if record['owner_approval_present'] is not True:\n"
+            "    raise SystemExit('owner approval missing after imports')\n"
+            "if record['canonical_approval_record_present'] is not True:\n"
+            "    raise SystemExit('canonical approval missing after imports')\n"
+            "if record['execution_authorized_by_this_approval'] is not False:\n"
+            "    raise SystemExit('approval opened execution after imports')\n"
+            "alignment.validate_alignment(root)\n"
+        )
+        environment = os.environ.copy()
+        environment.pop("PYTHONPYCACHEPREFIX", None)
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+
+        orders = tuple(
+            (f"first:{modules[index]}", modules[index:] + modules[:index])
+            for index in range(len(modules))
+        )
+        for label, order in orders:
+            with self.subTest(order=label):
+                temporary, repository = self.copy_repository()
+                self.addCleanup(temporary.cleanup)
+                completed = subprocess.run(
+                    [sys.executable, "-B", "-c", import_and_validate, *order],
+                    cwd=repository,
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    completed.returncode,
+                    0,
+                    completed.stdout + completed.stderr,
+                )
+                residue = sorted(
+                    path.relative_to(repository).as_posix()
+                    for path in repository.rglob("*")
+                    if path.name == "__pycache__" or path.suffix in {".pyc", ".pyo"}
+                )
+                self.assertEqual(residue, [])
+
+    def test_isolation_source_provenance_and_metadata_fail_closed(self) -> None:
+        index_temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(index_temporary.cleanup)
+        index_root = Path(index_temporary.name)
+        (index_root / ".git").mkdir()
+
+        def write_index(relative: str, mode: int = 0o100644) -> None:
+            encoded = relative.encode("utf-8")
+            fixed = struct.pack(
+                ">10I20sH",
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                mode,
+                0,
+                0,
+                0,
+                b"\0" * 20,
+                len(encoded),
+            )
+            entry = fixed + encoded + b"\0"
+            entry += b"\0" * ((8 - (len(entry) % 8)) % 8)
+            body = b"DIRC" + struct.pack(">II", 2, 1) + entry
+            (index_root / ".git/index").write_bytes(
+                body + hashlib.sha1(body).digest()
+            )
+
+        for relative in (
+            "research/archive_inventory/r11a_corrective/__pycache__/tracked.pyc",
+            "research/archive_inventory/r11a_corrective/tracked.pyc",
+            "research/archive_inventory/r11a_corrective/tracked.pyo",
+        ):
+            with self.subTest(tracked=relative):
+                write_index(relative)
+                parsed = tracked_repository_paths(index_root)
+                self.assertEqual(parsed, frozenset({relative}))
+                with self.assertRaisesRegex(
+                    RepositoryIsolationError, "tracked Python bytecode/cache residue"
+                ):
+                    require_no_tracked_bytecode(parsed)
+
+        for mode in (0o120000, 0o160000):
+            with self.subTest(tracked_mode=oct(mode)):
+                write_index("tracked-non-regular", mode)
+                with self.assertRaisesRegex(
+                    RepositoryIsolationError, "symlink, submodule, or unsupported mode"
+                ):
+                    tracked_repository_paths(index_root)
+
+        temporary, repository = self.copy_repository()
+        self.addCleanup(temporary.cleanup)
+        synthetic_cache = (
+            repository
+            / "research/archive_inventory/r11a_corrective/__pycache__"
+        )
+        synthetic_cache.mkdir()
+        unknown_cache_entry = synthetic_cache / "UNKNOWN_AUTHORITY.json"
+        unknown_cache_entry.write_text(
+            '{"owner_approval_present":true}\n', encoding="utf-8"
+        )
+        try:
+            with self.assertRaisesRegex(
+                RepositoryIsolationError, "non-bytecode entry"
+            ):
+                require_safe_source_metadata(repository)
+        finally:
+            shutil.rmtree(synthetic_cache)
+
+        for suffix in (".pyc", ".pyo"):
+            standalone = repository / f"synthetic{suffix}"
+            standalone.write_bytes(b"synthetic-bytecode")
+            try:
+                with self.assertRaisesRegex(
+                    RepositoryIsolationError, "standalone bytecode"
+                ):
+                    require_safe_source_metadata(repository)
+            finally:
+                standalone.unlink()
+
+        approval_path = repository / g2.APPROVAL_JSON
+        external_alias = Path(temporary.name) / "approval-hard-link.json"
+        os.link(approval_path, external_alias)
+        try:
+            with self.assertRaisesRegex(RepositoryIsolationError, "hard-link"):
+                require_safe_source_metadata(repository)
+        finally:
+            external_alias.unlink()
+
+        symlink = repository / "synthetic-cache-link"
+        symlink.symlink_to(repository / "README.md")
+        try:
+            with self.assertRaisesRegex(RepositoryIsolationError, "symlink"):
+                require_safe_source_metadata(repository)
+        finally:
+            symlink.unlink()
+
+        special = repository / "synthetic-special"
+        os.mkfifo(special)
+        try:
+            with self.assertRaisesRegex(RepositoryIsolationError, "special file"):
+                require_safe_source_metadata(repository)
+        finally:
+            special.unlink()
 
     def test_offline_successor_ladder_requires_every_predecessor_in_order(self) -> None:
         temporary, repository = self.copy_repository()

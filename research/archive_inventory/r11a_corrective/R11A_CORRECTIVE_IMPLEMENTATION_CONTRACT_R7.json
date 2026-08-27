@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "44453f8eedc717288f313f49de670a134a2717985a823a989a1a27cc2598cd7d",
+  "contract_projection_sha256": "ba51953a8a75291bbca640c156fb0aa6e750ee5f51bb294e7f181e0bec64f8a7",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -52,7 +52,7 @@
     "governance/validate_r11a_approval_r4.py": "92650c2f505df427fdfa21fa8dcc18f482701c268f8864ea5a44b0ad4266b20f",
     "governance/validate_r11a_execution_artifact_r7.py": "58a9469ad3f7b5f77ac8f3c064cd1021b02d4bf603b78971ccb6f18b57e169de",
     "governance/validate_r11a_execution_release_r4.py": "fc68a54e49cdf229effffab0f66e6102637dd4cfad8de08a7cd8018a51be49a0",
-    "governance/validate_r11a_g2_owner_approval.py": "7bb5045ba939013534e00b2b4314ba1dc1d5f047e605d83bf05893b172734065",
+    "governance/validate_r11a_g2_owner_approval.py": "9fa364c09aa3067cd950f8bb9d94e2cdd5d9aa3471eea01f573caeac41ce0369",
     "governance/validate_r11a_post_approval_validator_alignment.py": "9c242a461adf12d962c10324972945252d5411d60f330e9cf564cc4368d03266",
     "governance/validate_r11a_role_attestation_r4.py": "ad17b6375d5a742aeb6073c0dfe75fd8453a345a7c6b55763c9c8390733b2e4a",
     "governance/validate_r11a_role_preflight_evidence_r4.py": "824ba9a7a8d5bc4885d2c65cc88897940c8186132e1bdb794d66acb52d63621d",
@@ -138,7 +138,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "38c7d2f01a4af12ca4cbf0f29af07c0e979a52d047d45dc580997256ee18020e",
+  "repository_manifest_projection_sha256": "273ca11e3e9248ab4a1a204c6bddb52341609ca694df4f8544463d36191a0476",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -195,8 +195,8 @@
     "tests/test_archive_inventory_r11a_corrective_r3.py": "2e31a00be21d5ee8578d07bc8b2e761398ad84ac2aac5190880c0772ba682427",
     "tests/test_archive_inventory_r11a_corrective_r7.py": "d85a76b2b561e48aa195a8493ef878450e501b8a666918836adcb306ee5bf359",
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py": "13f58570211a5df4b8ce247b01ebe67c534473936fdc5e9ffc5d650b36740b56",
-    "tests/test_archive_inventory_r11a_g2_owner_approval.py": "7a8c1a82c69be7bfc1b677a9752ac999e680f6b9661cd385ea23673e8de53f1d",
-    "tests/test_archive_inventory_r11a_post_approval_validator_alignment.py": "9aefdf8fa35986c77c3f357e124bf19659f6647f75308e8ac4f34ff842badff0",
+    "tests/test_archive_inventory_r11a_g2_owner_approval.py": "eca77ece1d9feca0f69ec3a79bf74532761b6e07ff87fcd2c687b1447262e84e",
+    "tests/test_archive_inventory_r11a_post_approval_validator_alignment.py": "2be09e813cddbe413e88adb17841e92b6e1e2f69d3b231ed71e362a51298060e",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988"
   },

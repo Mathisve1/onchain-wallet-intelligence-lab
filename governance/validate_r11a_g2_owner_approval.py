@@ -788,6 +788,20 @@ def _validate_no_future_authority(root: Path) -> None:
             )
 
     for relative, information in _repository_entries(root):
+        if _is_r11a_archive_path(relative):
+            normalized_parts = tuple(
+                _normalized_name(part) for part in PurePosixPath(relative).parts
+            )
+            normalized_basename = _normalized_name(PurePosixPath(relative).name)
+            require(
+                "__pycache__" not in normalized_parts,
+                f"Python bytecode cache path prohibited: {relative}",
+            )
+            require(
+                PurePosixPath(normalized_basename.rstrip()).suffix
+                not in {".pyc", ".pyo"},
+                f"Python bytecode file path prohibited: {relative}",
+            )
         if stat.S_ISDIR(information.st_mode) and _is_r11a_archive_path(relative):
             require(
                 relative in ALLOWED_R11A_DIRECTORIES,

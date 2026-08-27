@@ -177,9 +177,59 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         )
         self.assertTrue(corrective_cache.is_dir())
         self.assertTrue(any(corrective_cache.glob("*.pyc")))
+        self.assertNotIn(
+            corrective_cache.relative_to(repository).as_posix(),
+            approval.ALLOWED_R11A_DIRECTORIES,
+        )
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited",
+        ):
+            validate(repository)
 
-        shutil.rmtree(corrective_cache)
+        for generated_cache in sorted(
+            repository.rglob("__pycache__"),
+            key=lambda path: len(path.parts),
+            reverse=True,
+        ):
+            if generated_cache.exists():
+                shutil.rmtree(generated_cache)
         self.assertFalse(corrective_cache.exists())
+
+        corrective_cache.mkdir()
+        (corrective_cache / "synthetic.pyc").write_bytes(b"synthetic-pyc")
+        (corrective_cache / "synthetic.pyo").write_bytes(b"synthetic-pyo")
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited",
+        ):
+            validate(repository)
+        shutil.rmtree(corrective_cache)
+
+        for suffix in (".pyc", ".pyo"):
+            with self.subTest(standalone_bytecode=suffix):
+                standalone = corrective_cache.parent / f"synthetic{suffix}"
+                standalone.write_bytes(b"synthetic-bytecode")
+                try:
+                    with self.assertRaisesRegex(
+                        R11AG2ApprovalError,
+                        "Python bytecode file path prohibited",
+                    ):
+                        validate(repository)
+                finally:
+                    standalone.unlink()
+
+        cache_target = repository / "synthetic-cache-target"
+        cache_target.mkdir()
+        corrective_cache.symlink_to(cache_target, target_is_directory=True)
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited|symlink",
+        ):
+            validate(repository)
+        corrective_cache.unlink()
+        cache_target.rmdir()
+
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         subprocess.run(
             [sys.executable, "-B", "-c", import_command],
@@ -195,6 +245,14 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         with self.assertRaisesRegex(
             R11AG2ApprovalError,
             "unrecognized R11A authority namespace",
+        ):
+            validate(repository)
+        shutil.rmtree(unknown_descendant)
+
+        unknown_descendant.symlink_to(repository / "README.md")
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "symlink|unrecognized R11A authority namespace",
         ):
             validate(repository)
 
@@ -827,7 +885,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
                 try:
                     with self.assertRaisesRegex(
                         R11AG2ApprovalError,
-                        "approval.*alias|approval/authority data file|nested repository metadata",
+                        "approval.*alias|approval/authority data file|nested repository metadata|Python bytecode cache path prohibited",
                     ):
                         validate(repository)
                 finally:
