@@ -7,6 +7,8 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).absolute().parents[1]))
 
+import difflib as _r11a_bytecode_boundary  # noqa: E402,F401
+
 from governance.r11a_post_approval_context import (
     PostApprovalContextError,
     ROOT,

@@ -10,7 +10,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -29,7 +29,10 @@ from governance import validate_r11a_role_configuration_candidate_r4 as role_con
 from governance import validate_r11a_role_preflight_evidence_r4 as preflight
 from governance import validate_r11a_runtime_binding_r7 as runtime_binding
 from governance import validate_r11a_workflow_installation_r4 as installation
-from governance.r11a_repository_provenance import authenticated_repository_copy
+from governance.r11a_repository_provenance import (
+    AuthenticatedRepository,
+    authenticated_repository_copy,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -636,8 +639,23 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
         stack.enter_context(
             mock.patch.object(
                 runtime_binding,
-                "authenticate_repository",
-                return_value=types.SimpleNamespace(head=SYNTHETIC_COMMIT, tree="f" * 40),
+                "open_authenticated_repository",
+                return_value=nullcontext(
+                    AuthenticatedRepository(
+                        snapshot_root=root,
+                        head=SYNTHETIC_COMMIT,
+                        tree="f" * 40,
+                        index_version=2,
+                        entries=(),
+                        _source_root=root,
+                    )
+                ),
+            )
+        )
+        stack.enter_context(
+            mock.patch.object(
+                runtime_binding,
+                "authenticated_repository_checkpoint",
             )
         )
         return stack
@@ -955,10 +973,10 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
             "first matching contract",
         )
         for relative in active:
-            text = (ROOT / relative).read_text(encoding="utf-8")
+            raw = (ROOT / relative).read_bytes()
             for token in forbidden:
                 with self.subTest(path=relative, token=token):
-                    self.assertNotIn(token, text)
+                    self.assertNotIn(token.encode("utf-8"), raw)
         self.assertEqual(tuple(common.REVIEW_GATE_IDS)[-1], "R11A_RUNTIME_BINDING_REVIEW")
         self.assertEqual(len(common.REVIEW_GATE_IDS), len(set(common.REVIEW_GATE_IDS)))
 
@@ -966,6 +984,12 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
         forbidden_import_roots = {"aiohttp", "boto3", "botocore", "httpx", "requests", "socket", "urllib"}
         for relative in ("governance/r11a_post_approval_context.py", *context.ALIGNED_CONSUMERS):
             with self.subTest(path=relative):
+                if not relative.endswith(".py"):
+                    raw = (ROOT / relative).read_bytes().lower()
+                    self.assertFalse(
+                        any(token.encode("ascii") in raw for token in forbidden_import_roots)
+                    )
+                    continue
                 tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"), filename=relative)
                 self.assertFalse(any(isinstance(node, ast.Assert) for node in ast.walk(tree)))
                 self.assertFalse(any(isinstance(node, ast.Name) and node.id == "__debug__" for node in ast.walk(tree)))

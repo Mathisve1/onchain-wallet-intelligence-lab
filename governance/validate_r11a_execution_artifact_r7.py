@@ -57,9 +57,16 @@ from research.archive_inventory.r11a_corrective.storage_r7 import (
     WorkspaceMeter,
 )
 from governance import r11a_stage_common_r4 as _stage
+from governance.r11a_repository_provenance import (
+    AuthenticatedRepository,
+    RepositoryProvenanceError,
+    authenticated_repository_checkpoint,
+    open_authenticated_repository,
+)
 from governance.validate_r11a_runtime_binding_r7 import (
     REQUIRED_BOUND_PATHS as RUNTIME_REQUIRED_BOUND_PATHS,
     validate as _validate_runtime_binding,
+    validate_authenticated as _validate_authenticated_runtime_binding,
 )
 
 # Backward-compatible patch seam retained for existing offline routing tests.
@@ -974,6 +981,7 @@ def validate_reviewed_runtime_binding(
     run_attempt: int,
     *,
     root: Path,
+    authenticated: AuthenticatedRepository | None = None,
 ) -> Mapping[str, object]:
     """Single integration seam for the separately reviewed binding gate.
 
@@ -983,7 +991,17 @@ def validate_reviewed_runtime_binding(
     artifact itself.
     """
 
-    return validate_runtime_binding(expected_commit, run_attempt, root=root)
+    if authenticated is None:
+        return validate_runtime_binding(expected_commit, run_attempt, root=root)
+    require(
+        root == authenticated.snapshot_root,
+        "artifact runtime gate root is not the authenticated snapshot",
+    )
+    return _validate_authenticated_runtime_binding(
+        expected_commit,
+        run_attempt,
+        authenticated=authenticated,
+    )
 
 
 def _validate_artifact_route(
@@ -1162,15 +1180,27 @@ def validate_aligned_execution_artifact(
         context["workflow_run_attempt"],
         "artifact workflow run attempt",
     )
-    binding = validate_reviewed_runtime_binding(
-        dispatch_sha,
-        run_attempt,
-        root=root,
-    )
-    if bound_context:
-        require(binding is not None, "bound artifact lacks reviewed runtime binding")
-        _validate_bound_context(context, binding, root=root)
-    validate_science(artifact)
+    try:
+        with open_authenticated_repository(
+            Path(root),
+            expected_head=dispatch_sha,
+        ) as authenticated:
+            snapshot_root = authenticated.snapshot_root
+            binding = validate_reviewed_runtime_binding(
+                dispatch_sha,
+                run_attempt,
+                root=snapshot_root,
+                authenticated=authenticated,
+            )
+            if bound_context:
+                require(binding is not None, "bound artifact lacks reviewed runtime binding")
+                _validate_bound_context(context, binding, root=snapshot_root)
+            authenticated_repository_checkpoint(authenticated)
+            validate_science(artifact)
+    except RepositoryProvenanceError as exc:
+        raise EvidenceValidationError(
+            f"artifact repository provenance invalid: {exc}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:

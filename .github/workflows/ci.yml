@@ -11,15 +11,11 @@ permissions:
 
 env:
   EXACT_CI_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-  # Repository-semantic validators reject every cache/bytecode entry.  Keep
-  # the physical checkout cache-free for the complete discovery process;
-  # focused adversarial tests create cache material only in temporary roots.
-  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - name: Check out exact CI commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -39,7 +35,46 @@ jobs:
         with:
           python-version: '3.12.13'
           check-latest: false
-      - name: Run unit and mutation tests
-        run: python -m unittest discover -s tests -v
+      - name: Verify native pre-import bytecode boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          boundary_root="$(mktemp -d)"
+          trap 'find "${boundary_root}" -type f -delete; rmdir "${boundary_root}"' EXIT
+          cc -std=c11 -O2 -fPIC -fno-ident -Werror \
+            -DPy_LIMITED_API=0x03080000 \
+            $(python3-config --includes) \
+            -shared -Wl,--build-id=none \
+            -o "${boundary_root}/difflib.abi3.so" \
+            governance/r11a_bytecode_boundary.c
+          cmp --silent difflib.abi3.so "${boundary_root}/difflib.abi3.so"
+      - name: Run focused normal and optimized import-isolation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -m unittest tests.test_archive_inventory_r11a_g2_owner_approval -v
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -O -m unittest tests.test_archive_inventory_r11a_g2_owner_approval -v
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -m unittest tests.test_archive_inventory_r11a_post_approval_validator_alignment -v
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -O -m unittest tests.test_archive_inventory_r11a_post_approval_validator_alignment -v
+      - name: Run complete bytecode-enabled verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -m unittest discover -s tests -v
+      - name: Run complete bytecode-disabled control
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python -B -m unittest discover -s tests -v
       - name: Validate repository governance
-        run: python governance/validate_repository.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
+            python governance/validate_repository.py

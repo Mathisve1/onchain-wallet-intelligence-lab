@@ -162,8 +162,19 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
             "import DEFAULT_LIMITS"
         )
         environment = os.environ.copy()
+        boundary = environment.pop("R11A_PYCACHE_BOUNDARY_ACTIVE", None)
         environment.pop("PYTHONPYCACHEPREFIX", None)
         environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        if boundary:
+            pythonpath = [
+                item
+                for item in environment.get("PYTHONPATH", "").split(os.pathsep)
+                if item and Path(item) != Path(boundary)
+            ]
+            if pythonpath:
+                environment["PYTHONPATH"] = os.pathsep.join(pythonpath)
+            else:
+                environment.pop("PYTHONPATH", None)
 
         subprocess.run(
             [sys.executable, "-c", import_command],

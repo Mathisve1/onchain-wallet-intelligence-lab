@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+_REPOSITORY_ROOT = Path(__file__).absolute().parents[1]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
+import difflib as _r11a_bytecode_boundary  # noqa: E402,F401
 
 try:
     from governance.r11a_stage_common_r4 import (

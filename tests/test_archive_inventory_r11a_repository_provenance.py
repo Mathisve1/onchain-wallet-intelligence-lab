@@ -21,6 +21,7 @@ from governance.r11a_repository_provenance import (
     authenticated_repository_copy,
     authenticate_repository,
     materialize_snapshot,
+    open_authenticated_repository,
 )
 
 
@@ -100,6 +101,25 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         self.git(root, "commit", "-q", "-m", "fixture")
         return temporary, root
 
+    def index_extension_offset(self, raw: bytes) -> int:
+        self.assertEqual(raw[:4], b"DIRC")
+        self.assertEqual(int.from_bytes(raw[4:8], "big"), 2)
+        position = 12
+        for _ in range(int.from_bytes(raw[8:12], "big")):
+            entry_start = position
+            fixed_end = entry_start + 62
+            nul = raw.index(b"\0", fixed_end, len(raw) - 20)
+            consumed = nul + 1 - entry_start
+            position = entry_start + ((consumed + 7) // 8) * 8
+        return position
+
+    def rebound_index(self, body: bytes | bytearray) -> bytes:
+        raw = bytes(body)
+        return raw[:-20] + hashlib.sha1(raw[:-20]).digest()
+
+    def write_rebound_index(self, root: Path, body: bytes | bytearray) -> None:
+        (root / ".git/index").write_bytes(self.rebound_index(body))
+
     def assert_provenance_failure(self, root: Path, pattern: str = ".*") -> None:
         with self.assertRaisesRegex(RepositoryProvenanceError, pattern):
             authenticate_repository(root)
@@ -138,7 +158,7 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         snapshot = authenticate_repository(root)
         self.assertRegex(snapshot.head, r"^[0-9a-f]{40}$")
         self.assertRegex(snapshot.tree, r"^[0-9a-f]{40}$")
-        self.assertIn(snapshot.index_version, {2, 3, 4})
+        self.assertEqual(snapshot.index_version, 2)
 
         destination = Path(temporary.name) / "materialized"
         materialize_snapshot(snapshot, destination)
@@ -163,35 +183,22 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         self.assertEqual((copied / "README.md").read_bytes(), b"authenticated snapshot\n")
         self.assertFalse((copied / ".git").exists())
 
-    def test_supported_index_versions_use_canonical_git_parser(self) -> None:
-        for version in (2, 4):
+    def test_only_fully_implemented_index_v2_is_supported(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        self.git(root, "update-index", "--index-version=2")
+        self.assertEqual(authenticate_repository(root).index_version, 2)
+
+        for version in (3, 4, 5):
             with self.subTest(version=version):
                 temporary, root = self.make_repository()
                 self.addCleanup(temporary.cleanup)
-                self.git(root, "update-index", f"--index-version={version}")
-                snapshot = authenticate_repository(root)
-                self.assertEqual(snapshot.index_version, version)
-
-        # Version 3 uses the same entry encoding as v2 when no extended bits
-        # are set.  Git normally writes the minimal v2 form, so construct the
-        # canonical v3 header and checksum directly and let Git parse it.
-        temporary, root = self.make_repository()
-        self.addCleanup(temporary.cleanup)
-        index = root / ".git/index"
-        raw = bytearray(index.read_bytes())
-        raw[4:8] = (3).to_bytes(4, "big")
-        raw[-20:] = hashlib.sha1(raw[:-20]).digest()
-        index.write_bytes(raw)
-        self.assertEqual(authenticate_repository(root).index_version, 3)
-
-        temporary, root = self.make_repository()
-        self.addCleanup(temporary.cleanup)
-        index = root / ".git/index"
-        raw = bytearray(index.read_bytes())
-        raw[4:8] = (5).to_bytes(4, "big")
-        raw[-20:] = hashlib.sha1(raw[:-20]).digest()
-        index.write_bytes(raw)
-        self.assert_provenance_failure(root, "unsupported Git index version")
+                index = root / ".git/index"
+                raw = bytearray(index.read_bytes())
+                raw[4:8] = version.to_bytes(4, "big")
+                raw[-20:] = hashlib.sha1(raw[:-20]).digest()
+                index.write_bytes(raw)
+                self.assert_provenance_failure(root, "unsupported Git index version")
 
     def test_git_root_and_metadata_indirection_fail_closed(self) -> None:
         temporary, root = self.make_repository()
@@ -215,8 +222,8 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
 
     def test_index_flags_unknown_mandatory_extension_and_malformed_bytes_fail(self) -> None:
         for arguments, pattern in (
-            (("update-index", "--skip-worktree", "README.md"), "prohibited index state"),
-            (("update-index", "--assume-unchanged", "README.md"), "prohibited index state"),
+            (("update-index", "--skip-worktree", "README.md"), "unsupported Git index version|prohibited"),
+            (("update-index", "--assume-unchanged", "README.md"), "assume-valid|prohibited"),
         ):
             with self.subTest(arguments=arguments):
                 temporary, root = self.make_repository()
@@ -231,7 +238,7 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         self.git(root, "add", "--intent-to-add", "intent.txt")
         self.assert_provenance_failure(
             root,
-            "unsupported Git index flags|invalid/zero Git index OID|differs from exact HEAD",
+            "unsupported Git index version|unsupported Git index flags|invalid/zero Git index OID|differs from exact HEAD",
         )
 
         temporary, root = self.make_repository()
@@ -240,13 +247,144 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         raw = index.read_bytes()
         body = raw[:-20] + b"zzzz" + (0).to_bytes(4, "big")
         index.write_bytes(body + hashlib.sha1(body).digest())
-        self.assert_provenance_failure(root, "Git plumbing failed")
+        self.assert_provenance_failure(root, "unsupported Git index extension")
 
         temporary, root = self.make_repository()
         self.addCleanup(temporary.cleanup)
         index = root / ".git/index"
         index.write_bytes(index.read_bytes()[:20])
         self.assert_provenance_failure(root, "malformed Git index|checksum")
+
+    def test_tree_extension_exact_size_and_payload_mutations_fail_closed(self) -> None:
+        mutations = ("size-minus-one", "size-plus-one", "root-byte")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                index = root / ".git/index"
+                raw = bytearray(index.read_bytes())
+                offset = self.index_extension_offset(raw)
+                self.assertEqual(raw[offset : offset + 4], b"TREE")
+                size = int.from_bytes(raw[offset + 4 : offset + 8], "big")
+                if mutation == "size-minus-one":
+                    raw[offset + 4 : offset + 8] = (size - 1).to_bytes(4, "big")
+                elif mutation == "size-plus-one":
+                    raw[offset + 4 : offset + 8] = (size + 1).to_bytes(4, "big")
+                else:
+                    self.assertEqual(raw[offset + 8], 0)
+                    raw[offset + 8] = 0xFF
+                self.write_rebound_index(root, raw)
+                self.assert_provenance_failure(
+                    root,
+                    "TREE|extension|UTF-8|truncated|checksum boundary",
+                )
+
+    def test_exact_4580_byte_tree_extension_review_reproductions_fail(self) -> None:
+        root = b"\0" + b"0 150\n" + b"\x01" * 20
+        children = []
+        for ordinal in range(150):
+            name = f"n{ordinal:03d}".encode("ascii")
+            if ordinal == 0:
+                name += b"x" * 203
+            children.append(name + b"\0" + b"0 0\n" + b"\x02" * 20)
+        payload = root + b"".join(children)
+        self.assertEqual(len(payload), 4580)
+        body = b"DIRC" + (2).to_bytes(4, "big") + (0).to_bytes(4, "big")
+        body += b"TREE" + len(payload).to_bytes(4, "big") + payload
+        canonical = body + hashlib.sha1(body).digest()
+        self.assertIsNotNone(provenance._parse_git_index(canonical).cache_tree)
+
+        for label, mutate in (
+            (
+                "4580-to-4579",
+                lambda raw: raw[:16] + (4579).to_bytes(4, "big") + raw[20:-20],
+            ),
+            (
+                "4580-to-4581",
+                lambda raw: raw[:16] + (4581).to_bytes(4, "big") + raw[20:-20],
+            ),
+            (
+                "root-nul-to-ff",
+                lambda raw: raw[:20] + b"\xff" + raw[21:-20],
+            ),
+        ):
+            with self.subTest(label=label):
+                mutated_body = mutate(canonical)
+                mutated = mutated_body + hashlib.sha1(mutated_body).digest()
+                with self.assertRaises(RepositoryProvenanceError):
+                    provenance._parse_git_index(mutated)
+
+    def test_tree_extension_framing_and_semantics_are_exact(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        canonical = (root / ".git/index").read_bytes()
+        offset = self.index_extension_offset(canonical)
+        self.assertEqual(canonical[offset : offset + 4], b"TREE")
+        size = int.from_bytes(canonical[offset + 4 : offset + 8], "big")
+        payload = canonical[offset + 8 : offset + 8 + size]
+
+        mutations: dict[str, bytes] = {
+            "truncated-payload": payload[:-1],
+            "excess-payload": payload + b"\0",
+            "malformed-root": b"x" + payload[1:],
+            "malformed-entry-count": payload.replace(b"\0", b"\0x", 1),
+            "malformed-subtree-count": payload.replace(b" ", b" x", 1),
+            "truncated-oid": payload[: payload.index(b"\n") + 10],
+        }
+        for label, mutated_payload in mutations.items():
+            with self.subTest(label=label):
+                body = (
+                    canonical[:offset]
+                    + b"TREE"
+                    + len(mutated_payload).to_bytes(4, "big")
+                    + mutated_payload
+                )
+                mutated = body + hashlib.sha1(body).digest()
+                with self.assertRaises(RepositoryProvenanceError):
+                    provenance._parse_git_index(mutated)
+
+        extension = canonical[offset:-20]
+        for label, signature in (
+            ("unknown-mandatory", b"link"),
+            ("unknown-optional", b"ABCD"),
+        ):
+            with self.subTest(label=label):
+                body = canonical[:-20] + signature + (0).to_bytes(4, "big")
+                with self.assertRaisesRegex(
+                    RepositoryProvenanceError,
+                    "unsupported Git index extension",
+                ):
+                    provenance._parse_git_index(body + hashlib.sha1(body).digest())
+
+        body = canonical[:-20] + extension
+        with self.assertRaisesRegex(RepositoryProvenanceError, "duplicate Git index extension"):
+            provenance._parse_git_index(body + hashlib.sha1(body).digest())
+
+        body = canonical[:-20] + b"ABCD" + (2**32 - 1).to_bytes(4, "big")
+        with self.assertRaisesRegex(RepositoryProvenanceError, "crosses checksum"):
+            provenance._parse_git_index(body + hashlib.sha1(body).digest())
+
+    def test_index_extended_stage_and_entry_framing_fail_closed(self) -> None:
+        for label, flag_mask, expected in (
+            ("extended", 0x4000, "extended Git index flags"),
+            ("conflict-stage", 0x1000, "unmerged Git index stage"),
+            ("assume-valid", 0x8000, "assume-valid Git index state"),
+        ):
+            with self.subTest(label=label):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                raw = bytearray((root / ".git/index").read_bytes())
+                flags = int.from_bytes(raw[72:74], "big") | flag_mask
+                raw[72:74] = flags.to_bytes(2, "big")
+                self.write_rebound_index(root, raw)
+                self.assert_provenance_failure(root, expected)
+
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        raw = bytearray((root / ".git/index").read_bytes())
+        raw[73] ^= 1
+        self.write_rebound_index(root, raw)
+        self.assert_provenance_failure(root, "pathname length flag drift")
 
     def test_index_oid_worktree_and_tracked_presence_are_exact(self) -> None:
         temporary, root = self.make_repository()
@@ -259,7 +397,10 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
             input_data=b"alternate\n",
         ).strip().decode("ascii")
         self.git(root, "update-index", "--cacheinfo", f"100644,{alternate_oid},README.md")
-        self.assert_provenance_failure(root, "index differs from exact HEAD tree")
+        self.assert_provenance_failure(
+            root,
+            "index differs from exact HEAD tree|Git TREE entry count",
+        )
 
         temporary, root = self.make_repository()
         self.addCleanup(temporary.cleanup)
@@ -394,12 +535,46 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         os.link(root / "README.md", cache / "synthetic.pyc")
         self.assert_provenance_failure(root, "hard-link")
 
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        (root / "pkg/__pycache__").mkdir()
+        self.assert_provenance_failure(root, "untracked/empty repository directory")
+
+        if hasattr(os, "mkfifo"):
+            temporary, root = self.make_repository()
+            self.addCleanup(temporary.cleanup)
+            cache = root / "pkg/__pycache__"
+            cache.mkdir()
+            os.mkfifo(cache / "synthetic.pyc")
+            self.assert_provenance_failure(root, "special file")
+
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        cache = root / "pkg/__pycache__"
+        cache.mkdir()
+        (cache / "tracked.pyc").write_bytes(b"tracked synthetic cache")
+        self.regenerate_manifest(root)
+        self.git(root, "add", "--all")
+        self.git(root, "commit", "-q", "-m", "tracked cache fixture")
+        self.assert_provenance_failure(root, "tracked Python cache/bytecode prohibited")
+
     def test_real_process_cache_is_rejected_and_bytecode_disabled_import_is_clean(self) -> None:
         temporary, root = self.make_repository()
         self.addCleanup(temporary.cleanup)
         environment = os.environ.copy()
+        boundary = environment.pop("R11A_PYCACHE_BOUNDARY_ACTIVE", None)
         environment.pop("PYTHONPYCACHEPREFIX", None)
         environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        if boundary:
+            pythonpath = [
+                item
+                for item in environment.get("PYTHONPATH", "").split(os.pathsep)
+                if item and Path(item) != Path(boundary)
+            ]
+            if pythonpath:
+                environment["PYTHONPATH"] = os.pathsep.join(pythonpath)
+            else:
+                environment.pop("PYTHONPATH", None)
         subprocess.run(
             [sys.executable, "-c", "import pkg.module"],
             cwd=root,
@@ -452,7 +627,7 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
             )
             + marshal.dumps(code)
         )
-        cache = Path(importlib.util.cache_from_source(str(source)))
+        cache = source.parent / "__pycache__/seal_r11a_v2_preregistration.cpython-312.pyc"
         cache.parent.mkdir()
         cache.write_bytes(exact_synthetic_pyc)
         self.assert_provenance_failure(root, "untracked repository file")
@@ -620,6 +795,300 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         existing.mkdir()
         with self.assertRaisesRegex(RepositoryProvenanceError, "already exists"):
             materialize_snapshot(snapshot, existing)
+
+    def test_post_scan_untracked_and_tracked_mutations_are_rejected(self) -> None:
+        for label in ("untracked-authority", "tracked-overwrite"):
+            with self.subTest(label=label):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                mutated = False
+
+                def checkpoint(
+                    phase: str,
+                    *,
+                    source_root: Path,
+                    snapshot_root: Path | None = None,
+                ) -> None:
+                    nonlocal mutated
+                    del snapshot_root
+                    if phase != "after_worktree_scan" or mutated:
+                        return
+                    mutated = True
+                    if label == "untracked-authority":
+                        target = (
+                            source_root
+                            / "research/archive_inventory/r11a_future/LATE_AUTHORITY.json"
+                        )
+                        target.parent.mkdir(parents=True)
+                        target.write_text("{}\n", encoding="utf-8")
+                    else:
+                        (source_root / "README.md").write_text(
+                            "late tracked overwrite\n",
+                            encoding="utf-8",
+                        )
+
+                with (
+                    mock.patch.object(provenance, "_provenance_checkpoint", checkpoint),
+                    self.assertRaisesRegex(
+                        RepositoryProvenanceError,
+                        "untracked|working-tree byte drift|worktree identity drift",
+                    ),
+                ):
+                    authenticate_repository(root)
+                self.assertTrue(mutated)
+
+    def test_snapshot_materialization_never_reads_mutated_source_bytes(self) -> None:
+        for phase in (
+            "during_snapshot_materialization",
+            "after_snapshot_materialization",
+            "before_semantic_validation",
+        ):
+            with self.subTest(phase=phase):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                mutated = False
+
+                def checkpoint(
+                    observed_phase: str,
+                    *,
+                    source_root: Path,
+                    snapshot_root: Path | None = None,
+                ) -> None:
+                    nonlocal mutated
+                    del snapshot_root
+                    if observed_phase == phase and not mutated:
+                        mutated = True
+                        (source_root / "README.md").write_text(
+                            "source mutation after capture\n",
+                            encoding="utf-8",
+                        )
+
+                with (
+                    mock.patch.object(provenance, "_provenance_checkpoint", checkpoint),
+                    self.assertRaisesRegex(
+                        RepositoryProvenanceError,
+                        "working-tree byte drift|worktree identity drift",
+                    ),
+                ):
+                    with open_authenticated_repository(root) as authenticated:
+                        self.assertEqual(
+                            (authenticated.snapshot_root / "README.md").read_bytes(),
+                            b"authenticated snapshot\n",
+                        )
+                self.assertTrue(mutated)
+
+    def test_materialization_rejects_replaced_ancestor_without_escape(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        snapshot = authenticate_repository(root)
+        destination = Path(temporary.name) / "materialized"
+        escaped = Path(temporary.name) / "escaped"
+        escaped.mkdir()
+        displaced = Path(temporary.name) / "displaced-pkg"
+        replaced = False
+
+        def checkpoint(
+            phase: str,
+            *,
+            source_root: Path,
+            snapshot_root: Path | None = None,
+        ) -> None:
+            nonlocal replaced
+            del source_root
+            if phase != "during_snapshot_materialization" or replaced:
+                return
+            self.assertIsNotNone(snapshot_root)
+            package = snapshot_root / "pkg"  # type: ignore[operator]
+            self.assertTrue(package.is_dir())
+            package.rename(displaced)
+            package.symlink_to(escaped, target_is_directory=True)
+            replaced = True
+
+        with (
+            mock.patch.object(provenance, "_provenance_checkpoint", checkpoint),
+            self.assertRaisesRegex(
+                RepositoryProvenanceError,
+                "snapshot directory traversal was replaced or escaped",
+            ),
+        ):
+            materialize_snapshot(snapshot, destination)
+        self.assertTrue(replaced)
+        self.assertFalse((escaped / "module.py").exists())
+
+    def test_cleanup_never_follows_snapshot_symlink_or_changes_external_mode(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        external = Path(temporary.name) / "external"
+        external.mkdir(mode=0o711)
+        external_file = external / "sentinel"
+        external_file.write_bytes(b"external bytes\n")
+        external_file.chmod(0o640)
+        directory_mode = external.stat().st_mode
+        file_mode = external_file.stat().st_mode
+
+        with self.assertRaises(RepositoryProvenanceError):
+            with open_authenticated_repository(root) as authenticated:
+                authenticated.snapshot_root.chmod(0o700)
+                package = authenticated.snapshot_root / "pkg"
+                displaced = authenticated.snapshot_root / "pkg-original"
+                package.rename(displaced)
+                package.symlink_to(external, target_is_directory=True)
+
+        self.assertEqual(external_file.read_bytes(), b"external bytes\n")
+        self.assertEqual(external.stat().st_mode, directory_mode)
+        self.assertEqual(external_file.stat().st_mode, file_mode)
+
+    def test_watcher_rejects_transient_restore_and_hardlink_alias_writes(self) -> None:
+        for mutation in ("direct-restore", "hardlink-alias"):
+            with self.subTest(mutation=mutation):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                with self.assertRaisesRegex(
+                    RepositoryProvenanceError,
+                    "authenticated snapshot changed",
+                ):
+                    with open_authenticated_repository(root) as authenticated:
+                        target = authenticated.snapshot_root / "README.md"
+                        original = target.read_bytes()
+                        original_mode = target.stat().st_mode
+                        if mutation == "direct-restore":
+                            target.chmod(0o600)
+                            target.write_bytes(b"transient unreviewed bytes\n")
+                            target.write_bytes(original)
+                            target.chmod(original_mode)
+                        else:
+                            alias = Path(temporary.name) / "snapshot-hardlink-alias"
+                            os.link(target, alias)
+                            alias.chmod(0o600)
+                            alias.write_bytes(b"transient unreviewed bytes\n")
+                            alias.write_bytes(original)
+                            alias.chmod(original_mode)
+                            alias.unlink()
+
+    def test_snapshot_lifetime_hooks_reject_transient_restore(self) -> None:
+        for target_phase in (
+            "after_snapshot_materialization",
+            "before_semantic_validation",
+            "before_final_success_revalidation",
+        ):
+            with self.subTest(target_phase=target_phase):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                mutated = False
+
+                def checkpoint(
+                    phase: str,
+                    *,
+                    source_root: Path,
+                    snapshot_root: Path | None = None,
+                ) -> None:
+                    nonlocal mutated
+                    del source_root
+                    if phase != target_phase or mutated:
+                        return
+                    self.assertIsNotNone(snapshot_root)
+                    target = snapshot_root / "README.md"  # type: ignore[operator]
+                    original = target.read_bytes()
+                    original_mode = target.stat().st_mode
+                    target.chmod(0o600)
+                    target.write_bytes(b"transient hook mutation\n")
+                    target.write_bytes(original)
+                    target.chmod(original_mode)
+                    mutated = True
+
+                with (
+                    mock.patch.object(
+                        provenance,
+                        "_provenance_checkpoint",
+                        checkpoint,
+                    ),
+                    self.assertRaisesRegex(
+                        RepositoryProvenanceError,
+                        "authenticated snapshot changed",
+                    ),
+                ):
+                    with open_authenticated_repository(root) as authenticated:
+                        self.assertEqual(
+                            (authenticated.snapshot_root / "README.md").read_bytes(),
+                            b"authenticated snapshot\n",
+                        )
+                self.assertTrue(mutated)
+
+    def test_semantic_consumer_reads_snapshot_and_final_source_drift_fails(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        with self.assertRaisesRegex(
+            RepositoryProvenanceError,
+            "working-tree byte drift|worktree identity drift",
+        ):
+            with open_authenticated_repository(root) as authenticated:
+                (root / "README.md").write_text("late source bytes\n", encoding="utf-8")
+                self.assertEqual(
+                    (authenticated.snapshot_root / "README.md").read_bytes(),
+                    b"authenticated snapshot\n",
+                )
+
+    def test_final_revalidation_rejects_authority_and_git_metadata_drift(self) -> None:
+        mutations = (
+            "workflow-alias",
+            "approval-alias",
+            "tracked-symlink",
+            "tracked-ancestor-replacement",
+            "tracked-mode",
+            "tracked-removal",
+            "index",
+            "head",
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                temporary, root = self.make_repository()
+                self.addCleanup(temporary.cleanup)
+                with self.assertRaises(RepositoryProvenanceError):
+                    with open_authenticated_repository(root) as authenticated:
+                        self.assertTrue(authenticated.snapshot_root.is_dir())
+                        if mutation == "workflow-alias":
+                            target = root / ".github/workflows/alternate-r11a.yml"
+                            target.parent.mkdir(parents=True)
+                            target.write_text("name: alternate\n", encoding="utf-8")
+                        elif mutation == "approval-alias":
+                            target = root / "research/archive_inventory/r11a_approval/alternate.json"
+                            target.parent.mkdir(parents=True)
+                            target.write_text("{}\n", encoding="utf-8")
+                        elif mutation == "tracked-symlink":
+                            target = root / "README.md"
+                            target.unlink()
+                            target.symlink_to(root / "pkg/module.py")
+                        elif mutation == "tracked-ancestor-replacement":
+                            package = root / "pkg"
+                            moved = root / "pkg-original"
+                            package.rename(moved)
+                            package.symlink_to(moved, target_is_directory=True)
+                        elif mutation == "tracked-mode":
+                            (root / "README.md").chmod(0o755)
+                        elif mutation == "tracked-removal":
+                            (root / "README.md").unlink()
+                        elif mutation == "index":
+                            index = root / ".git/index"
+                            raw = bytearray(index.read_bytes())
+                            raw[16] ^= 1
+                            self.write_rebound_index(root, raw)
+                        else:
+                            (root / ".git/HEAD").write_text(
+                                "ref: refs/heads/missing-r11a-ref\n",
+                                encoding="ascii",
+                            )
+
+    def test_snapshot_is_read_only_and_rejects_semantic_tampering(self) -> None:
+        temporary, root = self.make_repository()
+        self.addCleanup(temporary.cleanup)
+        with self.assertRaisesRegex(
+            RepositoryProvenanceError,
+            "authenticated snapshot changed|authenticated snapshot byte drift|writable",
+        ):
+            with open_authenticated_repository(root) as authenticated:
+                target = authenticated.snapshot_root / "README.md"
+                target.chmod(0o600)
+                target.write_text("snapshot tamper\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

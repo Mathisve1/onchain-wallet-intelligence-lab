@@ -4,8 +4,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+_REPOSITORY_ROOT = Path(__file__).absolute().parents[1]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
+import difflib as _r11a_bytecode_boundary  # noqa: E402,F401
 
 try:
     from governance.regenerate_manifest import render_manifest
@@ -42,6 +48,7 @@ CONTINUOUS_INTEGRATION_WORKFLOW = ".github/workflows/ci.yml"
 REPOSITORY_MANIFEST = "governance/REPOSITORY_MANIFEST.sha256"
 
 R7_CODE_PATHS = (
+    "difflib.abi3.so",
     "research/__init__.py",
     "research/archive_inventory/r11a_corrective/__init__.py",
     "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
@@ -83,6 +90,7 @@ GOVERNANCE_PATHS = (
     "governance/_validate_r11a_runtime_binding_core_r7.py",
     "governance/generate_r11a_corrective_policies.py",
     "governance/r11a_github_review_evidence.py",
+    "governance/r11a_bytecode_boundary.c",
     "governance/r11a_post_approval_context.py",
     "governance/r11a_repository_provenance.py",
     "governance/r11a_stage_common_r4.py",
@@ -144,6 +152,7 @@ SUPPORTING_PATHS = (
 )
 
 TEST_PATHS = (
+    "tests/test_000_r11a_import_isolation.py",
     "tests/test_archive_inventory_r11a_corrective_artifacts.py",
     "tests/test_archive_inventory_r11a_corrective_r3.py",
     "tests/test_archive_inventory_r11a_corrective_r7.py",
@@ -158,6 +167,7 @@ TEST_PATHS = (
     "tests/test_archive_inventory_r11a_v2_bindings.py",
     "tests/test_archive_inventory_r11a_v2_preregistration.py",
     "tests/test_r11a_workflow_identity.py",
+    "tests/test_ci_exact_head.py",
 )
 
 EXECUTED_SECURITY_PATHS = frozenset(

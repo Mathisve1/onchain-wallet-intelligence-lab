@@ -36,6 +36,39 @@ class ExactCIHeadTests(unittest.TestCase):
         ):
             self.assertIn(action, self.text)
 
+    def test_ci_proves_normal_optimized_and_bytecode_disabled_environments(self) -> None:
+        self.assertNotIn("PYTHONDONTWRITEBYTECODE: '1'", self.text)
+        self.assertGreaterEqual(
+            self.text.count("env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX"),
+            7,
+        )
+        self.assertIn(
+            "python -m unittest tests.test_archive_inventory_r11a_g2_owner_approval -v",
+            self.text,
+        )
+        self.assertIn(
+            "python -O -m unittest tests.test_archive_inventory_r11a_g2_owner_approval -v",
+            self.text,
+        )
+        self.assertIn(
+            "python -m unittest tests.test_archive_inventory_r11a_post_approval_validator_alignment -v",
+            self.text,
+        )
+        self.assertIn(
+            "python -O -m unittest tests.test_archive_inventory_r11a_post_approval_validator_alignment -v",
+            self.text,
+        )
+        self.assertIn("python -m unittest discover -s tests -v", self.text)
+        self.assertIn("python -B -m unittest discover -s tests -v", self.text)
+
+    def test_ci_rebuilds_boundary_and_keeps_fail_closed_governance(self) -> None:
+        self.assertIn("governance/r11a_bytecode_boundary.c", self.text)
+        self.assertIn("cmp --silent difflib.abi3.so", self.text)
+        self.assertIn("python governance/validate_repository.py", self.text)
+        self.assertNotIn("continue-on-error", self.text)
+        self.assertNotIn("id-token:", self.text)
+        self.assertNotIn("secrets.", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()

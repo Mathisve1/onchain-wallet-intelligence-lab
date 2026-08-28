@@ -6,7 +6,7 @@ import json
 import shutil
 import tempfile
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -154,6 +154,16 @@ class ArtifactHardeningTests(unittest.TestCase):
             )
         )
         return stack
+
+    def authenticated_repository(self) -> subject.AuthenticatedRepository:
+        return subject.AuthenticatedRepository(
+            snapshot_root=ROOT / "authenticated-snapshot",
+            head=DISPATCH_SHA,
+            tree="f" * 40,
+            index_version=2,
+            entries=(),
+            _source_root=ROOT,
+        )
 
     def assert_combined_bound_validation_rejects(
         self,
@@ -371,13 +381,20 @@ class ArtifactHardeningTests(unittest.TestCase):
                 context,
                 subject._FAIL_CLOSED_EARLY_TERMINAL,
             )
+            authenticated = self.authenticated_repository()
             with (
                 mock.patch.object(subject, "validate_artifact"),
+                mock.patch.object(
+                    subject,
+                    "open_authenticated_repository",
+                    return_value=nullcontext(authenticated),
+                ),
                 mock.patch.object(
                     subject,
                     "validate_reviewed_runtime_binding",
                     return_value=reviewed_binding(),
                 ) as gate,
+                mock.patch.object(subject, "authenticated_repository_checkpoint"),
                 mock.patch.object(subject, "_validate_bound_context") as bound,
                 mock.patch.object(subject, "validate_science") as science,
             ):
@@ -386,7 +403,12 @@ class ArtifactHardeningTests(unittest.TestCase):
                     root=ROOT,
                     expected_run_id=17,
                 )
-            gate.assert_called_once_with(DISPATCH_SHA, 1, root=ROOT)
+            gate.assert_called_once_with(
+                DISPATCH_SHA,
+                1,
+                root=authenticated.snapshot_root,
+                authenticated=authenticated,
+            )
             if phase in subject._PRECOLLECTOR_FAILURE_PHASES:
                 bound.assert_not_called()
             else:
@@ -398,8 +420,14 @@ class ArtifactHardeningTests(unittest.TestCase):
             minimal_context("OIDC_ROLE_ASSUMPTION"),
             subject._FAIL_CLOSED_EARLY_TERMINAL,
         )
+        authenticated = self.authenticated_repository()
         with (
             mock.patch.object(subject, "validate_artifact"),
+            mock.patch.object(
+                subject,
+                "open_authenticated_repository",
+                return_value=nullcontext(authenticated),
+            ),
             mock.patch.object(
                 subject,
                 "validate_reviewed_runtime_binding",
@@ -407,6 +435,7 @@ class ArtifactHardeningTests(unittest.TestCase):
                     "runtime-binding review evidence is absent"
                 ),
             ) as gate,
+            mock.patch.object(subject, "authenticated_repository_checkpoint"),
             mock.patch.object(subject, "validate_science") as science,
             self.assertRaisesRegex(
                 subject.EvidenceValidationError,
@@ -418,7 +447,12 @@ class ArtifactHardeningTests(unittest.TestCase):
                 root=ROOT,
                 expected_run_id=17,
             )
-        gate.assert_called_once_with(DISPATCH_SHA, 1, root=ROOT)
+        gate.assert_called_once_with(
+            DISPATCH_SHA,
+            1,
+            root=authenticated.snapshot_root,
+            authenticated=authenticated,
+        )
         science.assert_not_called()
 
     def test_workflow_run_id_must_match_trusted_runtime_identity(self) -> None:

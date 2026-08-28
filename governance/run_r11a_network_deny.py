@@ -7,7 +7,6 @@ import os
 import socket
 import subprocess
 import sys
-import unittest
 import urllib.request
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -15,6 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+import difflib as _r11a_bytecode_boundary  # noqa: E402,F401
+import unittest  # noqa: E402
 
 
 class NetworkDenied(RuntimeError):
@@ -144,14 +145,12 @@ def _require_local_git(
             == local_cwd / ".git/config"
             and arguments[1:] == ("--no-includes", "--null", "--name-only", "--list")
         )
-        config_write = (
-            len(arguments) == 2
-            and arguments[0] in {"user.name", "user.email"}
-            and arguments[1] in {
-                "R11A Offline Test",
-                "r11a-offline@example.invalid",
-            }
-        )
+        config_write = arguments in {
+            ("user.name", "R11A Offline Test"),
+            ("user.email", "r11a-offline@example.invalid"),
+            ("user.name", "R11A Snapshot Test"),
+            ("user.email", "r11a-snapshot@example.invalid"),
+        }
         allowed = config_read or config_write
     elif subcommand == "add":
         allowed = arguments in {
@@ -167,9 +166,16 @@ def _require_local_git(
             in {
                 "fixture",
                 "self listed manifest",
+                "tracked cache fixture",
                 "unordered manifest",
                 "wrong manifest digest",
             }
+        )
+        allowed = allowed or arguments == (
+            "-q",
+            "--allow-empty",
+            "-m",
+            "snapshot routing fixture",
         )
     elif subcommand == "update-index":
         cache_info = arguments[1].split(",") if len(arguments) == 2 else []
@@ -200,6 +206,7 @@ def _require_local_git(
             ("--verify", "HEAD^{tree}"),
             ("--verify", "HEAD"),
             ("--verify", "HEAD:README.md"),
+            ("HEAD",),
         }
     elif subcommand == "ls-files":
         allowed = arguments in {

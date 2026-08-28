@@ -15,9 +15,12 @@ sys.dont_write_bytecode = True
 try:
     from governance import _validate_r11a_runtime_binding_core_r7 as _core
     from governance.r11a_repository_provenance import (
+        AuthenticatedRepository,
         RepositoryProvenanceError,
         authenticate_repository,
+        authenticated_repository_checkpoint,
         harden_authenticated_worktree_for_bytecode_free_dispatch,
+        open_authenticated_repository,
     )
     from governance.r11a_stage_common_r4 import (
         ACTIVATION_RELATIVE,
@@ -31,9 +34,12 @@ try:
 except ModuleNotFoundError:
     import _validate_r11a_runtime_binding_core_r7 as _core
     from r11a_repository_provenance import (
+        AuthenticatedRepository,
         RepositoryProvenanceError,
         authenticate_repository,
+        authenticated_repository_checkpoint,
         harden_authenticated_worktree_for_bytecode_free_dispatch,
+        open_authenticated_repository,
     )
     from r11a_stage_common_r4 import (
         ACTIVATION_RELATIVE,
@@ -46,7 +52,9 @@ except ModuleNotFoundError:
     )
 
 _EXTRA_TRANSITIVE_PATHS = (
+    "difflib.abi3.so",
     "governance/_validate_r11a_runtime_binding_core_r7.py",
+    "governance/r11a_bytecode_boundary.c",
     "governance/r11a_github_review_evidence.py",
     "governance/r11a_repository_provenance.py",
     "governance/r11a_workflow_identity.py",
@@ -84,19 +92,19 @@ load = _core.load
 sha256 = _core.sha256
 
 
-def validate(
+def validate_authenticated(
     expected_commit: str,
     run_attempt: int,
     *,
-    root: Path = ROOT,
+    authenticated: AuthenticatedRepository,
 ) -> dict[str, Any]:
-    """Validate exact dispatch provenance, binding semantics, and its review.
+    """Validate binding semantics using only one authenticated snapshot root.
 
     The runtime-binding review evidence is necessarily committed after the
-    reviewed binding subject.  Repository provenance authenticates the exact
-    dispatch HEAD/tree/index/worktree without requiring a parent object; the
-    evidence validator independently authenticates the reviewed subject bytes
-    and then consumes a review identity distinct from every earlier gate.
+    reviewed binding subject.  The evidence validator independently validates
+    the reviewed subject bytes and consumes a review identity distinct from
+    every earlier gate.  No security-relevant read in this function returns to
+    the mutable source worktree.
     """
 
     expected = _core.require_commit(expected_commit, "expected commit")
@@ -105,14 +113,16 @@ def validate(
         "run attempt must be integer",
     )
     _core.require(run_attempt == 1, "runtime binding requires workflow run attempt one")
-    repository_root = Path(root)
-    try:
-        snapshot = authenticate_repository(repository_root, expected_head=expected)
-    except RepositoryProvenanceError as exc:
-        raise RuntimeBindingError(f"runtime repository provenance invalid: {exc}") from exc
+    _core.require(
+        isinstance(authenticated, AuthenticatedRepository),
+        "runtime binding requires authenticated repository context",
+    )
+    _core.require(authenticated.head == expected, "authenticated dispatch identity drift")
+    repository_root = authenticated.snapshot_root
 
     lineage: list[object] = []
     binding = _core.validate_binding(root=repository_root, _review_lineage=lineage)
+    authenticated_repository_checkpoint(authenticated)
     evidence_relative = REVIEW_EVIDENCE_PATHS[_core.RUNTIME_BINDING_REVIEW_GATE]
     try:
         evidence_sha = stage_sha256(repository_root, evidence_relative)
@@ -136,11 +146,33 @@ def validate(
         == REVIEW_GATE_IDS,
         "runtime binding did not consume the complete review-gate lineage",
     )
-    # Keep the authenticated object live through all semantic reads and make
-    # the current dispatch tree an explicit part of this function's result
-    # path, even though no self-declared tree field is accepted from binding.
-    _core.require(snapshot.head == expected and len(snapshot.tree) == 40, "authenticated dispatch identity drift")
+    _core.require(len(authenticated.tree) == 40, "authenticated dispatch tree invalid")
     return binding
+
+
+def validate(
+    expected_commit: str,
+    run_attempt: int,
+    *,
+    root: Path = ROOT,
+) -> dict[str, Any]:
+    """Authenticate one exact repository and validate only its frozen bytes."""
+
+    expected = _core.require_commit(expected_commit, "expected commit")
+    _core.require(
+        isinstance(run_attempt, int) and not isinstance(run_attempt, bool),
+        "run attempt must be integer",
+    )
+    _core.require(run_attempt == 1, "runtime binding requires workflow run attempt one")
+    try:
+        with open_authenticated_repository(Path(root), expected_head=expected) as authenticated:
+            return validate_authenticated(
+                expected,
+                run_attempt,
+                authenticated=authenticated,
+            )
+    except RepositoryProvenanceError as exc:
+        raise RuntimeBindingError(f"runtime repository provenance invalid: {exc}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
