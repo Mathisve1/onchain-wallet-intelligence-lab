@@ -19,6 +19,17 @@ FILES = (
     "tests/test_archive_inventory_r11a_v2_preregistration.py",
     "tests/test_archive_inventory_r11a_v2_bindings.py",
 )
+
+# The owner-approved V2 binding document is an immutable historical
+# preregistration snapshot.  Its self-reference records the exact validator
+# byte that existed at that stage.  The current post-G2 validator adds only
+# process-isolation hardening and is bound independently by the R7
+# implementation seal; do not rewrite the approved historical document.
+HISTORICAL_FILE_SHA256 = {
+    "governance/validate_r11a_v2_bindings.py": (
+        "ac68cc6f07a1a0b960ed271b26f642906de1dad96d9ade009b7ba3e4243e3c93"
+    ),
+}
 EXTERNAL_BINDINGS = {
     "canonical_parent_commit": "57566456624eb758049aa7687bdb7b8a2844c91d",
     "original_preregistration_merge_commit": "5103c846be8a53732d8559a281ac8b57ce4d7aac",
@@ -48,7 +59,10 @@ def expected() -> dict[str, object]:
         "binding_id": "R11A-V2-PREREGISTRATION-BINDINGS-001",
         "status": "SEALED_PREREGISTRATION_NO_EXECUTION",
         "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
-        "file_sha256": {path: sha256(ROOT / path) for path in FILES},
+        "file_sha256": {
+            path: HISTORICAL_FILE_SHA256.get(path, sha256(ROOT / path))
+            for path in FILES
+        },
         "external_bindings": EXTERNAL_BINDINGS,
         "owner_approval_eligible": False,
         "network_execution_authorized": False,

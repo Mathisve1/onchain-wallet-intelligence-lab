@@ -7,24 +7,18 @@ from pathlib import Path
 try:
     from governance.r11a_stage_common_r4 import (
         ACTIVATION_RELATIVE,
-        INSTALLATION_RELATIVE,
-        PREFLIGHT_CANDIDATE_RELATIVE,
-        PREFLIGHT_RELEASE_RELATIVE,
         RELEASE_CANDIDATE_RELATIVE,
         RELEASE_DIGEST_RELATIVE,
         RELEASE_RELATIVE,
-        ROLE_ATTESTATION_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
         WORKFLOW_NAME,
         WORKFLOW_RELATIVE,
         load,
         read_bytes,
         require,
-        require_commit,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -36,24 +30,18 @@ try:
 except ModuleNotFoundError:
     from r11a_stage_common_r4 import (
         ACTIVATION_RELATIVE,
-        INSTALLATION_RELATIVE,
-        PREFLIGHT_CANDIDATE_RELATIVE,
-        PREFLIGHT_RELEASE_RELATIVE,
         RELEASE_CANDIDATE_RELATIVE,
         RELEASE_DIGEST_RELATIVE,
         RELEASE_RELATIVE,
-        ROLE_ATTESTATION_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
         WORKFLOW_NAME,
         WORKFLOW_RELATIVE,
         load,
         read_bytes,
         require,
-        require_commit,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -66,6 +54,7 @@ except ModuleNotFoundError:
 ACTIVATION = ROOT / ACTIVATION_RELATIVE
 RELEASE = ROOT / RELEASE_RELATIVE
 RELEASE_DIGEST = ROOT / RELEASE_DIGEST_RELATIVE
+EXECUTION_RELEASE_REVIEW_GATE = "R11A_EXECUTION_RELEASE_REVIEW"
 ACTIVATION_KEYS = frozenset(
     {
         "schema_version",
@@ -74,18 +63,11 @@ ACTIVATION_KEYS = frozenset(
         "execution_release_id",
         "execution_release_candidate_sha256",
         "execution_release_blob_sha256",
-        "activation_base_commit",
-        "canonical_activation_merge_commit",
         "dispatch_ref_required",
         "workflow_name",
         "workflow_path",
         "workflow_sha256",
-        "execution_release_review_completed",
-        "execution_release_review_id",
-        "execution_release_review_event",
-        "execution_release_review_verdict",
-        "execution_release_reviewed_head",
-        "execution_release_reviewed_tree",
+        "execution_release_review_evidence_sha256",
         "automatic_dispatch_authorized",
         "reusable_activation_authorized",
         "maximum_runs",
@@ -109,19 +91,24 @@ def validate(
     root: Path = ROOT,
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
     permitted = successor_permissions(
-        frozenset(permitted_successor_paths) | {ACTIVATION_RELATIVE}
+        frozenset(permitted_successor_paths)
+        | {
+            ACTIVATION_RELATIVE,
+            REVIEW_EVIDENCE_PATHS[EXECUTION_RELEASE_REVIEW_GATE],
+        }
     )
-    release = validate_release(root, permitted_successor_paths=permitted)
-    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
-    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
-    preflight_release = load(root, PREFLIGHT_RELEASE_RELATIVE)
-    installation_contract = load(root, INSTALLATION_RELATIVE)
-    release_candidate = load(root, RELEASE_CANDIDATE_RELATIVE)
+    release = validate_release(
+        root,
+        permitted_successor_paths=permitted,
+        _review_lineage=lineage,
+    )
     activation = load(root, ACTIVATION_RELATIVE, missing_label="canonical activation is absent")
     require_exact(activation, ACTIVATION_KEYS, "canonical activation")
-    require(activation["schema_version"] == "1.0", "activation schema drift")
+    require(activation["schema_version"] == "2.0", "activation schema drift")
     require(
         activation["activation_id"]
         == "ACTIVATE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001",
@@ -151,42 +138,24 @@ def validate(
         read_bytes(root, RELEASE_DIGEST_RELATIVE) == f"{release_sha}\n".encode("ascii"),
         "activation detached release binding drift",
     )
-    base_commit = require_commit(activation["activation_base_commit"], "activation_base_commit")
-    merge_commit = require_commit(
-        activation["canonical_activation_merge_commit"],
-        "canonical_activation_merge_commit",
-    )
-    require(base_commit != merge_commit, "activation merge commit must be a successor commit")
     require(activation["dispatch_ref_required"] == "refs/heads/main", "activation dispatch ref drift")
     require(activation["workflow_name"] == WORKFLOW_NAME, "activation workflow name drift")
     require(activation["workflow_path"] == WORKFLOW_RELATIVE, "activation workflow path drift")
     require_sha256(activation["workflow_sha256"], "workflow_sha256")
     require(activation["workflow_sha256"] == sha256(root, WORKFLOW_RELATIVE), "activation workflow binding drift")
-    require_green_review(
+    require_gate_review(
+        root,
         activation,
-        "execution_release_review",
-        "execution release review",
-    )
-    require_distinct_review(
-        activation,
-        "execution_release_review",
-        release,
-        "release_candidate_review",
-        "execution release review",
-    )
-    require_fresh_review(
-        activation,
-        "execution_release_review",
-        "execution release review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-            (preflight_candidate, "role_attestation_review"),
-            (preflight_release, "candidate_review"),
-            (installation_contract, "sts_preflight_review"),
-            (release_candidate, "workflow_installation_review"),
-            (release, "release_candidate_review"),
-        ),
+        "execution_release_review_evidence_sha256",
+        EXECUTION_RELEASE_REVIEW_GATE,
+        target_files={
+            RELEASE_RELATIVE: sha256(root, RELEASE_RELATIVE),
+            RELEASE_DIGEST_RELATIVE: sha256(root, RELEASE_DIGEST_RELATIVE),
+        },
+        predecessor_files={
+            RELEASE_CANDIDATE_RELATIVE: sha256(root, RELEASE_CANDIDATE_RELATIVE)
+        },
+        lineage=lineage,
     )
     require(activation["automatic_dispatch_authorized"] is False, "activation authorizes automatic dispatch")
     require(activation["reusable_activation_authorized"] is False, "activation is reusable")

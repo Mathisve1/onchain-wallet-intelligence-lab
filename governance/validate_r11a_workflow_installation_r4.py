@@ -15,7 +15,7 @@ try:
         PREFLIGHT_RELEASE_RELATIVE,
         PRICING_SOURCE_RELATIVE,
         PRICING_TARGET_RELATIVE,
-        ROLE_ATTESTATION_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
         WORKFLOW_NAME,
         WORKFLOW_RELATIVE,
@@ -23,10 +23,8 @@ try:
         pricing_projection,
         read_bytes,
         require,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -47,7 +45,7 @@ except ModuleNotFoundError:
         PREFLIGHT_RELEASE_RELATIVE,
         PRICING_SOURCE_RELATIVE,
         PRICING_TARGET_RELATIVE,
-        ROLE_ATTESTATION_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
         WORKFLOW_NAME,
         WORKFLOW_RELATIVE,
@@ -55,10 +53,8 @@ except ModuleNotFoundError:
         pricing_projection,
         read_bytes,
         require,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -69,6 +65,7 @@ except ModuleNotFoundError:
     from validate_r11a_role_preflight_evidence_r4 import validate as validate_preflight
 
 CONTRACT = ROOT / INSTALLATION_RELATIVE
+STS_PREFLIGHT_REVIEW_GATE = "R11A_STS_PREFLIGHT_REVIEW"
 CONTRACT_KEYS = frozenset(
     {
         "schema_version",
@@ -78,12 +75,7 @@ CONTRACT_KEYS = frozenset(
         "preflight_release_sha256",
         "preflight_evidence_sha256",
         "preflight_consumption_sha256",
-        "sts_preflight_review_completed",
-        "sts_preflight_review_id",
-        "sts_preflight_review_event",
-        "sts_preflight_review_verdict",
-        "sts_preflight_reviewed_head",
-        "sts_preflight_reviewed_tree",
+        "sts_preflight_review_evidence_sha256",
         "workflow_name",
         "candidate_workflow_path",
         "workflow_path",
@@ -110,22 +102,28 @@ def validate(
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
     runtime_pricing_projection_permitted: bool = True,
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
     require(
         type(runtime_pricing_projection_permitted) is bool,
         "runtime pricing projection mode must be boolean",
     )
     permitted = successor_permissions(
-        frozenset(permitted_successor_paths) | {INSTALLATION_RELATIVE, WORKFLOW_RELATIVE}
+        frozenset(permitted_successor_paths)
+        | {
+            INSTALLATION_RELATIVE,
+            WORKFLOW_RELATIVE,
+            REVIEW_EVIDENCE_PATHS[STS_PREFLIGHT_REVIEW_GATE],
+        }
     )
     projection_present = sha256(root, PRICING_TARGET_RELATIVE) == APPROVED_PRICING_SOURCE_SHA
-    preflight = validate_preflight(
+    validate_preflight(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=projection_present,
+        _review_lineage=lineage,
     )
-    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
-    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
     contract = load(
         root,
         INSTALLATION_RELATIVE,
@@ -162,24 +160,19 @@ def validate(
         contract["preflight_consumption_sha256"] == sha256(root, PREFLIGHT_CONSUMPTION_RELATIVE),
         "installation preflight-consumption binding drift",
     )
-    require_green_review(contract, "sts_preflight_review", "STS preflight review")
-    require_distinct_review(
+    require_gate_review(
+        root,
         contract,
-        "sts_preflight_review",
-        preflight["release"],
-        "candidate_review",
-        "STS preflight review",
-    )
-    require_fresh_review(
-        contract,
-        "sts_preflight_review",
-        "STS preflight review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-            (preflight_candidate, "role_attestation_review"),
-            (preflight["release"], "candidate_review"),
-        ),
+        "sts_preflight_review_evidence_sha256",
+        STS_PREFLIGHT_REVIEW_GATE,
+        target_files={
+            PREFLIGHT_EVIDENCE_RELATIVE: sha256(root, PREFLIGHT_EVIDENCE_RELATIVE),
+            PREFLIGHT_CONSUMPTION_RELATIVE: sha256(root, PREFLIGHT_CONSUMPTION_RELATIVE),
+        },
+        predecessor_files={
+            PREFLIGHT_RELEASE_RELATIVE: sha256(root, PREFLIGHT_RELEASE_RELATIVE)
+        },
+        lineage=lineage,
     )
     require(contract["workflow_name"] == WORKFLOW_NAME, "workflow name drift")
     require(contract["candidate_workflow_path"] == CANDIDATE_RELATIVE, "candidate workflow path drift")

@@ -9,8 +9,10 @@ from typing import Any, Iterable
 
 try:  # Package import (tests and ``python -m``).
     from governance import r11a_post_approval_context as _post_approval
+    from governance import r11a_github_review_evidence as _review_evidence
 except ModuleNotFoundError:  # Direct ``python governance/<validator>.py`` execution.
     import r11a_post_approval_context as _post_approval
+    import r11a_github_review_evidence as _review_evidence
 
 
 ROOT = Path(__file__).absolute().parents[1]
@@ -23,6 +25,7 @@ ROLE_RELATIVE = f"{ARCHIVE_RELATIVE}/r11a_role_attestation"
 PREFLIGHT_RELATIVE = f"{ARCHIVE_RELATIVE}/r11a_role_preflight"
 INSTALL_RELATIVE = f"{ARCHIVE_RELATIVE}/r11a_workflow_installation"
 RUNTIME_RELATIVE = f"{ARCHIVE_RELATIVE}/r11a_runtime"
+REVIEW_EVIDENCE_RELATIVE = f"{ARCHIVE_RELATIVE}/r11a_review_evidence"
 
 ROLE_ARN = (
     "arn:aws:iam::630956766927:role/"
@@ -58,6 +61,9 @@ APPROVAL_TEXT_RELATIVE = f"{APPROVAL_RELATIVE}/{APPROVAL_ID}.txt"
 ROLE_ATTESTATION_RELATIVE = (
     f"{ROLE_RELATIVE}/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json"
 )
+ROLE_CONFIGURATION_CANDIDATE_RELATIVE = (
+    f"{ROLE_RELATIVE}/R11A_SUCCESSOR_ROLE_CREATION_CONFIGURATION_CANDIDATE.json"
+)
 PREFLIGHT_CANDIDATE_RELATIVE = (
     f"{PREFLIGHT_RELATIVE}/R11A_STS_PREFLIGHT_CANDIDATE.json"
 )
@@ -91,22 +97,20 @@ RESOURCE_FEASIBILITY_RELATIVE = f"{CORRECTIVE_RELATIVE}/R11A_RESOURCE_FEASIBILIT
 RUNNER_RELATIVE = f"{CORRECTIVE_RELATIVE}/runner.py"
 ARTIFACT_VALIDATOR_RELATIVE = "governance/validate_r11a_execution_artifact_r7.py"
 
+REVIEW_GATE_IDS = tuple(_review_evidence.GATE_REGISTRY)
+REVIEW_EVIDENCE_PATHS = {
+    gate_id: _review_evidence.evidence_path(gate_id)
+    for gate_id in REVIEW_GATE_IDS
+}
+
 APPROVED_WORKFLOW_SHA = "c10b810304d6cdbc68f23cb3db113b57580d34f0f74e781aefa2140edd0b5e65"
 APPROVED_PRICING_SOURCE_SHA = "d5043062386b3d70f695f09c917f11719512918c56f318cace1e0530b709ac43"
 APPROVED_PERMISSION_SHA = "2769afe520efff6f0b619fff352d2cf13d412d96d6c4642fcfc61a8165787e6a"
 APPROVED_TRUST_SHA = "375e224b269a62873afb4516651a259483feed4f211e9184272cb2af91513668"
 ALIGNMENT_ID = _post_approval.ALIGNMENT_ID
 ALIGNMENT_RELATIVE = _post_approval.ALIGNMENT_PATH
-ALIGNMENT_PREDECESSOR_HEAD = _post_approval.PREDECESSOR_HEAD
-ALIGNMENT_PREDECESSOR_TREE = _post_approval.PREDECESSOR_TREE
 APPROVAL_RECEIPT_SHA = _post_approval.APPROVAL_RECEIPT_SHA
 G2_REVIEW_ID = _post_approval.G2_REVIEW_ID
-SOFTWARE_REVIEW_ID = _post_approval.SOFTWARE_REVIEW_ID
-SOFTWARE_REVIEWED_HEAD = _post_approval.SOFTWARE_REVIEWED_HEAD
-SOFTWARE_REVIEWED_TREE = _post_approval.SOFTWARE_REVIEWED_TREE
-G1_REVIEW_ID = _post_approval.G1_REVIEW_ID
-G1_REVIEWED_HEAD = _post_approval.G1_REVIEWED_HEAD
-G1_REVIEWED_TREE = _post_approval.G1_REVIEWED_TREE
 
 # Compatibility path constants. Validation derives paths from the supplied root.
 BASE = ROOT / ARCHIVE_RELATIVE
@@ -154,6 +158,7 @@ TRADING_AUTHORITY_KEYS = frozenset(
 )
 KNOWN_SUCCESSOR_PATHS = frozenset(
     {
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROLE_ATTESTATION_RELATIVE,
         PREFLIGHT_CANDIDATE_RELATIVE,
         PREFLIGHT_RELEASE_RELATIVE,
@@ -167,6 +172,7 @@ KNOWN_SUCCESSOR_PATHS = frozenset(
         ACTIVATION_RELATIVE,
         BINDING_RELATIVE,
         RELEASE_CONSUMPTION_RELATIVE,
+        *REVIEW_EVIDENCE_PATHS.values(),
     }
 )
 
@@ -326,6 +332,23 @@ def sha256(root: Path, relative: str) -> str:
     return hashlib.sha256(read_bytes(Path(root), relative)).hexdigest()
 
 
+def file_sha256_map(root: Path, relatives: Iterable[str]) -> dict[str, str]:
+    """Bind a stage bundle to exact current raw bytes without path aliases."""
+
+    paths = tuple(relatives)
+    require(len(paths) == len(frozenset(paths)), "stage bundle contains duplicate path")
+    return {relative: sha256(root, relative) for relative in paths}
+
+
+def alignment_review_target_files(root: Path) -> dict[str, str]:
+    """The alignment review covers its record and every active aligned consumer."""
+
+    return file_sha256_map(
+        root,
+        (ALIGNMENT_RELATIVE, *_post_approval.ALIGNED_CONSUMERS),
+    )
+
+
 def require_exact(mapping: object, keys: Iterable[str], label: str) -> dict[str, Any]:
     require(isinstance(mapping, dict), f"{label} must be object")
     require(set(mapping) == frozenset(keys), f"{label} key set drift")
@@ -364,80 +387,72 @@ def require_commit(value: object, label: str) -> str:
     return value
 
 
-def require_git_oid(value: object, label: str) -> str:
-    require(
-        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) is not None,
-        f"{label} is not a full Git object ID",
-    )
-    return value
-
-
-def require_green_review(
+def require_gate_review(
+    root: Path,
     mapping: dict[str, Any],
-    prefix: str,
-    label: str,
-) -> None:
-    require(mapping[f"{prefix}_completed"] is True, f"{label} is not complete")
-    require_int(mapping[f"{prefix}_id"], f"{label} ID")
-    require(mapping[f"{prefix}_id"] > 0, f"{label} ID must be positive")
-    require(mapping[f"{prefix}_event"] == "COMMENTED", f"{label} event drift")
-    require(mapping[f"{prefix}_verdict"] == "GREEN", f"{label} verdict is not GREEN")
-    require_commit(mapping[f"{prefix}ed_head"], f"{label} reviewed head")
-    require_git_oid(mapping[f"{prefix}ed_tree"], f"{label} reviewed tree")
-
-
-def require_distinct_review(
-    current: dict[str, Any],
-    current_prefix: str,
-    predecessor: dict[str, Any],
-    predecessor_prefix: str,
-    label: str,
-) -> None:
-    require(
-        current[f"{current_prefix}_id"] != predecessor[f"{predecessor_prefix}_id"],
-        f"{label} reuses predecessor review ID",
-    )
-    require(
-        current[f"{current_prefix}ed_head"]
-        != predecessor[f"{predecessor_prefix}ed_head"],
-        f"{label} reuses predecessor reviewed head",
-    )
-    require(
-        current[f"{current_prefix}ed_tree"]
-        != predecessor[f"{predecessor_prefix}ed_tree"],
-        f"{label} reuses predecessor reviewed tree",
-    )
-
-
-def require_fresh_review(
-    current: dict[str, Any],
-    current_prefix: str,
-    label: str,
+    field: str,
+    gate_id: str,
     *,
-    ancestors: Iterable[tuple[dict[str, Any], str]] = (),
-) -> None:
-    """Reject reuse of any consumed review identity in the stage lineage."""
+    target_files: dict[str, str],
+    predecessor_files: dict[str, str],
+    lineage: list[Any],
+    expected_pr_number: int | None = None,
+) -> Any:
+    """Validate and consume one fixed, hash-bound external-review capture.
 
-    current_id = current[f"{current_prefix}_id"]
-    current_head = current[f"{current_prefix}ed_head"]
-    current_tree = current[f"{current_prefix}ed_tree"]
-    consumed: list[tuple[object, object, object]] = [
-        (SOFTWARE_REVIEW_ID, SOFTWARE_REVIEWED_HEAD, SOFTWARE_REVIEWED_TREE),
-        (G1_REVIEW_ID, G1_REVIEWED_HEAD, G1_REVIEWED_TREE),
-        (G2_REVIEW_ID, ALIGNMENT_PREDECESSOR_HEAD, ALIGNMENT_PREDECESSOR_TREE),
-    ]
-    consumed.extend(
-        (
-            record[f"{prefix}_id"],
-            record[f"{prefix}ed_head"],
-            record[f"{prefix}ed_tree"],
-        )
-        for record, prefix in ancestors
+    Stage records carry only the digest of the fixed evidence object.  Review
+    metadata is parsed from the independently captured object and reconciled
+    with its raw GitHub payloads by ``r11a_github_review_evidence``; editable
+    stage JSON never supplies review event, verdict, head, tree, or identity.
+    ``lineage`` makes review identities single-use across the entire call
+    graph rather than merely distinct from the immediately preceding gate.
+    """
+
+    require(gate_id in REVIEW_EVIDENCE_PATHS, f"unknown review gate: {gate_id}")
+    gate_index = REVIEW_GATE_IDS.index(gate_id)
+    observed_lineage = tuple(getattr(identity, "gate_id", None) for identity in lineage)
+    require(
+        observed_lineage == REVIEW_GATE_IDS[:gate_index],
+        f"{gate_id} does not consume the exact immediate review-gate lineage",
     )
-    for review_id, reviewed_head, reviewed_tree in consumed:
-        require(current_id != review_id, f"{label} reuses consumed review ID")
-        require(current_head != reviewed_head, f"{label} reuses consumed reviewed head")
-        require(current_tree != reviewed_tree, f"{label} reuses consumed reviewed tree")
+    reviewed_target_files = dict(target_files)
+    reviewed_predecessor_files = dict(predecessor_files)
+    if gate_index:
+        predecessor_evidence = REVIEW_EVIDENCE_PATHS[REVIEW_GATE_IDS[gate_index - 1]]
+        require(
+            predecessor_evidence not in reviewed_target_files,
+            "review target duplicates its immediate-predecessor evidence binding",
+        )
+        predecessor_identity = lineage[-1]
+        predecessor_digest = require_sha256(
+            getattr(predecessor_identity, "evidence_sha256", None),
+            "immediate-predecessor review-evidence SHA-256",
+        )
+        reviewed_target_files[predecessor_evidence] = predecessor_digest
+    if gate_index >= 2:
+        inherited_evidence = REVIEW_EVIDENCE_PATHS[REVIEW_GATE_IDS[gate_index - 2]]
+        require(
+            inherited_evidence not in reviewed_predecessor_files,
+            "review predecessor duplicates its inherited review-evidence binding",
+        )
+        inherited_identity = lineage[-2]
+        inherited_digest = require_sha256(
+            getattr(inherited_identity, "evidence_sha256", None),
+            "inherited predecessor review-evidence SHA-256",
+        )
+        reviewed_predecessor_files[inherited_evidence] = inherited_digest
+    expected_sha = require_sha256(mapping[field], field)
+    identity = _review_evidence.validate_gate_evidence(
+        Path(root),
+        gate_id,
+        expected_evidence_sha256=expected_sha,
+        expected_pr_number=expected_pr_number,
+        expected_target_files=reviewed_target_files,
+        expected_predecessor_files=reviewed_predecessor_files,
+        consumed=tuple(lineage),
+    )
+    lineage.append(identity)
+    return identity
 
 
 def require_all_false(

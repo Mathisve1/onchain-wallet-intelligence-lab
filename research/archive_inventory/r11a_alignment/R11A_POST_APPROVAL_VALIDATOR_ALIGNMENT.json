@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "alignment_id": "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001",
   "repository": "Mathisve1/onchain-wallet-intelligence-lab",
-  "status": "ALIGNED_INERT_AWAITING_INDEPENDENT_EXACT_HEAD_REVIEW_NO_AWS",
+  "status": "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
   "predecessor": {
     "head": "63526d6c39c9225e647a18693c70ec8e73535ff4",
     "tree": "eedeb4d6166c554b996ede740931c4bacb306f5d"
@@ -12,8 +12,30 @@
     "review_event": "COMMENTED",
     "review_verdict": "GREEN"
   },
+  "prior_exact_head_review": {
+    "review_id": 5049607285,
+    "review_event": "COMMENTED",
+    "review_verdict": "RED",
+    "reviewed_head": "44f9e912ca5b07bbe8f812d57a1706364d9c850b",
+    "reviewed_tree": "739a3d3cf309d40258c8c725c72078ee571a5285"
+  },
+  "seven_finding_remediation": {
+    "finding_ids": [
+      "R11A-ALIGN-ISO-001",
+      "R11A-ALIGN-ISO-002",
+      "R11A-ALIGN-STATE-003",
+      "R11A-ALIGN-REV-004",
+      "R11A-ALIGN-ART-005",
+      "R11A-ALIGN-GATE-006",
+      "R11A-ALIGN-WF-007"
+    ],
+    "remediation_status": "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW",
+    "independent_closure_pending": true,
+    "repository_only": true,
+    "aws_or_runtime_action_performed": false
+  },
   "approved_bound_bytes_unchanged": true,
-  "alignment_implementation_status": "IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REVIEW_NO_AWS",
+  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
   "no_aws_action_performed": true,
   "canonical_approval": {
     "receipt_path": "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json",
@@ -39,8 +61,16 @@
     "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt": "16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3"
   },
   "aligned_consumers": [
+    "governance/r11a_repository_provenance.py",
+    "governance/seal_r11a_v2_preregistration.py",
+    "governance/r11a_github_review_evidence.py",
+    "governance/r11a_post_approval_context.py",
     "governance/r11a_stage_common_r4.py",
+    "governance/r11a_workflow_identity.py",
     "governance/validate_r11a_approval_r4.py",
+    "governance/validate_r11a_g2_owner_approval.py",
+    "governance/validate_r11a_post_approval_validator_alignment.py",
+    "governance/validate_r11a_role_configuration_candidate_r4.py",
     "governance/validate_r11a_role_attestation_r4.py",
     "governance/validate_r11a_role_preflight_evidence_r4.py",
     "governance/validate_r11a_workflow_installation_r4.py",
@@ -48,7 +78,8 @@
     "governance/validate_r11a_activation_r4.py",
     "governance/validate_r11a_runtime_binding_r7.py",
     "governance/_validate_r11a_runtime_binding_core_r7.py",
-    "governance/validate_r11a_execution_artifact_r7.py"
+    "governance/validate_r11a_execution_artifact_r7.py",
+    "governance/validate_r11a_v2_bindings.py"
   ],
   "r7_workflow": {
     "path": "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml",
@@ -83,6 +114,7 @@
   },
   "future_authority_absence": {
     "canonical_artifact_paths": [
+      "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_CREATION_CONFIGURATION_CANDIDATE.json",
       "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
       "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
       "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
@@ -94,13 +126,25 @@
       "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.sha256",
       "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
       "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CANDIDATE.json",
-      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CONSUMPTION.json"
+      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CONSUMPTION.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ALIGNMENT_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_IDENTITY_CONFIGURATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ROLE_ATTESTATION_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_CANDIDATE_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_RELEASE_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_WORKFLOW_INSTALLATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_CANDIDATE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ACTIVATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_RUNTIME_BINDING_REVIEW_EVIDENCE.json"
     ],
     "prohibited_namespace_paths": [
       "research/archive_inventory/r11a_role_attestation",
       "research/archive_inventory/r11a_role_preflight",
       "research/archive_inventory/r11a_workflow_installation",
       "research/archive_inventory/r11a_runtime",
+      "research/archive_inventory/r11a_review_evidence",
       "research/archive_inventory/r11a_evidence",
       "research/archive_inventory/r11a_v2_approval",
       "research/archive_inventory/r11a_v2_runtime",
@@ -119,5 +163,5 @@
     "s3": false
   },
   "independent_exact_head_review_pending": true,
-  "next_gate": "INDEPENDENT_EXACT_HEAD_REVIEW_OF_POST_APPROVAL_VALIDATOR_ALIGNMENT_NO_AWS"
+  "next_gate": "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
 }

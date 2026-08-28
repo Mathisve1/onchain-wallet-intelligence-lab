@@ -10,6 +10,10 @@ import unittest
 from pathlib import Path
 
 from governance import validate_r11a_implementation as validator
+from governance.r11a_repository_provenance import (
+    authenticated_repository_copy,
+    project_historical_r11a_implementation_snapshot,
+)
 from research.archive_inventory.r11a_implementation import collector, limits
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,13 +29,11 @@ class R11AImplementationTests(unittest.TestCase):
         cls.selection = validator.strict_load(validator.SELECTION)
 
     def test_dedicated_validator_passes_in_normal_and_optimized_mode(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            historical_root = Path(directory) / "repository"
-            shutil.copytree(
-                ROOT,
-                historical_root,
-                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.pyo"),
-            )
+        temporary, historical_root = authenticated_repository_copy(
+            ROOT,
+        )
+        with temporary:
+            project_historical_r11a_implementation_snapshot(historical_root)
             shutil.rmtree(
                 historical_root / "research/archive_inventory/r11a_approval",
                 ignore_errors=True,

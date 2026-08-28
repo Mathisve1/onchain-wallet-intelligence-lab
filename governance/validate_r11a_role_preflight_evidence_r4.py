@@ -14,17 +14,16 @@ try:
         PREFLIGHT_CONSUMPTION_RELATIVE,
         PREFLIGHT_EVIDENCE_RELATIVE,
         PREFLIGHT_RELEASE_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROLE_ARN,
         ROOT,
         load,
         require,
         require_commit,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
-        require_git_oid,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -43,17 +42,16 @@ except ModuleNotFoundError:
         PREFLIGHT_CONSUMPTION_RELATIVE,
         PREFLIGHT_EVIDENCE_RELATIVE,
         PREFLIGHT_RELEASE_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROLE_ARN,
         ROOT,
         load,
         require,
         require_commit,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
-        require_git_oid,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -67,18 +65,16 @@ PREFLIGHT_CANDIDATE = ROOT / PREFLIGHT_CANDIDATE_RELATIVE
 PREFLIGHT_RELEASE = ROOT / PREFLIGHT_RELEASE_RELATIVE
 EVIDENCE = ROOT / PREFLIGHT_EVIDENCE_RELATIVE
 CONSUMPTION = ROOT / PREFLIGHT_CONSUMPTION_RELATIVE
+ROLE_ATTESTATION_REVIEW_GATE = "R11A_ROLE_ATTESTATION_REVIEW"
+STS_PREFLIGHT_CANDIDATE_REVIEW_GATE = "R11A_STS_PREFLIGHT_CANDIDATE_REVIEW"
+STS_PREFLIGHT_RELEASE_REVIEW_GATE = "R11A_STS_PREFLIGHT_RELEASE_REVIEW"
 
 CANDIDATE_KEYS = frozenset(
     {
         "schema_version",
         "preflight_candidate_id",
         "status",
-        "role_attestation_review_completed",
-        "role_attestation_review_id",
-        "role_attestation_review_event",
-        "role_attestation_review_verdict",
-        "role_attestation_reviewed_head",
-        "role_attestation_reviewed_tree",
+        "role_attestation_review_evidence_sha256",
         "role_attestation_sha256",
         "alignment_record_sha256",
         "approval_receipt_sha256",
@@ -111,12 +107,7 @@ RELEASE_KEYS = frozenset(
         "preflight_candidate_id",
         "status",
         "preflight_candidate_sha256",
-        "candidate_review_completed",
-        "candidate_review_id",
-        "candidate_review_event",
-        "candidate_review_verdict",
-        "candidate_reviewed_head",
-        "candidate_reviewed_tree",
+        "sts_preflight_candidate_review_evidence_sha256",
         "role_attestation_sha256",
         "alignment_record_sha256",
         "approval_receipt_sha256",
@@ -152,6 +143,7 @@ EVIDENCE_KEYS = frozenset(
         "technical_result",
         "preflight_release_id",
         "preflight_release_sha256",
+        "sts_preflight_release_review_evidence_sha256",
         "role_attestation_sha256",
         "alignment_record_sha256",
         "approval_receipt_sha256",
@@ -203,14 +195,19 @@ def validate_candidate(
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
     runtime_pricing_projection_permitted: bool = False,
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
+    evidence_relative = REVIEW_EVIDENCE_PATHS[ROLE_ATTESTATION_REVIEW_GATE]
     permitted = successor_permissions(
-        frozenset(permitted_successor_paths) | {PREFLIGHT_CANDIDATE_RELATIVE}
+        frozenset(permitted_successor_paths)
+        | {PREFLIGHT_CANDIDATE_RELATIVE, evidence_relative}
     )
-    role_attestation = validate_role(
+    validate_role(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=runtime_pricing_projection_permitted,
+        _review_lineage=lineage,
     )
     candidate = load(
         root,
@@ -229,22 +226,18 @@ def validate_candidate(
         == "CANDIDATE_AWAITING_INDEPENDENT_STS_ONLY_PREFLIGHT_RELEASE_REVIEW_NO_AWS",
         "preflight candidate status drift",
     )
-    require_green_review(candidate, "role_attestation_review", "role attestation review")
-    require_distinct_review(
+    require_gate_review(
+        root,
         candidate,
-        "role_attestation_review",
-        role_attestation,
-        "identity_creation_and_configuration_review",
-        "role attestation review",
-    )
-    require_fresh_review(
-        candidate,
-        "role_attestation_review",
-        "role attestation review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-        ),
+        "role_attestation_review_evidence_sha256",
+        ROLE_ATTESTATION_REVIEW_GATE,
+        target_files={ROLE_ATTESTATION_RELATIVE: sha256(root, ROLE_ATTESTATION_RELATIVE)},
+        predecessor_files={
+            ROLE_CONFIGURATION_CANDIDATE_RELATIVE: sha256(
+                root, ROLE_CONFIGURATION_CANDIDATE_RELATIVE
+            )
+        },
+        lineage=lineage,
     )
     bindings = {
         "role_attestation_sha256": ROLE_ATTESTATION_RELATIVE,
@@ -296,17 +289,24 @@ def validate_release(
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
     runtime_pricing_projection_permitted: bool = False,
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
+    evidence_relative = REVIEW_EVIDENCE_PATHS[STS_PREFLIGHT_CANDIDATE_REVIEW_GATE]
     permitted = successor_permissions(
         frozenset(permitted_successor_paths)
-        | {PREFLIGHT_CANDIDATE_RELATIVE, PREFLIGHT_RELEASE_RELATIVE}
+        | {
+            PREFLIGHT_CANDIDATE_RELATIVE,
+            PREFLIGHT_RELEASE_RELATIVE,
+            evidence_relative,
+        }
     )
     candidate = validate_candidate(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=runtime_pricing_projection_permitted,
+        _review_lineage=lineage,
     )
-    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
     release = load(
         root,
         PREFLIGHT_RELEASE_RELATIVE,
@@ -319,29 +319,18 @@ def validate_release(
     require(release["status"] == "RELEASED_FOR_EXACTLY_ONE_STS_GET_CALLER_IDENTITY_NO_S3", "preflight release status drift")
     require_sha256(release["preflight_candidate_sha256"], "preflight_candidate_sha256")
     require(release["preflight_candidate_sha256"] == sha256(root, PREFLIGHT_CANDIDATE_RELATIVE), "preflight release candidate hash drift")
-    require(release["candidate_review_completed"] is True, "preflight candidate review is not complete")
-    require_int(release["candidate_review_id"], "preflight candidate review ID")
-    require(release["candidate_review_id"] > 0, "preflight candidate review ID must be positive")
-    require(release["candidate_review_event"] == "COMMENTED", "preflight candidate review event drift")
-    require(release["candidate_review_verdict"] == "GREEN", "preflight candidate review verdict is not GREEN")
-    require_commit(release["candidate_reviewed_head"], "candidate_reviewed_head")
-    require_git_oid(release["candidate_reviewed_tree"], "candidate_reviewed_tree")
-    require_distinct_review(
+    require_gate_review(
+        root,
         release,
-        "candidate_review",
-        candidate,
-        "role_attestation_review",
-        "STS preflight candidate review",
-    )
-    require_fresh_review(
-        release,
-        "candidate_review",
-        "STS preflight candidate review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-            (candidate, "role_attestation_review"),
-        ),
+        "sts_preflight_candidate_review_evidence_sha256",
+        STS_PREFLIGHT_CANDIDATE_REVIEW_GATE,
+        target_files={
+            PREFLIGHT_CANDIDATE_RELATIVE: sha256(root, PREFLIGHT_CANDIDATE_RELATIVE)
+        },
+        predecessor_files={
+            ROLE_ATTESTATION_RELATIVE: sha256(root, ROLE_ATTESTATION_RELATIVE)
+        },
+        lineage=lineage,
     )
     bindings = {
         "role_attestation_sha256": ROLE_ATTESTATION_RELATIVE,
@@ -389,7 +378,9 @@ def validate(
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
     runtime_pricing_projection_permitted: bool = False,
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
     permitted = successor_permissions(
         frozenset(permitted_successor_paths)
         | {
@@ -397,12 +388,14 @@ def validate(
             PREFLIGHT_RELEASE_RELATIVE,
             PREFLIGHT_EVIDENCE_RELATIVE,
             PREFLIGHT_CONSUMPTION_RELATIVE,
+            REVIEW_EVIDENCE_PATHS[STS_PREFLIGHT_RELEASE_REVIEW_GATE],
         }
     )
     preflight_release = validate_release(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=runtime_pricing_projection_permitted,
+        _review_lineage=lineage,
     )
     evidence = load(
         root,
@@ -416,6 +409,21 @@ def validate(
     )
     require_exact(evidence, EVIDENCE_KEYS, "STS preflight evidence")
     require_exact(consumption, CONSUMPTION_KEYS, "STS preflight consumption")
+    require_gate_review(
+        root,
+        evidence,
+        "sts_preflight_release_review_evidence_sha256",
+        STS_PREFLIGHT_RELEASE_REVIEW_GATE,
+        target_files={
+            PREFLIGHT_RELEASE_RELATIVE: sha256(root, PREFLIGHT_RELEASE_RELATIVE)
+        },
+        predecessor_files={
+            PREFLIGHT_CANDIDATE_RELATIVE: sha256(
+                root, PREFLIGHT_CANDIDATE_RELATIVE
+            )
+        },
+        lineage=lineage,
+    )
     require(evidence["schema_version"] == "1.0", "preflight evidence schema drift")
     require(
         evidence["preflight_id"]

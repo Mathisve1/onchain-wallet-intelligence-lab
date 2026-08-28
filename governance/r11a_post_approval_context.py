@@ -5,20 +5,38 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 try:
+    from governance import r11a_github_review_evidence as _review_evidence
     from governance import validate_r11a_g2_owner_approval as _g2
+    from governance import r11a_workflow_identity as _workflow_identity
 except ModuleNotFoundError:  # Direct `python governance/<validator>.py` execution.
+    import r11a_github_review_evidence as _review_evidence
     import validate_r11a_g2_owner_approval as _g2
+    import r11a_workflow_identity as _workflow_identity
 
 ROOT = _g2.ROOT
 REPOSITORY = _g2.REPOSITORY
 
 ALIGNMENT_ID = "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001"
 ALIGNMENT_PATH = _g2.ALIGNMENT_PATH
-ALIGNMENT_STATUS = "ALIGNED_INERT_AWAITING_INDEPENDENT_EXACT_HEAD_REVIEW_NO_AWS"
+ALIGNMENT_STATUS = (
+    "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS"
+)
 
 PREDECESSOR_HEAD = "63526d6c39c9225e647a18693c70ec8e73535ff4"
 PREDECESSOR_TREE = "eedeb4d6166c554b996ede740931c4bacb306f5d"
 G2_REVIEW_ID = 5033303996
+RED_REVIEW_ID = 5049607285
+RED_REVIEWED_HEAD = "44f9e912ca5b07bbe8f812d57a1706364d9c850b"
+RED_REVIEWED_TREE = "739a3d3cf309d40258c8c725c72078ee571a5285"
+REMEDIATED_FINDING_IDS = (
+    "R11A-ALIGN-ISO-001",
+    "R11A-ALIGN-ISO-002",
+    "R11A-ALIGN-STATE-003",
+    "R11A-ALIGN-REV-004",
+    "R11A-ALIGN-ART-005",
+    "R11A-ALIGN-GATE-006",
+    "R11A-ALIGN-WF-007",
+)
 
 SOFTWARE_REVIEW_ID = _g2.SOFTWARE_REVIEW
 SOFTWARE_REVIEWED_HEAD = _g2.SOFTWARE_HEAD
@@ -45,11 +63,21 @@ RUNTIME_PRICING_TARGET_SHA = (
     "5e5a6469b921a15cbac1e2f03184e2dfcf6ffee51dc2e86833e9556a5c23c226"
 )
 
-NEXT_GATE = "INDEPENDENT_EXACT_HEAD_REVIEW_OF_POST_APPROVAL_VALIDATOR_ALIGNMENT_NO_AWS"
+NEXT_GATE = (
+    "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
+)
 
 ALIGNED_CONSUMERS = (
+    "governance/r11a_repository_provenance.py",
+    "governance/seal_r11a_v2_preregistration.py",
+    "governance/r11a_github_review_evidence.py",
+    "governance/r11a_post_approval_context.py",
     "governance/r11a_stage_common_r4.py",
+    "governance/r11a_workflow_identity.py",
     "governance/validate_r11a_approval_r4.py",
+    "governance/validate_r11a_g2_owner_approval.py",
+    "governance/validate_r11a_post_approval_validator_alignment.py",
+    "governance/validate_r11a_role_configuration_candidate_r4.py",
     "governance/validate_r11a_role_attestation_r4.py",
     "governance/validate_r11a_role_preflight_evidence_r4.py",
     "governance/validate_r11a_workflow_installation_r4.py",
@@ -58,6 +86,7 @@ ALIGNED_CONSUMERS = (
     "governance/validate_r11a_runtime_binding_r7.py",
     "governance/_validate_r11a_runtime_binding_core_r7.py",
     "governance/validate_r11a_execution_artifact_r7.py",
+    "governance/validate_r11a_v2_bindings.py",
 )
 
 FUTURE_STAGE_PATHS = _g2.KNOWN_FUTURE_STAGE_PATHS
@@ -223,6 +252,19 @@ def _validate_successor_surface(
             )
             _require(path == root / PurePosixPath(relative), "successor path ambiguity")
 
+    try:
+        _, installed_information = _g2._inspect_path(
+            root,
+            _g2.INSTALLED_WORKFLOW,
+            allow_missing=True,
+        )
+        _workflow_identity.validate_workflow_identity_inventory(
+            root,
+            canonical_installed=(installed_information is not None),
+        )
+    except (_g2.R11AG2ApprovalError, _workflow_identity.R11AWorkflowIdentityError) as exc:
+        raise PostApprovalContextError(str(exc)) from exc
+
 
 def validate_approval_context(
     root: Path = ROOT,
@@ -242,6 +284,60 @@ def validate_approval_context(
         _scalar_leaf_count(record) == APPROVAL_SCALAR_LEAVES,
         "canonical approval record scalar leaf count drift",
     )
+    def present(relative: str) -> bool:
+        try:
+            _, information = _g2._inspect_path(root, relative, allow_missing=True)
+        except _g2.R11AG2ApprovalError as exc:
+            raise PostApprovalContextError(str(exc)) from exc
+        if information is None:
+            return False
+        _require(stat.S_ISREG(information.st_mode), f"live stage path is not regular: {relative}")
+        _require(information.st_nlink == 1, f"live stage path has hard-link alias: {relative}")
+        return True
+
+    live_stage_state = {
+        "r11a_successor_role_created": present(
+            "research/archive_inventory/r11a_role_attestation/"
+            "R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json"
+        ),
+        "r11a_successor_role_attestation_present": present(
+            "research/archive_inventory/r11a_role_attestation/"
+            "R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json"
+        ),
+        "r11a_sts_preflight": present(
+            "research/archive_inventory/r11a_role_preflight/"
+            "R11A_SUCCESSOR_ROLE_STS_PREFLIGHT_ATTESTATION.json"
+        ),
+        "r11a_workflow_installed": present(
+            ".github/workflows/"
+            "hyperliquid-archive-r11a-identity-boundary-diagnostic.yml"
+        ),
+        "r11a_release_present": present(
+            "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json"
+        ),
+        "r11a_runtime_release": present(
+            "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json"
+        ),
+        "r11a_runtime_activation": present(
+            "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json"
+        ),
+        "r11a_runtime_binding": present(
+            "research/archive_inventory/r11a_runtime/R11A_RUNTIME_BINDING_R7.json"
+        ),
+        "r11a_runtime_binding_review": present(
+            _review_evidence.evidence_path("R11A_RUNTIME_BINDING_REVIEW")
+        ),
+    }
+    try:
+        _workflow_identity.validate_post_g2_project_state(
+            root,
+            approval_id=_g2.APPROVAL_ID,
+            approval_text_sha256=APPROVAL_STATEMENT_SHA,
+            approval_record=record,
+            live_stage_state=live_stage_state,
+        )
+    except _workflow_identity.R11AProjectStateError as exc:
+        raise PostApprovalContextError(str(exc)) from exc
     _validate_successor_surface(root, permitted)
     return record
 
@@ -262,9 +358,26 @@ def expected_alignment_record(root: Path = ROOT) -> dict[str, Any]:
             "review_event": "COMMENTED",
             "review_verdict": "GREEN",
         },
+        "prior_exact_head_review": {
+            "review_id": RED_REVIEW_ID,
+            "review_event": "COMMENTED",
+            "review_verdict": "RED",
+            "reviewed_head": RED_REVIEWED_HEAD,
+            "reviewed_tree": RED_REVIEWED_TREE,
+        },
+        "seven_finding_remediation": {
+            "finding_ids": list(REMEDIATED_FINDING_IDS),
+            "remediation_status": (
+                "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW"
+            ),
+            "independent_closure_pending": True,
+            "repository_only": True,
+            "aws_or_runtime_action_performed": False,
+        },
         "approved_bound_bytes_unchanged": True,
         "alignment_implementation_status": (
-            "IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REVIEW_NO_AWS"
+            "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_"
+            "INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS"
         ),
         "no_aws_action_performed": True,
         "canonical_approval": {

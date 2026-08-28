@@ -10,6 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# This direct-script validator is invoked by the immutable R7 workflow before
+# the aligned runtime-binding gate.  Disable bytecode before its only project
+# import so the physical checkout remains an exact, cache-free Git snapshot.
+sys.dont_write_bytecode = True
+
 BINDING = ROOT / "research/archive_inventory/r11a_v2/R11A_V2_PREREGISTRATION_BINDINGS.json"
 
 

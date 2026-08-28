@@ -8,61 +8,64 @@ try:
         APPROVED_PERMISSION_SHA,
         APPROVED_TRUST_SHA,
         ALIGNMENT_ID,
-        ALIGNMENT_PREDECESSOR_HEAD,
-        ALIGNMENT_PREDECESSOR_TREE,
         ALIGNMENT_RELATIVE,
         APPROVAL_RECEIPT_SHA,
         G2_REVIEW_ID,
         PERMISSION_POLICY_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ARN,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROOT,
         TRUST_POLICY_RELATIVE,
+        alignment_review_target_files,
         load,
         require,
         require_exact,
-        require_fresh_review,
+        require_gate_review,
         require_int,
-        require_commit,
-        require_git_oid,
         require_sha256,
         sha256,
         stage_authority,
         successor_permissions,
         trading_authority,
     )
-    from governance.validate_r11a_approval_r4 import validate as validate_approval
+    from governance.validate_r11a_role_configuration_candidate_r4 import (
+        validate as validate_configuration_candidate,
+    )
 except ModuleNotFoundError:
     from r11a_stage_common_r4 import (
         APPROVED_PERMISSION_SHA,
         APPROVED_TRUST_SHA,
         ALIGNMENT_ID,
-        ALIGNMENT_PREDECESSOR_HEAD,
-        ALIGNMENT_PREDECESSOR_TREE,
         ALIGNMENT_RELATIVE,
         APPROVAL_RECEIPT_SHA,
         G2_REVIEW_ID,
         PERMISSION_POLICY_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ARN,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROOT,
         TRUST_POLICY_RELATIVE,
+        alignment_review_target_files,
         load,
         require,
         require_exact,
-        require_fresh_review,
+        require_gate_review,
         require_int,
-        require_commit,
-        require_git_oid,
         require_sha256,
         sha256,
         stage_authority,
         successor_permissions,
         trading_authority,
     )
-    from validate_r11a_approval_r4 import validate as validate_approval
+    from validate_r11a_role_configuration_candidate_r4 import (
+        validate as validate_configuration_candidate,
+    )
 
 ATTESTATION = ROOT / ROLE_ATTESTATION_RELATIVE
+IDENTITY_CONFIGURATION_REVIEW_GATE = "R11A_IDENTITY_CONFIGURATION_REVIEW"
 ATTESTATION_KEYS = frozenset(
     {
         "schema_version",
@@ -72,18 +75,8 @@ ATTESTATION_KEYS = frozenset(
         "alignment_record_sha256",
         "approval_receipt_sha256",
         "g2_review_id",
-        "alignment_review_completed",
-        "alignment_review_id",
-        "alignment_review_event",
-        "alignment_review_verdict",
-        "alignment_reviewed_head",
-        "alignment_reviewed_tree",
-        "identity_creation_and_configuration_review_completed",
-        "identity_creation_and_configuration_review_id",
-        "identity_creation_and_configuration_review_event",
-        "identity_creation_and_configuration_review_verdict",
-        "identity_creation_and_configuration_reviewed_head",
-        "identity_creation_and_configuration_reviewed_tree",
+        "role_configuration_candidate_sha256",
+        "identity_configuration_review_evidence_sha256",
         "account_id",
         "role_arn",
         "role_max_session_duration_seconds",
@@ -114,14 +107,23 @@ def validate(
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
     runtime_pricing_projection_permitted: bool = False,
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
+    evidence_relative = REVIEW_EVIDENCE_PATHS[IDENTITY_CONFIGURATION_REVIEW_GATE]
     permitted = successor_permissions(
-        frozenset(permitted_successor_paths) | {ROLE_ATTESTATION_RELATIVE}
+        frozenset(permitted_successor_paths)
+        | {
+            ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
+            ROLE_ATTESTATION_RELATIVE,
+            evidence_relative,
+        }
     )
-    validate_approval(
+    validate_configuration_candidate(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=runtime_pricing_projection_permitted,
+        _review_lineage=lineage,
     )
     attestation = load(
         root,
@@ -151,71 +153,27 @@ def validate(
     )
     require_int(attestation["g2_review_id"], "G2 review ID")
     require(attestation["g2_review_id"] == G2_REVIEW_ID, "role G2 review lineage drift")
-    require(attestation["alignment_review_completed"] is True, "alignment review is not complete")
-    require_int(attestation["alignment_review_id"], "alignment review ID")
-    require(attestation["alignment_review_id"] > 0, "alignment review ID must be positive")
-    require(attestation["alignment_review_id"] != G2_REVIEW_ID, "alignment review reuses G2 review")
-    require(attestation["alignment_review_event"] == "COMMENTED", "alignment review event drift")
-    require(attestation["alignment_review_verdict"] == "GREEN", "alignment review verdict is not GREEN")
-    require_commit(attestation["alignment_reviewed_head"], "alignment_reviewed_head")
-    require_git_oid(attestation["alignment_reviewed_tree"], "alignment_reviewed_tree")
-    require(
-        attestation["alignment_reviewed_head"] != ALIGNMENT_PREDECESSOR_HEAD,
-        "alignment review does not review an alignment successor",
+    require_sha256(
+        attestation["role_configuration_candidate_sha256"],
+        "role_configuration_candidate_sha256",
     )
     require(
-        attestation["alignment_reviewed_tree"] != ALIGNMENT_PREDECESSOR_TREE,
-        "alignment review tree reuses predecessor tree",
+        attestation["role_configuration_candidate_sha256"]
+        == sha256(root, ROLE_CONFIGURATION_CANDIDATE_RELATIVE),
+        "role configuration candidate binding drift",
     )
-    require_fresh_review(attestation, "alignment_review", "alignment review")
-    require(
-        attestation["identity_creation_and_configuration_review_completed"] is True,
-        "identity creation/configuration review is not complete",
-    )
-    require_int(
-        attestation["identity_creation_and_configuration_review_id"],
-        "identity creation/configuration review ID",
-    )
-    require(
-        attestation["identity_creation_and_configuration_review_id"] > 0,
-        "identity creation/configuration review ID must be positive",
-    )
-    require(
-        attestation["identity_creation_and_configuration_review_id"]
-        != attestation["alignment_review_id"],
-        "identity creation/configuration review is not separate from alignment review",
-    )
-    require(
-        attestation["identity_creation_and_configuration_review_event"] == "COMMENTED",
-        "identity creation/configuration review event drift",
-    )
-    require(
-        attestation["identity_creation_and_configuration_review_verdict"] == "GREEN",
-        "identity creation/configuration review verdict is not GREEN",
-    )
-    require_commit(
-        attestation["identity_creation_and_configuration_reviewed_head"],
-        "identity_creation_and_configuration_reviewed_head",
-    )
-    require_git_oid(
-        attestation["identity_creation_and_configuration_reviewed_tree"],
-        "identity_creation_and_configuration_reviewed_tree",
-    )
-    require(
-        attestation["identity_creation_and_configuration_reviewed_head"]
-        != attestation["alignment_reviewed_head"],
-        "identity creation/configuration review reuses alignment-reviewed head",
-    )
-    require(
-        attestation["identity_creation_and_configuration_reviewed_tree"]
-        != attestation["alignment_reviewed_tree"],
-        "identity creation/configuration review reuses alignment-reviewed tree",
-    )
-    require_fresh_review(
+    require_gate_review(
+        root,
         attestation,
-        "identity_creation_and_configuration_review",
-        "identity creation/configuration review",
-        ancestors=((attestation, "alignment_review"),),
+        "identity_configuration_review_evidence_sha256",
+        IDENTITY_CONFIGURATION_REVIEW_GATE,
+        target_files={
+            ROLE_CONFIGURATION_CANDIDATE_RELATIVE: sha256(
+                root, ROLE_CONFIGURATION_CANDIDATE_RELATIVE
+            )
+        },
+        predecessor_files=alignment_review_target_files(root),
+        lineage=lineage,
     )
     require(attestation["account_id"] == "630956766927", "role AWS account drift")
     require(attestation["role_arn"] == ROLE_ARN, "successor role ARN drift")

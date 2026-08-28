@@ -11,24 +11,22 @@ try:
         DIAGNOSTIC_ID,
         IMPLEMENTATION_RELATIVE,
         INSTALLATION_RELATIVE,
-        PREFLIGHT_CANDIDATE_RELATIVE,
-        PREFLIGHT_RELEASE_RELATIVE,
+        PREFLIGHT_CONSUMPTION_RELATIVE,
+        PREFLIGHT_EVIDENCE_RELATIVE,
         PRICING_TARGET_RELATIVE,
         RELEASE_CANDIDATE_RELATIVE,
         RELEASE_DIGEST_RELATIVE,
         RELEASE_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
-        ROLE_ATTESTATION_RELATIVE,
         RUNNER_RELATIVE,
         SELECTION_RELATIVE,
         WORKFLOW_RELATIVE,
         load,
         read_bytes,
         require,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -45,24 +43,22 @@ except ModuleNotFoundError:
         DIAGNOSTIC_ID,
         IMPLEMENTATION_RELATIVE,
         INSTALLATION_RELATIVE,
-        PREFLIGHT_CANDIDATE_RELATIVE,
-        PREFLIGHT_RELEASE_RELATIVE,
+        PREFLIGHT_CONSUMPTION_RELATIVE,
+        PREFLIGHT_EVIDENCE_RELATIVE,
         PRICING_TARGET_RELATIVE,
         RELEASE_CANDIDATE_RELATIVE,
         RELEASE_DIGEST_RELATIVE,
         RELEASE_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROOT,
-        ROLE_ATTESTATION_RELATIVE,
         RUNNER_RELATIVE,
         SELECTION_RELATIVE,
         WORKFLOW_RELATIVE,
         load,
         read_bytes,
         require,
-        require_distinct_review,
         require_exact,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_int,
         require_sha256,
         sha256,
@@ -77,6 +73,8 @@ RELEASE = ROOT / RELEASE_RELATIVE
 RELEASE_DIGEST = ROOT / RELEASE_DIGEST_RELATIVE
 APPROVAL_TEXT = ROOT / APPROVAL_TEXT_RELATIVE
 ARTIFACT_VALIDATOR = ROOT / ARTIFACT_VALIDATOR_RELATIVE
+WORKFLOW_INSTALLATION_REVIEW_GATE = "R11A_WORKFLOW_INSTALLATION_REVIEW"
+EXECUTION_RELEASE_CANDIDATE_REVIEW_GATE = "R11A_EXECUTION_RELEASE_CANDIDATE_REVIEW"
 
 CAP_KEYS = frozenset(
     {
@@ -118,12 +116,7 @@ CANDIDATE_KEYS = frozenset(
         "selection_sha256",
         "runner_sha256",
         "validator_sha256",
-        "workflow_installation_review_completed",
-        "workflow_installation_review_id",
-        "workflow_installation_review_event",
-        "workflow_installation_review_verdict",
-        "workflow_installation_reviewed_head",
-        "workflow_installation_reviewed_tree",
+        "workflow_installation_review_evidence_sha256",
         *CAP_KEYS,
         "single_workflow_dispatch_authorized",
         "owner_dispatch_required",
@@ -151,12 +144,7 @@ RELEASE_KEYS = frozenset(
         "collector_sha256",
         "validator_sha256",
         "selection_sha256",
-        "release_candidate_review_completed",
-        "release_candidate_review_id",
-        "release_candidate_review_event",
-        "release_candidate_review_verdict",
-        "release_candidate_reviewed_head",
-        "release_candidate_reviewed_tree",
+        "execution_release_candidate_review_evidence_sha256",
         *CAP_KEYS,
         "single_workflow_dispatch_authorized_by_release",
         "single_workflow_dispatch_eligible_after_activation",
@@ -212,18 +200,22 @@ def validate_candidate(
     root: Path = ROOT,
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
     permitted = successor_permissions(
-        frozenset(permitted_successor_paths) | {RELEASE_CANDIDATE_RELATIVE}
+        frozenset(permitted_successor_paths)
+        | {
+            RELEASE_CANDIDATE_RELATIVE,
+            REVIEW_EVIDENCE_PATHS[WORKFLOW_INSTALLATION_REVIEW_GATE],
+        }
     )
-    installation_contract = validate_installation(
+    validate_installation(
         root,
         permitted_successor_paths=permitted,
         runtime_pricing_projection_permitted=True,
+        _review_lineage=lineage,
     )
-    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
-    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
-    preflight_release = load(root, PREFLIGHT_RELEASE_RELATIVE)
     candidate = load(
         root,
         RELEASE_CANDIDATE_RELATIVE,
@@ -255,29 +247,21 @@ def validate_candidate(
         require(candidate[key] == sha256(root, relative), f"release candidate {key} drift")
     require_sha256(candidate["approval_receipt_sha256"], "approval_receipt_sha256")
     require(candidate["approval_receipt_sha256"] == APPROVAL_RECEIPT_SHA, "release candidate approval binding drift")
-    require_green_review(
+    require_gate_review(
+        root,
         candidate,
-        "workflow_installation_review",
-        "workflow installation review",
-    )
-    require_distinct_review(
-        candidate,
-        "workflow_installation_review",
-        installation_contract,
-        "sts_preflight_review",
-        "workflow installation review",
-    )
-    require_fresh_review(
-        candidate,
-        "workflow_installation_review",
-        "workflow installation review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-            (preflight_candidate, "role_attestation_review"),
-            (preflight_release, "candidate_review"),
-            (installation_contract, "sts_preflight_review"),
-        ),
+        "workflow_installation_review_evidence_sha256",
+        WORKFLOW_INSTALLATION_REVIEW_GATE,
+        target_files={
+            INSTALLATION_RELATIVE: sha256(root, INSTALLATION_RELATIVE),
+            WORKFLOW_RELATIVE: sha256(root, WORKFLOW_RELATIVE),
+            PRICING_TARGET_RELATIVE: sha256(root, PRICING_TARGET_RELATIVE),
+        },
+        predecessor_files={
+            PREFLIGHT_EVIDENCE_RELATIVE: sha256(root, PREFLIGHT_EVIDENCE_RELATIVE),
+            PREFLIGHT_CONSUMPTION_RELATIVE: sha256(root, PREFLIGHT_CONSUMPTION_RELATIVE),
+        },
+        lineage=lineage,
     )
     _validate_caps(candidate, "release candidate")
     require(candidate["single_workflow_dispatch_authorized"] is False, "release candidate self-authorizes dispatch")
@@ -298,16 +282,23 @@ def validate(
     root: Path = ROOT,
     *,
     permitted_successor_paths: frozenset[str] = frozenset(),
+    _review_lineage: list[object] | None = None,
 ) -> dict[str, object]:
+    lineage = [] if _review_lineage is None else _review_lineage
     permitted = successor_permissions(
         frozenset(permitted_successor_paths)
-        | {RELEASE_CANDIDATE_RELATIVE, RELEASE_RELATIVE, RELEASE_DIGEST_RELATIVE}
+        | {
+            RELEASE_CANDIDATE_RELATIVE,
+            RELEASE_RELATIVE,
+            RELEASE_DIGEST_RELATIVE,
+            REVIEW_EVIDENCE_PATHS[EXECUTION_RELEASE_CANDIDATE_REVIEW_GATE],
+        }
     )
-    candidate = validate_candidate(root, permitted_successor_paths=permitted)
-    role_attestation = load(root, ROLE_ATTESTATION_RELATIVE)
-    preflight_candidate = load(root, PREFLIGHT_CANDIDATE_RELATIVE)
-    preflight_release = load(root, PREFLIGHT_RELEASE_RELATIVE)
-    installation_contract = load(root, INSTALLATION_RELATIVE)
+    candidate = validate_candidate(
+        root,
+        permitted_successor_paths=permitted,
+        _review_lineage=lineage,
+    )
     release = load(root, RELEASE_RELATIVE, missing_label="execution release is absent")
     require_exact(release, RELEASE_KEYS, "execution release")
     detached_raw = read_bytes(
@@ -345,30 +336,20 @@ def validate(
         require(release[key] == sha256(root, relative), f"release {key} drift")
     require_sha256(release["approval_receipt_sha256"], "approval_receipt_sha256")
     require(release["approval_receipt_sha256"] == APPROVAL_RECEIPT_SHA, "release approval receipt binding drift")
-    require_green_review(
+    require_gate_review(
+        root,
         release,
-        "release_candidate_review",
-        "execution release candidate review",
-    )
-    require_distinct_review(
-        release,
-        "release_candidate_review",
-        candidate,
-        "workflow_installation_review",
-        "execution release candidate review",
-    )
-    require_fresh_review(
-        release,
-        "release_candidate_review",
-        "execution release candidate review",
-        ancestors=(
-            (role_attestation, "alignment_review"),
-            (role_attestation, "identity_creation_and_configuration_review"),
-            (preflight_candidate, "role_attestation_review"),
-            (preflight_release, "candidate_review"),
-            (installation_contract, "sts_preflight_review"),
-            (candidate, "workflow_installation_review"),
-        ),
+        "execution_release_candidate_review_evidence_sha256",
+        EXECUTION_RELEASE_CANDIDATE_REVIEW_GATE,
+        target_files={
+            RELEASE_CANDIDATE_RELATIVE: sha256(root, RELEASE_CANDIDATE_RELATIVE)
+        },
+        predecessor_files={
+            INSTALLATION_RELATIVE: sha256(root, INSTALLATION_RELATIVE),
+            WORKFLOW_RELATIVE: sha256(root, WORKFLOW_RELATIVE),
+            PRICING_TARGET_RELATIVE: sha256(root, PRICING_TARGET_RELATIVE),
+        },
+        lineage=lineage,
     )
     _validate_caps(release, "release")
     require(

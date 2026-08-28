@@ -11,6 +11,10 @@ permissions:
 
 env:
   EXACT_CI_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  # Repository-semantic validators reject every cache/bytecode entry.  Keep
+  # the physical checkout cache-free for the complete discovery process;
+  # focused adversarial tests create cache material only in temporary roots.
+  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
   test:

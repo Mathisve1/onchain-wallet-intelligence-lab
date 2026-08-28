@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,7 +37,9 @@ try:
         RELEASE_RELATIVE,
         RELEASE_CONSUMPTION_RELATIVE,
         RESOURCE_FEASIBILITY_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROLE_DECISION_RELATIVE,
         ROOT,
         RUNNER_RELATIVE,
@@ -52,9 +53,7 @@ try:
         read_bytes,
         require_commit as stage_require_commit,
         require_exact,
-        require_distinct_review,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_absent,
         require_sha256 as stage_require_sha256,
         sha256 as stage_sha256,
@@ -95,7 +94,9 @@ except ModuleNotFoundError:
         RELEASE_RELATIVE,
         RELEASE_CONSUMPTION_RELATIVE,
         RESOURCE_FEASIBILITY_RELATIVE,
+        REVIEW_EVIDENCE_PATHS,
         ROLE_ATTESTATION_RELATIVE,
+        ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
         ROLE_DECISION_RELATIVE,
         ROOT,
         RUNNER_RELATIVE,
@@ -109,9 +110,7 @@ except ModuleNotFoundError:
         read_bytes,
         require_commit as stage_require_commit,
         require_exact,
-        require_distinct_review,
-        require_fresh_review,
-        require_green_review,
+        require_gate_review,
         require_absent,
         require_sha256 as stage_require_sha256,
         sha256 as stage_sha256,
@@ -123,6 +122,8 @@ except ModuleNotFoundError:
 
 IMPLEMENTATION_ID = "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-CORRECTIVE-R7"
 BINDING = ROOT / BINDING_RELATIVE
+ACTIVATION_REVIEW_GATE = "R11A_ACTIVATION_REVIEW"
+RUNTIME_BINDING_REVIEW_GATE = "R11A_RUNTIME_BINDING_REVIEW"
 
 # Runtime behavior plus every governance consumer whose result is relied upon
 # by the binding.  The wrapper adds private R7 cores before validation.
@@ -203,6 +204,7 @@ REQUIRED_BOUND_PATHS = tuple(
             PRICING_TARGET_RELATIVE,
             APPROVAL_JSON_RELATIVE,
             APPROVAL_TEXT_RELATIVE,
+            ROLE_CONFIGURATION_CANDIDATE_RELATIVE,
             ROLE_ATTESTATION_RELATIVE,
             PREFLIGHT_CANDIDATE_RELATIVE,
             PREFLIGHT_RELEASE_RELATIVE,
@@ -220,6 +222,11 @@ REQUIRED_BOUND_PATHS = tuple(
             ROLE_DECISION_RELATIVE,
             DEPENDENCIES_RELATIVE,
             RESOURCE_FEASIBILITY_RELATIVE,
+            *(
+                relative
+                for gate_id, relative in REVIEW_EVIDENCE_PATHS.items()
+                if gate_id != RUNTIME_BINDING_REVIEW_GATE
+            ),
             *TRANSITIVE_CODE_PATHS,
         },
         key=lambda value: value.encode("utf-8"),
@@ -263,7 +270,6 @@ BINDING_KEYS = frozenset(
         "approval_id",
         "alignment_id",
         "status",
-        "canonical_commit",
         "workflow_name",
         "workflow_file",
         "candidate_workflow_path",
@@ -271,12 +277,7 @@ BINDING_KEYS = frozenset(
         "runtime_pricing_source_path",
         "runtime_pricing_installed_path",
         "single_use_window_start_utc",
-        "activation_review_completed",
-        "activation_review_id",
-        "activation_review_event",
-        "activation_review_verdict",
-        "activation_reviewed_head",
-        "activation_reviewed_tree",
+        "activation_review_evidence_sha256",
         "bound_files",
         "runtime_authority",
         "science_state",
@@ -363,10 +364,20 @@ def _utc_timestamp(value: object, label: str) -> str:
     return value
 
 
-def validate(expected_commit: str, run_attempt: int, *, root: Path = ROOT) -> dict[str, Any]:
-    require_commit(expected_commit, "expected commit")
-    require(isinstance(run_attempt, int) and not isinstance(run_attempt, bool), "run attempt must be integer")
-    require(run_attempt == 1, "runtime binding requires workflow run attempt one")
+def validate_binding(
+    *,
+    root: Path = ROOT,
+    _review_lineage: list[object] | None = None,
+) -> dict[str, Any]:
+    """Validate the immutable binding subject and consume its activation review.
+
+    Dispatch identity and the separate review of these binding bytes are outer
+    concerns.  Keeping them out of this record avoids the impossible cycle in
+    which a binding would need to contain either its own future Git commit or
+    the digest of evidence that can exist only after the binding was reviewed.
+    """
+
+    lineage = [] if _review_lineage is None else _review_lineage
     try:
         permitted = successor_permissions(
             {
@@ -382,35 +393,33 @@ def validate(expected_commit: str, run_attempt: int, *, root: Path = ROOT) -> di
                 RELEASE_DIGEST_RELATIVE,
                 ACTIVATION_RELATIVE,
                 BINDING_RELATIVE,
+                REVIEW_EVIDENCE_PATHS[ACTIVATION_REVIEW_GATE],
+                REVIEW_EVIDENCE_PATHS[RUNTIME_BINDING_REVIEW_GATE],
             }
         )
-        activation = validate_activation(root, permitted_successor_paths=permitted)
+        activation = validate_activation(
+            root,
+            permitted_successor_paths=permitted,
+            _review_lineage=lineage,
+        )
         require_absent(root, RELEASE_CONSUMPTION_RELATIVE, "execution release consumption")
     except AssertionError as exc:
         raise RuntimeBindingError(str(exc)) from exc
     try:
         binding = stage_load(root, BINDING_RELATIVE, missing_label="R7 runtime binding is absent")
-        role_attestation = stage_load(root, ROLE_ATTESTATION_RELATIVE)
-        preflight_candidate = stage_load(root, PREFLIGHT_CANDIDATE_RELATIVE)
-        preflight_release = stage_load(root, PREFLIGHT_RELEASE_RELATIVE)
-        installation_contract = stage_load(root, INSTALLATION_RELATIVE)
-        release_candidate = stage_load(root, RELEASE_CANDIDATE_RELATIVE)
-        release = stage_load(root, RELEASE_RELATIVE)
     except AssertionError as exc:
         raise RuntimeBindingError(str(exc)) from exc
     try:
         require_exact(binding, BINDING_KEYS, "runtime binding")
     except AssertionError as exc:
         raise RuntimeBindingError(str(exc)) from exc
-    require(binding["schema_version"] == "1.0", "runtime binding schema version drift")
+    require(binding["schema_version"] == "2.0", "runtime binding schema version drift")
     require(binding["binding_id"] == "HL-ARCHIVE-R11A-RUNTIME-BINDING-R7-001", "runtime binding ID drift")
     require(binding["diagnostic_id"] == DIAGNOSTIC_ID, "diagnostic ID drift")
     require(binding["implementation_id"] == IMPLEMENTATION_ID, "implementation ID drift")
     require(binding["approval_id"] == APPROVAL_ID, "approval ID drift")
     require(binding["alignment_id"] == ALIGNMENT_ID, "alignment ID drift")
     require(binding["status"] == "ACTIVE_FOR_EXACTLY_ONE_CANONICAL_R11A_R7_RUN", "runtime binding status drift")
-    canonical_commit = require_commit(binding["canonical_commit"], "canonical_commit")
-    require(canonical_commit == expected_commit, "runtime binding does not bind dispatch commit")
     require(binding["workflow_name"] == WORKFLOW_NAME, "workflow name drift")
     require(binding["workflow_file"] == WORKFLOW_FILE, "workflow file drift")
     require(binding["candidate_workflow_path"] == CANDIDATE_RELATIVE, "candidate workflow path drift")
@@ -418,28 +427,19 @@ def validate(expected_commit: str, run_attempt: int, *, root: Path = ROOT) -> di
     require(binding["runtime_pricing_source_path"] == PRICING_SOURCE_RELATIVE, "runtime pricing source path drift")
     require(binding["runtime_pricing_installed_path"] == PRICING_TARGET_RELATIVE, "runtime pricing target path drift")
     try:
-        require_green_review(binding, "activation_review", "single-use activation review")
-        require_distinct_review(
+        require_gate_review(
+            root,
             binding,
-            "activation_review",
-            activation,
-            "execution_release_review",
-            "single-use activation review",
-        )
-        require_fresh_review(
-            binding,
-            "activation_review",
-            "single-use activation review",
-            ancestors=(
-                (role_attestation, "alignment_review"),
-                (role_attestation, "identity_creation_and_configuration_review"),
-                (preflight_candidate, "role_attestation_review"),
-                (preflight_release, "candidate_review"),
-                (installation_contract, "sts_preflight_review"),
-                (release_candidate, "workflow_installation_review"),
-                (release, "release_candidate_review"),
-                (activation, "execution_release_review"),
-            ),
+            "activation_review_evidence_sha256",
+            ACTIVATION_REVIEW_GATE,
+            target_files={
+                ACTIVATION_RELATIVE: stage_sha256(root, ACTIVATION_RELATIVE),
+            },
+            predecessor_files={
+                RELEASE_RELATIVE: stage_sha256(root, RELEASE_RELATIVE),
+                RELEASE_DIGEST_RELATIVE: stage_sha256(root, RELEASE_DIGEST_RELATIVE),
+            },
+            lineage=lineage,
         )
     except AssertionError as exc:
         raise RuntimeBindingError(str(exc)) from exc
@@ -462,7 +462,6 @@ def validate(expected_commit: str, run_attempt: int, *, root: Path = ROOT) -> di
         pricing_projection(root)
     except AssertionError as exc:
         raise RuntimeBindingError(str(exc)) from exc
-    require(activation["canonical_activation_merge_commit"] == canonical_commit, "activation does not bind dispatch commit")
     require(activation["single_use_window_start_utc"] == start, "runtime binding and activation windows differ")
 
     require_typed_exact(
@@ -483,17 +482,3 @@ def validate(expected_commit: str, run_attempt: int, *, root: Path = ROOT) -> di
     require(binding["r11_closed"] is False, "runtime binding prematurely closes R11")
     require(binding["r12_ready"] is False, "runtime binding prematurely opens R12")
     return binding
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate exact post-approval R11A R7 runtime binding")
-    parser.add_argument("--expected-commit", required=True)
-    parser.add_argument("--run-attempt", required=True, type=int)
-    arguments = parser.parse_args(argv)
-    validate(arguments.expected_commit, arguments.run_attempt)
-    print("R11A_R7_RUNTIME_BINDING_VALID_SINGLE_USE")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

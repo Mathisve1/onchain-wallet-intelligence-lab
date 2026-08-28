@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import sqlite3
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+
+# Direct workflow invocation must not add repository bytecode while an
+# execution artifact is being checked against immutable governance bytes.
+sys.dont_write_bytecode = True
 
 # The approved workflow invokes this file directly.  Ensure that direct-script
 # execution and package imports use the same repository modules without
@@ -18,12 +23,16 @@ if str(_REPOSITORY_ROOT) not in sys.path:
 from research.archive_inventory.r11a_corrective.artifact import (
     validate_artifact,
 )
+from research.archive_inventory.r11a_corrective import (
+    _artifact_contract_core_r7 as _artifact_contract,
+)
 from research.archive_inventory.r11a_corrective.artifact_schema import (
     AUTHORITATIVE_UNIT_UNIVERSES,
     CONSERVATION_FILE,
     CONTEXT_FILE,
     DIAGNOSTIC_ID,
     IMPLEMENTATION_ID,
+    PHASES,
     RESULT_FILE,
     SCIENCE_CONTAINERS,
     TAXA,
@@ -49,8 +58,13 @@ from research.archive_inventory.r11a_corrective.storage_r7 import (
 )
 from governance import r11a_stage_common_r4 as _stage
 from governance.validate_r11a_runtime_binding_r7 import (
-    validate as validate_runtime_binding,
+    REQUIRED_BOUND_PATHS as RUNTIME_REQUIRED_BOUND_PATHS,
+    validate as _validate_runtime_binding,
 )
+
+# Backward-compatible patch seam retained for existing offline routing tests.
+# New artifact code calls ``validate_reviewed_runtime_binding`` below.
+validate_runtime_binding = _validate_runtime_binding
 
 UNIT_FILE = "r11a-v2-taxonomy-units.ndjson"
 BLOCK_PROOF_FILE = "r11a-v2-exact-block-replay-proofs.ndjson"
@@ -179,6 +193,27 @@ _SCHEMA_UNIVERSES = frozenset(
     for universe in AUTHORITATIVE_UNIT_UNIVERSES
     if universe.startswith("REPEAT_INTERSECTING_")
 )
+
+# The approved artifact contract has two deliberately closed context schemas:
+# one minimal failure schema and one fully bound runtime schema.  Reuse those
+# exact field sets instead of maintaining a second schema definition here.
+_CONTEXT_COMMON_FIELDS = frozenset(_artifact_contract._CONTEXT_COMMON_FIELDS)
+_CONTEXT_BOUND_FIELDS = frozenset(_artifact_contract._CONTEXT_BOUND_FIELDS)
+_MINIMAL_CONTEXT_SCHEMAS = frozenset(
+    {
+        _CONTEXT_COMMON_FIELDS,
+        _CONTEXT_COMMON_FIELDS | {"failure_exception_type_sha256"},
+    }
+)
+_FULL_BOUND_CONTEXT_SCHEMA = _CONTEXT_COMMON_FIELDS | _CONTEXT_BOUND_FIELDS
+_PRECOLLECTOR_FAILURE_PHASES = frozenset(PHASES[:4])
+_FULL_SCIENCE_TERMINALS = frozenset(
+    {
+        "R11A_V2_ROOT_CAUSE_TAXONOMY_COMPLETE",
+        "R11A_V2_DIAGNOSTIC_INCOMPLETE",
+    }
+)
+_FAIL_CLOSED_EARLY_TERMINAL = "R11A_V2_FAIL_CLOSED_EARLY_STOP"
 
 
 class EvidenceValidationError(RuntimeError):
@@ -934,17 +969,165 @@ def validate_science(artifact: Path) -> None:
             database.close_delete()
 
 
+def validate_reviewed_runtime_binding(
+    expected_commit: str,
+    run_attempt: int,
+    *,
+    root: Path,
+) -> Mapping[str, object]:
+    """Single integration seam for the separately reviewed binding gate.
+
+    The runtime-binding validator owns review-evidence authentication.  This
+    adapter deliberately gives the artifact consumer one named gate to call;
+    it must never add an artifact-side fallback or infer review truth from the
+    artifact itself.
+    """
+
+    return validate_runtime_binding(expected_commit, run_attempt, root=root)
+
+
+def _validate_artifact_route(
+    context: Mapping[str, object],
+    result: Mapping[str, object],
+) -> tuple[str, bool]:
+    """Select the closed context schema from phase and terminal semantics."""
+
+    phase = text(context["execution_phase"], "artifact execution phase")
+    terminal = text(result["terminal_class"], "artifact terminal class")
+    require(phase in PHASES, "artifact execution phase is unknown")
+
+    observed_fields = frozenset(context)
+    bound_context = observed_fields == _FULL_BOUND_CONTEXT_SCHEMA
+    minimal_context = observed_fields in _MINIMAL_CONTEXT_SCHEMAS
+    require(
+        bound_context or minimal_context,
+        "artifact context is neither exact minimal nor exact bound schema",
+    )
+
+    if phase in _PRECOLLECTOR_FAILURE_PHASES:
+        require(
+            terminal == _FAIL_CLOSED_EARLY_TERMINAL,
+            "precollector artifact is not an exact fail-closed early terminal",
+        )
+        require(
+            minimal_context,
+            "precollector failure artifact must use exact minimal context",
+        )
+        require(
+            integer(context["s3_requests_executed"], "artifact request count") == 0,
+            "precollector failure artifact contains S3 requests",
+        )
+        require(
+            integer(context["object_bytes_downloaded"], "artifact byte count") == 0,
+            "precollector failure artifact contains downloaded bytes",
+        )
+        if phase in {
+            "PRE_OIDC_STATIC_GATE",
+            "OIDC_ROLE_ASSUMPTION",
+            "STS_PRINCIPAL_VALIDATION",
+        }:
+            require(
+                context["principal_observed"] is False,
+                "pre-principal failure artifact claims an observed principal",
+            )
+    else:
+        require(
+            bound_context,
+            "post-precollector artifact requires exact complete bound context",
+        )
+
+    if terminal in _FULL_SCIENCE_TERMINALS:
+        require(
+            phase == "ARTIFACT_PACKAGING" and bound_context,
+            "fully materialized artifact lacks packaging-phase bound context",
+        )
+    return phase, bound_context
+
+
+def _validate_bound_context(
+    context: Mapping[str, object],
+    binding: Mapping[str, object],
+    *,
+    root: Path,
+) -> None:
+    """Bind artifact-declared runtime bytes to the reviewed binding chain."""
+
+    release = _stage.load(root, _stage.RELEASE_RELATIVE)
+    activation = _stage.load(root, _stage.ACTIVATION_RELATIVE)
+    pricing = _stage.load(root, _stage.PRICING_TARGET_RELATIVE)
+    expected = {
+        "approval_id": _stage.APPROVAL_ID,
+        "approval_text_sha256": _stage.sha256(root, _stage.APPROVAL_TEXT_RELATIVE),
+        "execution_release_id": release["execution_release_id"],
+        "execution_release_blob_sha256": _stage.sha256(root, _stage.RELEASE_RELATIVE),
+        "activation_id": activation["activation_id"],
+        "implementation_contract_sha256": _stage.sha256(root, _stage.IMPLEMENTATION_RELATIVE),
+        "workflow_sha256": _stage.sha256(root, _stage.WORKFLOW_RELATIVE),
+        "collector_sha256": _stage.sha256(root, _stage.RUNNER_RELATIVE),
+        "validator_sha256": _stage.sha256(root, _stage.ARTIFACT_VALIDATOR_RELATIVE),
+        "selection_sha256": _stage.sha256(root, _stage.SELECTION_RELATIVE),
+        "pricing_snapshot_sha256": _stage.sha256(root, _stage.PRICING_TARGET_RELATIVE),
+        "single_use_window_start_utc": binding.get("single_use_window_start_utc"),
+    }
+    for key, expected_value in expected.items():
+        require(
+            context[key] == expected_value,
+            f"artifact bound context drift: {key}",
+        )
+    require(
+        integer(
+            context["pricing_projection_eur_micros"],
+            "artifact pricing projection",
+        )
+        == pricing["projected_eur_micros_at_frozen_maximum"],
+        "artifact bound context drift: pricing_projection_eur_micros",
+    )
+
+    for binding_key, context_key in (
+        ("approval_id", "approval_id"),
+        ("implementation_id", "implementation_id"),
+        ("workflow_name", "workflow_name"),
+    ):
+        require(
+            binding.get(binding_key) == context[context_key],
+            f"artifact reviewed runtime binding drift: {context_key}",
+        )
+
+    bound_files = binding.get("bound_files")
+    require(isinstance(bound_files, Mapping), "reviewed runtime bound_files is absent")
+    require(
+        tuple(sorted(bound_files, key=lambda value: value.encode("utf-8")))
+        == RUNTIME_REQUIRED_BOUND_PATHS,
+        "reviewed runtime bound_files is not the exact complete stage chain",
+    )
+    for context_key, relative in (
+        ("approval_text_sha256", _stage.APPROVAL_TEXT_RELATIVE),
+        ("execution_release_blob_sha256", _stage.RELEASE_RELATIVE),
+        ("implementation_contract_sha256", _stage.IMPLEMENTATION_RELATIVE),
+        ("workflow_sha256", _stage.WORKFLOW_RELATIVE),
+        ("collector_sha256", _stage.RUNNER_RELATIVE),
+        ("validator_sha256", _stage.ARTIFACT_VALIDATOR_RELATIVE),
+        ("selection_sha256", _stage.SELECTION_RELATIVE),
+        ("pricing_snapshot_sha256", _stage.PRICING_TARGET_RELATIVE),
+    ):
+        require(
+            bound_files.get(relative) == context[context_key],
+            f"artifact context is not bound by reviewed runtime: {context_key}",
+        )
+
+
 def validate_aligned_execution_artifact(
     artifact: Path,
     *,
     root: Path = _REPOSITORY_ROOT,
+    expected_run_id: int | None = None,
 ) -> None:
-    """Validate an artifact and bind every post-OIDC context to R7 authority.
+    """Validate one artifact against its phase-required reviewed runtime chain.
 
-    Minimal pre-OIDC failure artifacts deliberately remain independently
-    verifiable when the runtime-binding gate itself failed.  Any bound context
-    contains ``approval_id`` and must match the complete aligned runtime chain
-    and the exact raw repository bytes before its science is accepted.
+    Only a phase-truthful, empty precollector failure may use the approved
+    minimal context schema.  Every post-precollector artifact must carry the
+    complete bound schema; deleting bound fields can therefore never select a
+    weaker validation branch.
     """
 
     validate_artifact(artifact, DEFAULT_LIMITS)
@@ -952,50 +1135,41 @@ def validate_aligned_execution_artifact(
         strict_json_loads((artifact / CONTEXT_FILE).read_bytes()),
         "artifact context",
     )
-    bound_context = "approval_id" in context
-    runtime_required = (
-        bound_context or context["execution_phase"] != "PRE_OIDC_STATIC_GATE"
+    result = obj(
+        strict_json_loads((artifact / RESULT_FILE).read_bytes()),
+        "artifact result",
     )
-    binding: Mapping[str, object] | None = None
-    if runtime_required:
-        dispatch_sha = text(context["dispatch_sha"], "artifact dispatch SHA")
-        run_attempt = integer(
-            context["workflow_run_attempt"],
-            "artifact workflow run attempt",
-        )
-        binding = validate_runtime_binding(dispatch_sha, run_attempt, root=root)
+    phase, bound_context = _validate_artifact_route(context, result)
+
+    if expected_run_id is None:
+        raw_run_id = os.environ.get("CURRENT_RUN_ID")
+        require(raw_run_id is not None, "trusted current workflow run ID is absent")
+        require(raw_run_id.isascii() and raw_run_id.isdecimal(), "trusted current workflow run ID is malformed")
+        expected_run_id = int(raw_run_id)
+    require(
+        isinstance(expected_run_id, int)
+        and not isinstance(expected_run_id, bool)
+        and expected_run_id > 0,
+        "trusted current workflow run ID is invalid",
+    )
+    require(
+        integer(context["workflow_run_id"], "artifact workflow run ID")
+        == expected_run_id,
+        "artifact workflow run ID differs from trusted current run",
+    )
+    dispatch_sha = text(context["dispatch_sha"], "artifact dispatch SHA")
+    run_attempt = integer(
+        context["workflow_run_attempt"],
+        "artifact workflow run attempt",
+    )
+    binding = validate_reviewed_runtime_binding(
+        dispatch_sha,
+        run_attempt,
+        root=root,
+    )
     if bound_context:
-        require(binding is not None, "bound artifact lacks aligned runtime binding")
-        release = _stage.load(root, _stage.RELEASE_RELATIVE)
-        activation = _stage.load(root, _stage.ACTIVATION_RELATIVE)
-        pricing = _stage.load(root, _stage.PRICING_TARGET_RELATIVE)
-        expected = {
-            "approval_id": _stage.APPROVAL_ID,
-            "approval_text_sha256": _stage.sha256(root, _stage.APPROVAL_TEXT_RELATIVE),
-            "execution_release_id": release["execution_release_id"],
-            "execution_release_blob_sha256": _stage.sha256(root, _stage.RELEASE_RELATIVE),
-            "activation_id": activation["activation_id"],
-            "implementation_contract_sha256": _stage.sha256(root, _stage.IMPLEMENTATION_RELATIVE),
-            "workflow_sha256": _stage.sha256(root, _stage.WORKFLOW_RELATIVE),
-            "collector_sha256": _stage.sha256(root, _stage.RUNNER_RELATIVE),
-            "validator_sha256": _stage.sha256(root, _stage.ARTIFACT_VALIDATOR_RELATIVE),
-            "selection_sha256": _stage.sha256(root, _stage.SELECTION_RELATIVE),
-            "pricing_snapshot_sha256": _stage.sha256(root, _stage.PRICING_TARGET_RELATIVE),
-            "single_use_window_start_utc": binding["single_use_window_start_utc"],
-        }
-        for key, expected_value in expected.items():
-            require(
-                context[key] == expected_value,
-                f"artifact bound context drift: {key}",
-            )
-        require(
-            integer(
-                context["pricing_projection_eur_micros"],
-                "artifact pricing projection",
-            )
-            == pricing["projected_eur_micros_at_frozen_maximum"],
-            "artifact bound context drift: pricing_projection_eur_micros",
-        )
+        require(binding is not None, "bound artifact lacks reviewed runtime binding")
+        _validate_bound_context(context, binding, root=root)
     validate_science(artifact)
 
 

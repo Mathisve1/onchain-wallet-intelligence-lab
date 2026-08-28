@@ -10,6 +10,13 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
+try:
+    from governance import r11a_workflow_identity as _workflow_identity
+    from governance import r11a_github_review_evidence as _review_evidence
+except ModuleNotFoundError:  # Direct `python governance/<validator>.py` execution.
+    import r11a_workflow_identity as _workflow_identity
+    import r11a_github_review_evidence as _review_evidence
+
 # Keep the caller-visible lexical path.  validate() deliberately rejects a
 # repository root reached through a symlink instead of resolving it away.
 ROOT = Path(__file__).absolute().parents[1]
@@ -37,7 +44,7 @@ PRICING = "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json"
 RUNTIME_PRICING = "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SNAPSHOT_CANDIDATE.json"
 PERMISSION = "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json"
 TRUST = "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json"
-WORKFLOW = "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
+WORKFLOW = _workflow_identity.CANDIDATE_WORKFLOW_RELATIVE
 ALIGNMENT_DIR = "research/archive_inventory/r11a_alignment"
 ALIGNMENT_PATH = f"{ALIGNMENT_DIR}/R11A_POST_APPROVAL_VALIDATOR_ALIGNMENT.json"
 
@@ -64,6 +71,7 @@ EXPECTED_BOUND_FILES = {
 }
 
 CANONICAL_FUTURE_AUTHORITY_PATHS = (
+    "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_CREATION_CONFIGURATION_CANDIDATE.json",
     "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
     "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
     "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
@@ -76,6 +84,10 @@ CANONICAL_FUTURE_AUTHORITY_PATHS = (
     "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
     "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CANDIDATE.json",
     "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CONSUMPTION.json",
+    *tuple(
+        contract.evidence_relative
+        for contract in _review_evidence.GATE_REGISTRY.values()
+    ),
 )
 
 PROHIBITED_AUTHORITY_NAMESPACES = (
@@ -83,6 +95,7 @@ PROHIBITED_AUTHORITY_NAMESPACES = (
     "research/archive_inventory/r11a_role_preflight",
     "research/archive_inventory/r11a_workflow_installation",
     "research/archive_inventory/r11a_runtime",
+    _review_evidence.EVIDENCE_DIRECTORY,
     "research/archive_inventory/r11a_evidence",
     "research/archive_inventory/r11a_v2_approval",
     "research/archive_inventory/r11a_v2_runtime",
@@ -119,7 +132,7 @@ PROHIBITED_INSTALLED_WORKFLOWS = (
     ".github/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
     ".github/workflows/hyperliquid-archive-r11a-v2-identity-boundary-diagnostic.yml",
 )
-INSTALLED_WORKFLOW = PROHIBITED_INSTALLED_WORKFLOWS[0]
+INSTALLED_WORKFLOW = _workflow_identity.CANONICAL_INSTALLED_WORKFLOW_RELATIVE
 KNOWN_FUTURE_STAGE_PATHS = frozenset(
     {*CANONICAL_FUTURE_AUTHORITY_PATHS, *PROHIBITED_INSTALLED_WORKFLOWS}
 )
@@ -138,7 +151,7 @@ R11A_DEVELOPMENT_WORKFLOW_SHA = (
     "23754917699c0f685f0164b64cc78807ab7872e7fe179982d0f0145da35f74fe"
 )
 INSTALLED_WORKFLOW_INVENTORY_SHA256 = (
-    "89ed9152230a97865f4ac3531156a5cc5dffb09e9d942586d043215b5332dcb6"
+    _workflow_identity.PREINSTALL_WORKFLOW_INVENTORY_SHA256
 )
 
 CANONICAL_R11A_JSON_PATHS = frozenset(
@@ -834,42 +847,13 @@ def _validate_no_future_authority(root: Path) -> None:
         hashlib.sha256(development_workflow).hexdigest() == R11A_DEVELOPMENT_WORKFLOW_SHA,
         "R11A development workflow hash drift",
     )
-    workflow_directory = _required_directory(root, ".github/workflows")
     try:
-        workflow_entries = list(os.scandir(workflow_directory))
-    except OSError as exc:
-        raise R11AG2ApprovalError("cannot inventory installed workflows") from exc
-    prohibited_names = {PurePosixPath(value).name for value in PROHIBITED_INSTALLED_WORKFLOWS}
-    inventory_rows: list[bytes] = []
-    for entry in sorted(workflow_entries, key=lambda item: item.name.encode("utf-8")):
-        if entry.name in prohibited_names:
-            raise R11AG2ApprovalError(f"R11A runtime workflow is installed: .github/workflows/{entry.name}")
-        try:
-            information = entry.stat(follow_symlinks=False)
-        except OSError as exc:
-            raise R11AG2ApprovalError(f"cannot inspect workflow entry: {entry.name}") from exc
-        if stat.S_ISLNK(information.st_mode):
-            raise R11AG2ApprovalError(f"workflow symlink prohibited: .github/workflows/{entry.name}")
-        require(
-            stat.S_ISREG(information.st_mode)
-            and Path(entry.name).suffix.casefold() in {".yml", ".yaml"},
-            f"unexpected installed-workflow directory entry: .github/workflows/{entry.name}",
+        _workflow_identity.validate_workflow_identity_inventory(
+            root,
+            canonical_installed=False,
         )
-        raw = Path(entry.path).read_bytes()
-        relative = f".github/workflows/{entry.name}"
-        inventory_rows.append(
-            hashlib.sha256(raw).hexdigest().encode("ascii")
-            + b"  "
-            + relative.encode("ascii")
-            + b"\n"
-        )
-        if relative == R11A_DEVELOPMENT_WORKFLOW:
-            require(raw == development_workflow, "R11A development workflow changed during inventory")
-    require(
-        hashlib.sha256(b"".join(inventory_rows)).hexdigest()
-        == INSTALLED_WORKFLOW_INVENTORY_SHA256,
-        "installed workflow path/raw-byte inventory drift",
-    )
+    except _workflow_identity.R11AWorkflowIdentityError as exc:
+        raise R11AG2ApprovalError(str(exc)) from exc
 
 
 def _validate_no_repository_symlinks(root: Path) -> None:
