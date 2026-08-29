@@ -562,19 +562,25 @@ class R11ARepositoryProvenanceTests(unittest.TestCase):
         temporary, root = self.make_repository()
         self.addCleanup(temporary.cleanup)
         environment = os.environ.copy()
-        boundary = environment.pop("R11A_PYCACHE_BOUNDARY_ACTIVE", None)
-        environment.pop("PYTHONPYCACHEPREFIX", None)
-        environment.pop("PYTHONDONTWRITEBYTECODE", None)
-        if boundary:
-            pythonpath = [
-                item
-                for item in environment.get("PYTHONPATH", "").split(os.pathsep)
-                if item and Path(item) != Path(boundary)
-            ]
-            if pythonpath:
-                environment["PYTHONPATH"] = os.pathsep.join(pythonpath)
-            else:
-                environment.pop("PYTHONPATH", None)
+        for key in (
+            "PYTHONDONTWRITEBYTECODE",
+            "PYTHONPYCACHEPREFIX",
+            "PYTHONPATH",
+            "PYTHONSAFEPATH",
+            "PYTHONNOUSERSITE",
+            "R11A_PYCACHE_BOUNDARY_ACTIVE",
+            "R11A_NATIVE_BOUNDARY_ROOT",
+            "R11A_NATIVE_IMPORT_ROOT",
+            "R11A_NATIVE_BOUNDARY_BINARY",
+            "R11A_NATIVE_BOUNDARY_RECEIPT",
+            "R11A_NATIVE_BOUNDARY_RECEIPT_SHA256",
+            "R11A_NATIVE_ARTIFACT_SHA256",
+            "R11A_NATIVE_ARTIFACT_DEV",
+            "R11A_NATIVE_ARTIFACT_INO",
+            "R11A_REPOSITORY_ROOT",
+            "R11A_NATIVE_ENV_FILE",
+        ):
+            environment.pop(key, None)
         subprocess.run(
             [sys.executable, "-c", "import pkg.module"],
             cwd=root,

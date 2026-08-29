@@ -52,9 +52,9 @@ except ModuleNotFoundError:
     )
 
 _EXTRA_TRANSITIVE_PATHS = (
-    "difflib.abi3.so",
     "governance/_validate_r11a_runtime_binding_core_r7.py",
     "governance/r11a_bytecode_boundary.c",
+    "governance/r11a_native_boundary.sh",
     "governance/r11a_github_review_evidence.py",
     "governance/r11a_repository_provenance.py",
     "governance/r11a_workflow_identity.py",

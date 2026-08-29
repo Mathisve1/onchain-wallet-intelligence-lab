@@ -68,8 +68,8 @@ NEXT_GATE = (
 )
 
 ALIGNED_CONSUMERS = (
-    "difflib.abi3.so",
     "governance/r11a_bytecode_boundary.c",
+    "governance/r11a_native_boundary.sh",
     "governance/r11a_repository_provenance.py",
     "governance/seal_r11a_v2_preregistration.py",
     "governance/r11a_github_review_evidence.py",

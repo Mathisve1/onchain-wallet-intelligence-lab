@@ -5,11 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
+BOUNDARY_HELPER = ROOT / "governance/r11a_native_boundary.sh"
 
 
 class ExactCIHeadTests(unittest.TestCase):
     def setUp(self) -> None:
         self.text = WORKFLOW.read_text(encoding="utf-8")
+        self.boundary_text = BOUNDARY_HELPER.read_text(encoding="utf-8")
 
     def test_pull_request_uses_source_head_and_other_runs_use_github_sha(self) -> None:
         self.assertIn(
@@ -61,13 +63,70 @@ class ExactCIHeadTests(unittest.TestCase):
         self.assertIn("python -m unittest discover -s tests -v", self.text)
         self.assertIn("python -B -m unittest discover -s tests -v", self.text)
 
-    def test_ci_rebuilds_boundary_and_keeps_fail_closed_governance(self) -> None:
-        self.assertIn("governance/r11a_bytecode_boundary.c", self.text)
-        self.assertIn("cmp --silent difflib.abi3.so", self.text)
+    def test_ci_source_builds_and_reverifies_boundary_before_every_python(self) -> None:
+        self.assertIn("governance/r11a_bytecode_boundary.c", self.boundary_text)
+        self.assertNotIn("difflib.abi3.so", self.text)
+        self.assertIn(
+            'governance/r11a_native_boundary.sh prepare "${R11A_NATIVE_ENV_FILE}"',
+            self.text,
+        )
+        self.assertEqual(
+            self.text.count(
+                'governance/r11a_native_boundary.sh verify "${R11A_NATIVE_ENV_FILE}"'
+            ),
+            8,
+        )
+        self.assertIn(
+            'governance/r11a_native_boundary.sh cleanup "${R11A_NATIVE_ENV_FILE}"',
+            self.text,
+        )
+        self.assertIn("if: always()", self.text)
         self.assertIn("python governance/validate_repository.py", self.text)
         self.assertNotIn("continue-on-error", self.text)
+        self.assertNotIn("|| true", self.text)
         self.assertNotIn("id-token:", self.text)
         self.assertNotIn("secrets.", self.text)
+        self.assertNotIn("aws-actions", self.text)
+        self.assertIn("timeout-minutes: 60", self.text)
+
+    def test_boundary_contract_is_repeatable_source_bound_and_diagnostic(self) -> None:
+        for required in (
+            "B_FRESH_AUTHENTICATED_HEAD_SOURCE",
+            'git cat-file blob "$SOURCE_OID"',
+            'compare_full_files "repeat build"',
+            'compare_full_files "fresh rebuild versus promoted artifact"',
+            "python_headers_inventory_sha256",
+            "cc_specs_sha256",
+            "compile_argv_sha256",
+            "artifact_sha256",
+            "print_binary_diagnostics",
+            "require_binary_sha256",
+            "import root inventory is not exact",
+            "R11A_NATIVE_ARTIFACT_DEV",
+            "R11A_NATIVE_ARTIFACT_INO",
+            "readelf -S",
+            "objdump -x",
+            "cmp -l",
+            "PYTHONSAFEPATH",
+            "PYTHONNOUSERSITE",
+        ):
+            self.assertIn(required, self.boundary_text)
+        self.assertNotIn("|| true", self.boundary_text)
+        self.assertIn("printf -- '--- %s: %s ---", self.boundary_text)
+        self.assertIn("set +e", self.boundary_text)
+
+    def test_required_ci_steps_remain_in_fail_closed_order(self) -> None:
+        names = (
+            "Verify exact CI commit identity",
+            "Prepare and verify source-built native boundary",
+            "Run focused normal and optimized import-isolation tests",
+            "Run complete bytecode-enabled verification",
+            "Run complete bytecode-disabled control",
+            "Validate repository governance",
+            "Clean source-built native boundary",
+        )
+        offsets = [self.text.index(name) for name in names]
+        self.assertEqual(offsets, sorted(offsets))
 
 
 if __name__ == "__main__":

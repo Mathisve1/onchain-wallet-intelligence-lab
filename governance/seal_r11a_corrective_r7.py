@@ -48,7 +48,6 @@ CONTINUOUS_INTEGRATION_WORKFLOW = ".github/workflows/ci.yml"
 REPOSITORY_MANIFEST = "governance/REPOSITORY_MANIFEST.sha256"
 
 R7_CODE_PATHS = (
-    "difflib.abi3.so",
     "research/__init__.py",
     "research/archive_inventory/r11a_corrective/__init__.py",
     "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
@@ -91,6 +90,7 @@ GOVERNANCE_PATHS = (
     "governance/generate_r11a_corrective_policies.py",
     "governance/r11a_github_review_evidence.py",
     "governance/r11a_bytecode_boundary.c",
+    "governance/r11a_native_boundary.sh",
     "governance/r11a_post_approval_context.py",
     "governance/r11a_repository_provenance.py",
     "governance/r11a_stage_common_r4.py",
