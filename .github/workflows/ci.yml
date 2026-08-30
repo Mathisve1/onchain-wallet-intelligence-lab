@@ -16,8 +16,6 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env:
-      R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
     steps:
       - name: Check out exact CI commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -39,6 +37,8 @@ jobs:
           check-latest: false
       - name: Prepare and verify source-built native boundary
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
           governance/r11a_native_boundary.sh prepare "${R11A_NATIVE_ENV_FILE}"
@@ -49,6 +49,8 @@ jobs:
           done < "${R11A_NATIVE_ENV_FILE}"
       - name: Run focused normal and optimized import-isolation tests
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
           governance/r11a_native_boundary.sh verify "${R11A_NATIVE_ENV_FILE}"
@@ -65,6 +67,8 @@ jobs:
             python -O -m unittest tests.test_archive_inventory_r11a_post_approval_validator_alignment -v
       - name: Run complete bytecode-enabled verification
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
           governance/r11a_native_boundary.sh verify "${R11A_NATIVE_ENV_FILE}"
@@ -72,6 +76,8 @@ jobs:
             python -m unittest discover -s tests -v
       - name: Run complete bytecode-disabled control
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
           governance/r11a_native_boundary.sh verify "${R11A_NATIVE_ENV_FILE}"
@@ -79,6 +85,8 @@ jobs:
             python -B -m unittest discover -s tests -v
       - name: Validate repository governance
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
           governance/r11a_native_boundary.sh verify "${R11A_NATIVE_ENV_FILE}"
@@ -87,6 +95,10 @@ jobs:
       - name: Clean source-built native boundary
         if: always()
         shell: bash
+        env:
+          R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env
         run: |
           set -euo pipefail
-          governance/r11a_native_boundary.sh cleanup "${R11A_NATIVE_ENV_FILE}"
+          if [[ -e "${R11A_NATIVE_ENV_FILE}" || -L "${R11A_NATIVE_ENV_FILE}" ]]; then
+            governance/r11a_native_boundary.sh cleanup "${R11A_NATIVE_ENV_FILE}"
+          fi

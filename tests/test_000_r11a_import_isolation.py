@@ -155,6 +155,30 @@ class R11AImportIsolationTests(unittest.TestCase):
             self.assertIn(expected_output, combined)
         return completed
 
+    def commit_fixture(self, repository: Path, message: str) -> None:
+        committed = subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=R11A Lifecycle Test",
+                "-c",
+                "user.email=r11a-lifecycle@example.invalid",
+                "commit",
+                "-am",
+                message,
+            ],
+            cwd=repository,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(
+            committed.returncode,
+            0,
+            committed.stdout.decode(errors="replace")
+            + committed.stderr.decode(errors="replace"),
+        )
+
     def test_native_boundary_is_source_built_authenticated_and_loaded(self) -> None:
         artifact = Path(os.environ["R11A_NATIVE_BOUNDARY_BINARY"])
         import_root = Path(os.environ["R11A_NATIVE_IMPORT_ROOT"])
@@ -275,6 +299,25 @@ class R11AImportIsolationTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(clone.returncode, 0, clone.stderr.decode(errors="replace"))
+            fixture_builder = fixture / BOUNDARY_BUILDER.relative_to(ROOT)
+            builder_text = fixture_builder.read_text(encoding="utf-8")
+            build_hook = '    local output="$build_root/$ARTIFACT_NAME"\n\n'
+            self.assertEqual(builder_text.count(build_hook), 1)
+            fixture_builder.write_text(
+                builder_text.replace(
+                    build_hook,
+                    build_hook
+                    + "    if [[ ${R11A_NATIVE_TEST_VERIFY_BUILD_FAILURE-} = 1 "
+                    + '&& "$build_root" = */verify ]]; then\n'
+                    + "        printf '%s\\n' "
+                    + "'R11A native boundary injected verify build failure' >&2\n"
+                    + "        return 97\n"
+                    + "    fi\n\n",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            self.commit_fixture(fixture, "test: inject verify build failure hook")
             base_environment = self.child_environment(inherit_boundary=False)
             base_environment.pop(_NESTED, None)
 
@@ -286,6 +329,22 @@ class R11AImportIsolationTests(unittest.TestCase):
             first_artifact = Path(first_values["R11A_NATIVE_BOUNDARY_BINARY"])
             first_import_root = Path(first_values["R11A_NATIVE_IMPORT_ROOT"])
             first_bytes = first_artifact.read_bytes()
+            self.run_boundary_helper(
+                fixture,
+                "verify",
+                first_env_file,
+                {
+                    **first_environment,
+                    "R11A_NATIVE_TEST_VERIFY_BUILD_FAILURE": "1",
+                },
+                expected_returncode=1,
+                expected_output=(
+                    "R11A native boundary injected verify build failure"
+                ),
+            )
+            first_boundary_root = Path(first_values["R11A_NATIVE_BOUNDARY_ROOT"])
+            for transient in ("verify", "verify-home", "verify-tmp"):
+                self.assertFalse((first_boundary_root / transient).exists())
 
             second_env_file = temporary / "second.env"
             self.run_boundary_helper(fixture, "prepare", second_env_file, base_environment)
@@ -529,6 +588,27 @@ class R11AImportIsolationTests(unittest.TestCase):
             self.run_boundary_helper(fixture, "cleanup", first_env_file, first_environment)
             self.assertFalse(boundary_root.exists())
             self.assertFalse(first_env_file.exists())
+
+            partial_runner = temporary / "partial-runner"
+            partial_runner.mkdir(mode=0o700)
+            partial_env_file = partial_runner / "boundary.env"
+            source.write_bytes(
+                source_bytes
+                + b"\nthis_is_intentionally_invalid_c_for_partial_prepare_testing\n"
+            )
+            self.commit_fixture(fixture, "test: inject partial native prepare failure")
+            self.run_boundary_helper(
+                fixture,
+                "prepare",
+                partial_env_file,
+                {**base_environment, "RUNNER_TEMP": str(partial_runner)},
+                expected_returncode=1,
+                expected_output=(
+                    "this_is_intentionally_invalid_c_for_partial_prepare_testing"
+                ),
+            )
+            self.assertFalse(partial_env_file.exists())
+            self.assertEqual(list(partial_runner.iterdir()), [])
 
     def test_focused_literal_normal_optimized_and_bytecode_disabled(self) -> None:
         if os.environ.get(_NESTED):

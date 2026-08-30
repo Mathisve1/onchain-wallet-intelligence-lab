@@ -1,11 +1,40 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 BOUNDARY_HELPER = ROOT / "governance/r11a_native_boundary.sh"
+
+_EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
+_CONTEXT_ROOT = re.compile(
+    r"\b(github|runner|env|steps|job|needs|matrix|strategy|vars|secrets|inputs)\."
+)
+_STEP = re.compile(
+    r"^      - name: (?P<name>[^\n]+)\n"
+    r"(?P<body>.*?)(?=^      - name: |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+_CONTEXT_AVAILABILITY = {
+    "workflow_env": {"github", "secrets", "inputs", "vars"},
+    "job_env": {"github", "needs", "strategy", "matrix", "vars", "secrets", "inputs"},
+    "step_env": {
+        "github", "needs", "strategy", "matrix", "job", "runner",
+        "env", "vars", "secrets", "steps", "inputs",
+    },
+    "step_with": {
+        "github", "needs", "strategy", "matrix", "job", "runner",
+        "env", "vars", "secrets", "steps", "inputs",
+    },
+}
+
+
+def _unsupported_contexts(expression: str, placement: str) -> set[str]:
+    referenced = set(_CONTEXT_ROOT.findall(expression))
+    return referenced - _CONTEXT_AVAILABILITY[placement]
 
 
 class ExactCIHeadTests(unittest.TestCase):
@@ -80,6 +109,11 @@ class ExactCIHeadTests(unittest.TestCase):
             'governance/r11a_native_boundary.sh cleanup "${R11A_NATIVE_ENV_FILE}"',
             self.text,
         )
+        self.assertIn(
+            'if [[ -e "${R11A_NATIVE_ENV_FILE}" || '
+            '-L "${R11A_NATIVE_ENV_FILE}" ]]; then',
+            self.text,
+        )
         self.assertIn("if: always()", self.text)
         self.assertIn("python governance/validate_repository.py", self.text)
         self.assertNotIn("continue-on-error", self.text)
@@ -88,6 +122,45 @@ class ExactCIHeadTests(unittest.TestCase):
         self.assertNotIn("secrets.", self.text)
         self.assertNotIn("aws-actions", self.text)
         self.assertIn("timeout-minutes: 60", self.text)
+
+    def test_workflow_context_availability_and_runner_temp_scope(self) -> None:
+        exact_commit = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        checkout_ref = "${{ env.EXACT_CI_COMMIT }}"
+        binding = "R11A_NATIVE_ENV_FILE: ${{ runner.temp }}/r11a-native-boundary.env"
+        runner_expression = "${{ runner.temp }}"
+        self.assertEqual(_unsupported_contexts(exact_commit, "workflow_env"), set())
+        self.assertEqual(_unsupported_contexts(checkout_ref, "step_with"), set())
+        self.assertEqual(_unsupported_contexts(runner_expression, "job_env"), {"runner"})
+        self.assertEqual(_unsupported_contexts(runner_expression, "step_env"), set())
+        self.assertNotIn("    env:\n      " + binding, self.text)
+
+        consumers = {
+            name: body
+            for name, body in _STEP.findall(self.text)
+            if '${R11A_NATIVE_ENV_FILE}' in body
+        }
+        self.assertEqual(
+            set(consumers),
+            {
+                "Prepare and verify source-built native boundary",
+                "Run focused normal and optimized import-isolation tests",
+                "Run complete bytecode-enabled verification",
+                "Run complete bytecode-disabled control",
+                "Validate repository governance",
+                "Clean source-built native boundary",
+            },
+        )
+        placement = (
+            "        env:\n"
+            f"          {binding}\n"
+        )
+        for name, body in consumers.items():
+            with self.subTest(step=name):
+                self.assertIn(placement, body)
+        self.assertEqual(
+            _EXPRESSION.findall(self.text),
+            [exact_commit, checkout_ref] + [runner_expression] * len(consumers),
+        )
 
     def test_boundary_contract_is_repeatable_source_bound_and_diagnostic(self) -> None:
         for required in (

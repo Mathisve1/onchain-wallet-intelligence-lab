@@ -646,7 +646,7 @@ validate_root_layout() {
 prepare_boundary() {
     local env_file=$1
     local temp_parent root import_root artifact reference receipt build_root home_root temporary_root
-    local receipt_sha artifact_sha cleanup_rc primary_rc
+    local receipt_sha artifact_sha prepare_cleanup_trap
 
     [[ "$env_file" = /* ]] || die "environment-file path must be absolute"
     safe_absolute_path "$env_file"
@@ -669,25 +669,29 @@ prepare_boundary() {
     mkdir -m 700 -- "$import_root" "$home_root" "$temporary_root"
 
     prepare_exit_handler() {
-        primary_rc=$?
+        local primary_rc=$?
+        local cleanup_root=$1
+        local cleanup_env_file=$2
+        local cleanup_rc=0
         trap - EXIT
-        cleanup_rc=0
-        if [[ -n ${root-} && -d ${root-} && ! -L ${root-} ]]; then
-            chmod 700 -- "$root" || cleanup_rc=$?
-            if [[ -d "$root/import" && ! -L "$root/import" ]]; then
-                chmod 700 -- "$root/import" || cleanup_rc=$?
+        if [[ -d "$cleanup_root" && ! -L "$cleanup_root" ]]; then
+            chmod 700 -- "$cleanup_root" || cleanup_rc=$?
+            if [[ -d "$cleanup_root/import" && ! -L "$cleanup_root/import" ]]; then
+                chmod 700 -- "$cleanup_root/import" || cleanup_rc=$?
             fi
-            rm -rf --one-file-system -- "$root" || cleanup_rc=$?
+            rm -rf --one-file-system -- "$cleanup_root" || cleanup_rc=$?
         fi
-        if [[ -n ${env_file-} && -f ${env_file-} && ! -L ${env_file-} ]]; then
-            rm -f -- "$env_file" || cleanup_rc=$?
+        if [[ -f "$cleanup_env_file" && ! -L "$cleanup_env_file" ]]; then
+            rm -f -- "$cleanup_env_file" || cleanup_rc=$?
         fi
         if (( primary_rc == 0 && cleanup_rc != 0 )); then
             primary_rc=$cleanup_rc
         fi
         exit "$primary_rc"
     }
-    trap prepare_exit_handler EXIT
+    printf -v prepare_cleanup_trap \
+        'prepare_exit_handler %q %q' "$root" "$env_file"
+    trap "$prepare_cleanup_trap" EXIT
 
     build_pair "$build_root" "$home_root" "$temporary_root"
     install -m 500 -- "$build_root/$ARTIFACT_NAME" "$artifact"
@@ -713,7 +717,7 @@ prepare_boundary() {
 verify_boundary() {
     local env_file=$1
     local root import_root artifact reference receipt verify_root home_root temporary_root
-    local artifact_sha reference_sha receipt_sha
+    local artifact_sha reference_sha receipt_sha verify_cleanup_trap
 
     load_environment_file "$env_file" yes
     validate_root_layout
@@ -761,15 +765,17 @@ verify_boundary() {
     temporary_root="$root/verify-tmp"
     verify_exit_handler() {
         local primary_rc=$?
+        local cleanup_root=$1
         local cleanup_rc=0
         trap - EXIT
-        remove_verify_transients "$root" || cleanup_rc=$?
+        remove_verify_transients "$cleanup_root" || cleanup_rc=$?
         if (( primary_rc == 0 && cleanup_rc != 0 )); then
             primary_rc=$cleanup_rc
         fi
         exit "$primary_rc"
     }
-    trap verify_exit_handler EXIT
+    printf -v verify_cleanup_trap 'verify_exit_handler %q' "$root"
+    trap "$verify_cleanup_trap" EXIT
     mkdir -m 700 -- "$home_root" "$temporary_root"
     build_pair "$verify_root" "$home_root" "$temporary_root"
     compare_full_files "fresh rebuild versus promoted artifact" "$verify_root/$ARTIFACT_NAME" "$artifact"

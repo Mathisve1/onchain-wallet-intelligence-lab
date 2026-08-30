@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "db55d47d5452f17f9cdecfd07006c4bbcb68b3f576217ee71fc06aff64c5f83e",
+  "contract_projection_sha256": "1ee95d0aa9c35ab1c122b3639d66dd6aabe79826c18f01e13bb85d750b46eef9",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -44,11 +44,11 @@
     "governance/generate_r11a_corrective_policies.py": "fa7d830e57512fc3437e50761a37ee64db93c3fb8f29f33463f2ecbfec974a6d",
     "governance/r11a_bytecode_boundary.c": "15c07b78d158f453be922a354b45af3b33b4b15c62e243dc692c6a22d791bcbf",
     "governance/r11a_github_review_evidence.py": "2598b52296eb15ce3c77c5272389f7c644b963dfc6fe4444808ae0ce4876f0ad",
-    "governance/r11a_native_boundary.sh": "281b0716a9574f48184ff83646b165b492166b5656d91a810e26582fb9d73356",
+    "governance/r11a_native_boundary.sh": "9680e58aa5adc851b0e4ce34831f7ab9c1619669599a51ae33dd8587e0913262",
     "governance/r11a_post_approval_context.py": "25dd7c5f6d0ea02c8838d2af6e50e2e38bbefea85b808e819b7af5e74669145f",
     "governance/r11a_repository_provenance.py": "a54ce21bb278e4b8e5c19092216ee23f27bf7497ef4f3518136f3d48fab04ca9",
     "governance/r11a_stage_common_r4.py": "20f6751062c4bb2727269b744ba2956cc411b551db3e00298ba8951e6893a24a",
-    "governance/r11a_workflow_identity.py": "e3b633a1756c17a207d9754970a63808957fa41bbc4c36b87123c03907bb70db",
+    "governance/r11a_workflow_identity.py": "5b890245f1f1bbd5bef86839a13ad28defe4ee6afae0430b460f7bb48f4929e5",
     "governance/regenerate_manifest.py": "1e2404ab6f2f5a4c03c419c7f8e43e3167289e21982e5ba728bcdbc67bbe1a7c",
     "governance/run_r11a_network_deny.py": "d1bd57832b6dd45be8670a89388bb08eb0dbbd64248cf5a6a1551b60756e7fd7",
     "governance/seal_r11a_corrective_r7.py": "f87e3e1bf633f83b72781a0bc5961af90e8388b911da54fd0b7f1dee16d78858",
@@ -144,7 +144,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "894e8edad009aa36dbecc034789c97d91233bdd45ed75852359a153bf7cbc91f",
+  "repository_manifest_projection_sha256": "0adcb3d593a97dd1d588167eefb4fe8cbd3a926e71a9735738855e49086e6b35",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -164,7 +164,7 @@
   "successor_role_created": false,
   "supporting_file_hashes": {
     ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
-    ".github/workflows/ci.yml": "a478905c9405bd8a62e05beb6ca29b5d4ef5111adc701cef2870502c81294d4f",
+    ".github/workflows/ci.yml": "91c0c4d4059eeda1d2bfcc870f22ae3f5e78d711df652ef29c9d0f64b1c59dd6",
     ".github/workflows/r11a-r7-dev.yml": "23754917699c0f685f0164b64cc78807ab7872e7fe179982d0f0145da35f74fe",
     "DECISION_LOG.md": "059b86d30bb9210f64d8812275a51176fe50efad85e5e774d32095f6fc4d0b6f",
     "PROJECT_STATE.md": "e5fc7659b8a2ba0f47a2d19d7b0996495384ed4fa004fb75552fae4a43441b5a",
@@ -198,7 +198,7 @@
     "research/archive_inventory/r11a_v2/README.md": "63e7e4a79f302da36818aff19ad4183335e3a80919149195028dc21d924839ad"
   },
   "test_file_hashes": {
-    "tests/test_000_r11a_import_isolation.py": "e156b5c2b8aa72e5e6142b17f9dda5c0f2368b7c0cb2484283ea90095d86c634",
+    "tests/test_000_r11a_import_isolation.py": "220e185d6f7cc6780b9d701ac211b63e988617454a988be850a6fd8844cf4b03",
     "tests/test_archive_inventory_r11a_corrective_artifacts.py": "aa04a39cc26b4837162bf772ce217fb12ca1aa08af824d1b4384fe4ba32fcd59",
     "tests/test_archive_inventory_r11a_corrective_r3.py": "2e31a00be21d5ee8578d07bc8b2e761398ad84ac2aac5190880c0772ba682427",
     "tests/test_archive_inventory_r11a_corrective_r7.py": "d85a76b2b561e48aa195a8493ef878450e501b8a666918836adcb306ee5bf359",
@@ -212,7 +212,7 @@
     "tests/test_archive_inventory_r11a_runtime_binding_review.py": "bfbad56b9d5cd49797a3b4a0e66b602bf8619bc4dfe3b078402ac1dbbda5470c",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988",
-    "tests/test_ci_exact_head.py": "d196fdaed069189b1072a0659f962e7a4418e1cfa4d28ddd0c54ce91ae74eacf",
+    "tests/test_ci_exact_head.py": "c9db40c12485a6cfb320fd4fe1b7128f2ee71e59450009ef0af2cc69c9af9826",
     "tests/test_r11a_workflow_identity.py": "caa08da83ec2e7811f74099fd31b9a9fd3ed0184985bcff1a11988a66a5e38ac"
   },
   "trading_authorizations": {
