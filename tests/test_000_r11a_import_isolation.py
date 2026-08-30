@@ -17,6 +17,38 @@ ROOT = Path(__file__).absolute().parents[1]
 BOUNDARY_BUILDER = ROOT / "governance/r11a_native_boundary.sh"
 BOUNDARY_SOURCE = ROOT / "governance/r11a_bytecode_boundary.c"
 _NESTED = "R11A_IMPORT_ISOLATION_NESTED"
+_LOADER_KEYS = ("LD_AUDIT", "LD_LIBRARY_PATH", "LD_PRELOAD", "LD_RUN_PATH")
+_SETUP_PYTHON_KEYS = (
+    "pythonLocation",
+    "PKG_CONFIG_PATH",
+    "Python_ROOT_DIR",
+    "Python2_ROOT_DIR",
+    "Python3_ROOT_DIR",
+    "LD_LIBRARY_PATH",
+    "R11A_SETUP_PYTHON_VERSION",
+    "R11A_SETUP_PYTHON_PATH",
+)
+_BUILD_OVERRIDE_KEYS = (
+    "CC",
+    "CFLAGS",
+    "CPPFLAGS",
+    "CXXFLAGS",
+    "LDFLAGS",
+    "CPATH",
+    "C_INCLUDE_PATH",
+    "CPLUS_INCLUDE_PATH",
+    "OBJC_INCLUDE_PATH",
+    "LIBRARY_PATH",
+    "COMPILER_PATH",
+    "GCC_EXEC_PREFIX",
+    "LD_AUDIT",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "LD_RUN_PATH",
+    "COLLECT_GCC_OPTIONS",
+    "SOURCE_DATE_EPOCH",
+    "R11A_NATIVE_TRUSTED_PYTHON_CONFIG",
+)
 _NATIVE_KEYS = (
     "R11A_NATIVE_BOUNDARY_ROOT",
     "R11A_NATIVE_IMPORT_ROOT",
@@ -74,7 +106,16 @@ class R11AImportIsolationTests(unittest.TestCase):
         ):
             environment.pop(key, None)
         if not inherit_boundary:
-            for key in (*_NATIVE_KEYS, "PYTHONPATH", "PYTHONSAFEPATH", "PYTHONNOUSERSITE"):
+            # Synthetic repositories have their own authenticated HEAD.  The
+            # outer workflow's exact-checkout binding must not be mistaken for
+            # authority over a fixture commit created by this test.
+            for key in (
+                *_NATIVE_KEYS,
+                "EXACT_CI_COMMIT",
+                "PYTHONPATH",
+                "PYTHONSAFEPATH",
+                "PYTHONNOUSERSITE",
+            ):
                 environment.pop(key, None)
         environment[_NESTED] = "1"
         return environment
@@ -124,17 +165,18 @@ class R11AImportIsolationTests(unittest.TestCase):
     def run_boundary_helper(
         self,
         repository: Path,
-        operation: str,
+        operation: str | tuple[str, ...],
         environment_file: Path,
         environment: dict[str, str],
         *,
         expected_returncode: int = 0,
         expected_output: str | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
+        operations = (operation,) if isinstance(operation, str) else operation
         completed = subprocess.run(
             [
                 str(repository / "governance/r11a_native_boundary.sh"),
-                operation,
+                *operations,
                 str(environment_file),
             ],
             cwd=repository,
@@ -272,8 +314,15 @@ class R11AImportIsolationTests(unittest.TestCase):
                 self.assertEqual(completed.returncode, 78, completed.stderr.decode(errors="replace"))
                 self.assertIn(expected_error, completed.stderr.decode(errors="replace"))
 
+        verify_operation = ("verify",)
+        if all(key in os.environ for key in _SETUP_PYTHON_KEYS):
+            verify_operation = ("setup-python", "verify")
         completed = subprocess.run(
-            [str(BOUNDARY_BUILDER), "verify", os.environ["R11A_NATIVE_ENV_FILE"]],
+            [
+                str(BOUNDARY_BUILDER),
+                *verify_operation,
+                os.environ["R11A_NATIVE_ENV_FILE"],
+            ],
             cwd=ROOT,
             env=os.environ.copy(),
             stdout=subprocess.PIPE,
@@ -320,6 +369,8 @@ class R11AImportIsolationTests(unittest.TestCase):
             self.commit_fixture(fixture, "test: inject verify build failure hook")
             base_environment = self.child_environment(inherit_boundary=False)
             base_environment.pop(_NESTED, None)
+            for key in (*_SETUP_PYTHON_KEYS, "LD_AUDIT", "LD_PRELOAD", "LD_RUN_PATH"):
+                base_environment.pop(key, None)
 
             first_env_file = temporary / "first.env"
             self.run_boundary_helper(fixture, "prepare", first_env_file, base_environment)
@@ -609,6 +660,407 @@ class R11AImportIsolationTests(unittest.TestCase):
             )
             self.assertFalse(partial_env_file.exists())
             self.assertEqual(list(partial_runner.iterdir()), [])
+
+    def test_setup_python_adapter_accepts_only_exact_scrubbed_contract(self) -> None:
+        if os.environ.get(_NESTED):
+            return
+
+        self.assertEqual(sys.version_info[:3], (3, 12, 13))
+        python_executable = Path(sys.executable).resolve()
+        python_root = python_executable.parents[1]
+        python_bin = python_root / "bin"
+        python_loader = python_root / "lib"
+        action_python = python_bin / "python"
+        self.assertEqual(python_root.resolve(), python_root)
+        self.assertEqual(python_executable, python_bin / "python3.12")
+        self.assertEqual(action_python.resolve(), python_executable)
+
+        with tempfile.TemporaryDirectory(
+            prefix="r11a-setup-python-adapter-",
+            dir="/var/tmp",
+        ) as directory:
+            temporary = Path(directory).resolve()
+            fixture = temporary / "repository"
+            clone = subprocess.run(
+                ["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(fixture)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(clone.returncode, 0, clone.stderr.decode(errors="replace"))
+
+            # Local runs can exercise an uncommitted adapter implementation; CI
+            # naturally takes the identical bytes from the cloned exact HEAD.
+            fixture_builder = fixture / BOUNDARY_BUILDER.relative_to(ROOT)
+            builder_bytes = BOUNDARY_BUILDER.read_bytes()
+            if fixture_builder.read_bytes() != builder_bytes:
+                fixture_builder.write_bytes(builder_bytes)
+                self.commit_fixture(fixture, "test: bind current setup-python adapter")
+
+            runner_temp = temporary / "runner-temp"
+            runner_temp.mkdir(mode=0o700)
+            wrapper_root = temporary / "wrappers"
+            wrapper_root.mkdir(mode=0o700)
+            adversarial_trace = temporary / "ambient-path-command.txt"
+
+            def write_adversarial_wrapper(name: str) -> None:
+                wrapper = wrapper_root / name
+                wrapper.write_text(
+                    "#!/bin/sh\n"
+                    "set -eu\n"
+                    f"printf '%s\\n' {name} >> {adversarial_trace}\n"
+                    "exit 99\n",
+                    encoding="ascii",
+                )
+                wrapper.chmod(0o700)
+
+            for command in (
+                "cc",
+                "cmp",
+                "file",
+                "git",
+                "nm",
+                "objdump",
+                "readelf",
+                "sha256sum",
+                "strings",
+            ):
+                write_adversarial_wrapper(command)
+
+            base_environment = self.child_environment(inherit_boundary=False)
+            base_environment.pop(_NESTED, None)
+            for key in set((*_SETUP_PYTHON_KEYS, *_BUILD_OVERRIDE_KEYS)):
+                base_environment.pop(key, None)
+            base_environment.update(
+                {
+                    "PATH": f"{python_bin}:{wrapper_root}:/usr/bin:/bin",
+                    "RUNNER_TEMP": str(runner_temp),
+                }
+            )
+
+            def environment_for_root(
+                root: Path,
+                *,
+                source: dict[str, str] | None = None,
+            ) -> dict[str, str]:
+                root_text = str(root)
+                return {
+                    **(base_environment if source is None else source),
+                    "pythonLocation": root_text,
+                    "PKG_CONFIG_PATH": f"{root_text}/lib/pkgconfig",
+                    "Python_ROOT_DIR": root_text,
+                    "Python2_ROOT_DIR": root_text,
+                    "Python3_ROOT_DIR": root_text,
+                    "LD_LIBRARY_PATH": f"{root_text}/lib",
+                    "R11A_SETUP_PYTHON_VERSION": "3.12.13",
+                    "R11A_SETUP_PYTHON_PATH": f"{root_text}/bin/python",
+                }
+
+            adapter_environment = environment_for_root(python_root)
+            local_adapter_environment = adapter_environment.copy()
+            local_adapter_environment.pop("GITHUB_ACTIONS", None)
+            local_adapter_environment.pop("RUNNER_TOOL_CACHE", None)
+
+            rejected_index = 0
+
+            def reject_adapter(
+                label: str,
+                environment: dict[str, str],
+                expected_output: str,
+            ) -> None:
+                nonlocal rejected_index
+                rejected_index += 1
+                environment_file = temporary / f"rejected-{rejected_index}.env"
+                with self.subTest(adapter_rejection=label):
+                    self.run_boundary_helper(
+                        fixture,
+                        ("setup-python", "prepare"),
+                        environment_file,
+                        environment,
+                        expected_returncode=1,
+                        expected_output=expected_output,
+                    )
+                    self.assertFalse(environment_file.exists())
+
+            direct_environment_file = temporary / "direct-loader.env"
+            self.run_boundary_helper(
+                fixture,
+                "prepare",
+                direct_environment_file,
+                {
+                    **base_environment,
+                    "LD_LIBRARY_PATH": str(python_loader),
+                },
+                expected_returncode=1,
+                expected_output="unapproved build override is set: LD_LIBRARY_PATH",
+            )
+            self.assertFalse(direct_environment_file.exists())
+
+            for label, loader_value, expected_output in (
+                (
+                    "loader from a different installation",
+                    "/usr/lib",
+                    "LD_LIBRARY_PATH does not exactly match pythonLocation/lib",
+                ),
+                (
+                    "temporary attacker-controlled loader",
+                    "/tmp/evil",
+                    "LD_LIBRARY_PATH does not exactly match pythonLocation/lib",
+                ),
+                (
+                    "relative loader",
+                    "lib",
+                    "path is outside the supported absolute-path grammar: lib",
+                ),
+                (
+                    "two-component loader",
+                    f"{python_loader}:/usr/lib",
+                    "LD_LIBRARY_PATH must contain exactly one component",
+                ),
+                (
+                    "leading empty component",
+                    f":{python_loader}",
+                    "LD_LIBRARY_PATH must contain exactly one component",
+                ),
+                (
+                    "trailing empty component",
+                    f"{python_loader}:",
+                    "LD_LIBRARY_PATH must contain exactly one component",
+                ),
+                (
+                    "empty loader",
+                    "",
+                    "setup-python LD_LIBRARY_PATH is absent",
+                ),
+            ):
+                environment = adapter_environment.copy()
+                environment["LD_LIBRARY_PATH"] = loader_value
+                reject_adapter(label, environment, expected_output)
+
+            repository_environment = environment_for_root(fixture)
+            reject_adapter(
+                "repository installation",
+                repository_environment,
+                "setup-python installation is inside the repository",
+            )
+
+            symlink_root = temporary / "python-symlink"
+            symlink_root.symlink_to(python_root, target_is_directory=True)
+            reject_adapter(
+                "symlink installation",
+                environment_for_root(symlink_root),
+                "setup-python pythonLocation is not canonical and physical",
+            )
+
+            symlink_loader_root = temporary / "python-loader-symlink"
+            symlink_loader_root.mkdir(mode=0o700)
+            (symlink_loader_root / "physical-lib").mkdir(mode=0o700)
+            (symlink_loader_root / "lib").symlink_to(
+                symlink_loader_root / "physical-lib",
+                target_is_directory=True,
+            )
+            reject_adapter(
+                "symlink loader directory",
+                environment_for_root(symlink_loader_root),
+                "setup-python loader directory is not the exact physical pythonLocation/lib",
+            )
+
+            for label, mode in (("group-writable", 0o720), ("world-writable", 0o702)):
+                unsafe_root = temporary / label
+                unsafe_root.mkdir(mode=0o700)
+                (unsafe_root / "lib").mkdir(mode=0o700)
+                unsafe_root.chmod(mode)
+                try:
+                    reject_adapter(
+                        label,
+                        environment_for_root(unsafe_root, source=local_adapter_environment),
+                        "setup-python installation root is group/world writable",
+                    )
+                finally:
+                    unsafe_root.chmod(0o700)
+
+            for label, mode in (
+                ("group-writable-loader", 0o720),
+                ("world-writable-loader", 0o702),
+            ):
+                unsafe_loader_root = temporary / label
+                unsafe_loader_root.mkdir(mode=0o700)
+                (unsafe_loader_root / "bin").mkdir(mode=0o500)
+                (unsafe_loader_root / "include").mkdir(mode=0o500)
+                unsafe_loader = unsafe_loader_root / "lib"
+                unsafe_loader.mkdir(mode=0o700)
+                (unsafe_loader / "pkgconfig").mkdir(mode=0o500)
+                unsafe_loader.chmod(mode)
+                unsafe_loader_root.chmod(0o500)
+                protected_paths = (
+                    unsafe_loader_root,
+                    unsafe_loader_root / "bin",
+                    unsafe_loader_root / "include",
+                    unsafe_loader,
+                    unsafe_loader / "pkgconfig",
+                )
+                try:
+                    reject_adapter(
+                        label,
+                        environment_for_root(
+                            unsafe_loader_root,
+                            source=local_adapter_environment,
+                        ),
+                        "setup-python loader directory is group/world writable",
+                    )
+                finally:
+                    for path in protected_paths:
+                        path.chmod(0o700)
+
+            owner_writable_root = temporary / "owner-writable-root"
+            owner_writable_root.mkdir(mode=0o700)
+            (owner_writable_root / "lib").mkdir(mode=0o700)
+            reject_adapter(
+                "effective-user-writable installation",
+                environment_for_root(
+                    owner_writable_root,
+                    source=local_adapter_environment,
+                ),
+                "setup-python installation root is writable by the effective user",
+            )
+
+            owner_writable_loader_root = temporary / "owner-writable-loader"
+            owner_writable_loader_root.mkdir(mode=0o700)
+            (owner_writable_loader_root / "bin").mkdir(mode=0o500)
+            (owner_writable_loader_root / "include").mkdir(mode=0o500)
+            owner_writable_loader = owner_writable_loader_root / "lib"
+            owner_writable_loader.mkdir(mode=0o700)
+            (owner_writable_loader / "pkgconfig").mkdir(mode=0o500)
+            owner_writable_loader_root.chmod(0o500)
+            owner_loader_paths = (
+                owner_writable_loader_root,
+                owner_writable_loader_root / "bin",
+                owner_writable_loader_root / "include",
+                owner_writable_loader,
+                owner_writable_loader / "pkgconfig",
+            )
+            try:
+                reject_adapter(
+                    "effective-user-writable loader",
+                    environment_for_root(
+                        owner_writable_loader_root,
+                        source=local_adapter_environment,
+                    ),
+                    "setup-python loader directory is writable by the effective user",
+                )
+            finally:
+                for path in owner_loader_paths:
+                    path.chmod(0o700)
+
+            wrong_version_environment = adapter_environment.copy()
+            wrong_version_environment["R11A_SETUP_PYTHON_VERSION"] = "3.12.12"
+            reject_adapter(
+                "wrong action version",
+                wrong_version_environment,
+                "setup-python action output version is not 3.12.13",
+            )
+
+            wrong_version_root = temporary / "Python-3.12.12"
+            wrong_version_root.mkdir(mode=0o700)
+            (wrong_version_root / "bin").mkdir(mode=0o700)
+            (wrong_version_root / "include").mkdir(mode=0o700)
+            (wrong_version_root / "lib").mkdir(mode=0o700)
+            (wrong_version_root / "lib/pkgconfig").mkdir(mode=0o700)
+            (wrong_version_root / "bin/python").symlink_to(python_executable)
+            for path in (
+                wrong_version_root,
+                wrong_version_root / "bin",
+                wrong_version_root / "include",
+                wrong_version_root / "lib",
+                wrong_version_root / "lib/pkgconfig",
+            ):
+                path.chmod(0o500)
+            try:
+                reject_adapter(
+                    "wrong Python version root",
+                    environment_for_root(
+                        wrong_version_root,
+                        source=local_adapter_environment,
+                    ),
+                    "active Python executable is outside the exact setup-python installation",
+                )
+            finally:
+                for path in (
+                    wrong_version_root,
+                    wrong_version_root / "bin",
+                    wrong_version_root / "include",
+                    wrong_version_root / "lib",
+                    wrong_version_root / "lib/pkgconfig",
+                ):
+                    path.chmod(0o700)
+
+            for key, expected_output in (
+                ("PKG_CONFIG_PATH", "PKG_CONFIG_PATH does not exactly match pythonLocation/lib/pkgconfig"),
+                ("Python_ROOT_DIR", "Python_ROOT_DIR does not match pythonLocation"),
+                ("Python2_ROOT_DIR", "Python2_ROOT_DIR does not match pythonLocation"),
+                ("Python3_ROOT_DIR", "Python3_ROOT_DIR does not match pythonLocation"),
+                (
+                    "R11A_SETUP_PYTHON_PATH",
+                    "action output path does not exactly match pythonLocation/bin/python",
+                ),
+            ):
+                environment = adapter_environment.copy()
+                environment[key] = "/usr"
+                reject_adapter(f"different root for {key}", environment, expected_output)
+
+            for key in _BUILD_OVERRIDE_KEYS:
+                if key in _LOADER_KEYS:
+                    continue
+                environment = adapter_environment.copy()
+                environment[key] = "r11a-test-override"
+                reject_adapter(
+                    f"compiler override {key}",
+                    environment,
+                    f"unapproved build override is set: {key}",
+                )
+
+            for key in ("LD_AUDIT", "LD_PRELOAD", "LD_RUN_PATH"):
+                environment = adapter_environment.copy()
+                environment[key] = "/r11a-test-override"
+                reject_adapter(
+                    f"loader override {key}",
+                    environment,
+                    f"unapproved build override is set: {key}",
+                )
+
+            for cycle in range(2):
+                environment_file = temporary / f"accepted-{cycle}.env"
+                self.run_boundary_helper(
+                    fixture,
+                    ("setup-python", "prepare"),
+                    environment_file,
+                    adapter_environment,
+                    expected_output="R11A setup-python loader attested and scrubbed",
+                )
+                boundary_values = _read_environment(environment_file)
+                live_environment = {**adapter_environment, **boundary_values}
+                self.run_boundary_helper(
+                    fixture,
+                    ("setup-python", "verify"),
+                    environment_file,
+                    live_environment,
+                    expected_output="R11A setup-python loader attested and scrubbed",
+                )
+                boundary_root = Path(boundary_values["R11A_NATIVE_BOUNDARY_ROOT"])
+                self.run_boundary_helper(
+                    fixture,
+                    ("setup-python", "cleanup"),
+                    environment_file,
+                    live_environment,
+                    expected_output="R11A setup-python loader attested and scrubbed",
+                )
+                self.assertFalse(environment_file.exists())
+                self.assertFalse(boundary_root.exists())
+
+            self.assertFalse(
+                adversarial_trace.exists(),
+                "native-boundary operation used a command from the ambient PATH",
+            )
 
     def test_focused_literal_normal_optimized_and_bytecode_disabled(self) -> None:
         if os.environ.get(_NESTED):

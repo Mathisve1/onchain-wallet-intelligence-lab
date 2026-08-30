@@ -12,6 +12,9 @@ readonly SOURCE_PATH="governance/r11a_bytecode_boundary.c"
 readonly BUILDER_PATH="governance/r11a_native_boundary.sh"
 readonly ARTIFACT_NAME="sitecustomize.abi3.so"
 readonly REFERENCE_NAME="sitecustomize.reference.so"
+readonly SETUP_PYTHON_VERSION="3.12.13"
+readonly SETUP_PYTHON_ARCHITECTURE="x64"
+readonly SETUP_PYTHON_ACTION_SHA="a26af69be951a213d495a4c3e4e4022e16d87065"
 
 die() {
     printf 'R11A native boundary: %s\n' "$*" >&2
@@ -66,10 +69,181 @@ reject_build_overrides() {
     for name in \
         CC CFLAGS CPPFLAGS CXXFLAGS LDFLAGS CPATH C_INCLUDE_PATH \
         CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH LIBRARY_PATH COMPILER_PATH \
-        GCC_EXEC_PREFIX LD_PRELOAD LD_LIBRARY_PATH LD_RUN_PATH \
-        COLLECT_GCC_OPTIONS SOURCE_DATE_EPOCH; do
+        GCC_EXEC_PREFIX LD_AUDIT LD_PRELOAD LD_LIBRARY_PATH LD_RUN_PATH \
+        COLLECT_GCC_OPTIONS SOURCE_DATE_EPOCH \
+        R11A_NATIVE_TRUSTED_PYTHON_CONFIG; do
         [[ -z ${!name-} ]] || die "unapproved build override is set: $name"
     done
+}
+
+assert_loader_environment_absent() {
+    local name
+    for name in LD_AUDIT LD_LIBRARY_PATH LD_PRELOAD LD_RUN_PATH; do
+        [[ ! -v $name ]] || die "loader variable survived sanitization: $name"
+    done
+}
+
+assert_setup_python_path() {
+    local path=$1
+    local kind=$2
+    local label=$3
+    local expected_uid=$4
+    local mode uid numeric_mode
+
+    case "$kind" in
+        directory)
+            [[ -d "$path" && ! -L "$path" ]] || die "setup-python $label is not a physical directory: $path"
+            ;;
+        file)
+            [[ -f "$path" && ! -L "$path" ]] || die "setup-python $label is not a physical regular file: $path"
+            ;;
+        *)
+            die "internal setup-python path kind is invalid: $kind"
+            ;;
+    esac
+    [[ $(physical_path "$path") = "$path" ]] || die "setup-python $label is not canonical and physical: $path"
+    if [[ "$kind" = file ]]; then
+        [[ $(stat -c '%h' -- "$path") = 1 ]] || die "setup-python $label has an unsafe hard-link count: $path"
+    fi
+    uid=$(stat -c '%u' -- "$path")
+    [[ "$uid" = "$expected_uid" ]] || die "setup-python $label owner differs from installation owner: $path"
+    mode=$(stat -c '%a' -- "$path")
+    numeric_mode=$((8#$mode))
+    (( (numeric_mode & 8#022) == 0 )) || die "setup-python $label is group/world writable: $path"
+    (( (numeric_mode & 8#7000) == 0 )) || die "setup-python $label has special permission bits: $path"
+    if [[ "$uid" = "$(id -u)" ]]; then
+        (( (numeric_mode & 8#200) == 0 )) || \
+            die "setup-python $label is writable by the effective user: $path"
+    fi
+}
+
+assert_setup_python_system_helper() {
+    local path=$1
+    local expected_mode=$2
+    local label=$3
+    [[ -f "$path" && ! -L "$path" ]] || die "setup-python $label is not a physical regular file: $path"
+    [[ $(physical_path "$path") = "$path" ]] || die "setup-python $label is not canonical and physical: $path"
+    [[ $(stat -c '%u:%g' -- "$path") = 0:0 ]] || die "setup-python $label is not root-owned: $path"
+    [[ $(stat -c '%h' -- "$path") = 1 ]] || die "setup-python $label has an unsafe hard-link count: $path"
+    [[ $(stat -c '%a' -- "$path") = "$expected_mode" ]] || \
+        die "setup-python $label has an unexpected mode: $path"
+}
+
+assert_setup_python_tree_shape() {
+    local root=$1
+    local unsafe target mount_target mount_table link_targets
+
+    if ! mount_table=$(
+        /usr/bin/env -i PATH=/usr/bin:/bin \
+            /usr/bin/findmnt -k -r -n -o TARGET
+    ); then
+        die "setup-python mount-table inspection failed"
+    fi
+    [[ -n "$mount_table" ]] || die "setup-python mount-table inspection returned no mounts"
+    while IFS= read -r mount_target; do
+        [[ "$mount_target" != "$root" && "$mount_target" != "$root/"* ]] || \
+            die "setup-python installation contains a nested mount: $mount_target"
+    done <<<"$mount_table"
+
+    unsafe=$(find -P "$root" -xdev ! \( -type d -o -type f -o -type l \) -print -quit)
+    [[ -z "$unsafe" ]] || die "setup-python installation contains a special file: $unsafe"
+    unsafe=$(find -P "$root" -xdev -type f -links +1 -print -quit)
+    [[ -z "$unsafe" ]] || die "setup-python installation contains a multiply linked file: $unsafe"
+    if ! link_targets=$(
+        find -P "$root" -xdev -type l -exec /usr/bin/readlink -f -- '{}' +
+    ); then
+        die "setup-python installation symlink inspection failed"
+    fi
+    if [[ -n "$link_targets" ]]; then
+        while IFS= read -r target; do
+            [[ "$target" = "$root"/* ]] || \
+                die "setup-python installation symlink escapes the installation: $target"
+        done <<<"$link_targets"
+    fi
+}
+
+assert_frozen_setup_python_tree() {
+    local root=$1
+    local unsafe
+
+    assert_setup_python_tree_shape "$root"
+    unsafe=$(find -P "$root" -xdev ! -uid 0 -print -quit)
+    [[ -z "$unsafe" ]] || die "setup-python installation contains a non-root-owned path: $unsafe"
+    unsafe=$(find -P "$root" -xdev ! -type l -perm /022 -print -quit)
+    [[ -z "$unsafe" ]] || die "setup-python installation contains a group/world-writable path: $unsafe"
+    unsafe=$(find -P "$root" -xdev ! -type l -perm /7000 -print -quit)
+    [[ -z "$unsafe" ]] || die "setup-python installation contains a path with special permission bits: $unsafe"
+}
+
+assert_github_frozen_setup_python_tree() {
+    local root=$1
+    local runner_tool_cache=$2
+    local path
+    local -a chain=(
+        /opt
+        "$runner_tool_cache"
+        "$runner_tool_cache/Python"
+        "$runner_tool_cache/Python/$SETUP_PYTHON_VERSION"
+        "$root"
+    )
+
+    for path in "${chain[@]}"; do
+        assert_setup_python_path "$path" directory "trust-chain component" 0
+    done
+    assert_frozen_setup_python_tree "$root"
+}
+
+freeze_github_setup_python_tree() {
+    local root=$1
+    local runner_tool_cache=$2
+    local path observed
+    local -a chain=(
+        /opt
+        "$runner_tool_cache"
+        "$runner_tool_cache/Python"
+        "$runner_tool_cache/Python/$SETUP_PYTHON_VERSION"
+        "$root"
+    )
+    local -a identities=()
+
+    [[ $(id -u) != 0 ]] || die "GitHub setup-python trust bootstrap must run as the unprivileged runner identity"
+    assert_setup_python_system_helper /usr/bin/env 755 "environment scrubber"
+    assert_setup_python_system_helper /usr/bin/sudo 4755 "privilege boundary"
+    assert_setup_python_system_helper /usr/bin/chown 755 "ownership helper"
+    assert_setup_python_system_helper /usr/bin/chmod 755 "mode helper"
+    assert_setup_python_system_helper /usr/bin/find 755 "tree-walk helper"
+    assert_setup_python_system_helper /usr/bin/findmnt 755 "mount-table helper"
+    assert_setup_python_system_helper /usr/bin/readlink 755 "symlink-resolution helper"
+
+    for path in "${chain[@]}"; do
+        [[ -d "$path" && ! -L "$path" ]] || die "setup-python trust-chain component is not a physical directory: $path"
+        [[ $(physical_path "$path") = "$path" ]] || die "setup-python trust-chain component is not canonical and physical: $path"
+        identities+=("$(stat -c '%d:%i' -- "$path")")
+    done
+    assert_setup_python_tree_shape "$root"
+
+    # The pinned action runs before repository code.  Freeze its exact hosted
+    # tool-cache path from the already scrubbed environment so the runner user
+    # cannot mutate or rename loader, header, interpreter, or helper bytes.
+    for path in "${chain[@]:1:3}"; do
+        /usr/bin/env -i PATH=/usr/bin:/bin \
+            /usr/bin/sudo -n /usr/bin/chown 0:0 -- "$path"
+        /usr/bin/env -i PATH=/usr/bin:/bin \
+            /usr/bin/sudo -n /usr/bin/chmod go-w -- "$path"
+    done
+    /usr/bin/env -i PATH=/usr/bin:/bin \
+        /usr/bin/sudo -n /usr/bin/find -P "$root" -xdev \
+        -exec /usr/bin/chown -h 0:0 -- '{}' +
+    /usr/bin/env -i PATH=/usr/bin:/bin \
+        /usr/bin/sudo -n /usr/bin/find -P "$root" -xdev ! -type l \
+        -exec /usr/bin/chmod go-w -- '{}' +
+
+    for path in "${!chain[@]}"; do
+        observed=$(stat -c '%d:%i' -- "${chain[$path]}")
+        [[ "$observed" = "${identities[$path]}" ]] || \
+            die "setup-python trust-chain identity changed during freeze: ${chain[$path]}"
+    done
+    assert_github_frozen_setup_python_tree "$root" "$runner_tool_cache"
 }
 
 check_required_commands() {
@@ -81,7 +255,6 @@ check_required_commands() {
         require_command "$name"
     done
     require_command cc
-    require_command python3-config
 }
 
 bind_repository_file() {
@@ -165,11 +338,17 @@ command_output_sha256() {
 }
 
 collect_toolchain_contract() {
-    local includes include_argument candidate python_version
+    local includes include_argument candidate python_version requested_python_config
     local -a include_arguments=()
     local -a unique_includes=()
 
-    PYTHON_CONFIG_REALPATH=$(physical_path "$(command -v python3-config)")
+    requested_python_config=${R11A_NATIVE_TRUSTED_PYTHON_CONFIG-}
+    if [[ -n "$requested_python_config" ]]; then
+        PYTHON_CONFIG_REALPATH=$(physical_path "$requested_python_config")
+    else
+        require_command python3-config
+        PYTHON_CONFIG_REALPATH=$(physical_path "$(command -v python3-config)")
+    fi
     [[ -f "$PYTHON_CONFIG_REALPATH" ]] || die "python3-config is not a regular file"
     PYTHON_CONFIG_SHA256=$(sha256_file "$PYTHON_CONFIG_REALPATH")
     includes=$("$PYTHON_CONFIG_REALPATH" --includes)
@@ -232,6 +411,185 @@ collect_toolchain_contract() {
         source.c
     )
     COMPILE_ARGV_SHA256=$(printf '%s\0' "${COMPILE_ARGUMENTS[@]}" | sha256_stream)
+}
+
+setup_python_adapter() {
+    local operation=$1
+    local env_file=$2
+    local saved_python_location=${pythonLocation-}
+    local saved_pkg_config_path=${PKG_CONFIG_PATH-}
+    local saved_python_root=${Python_ROOT_DIR-}
+    local saved_python2_root=${Python2_ROOT_DIR-}
+    local saved_python3_root=${Python3_ROOT_DIR-}
+    local saved_ld_audit=${LD_AUDIT-}
+    local saved_loader_path=${LD_LIBRARY_PATH-}
+    local saved_ld_preload=${LD_PRELOAD-}
+    local saved_ld_run_path=${LD_RUN_PATH-}
+    local saved_action_version=${R11A_SETUP_PYTHON_VERSION-}
+    local saved_action_python_path=${R11A_SETUP_PYTHON_PATH-}
+    local saved_internal_python_config=${R11A_NATIVE_TRUSTED_PYTHON_CONFIG-}
+    local root loader bin_root include_root pkgconfig_root python_real config_prefix
+    local installation_uid effective_uid runner_tool_cache runner_temp
+    local scrubbed_probe
+    local -a probe_lines=()
+
+    case "$operation" in
+        prepare|verify|cleanup)
+            ;;
+        *)
+            die "unsupported setup-python adapter operation: $operation"
+            ;;
+    esac
+
+    # Capture only with shell builtins, then remove every loader/setup hint
+    # before the first repository, toolchain, hash, or inspection subprocess.
+    unset \
+        LD_AUDIT LD_LIBRARY_PATH LD_PRELOAD LD_RUN_PATH PKG_CONFIG_PATH \
+        Python_ROOT_DIR Python2_ROOT_DIR Python3_ROOT_DIR pythonLocation \
+        R11A_SETUP_PYTHON_VERSION R11A_SETUP_PYTHON_PATH \
+        R11A_NATIVE_TRUSTED_PYTHON_CONFIG
+    PATH=/usr/bin:/bin
+    export PATH
+    assert_loader_environment_absent
+
+    [[ -z "$saved_internal_python_config" ]] || \
+        die "unapproved build override is set: R11A_NATIVE_TRUSTED_PYTHON_CONFIG"
+    [[ -z "$saved_ld_audit" ]] || die "unapproved build override is set: LD_AUDIT"
+    [[ -z "$saved_ld_preload" ]] || die "unapproved build override is set: LD_PRELOAD"
+    [[ -z "$saved_ld_run_path" ]] || die "unapproved build override is set: LD_RUN_PATH"
+    [[ -n "$saved_python_location" ]] || die "setup-python pythonLocation is absent"
+    [[ -n "$saved_loader_path" ]] || die "setup-python LD_LIBRARY_PATH is absent"
+    [[ "$saved_python_location" != *:* ]] || die "setup-python pythonLocation contains a separator"
+    [[ "$saved_loader_path" != *:* ]] || die "setup-python LD_LIBRARY_PATH must contain exactly one component"
+    safe_absolute_path "$saved_python_location"
+    safe_absolute_path "$saved_loader_path"
+    [[ "$saved_python_location" != /tmp && "$saved_python_location" != /tmp/* ]] || \
+        die "setup-python installation is under a temporary attacker-controlled path"
+    [[ "$saved_loader_path" = "$saved_python_location/lib" ]] || \
+        die "setup-python LD_LIBRARY_PATH does not exactly match pythonLocation/lib"
+    [[ "$saved_pkg_config_path" = "$saved_python_location/lib/pkgconfig" ]] || \
+        die "setup-python PKG_CONFIG_PATH does not exactly match pythonLocation/lib/pkgconfig"
+    [[ "$saved_python_root" = "$saved_python_location" ]] || \
+        die "setup-python Python_ROOT_DIR does not match pythonLocation"
+    [[ "$saved_python2_root" = "$saved_python_location" ]] || \
+        die "setup-python Python2_ROOT_DIR does not match pythonLocation"
+    [[ "$saved_python3_root" = "$saved_python_location" ]] || \
+        die "setup-python Python3_ROOT_DIR does not match pythonLocation"
+    [[ "$saved_action_version" = "$SETUP_PYTHON_VERSION" ]] || \
+        die "setup-python action output version is not $SETUP_PYTHON_VERSION"
+    [[ "$saved_action_python_path" = "$saved_python_location/bin/python" ]] || \
+        die "setup-python action output path does not exactly match pythonLocation/bin/python"
+
+    check_required_commands
+    reject_build_overrides
+    collect_repository_contract
+    assert_loader_environment_absent
+
+    [[ "$saved_python_location" != "$REPOSITORY_ROOT" && \
+       "$saved_python_location" != "$REPOSITORY_ROOT/"* ]] || \
+        die "setup-python installation is inside the repository"
+    if [[ -n ${RUNNER_TEMP-} ]]; then
+        runner_temp=$(physical_path "$RUNNER_TEMP")
+        [[ "$saved_python_location" != "$runner_temp" && \
+           "$saved_python_location" != "$runner_temp/"* ]] || \
+            die "setup-python installation is inside RUNNER_TEMP"
+    fi
+
+    root=$(physical_path "$saved_python_location")
+    [[ "$root" = "$saved_python_location" ]] || die "setup-python pythonLocation is not canonical and physical"
+    loader=$(physical_path "$saved_loader_path")
+    [[ "$loader" = "$saved_loader_path" && "$loader" = "$root/lib" ]] || \
+        die "setup-python loader directory is not the exact physical pythonLocation/lib"
+    bin_root="$root/bin"
+    include_root="$root/include"
+    pkgconfig_root="$root/lib/pkgconfig"
+
+    if [[ ${GITHUB_ACTIONS-} = true ]]; then
+        [[ -n ${RUNNER_TOOL_CACHE-} ]] || die "RUNNER_TOOL_CACHE is absent in GitHub Actions"
+        safe_absolute_path "$RUNNER_TOOL_CACHE"
+        runner_tool_cache=$(physical_path "$RUNNER_TOOL_CACHE")
+        [[ "$runner_tool_cache" = "$RUNNER_TOOL_CACHE" ]] || \
+            die "RUNNER_TOOL_CACHE is not canonical and physical"
+        [[ "$runner_tool_cache" = /opt/hostedtoolcache ]] || \
+            die "RUNNER_TOOL_CACHE is not the GitHub-hosted Linux tool-cache root"
+        [[ "$root" = "$runner_tool_cache/Python/$SETUP_PYTHON_VERSION/$SETUP_PYTHON_ARCHITECTURE" ]] || \
+            die "setup-python installation does not match the exact runner tool-cache identity"
+        if [[ "$operation" = prepare ]]; then
+            freeze_github_setup_python_tree "$root" "$runner_tool_cache"
+        fi
+        assert_github_frozen_setup_python_tree "$root" "$runner_tool_cache"
+    fi
+
+    installation_uid=$(stat -c '%u' -- "$root")
+    effective_uid=$(id -u)
+    if [[ ${GITHUB_ACTIONS-} = true ]]; then
+        [[ "$effective_uid" != 0 ]] || die "GitHub setup-python adapter is running as root"
+        [[ "$installation_uid" = 0 ]] || die "setup-python installation is not frozen under root ownership"
+    fi
+
+    assert_setup_python_path "$root" directory "installation root" "$installation_uid"
+    assert_setup_python_path "$bin_root" directory "bin directory" "$installation_uid"
+    assert_setup_python_path "$loader" directory "loader directory" "$installation_uid"
+    assert_setup_python_path "$include_root" directory "include directory" "$installation_uid"
+    assert_setup_python_path "$pkgconfig_root" directory "pkg-config directory" "$installation_uid"
+
+    python_real=$(physical_path "$saved_action_python_path")
+    [[ "$python_real" = "$root/bin/python3.12" ]] || \
+        die "active Python executable is outside the exact setup-python installation"
+    [[ $(physical_path "$saved_action_python_path") = "$python_real" ]] || \
+        die "setup-python action output does not resolve to the active Python executable"
+    assert_setup_python_path "$python_real" file "Python executable" "$installation_uid"
+
+    readonly R11A_NATIVE_TRUSTED_PYTHON_CONFIG="$root/bin/python3-config"
+    collect_toolchain_contract
+    assert_loader_environment_absent
+    [[ "$PYTHON_VERSION" = "$SETUP_PYTHON_VERSION" ]] || die "setup-python headers have the wrong version"
+    [[ "$PYTHON_CONFIG_REALPATH" = "$root/bin/python3.12-config" ]] || \
+        die "python3-config is outside the exact setup-python installation"
+    [[ "$PYTHON_INCLUDE_REALPATH" = "$root/include/python3.12" ]] || \
+        die "Python headers are outside the exact setup-python installation"
+    assert_setup_python_path "$PYTHON_CONFIG_REALPATH" file "python3-config target" "$installation_uid"
+    assert_setup_python_path "$PYTHON_INCLUDE_REALPATH" directory "versioned include directory" "$installation_uid"
+    assert_setup_python_path "$PYTHON_INCLUDE_REALPATH/patchlevel.h" file "patchlevel header" "$installation_uid"
+    config_prefix=$(physical_path "$("$PYTHON_CONFIG_REALPATH" --prefix)")
+    [[ "$config_prefix" = "$root" ]] || die "python3-config prefix differs from pythonLocation"
+
+    if ! scrubbed_probe=$(
+        env -i \
+            PATH="$root/bin:/usr/bin:/bin" \
+            PYTHONSAFEPATH=1 \
+            PYTHONNOUSERSITE=1 \
+            LANG=C \
+            LC_ALL=C \
+            "$python_real" -I -S -c \
+            'import os, sys, sysconfig
+print(".".join(map(str, sys.version_info[:3])))
+print(os.path.realpath(sys.executable))
+print(os.path.realpath(sys.prefix))
+print(os.path.realpath(sys.base_prefix))
+print(os.path.realpath(sysconfig.get_path("include")))
+print(os.path.realpath(str(sysconfig.get_config_var("LIBDIR"))))
+print("present" if any(name in os.environ for name in ("LD_AUDIT", "LD_LIBRARY_PATH", "LD_PRELOAD", "LD_RUN_PATH")) else "absent")'
+    ); then
+        die "setup-python interpreter failed with the loader environment scrubbed"
+    fi
+    mapfile -t probe_lines <<<"$scrubbed_probe"
+    [[ ${#probe_lines[@]} = 7 ]] || die "setup-python interpreter identity probe has an invalid shape"
+    [[ ${probe_lines[0]} = "$SETUP_PYTHON_VERSION" ]] || die "setup-python interpreter version mismatch"
+    [[ ${probe_lines[1]} = "$python_real" ]] || die "setup-python interpreter executable mismatch"
+    [[ ${probe_lines[2]} = "$root" && ${probe_lines[3]} = "$root" ]] || \
+        die "setup-python interpreter prefix mismatch"
+    [[ ${probe_lines[4]} = "$PYTHON_INCLUDE_REALPATH" ]] || die "setup-python interpreter include mismatch"
+    [[ ${probe_lines[6]} = absent ]] || die "setup-python interpreter retained a loader variable"
+    if [[ ${GITHUB_ACTIONS-} = true ]]; then
+        [[ ${probe_lines[5]} = "$loader" ]] || die "setup-python interpreter LIBDIR mismatch"
+    fi
+    assert_loader_environment_absent
+
+    printf 'R11A setup-python loader attested and scrubbed: action=%s python=%s loader=%s owner_uid=%s\n' \
+        "$SETUP_PYTHON_ACTION_SHA" "$root" "$loader" "$installation_uid"
+
+    run_boundary_operation "$operation" "$env_file"
 }
 
 validate_elf() {
@@ -818,14 +1176,10 @@ cleanup_boundary() {
     printf 'R11A native boundary cleaned: %s\n' "$root"
 }
 
-main() {
-    local operation=${1-}
-    local env_file=${2-}
-    [[ $# = 2 ]] || die "usage: $BUILDER_PATH {prepare|verify|cleanup} ABSOLUTE_ENV_FILE"
-    check_required_commands
-    reject_build_overrides
-    collect_repository_contract
-    collect_toolchain_contract
+run_boundary_operation() {
+    local operation=$1
+    local env_file=$2
+    assert_loader_environment_absent
     case "$operation" in
         prepare)
             prepare_boundary "$env_file"
@@ -840,6 +1194,22 @@ main() {
             die "unsupported operation: $operation"
             ;;
     esac
+}
+
+main() {
+    local operation=${1-}
+    local env_file=${2-}
+    if [[ "$operation" = setup-python ]]; then
+        [[ $# = 3 ]] || die "usage: $BUILDER_PATH setup-python {prepare|verify|cleanup} ABSOLUTE_ENV_FILE"
+        setup_python_adapter "$2" "$3"
+        return
+    fi
+    [[ $# = 2 ]] || die "usage: $BUILDER_PATH {prepare|verify|cleanup} ABSOLUTE_ENV_FILE"
+    check_required_commands
+    reject_build_overrides
+    collect_repository_contract
+    collect_toolchain_contract
+    run_boundary_operation "$operation" "$env_file"
 }
 
 main "$@"
