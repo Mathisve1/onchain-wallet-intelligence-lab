@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 import re
+import stat
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -41,6 +45,26 @@ class ExactCIHeadTests(unittest.TestCase):
     def setUp(self) -> None:
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.boundary_text = BOUNDARY_HELPER.read_text(encoding="utf-8")
+
+    def _run_boundary_functions(
+        self,
+        command: str,
+        *arguments: str,
+    ) -> subprocess.CompletedProcess[str]:
+        marker = '\nmain "$@"\n'
+        self.assertEqual(self.boundary_text.count(marker), 1)
+        definitions = self.boundary_text.split(marker, 1)[0]
+        return subprocess.run(
+            ["/usr/bin/bash", "-s", "--", *arguments],
+            cwd="/",
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+            input=definitions + "\n" + command + "\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=30,
+        )
 
     def test_pull_request_uses_source_head_and_other_runs_use_github_sha(self) -> None:
         self.assertIn(
@@ -187,9 +211,65 @@ class ExactCIHeadTests(unittest.TestCase):
             'setup-python $label is writable by the effective user',
             self.boundary_text,
         )
-        self.assertIn(
-            "[[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]]",
-            self.boundary_text,
+        safe_start = self.boundary_text.index("safe_absolute_path() {")
+        safe_end = self.boundary_text.index("\n}\n\nphysical_path() {", safe_start) + 2
+        self.assertEqual(
+            self.boundary_text[safe_start:safe_end],
+            "safe_absolute_path() {\n"
+            "    local value=$1\n"
+            "    [[ \"$value\" =~ ^/[A-Za-z0-9._/-]+$ ]] || die \"path is outside the supported absolute-path grammar: $value\"\n"
+            "    [[ \"$value\" != *//* ]] || die \"path is not canonical: $value\"\n"
+            "    [[ \"$value\" != *:* ]] || die \"path contains a PYTHONPATH separator: $value\"\n"
+            "}",
+        )
+        physical_start = self.boundary_text.index("physical_path() {")
+        physical_end = self.boundary_text.index(
+            "\n}\n\nassert_literal_github_filesystem_root_observation() {",
+            physical_start,
+        ) + 2
+        self.assertEqual(
+            self.boundary_text[physical_start:physical_end],
+            "physical_path() {\n"
+            "    local value\n"
+            "    value=$(readlink -f -- \"$1\")\n"
+            "    safe_absolute_path \"$value\"\n"
+            "    printf '%s\\n' \"$value\"\n"
+            "}",
+        )
+        literal_start = self.boundary_text.index(
+            "assert_literal_github_filesystem_root() {"
+        )
+        literal_end = self.boundary_text.index(
+            "\n}\n\nassert_github_opt_ancestor_observation() {",
+            literal_start,
+        )
+        literal_body = self.boundary_text[literal_start:literal_end]
+        for required in (
+            '[[ $# = 0 ]]',
+            '[[ -d / && ! -L / ]]',
+            'resolved=$(/usr/bin/readlink -f -- /)',
+            "ownership_mode=$(/usr/bin/stat -c '%u:%g:%a' -- /)",
+            "identity=$(/usr/bin/stat -c '%d:%i' -- /)",
+            'if [[ -w / ]]; then',
+            'assert_literal_github_filesystem_root_observation',
+        ):
+            self.assertIn(required, literal_body)
+        self.assertNotIn("safe_absolute_path", literal_body)
+        self.assertNotIn("physical_path", literal_body)
+        self.assertIsNone(
+            re.search(r"physical_path[ \t]+/[ \t]*\)", self.boundary_text)
+        )
+        self.assertEqual(
+            self.boundary_text.count(
+                "\n    root_identity=$(assert_literal_github_filesystem_root)\n"
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.boundary_text.count(
+                "observed_root_identity=$(assert_literal_github_filesystem_root)"
+            ),
+            1,
         )
         self.assertIn(
             '0:0:777|0:0:755)',
@@ -208,16 +288,32 @@ class ExactCIHeadTests(unittest.TestCase):
             self.boundary_text,
         )
         self.assertIn(
-            "observed_identity=$(stat -c '%d:%i' -- /opt)",
+            "observed_opt_identity=$(stat -c '%d:%i' -- /opt)",
             self.boundary_text,
         )
         self.assertIn(
-            '[[ "$observed_identity" = "$opt_identity" ]]',
+            '"GitHub filesystem root" "$root_identity" "$observed_root_identity"',
             self.boundary_text,
         )
         self.assertIn(
-            '[[ ! -w /opt ]]',
+            '"GitHub /opt ancestor" "$opt_identity" "$observed_opt_identity"',
             self.boundary_text,
+        )
+        self.assertEqual(
+            self.boundary_text.count('if [[ -d /opt && ! -L /opt ]]; then'),
+            2,
+        )
+        self.assertEqual(
+            self.boundary_text.count(
+                '"$opt_contract" "$opt_writable" bootstrap'
+            ),
+            1,
+        )
+        self.assertEqual(
+            self.boundary_text.count(
+                '"$opt_contract" "$opt_writable" sealed'
+            ),
+            1,
         )
         self.assertEqual(
             self.boundary_text.count('    seal_github_opt_ancestor\n'),
@@ -250,6 +346,172 @@ class ExactCIHeadTests(unittest.TestCase):
             freeze_body.index('assert_setup_python_tree_shape "$root"'),
         )
         self.assertNotIn("sudo -E", self.boundary_text)
+
+        generic_cases = (
+            ("safe root", 'safe_absolute_path "$1"', "/"),
+            ("physical root", 'physical_path "$1"', "/"),
+            ("double slash", 'safe_absolute_path "$1"', "//"),
+            ("dot root", 'physical_path "$1"', "/./"),
+            ("parent root", 'physical_path "$1"', "/../"),
+            ("opt parent", 'physical_path "$1"', "/opt/.."),
+            ("opt double slash", 'safe_absolute_path "$1"', "/opt//"),
+            (
+                "opt normalized traversal",
+                'safe_absolute_path "$1"; resolved=$(physical_path "$1"); '
+                '[[ "$resolved" = "$1" ]] || die "path is not canonical: $1"',
+                "/opt/../opt",
+            ),
+            ("relative", 'safe_absolute_path "$1"', "relative/path"),
+            ("empty", 'safe_absolute_path "$1"', ""),
+            ("colon", 'safe_absolute_path "$1"', "/opt:other"),
+            ("newline", 'safe_absolute_path "$1"', "/opt\nbad"),
+            ("control", 'safe_absolute_path "$1"', "/opt\tbad"),
+            ("confusable slash", 'safe_absolute_path "$1"', "／opt"),
+        )
+        for label, command, value in generic_cases:
+            with self.subTest(generic_rejection=label):
+                completed = self._run_boundary_functions(command, value)
+                self.assertNotEqual(completed.returncode, 0, completed.stderr)
+        for command in ('safe_absolute_path "$1"', 'physical_path "$1"'):
+            with self.subTest(generic_root_reproduction=command):
+                completed = self._run_boundary_functions(command, "/")
+                self.assertIn(
+                    "path is outside the supported absolute-path grammar: /",
+                    completed.stderr,
+                )
+        physical_opt = self._run_boundary_functions('physical_path "$1"', "/opt")
+        self.assertEqual(physical_opt.returncode, 0, physical_opt.stderr)
+        self.assertEqual(physical_opt.stdout, "/opt\n")
+
+        literal_root = self._run_boundary_functions(
+            "assert_literal_github_filesystem_root",
+        )
+        if os.geteuid() == 0:
+            self.assertNotEqual(literal_root.returncode, 0)
+            self.assertIn(
+                "GitHub filesystem root is writable by the runner identity",
+                literal_root.stderr,
+            )
+        else:
+            self.assertEqual(literal_root.returncode, 0, literal_root.stderr)
+            self.assertRegex(literal_root.stdout, r"^[0-9]+:[0-9]+\n$")
+        literal_argument = self._run_boundary_functions(
+            'assert_literal_github_filesystem_root "$1"',
+            "/",
+        )
+        self.assertNotEqual(literal_argument.returncode, 0)
+        self.assertIn("does not accept path arguments", literal_argument.stderr)
+
+        observation_command = (
+            'assert_literal_github_filesystem_root_observation '
+            '"$1" "$2" "$3" "$4"'
+        )
+        valid_observation = self._run_boundary_functions(
+            observation_command,
+            "/",
+            "0:0:755",
+            "false",
+            "28:786433",
+        )
+        self.assertEqual(valid_observation.returncode, 0, valid_observation.stderr)
+        self.assertEqual(valid_observation.stdout, "28:786433\n")
+        invalid_observations = (
+            ("resolved", "/opt", "0:0:755", "false", "28:786433"),
+            ("owner", "/", "1:0:755", "false", "28:786433"),
+            ("group", "/", "0:1:755", "false", "28:786433"),
+            ("mode", "/", "0:0:775", "false", "28:786433"),
+            ("special bits", "/", "0:0:4755", "false", "28:786433"),
+            ("writable", "/", "0:0:755", "true", "28:786433"),
+            ("writable unknown", "/", "0:0:755", "unknown", "28:786433"),
+            ("identity", "/", "0:0:755", "false", "invalid"),
+        )
+        for label, *observation in invalid_observations:
+            with self.subTest(root_observation_rejection=label):
+                completed = self._run_boundary_functions(
+                    observation_command,
+                    *observation,
+                )
+                self.assertNotEqual(completed.returncode, 0, completed.stderr)
+
+        opt_observation_command = (
+            'assert_github_opt_ancestor_observation '
+            '"$1" "$2" "$3" "$4" "$5" "$6" "$7"'
+        )
+        valid_opt_observations = (
+            ("bootstrap 0777", "true", "/opt", "28:1", "28:2", "0:0:777", "true", "bootstrap"),
+            ("bootstrap 0755", "true", "/opt", "28:1", "28:2", "0:0:755", "false", "bootstrap"),
+            ("sealed 0755", "true", "/opt", "28:1", "28:2", "0:0:755", "false", "sealed"),
+        )
+        for label, *observation in valid_opt_observations:
+            with self.subTest(opt_observation_acceptance=label):
+                completed = self._run_boundary_functions(
+                    opt_observation_command,
+                    *observation,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+        invalid_opt_observations = (
+            ("symlink", "false", "/opt", "28:1", "28:2", "0:0:777", "true", "bootstrap"),
+            ("noncanonical", "true", "/tmp", "28:1", "28:2", "0:0:777", "true", "bootstrap"),
+            ("cross device", "true", "/opt", "28:1", "29:2", "0:0:777", "true", "bootstrap"),
+            ("wrong owner", "true", "/opt", "28:1", "28:2", "1:0:777", "true", "bootstrap"),
+            ("wrong group", "true", "/opt", "28:1", "28:2", "0:1:777", "true", "bootstrap"),
+            ("unexpected mode", "true", "/opt", "28:1", "28:2", "0:0:775", "true", "bootstrap"),
+            ("sealed wrong owner", "true", "/opt", "28:1", "28:2", "1:0:755", "false", "sealed"),
+            ("sealed wrong mode", "true", "/opt", "28:1", "28:2", "0:0:777", "false", "sealed"),
+            ("sealed writable", "true", "/opt", "28:1", "28:2", "0:0:755", "true", "sealed"),
+            ("identity", "true", "/opt", "28:1", "invalid", "0:0:777", "true", "bootstrap"),
+        )
+        for label, *observation in invalid_opt_observations:
+            with self.subTest(opt_observation_rejection=label):
+                completed = self._run_boundary_functions(
+                    opt_observation_command,
+                    *observation,
+                )
+                self.assertNotEqual(completed.returncode, 0, completed.stderr)
+
+        stable_identity = (
+            'assert_filesystem_identity_stable "$1" "$2" "$3"'
+        )
+        stable = self._run_boundary_functions(
+            stable_identity,
+            "GitHub filesystem root",
+            "28:1",
+            "28:1",
+        )
+        self.assertEqual(stable.returncode, 0, stable.stderr)
+        for label in ("GitHub filesystem root", "GitHub /opt ancestor"):
+            with self.subTest(identity_drift=label):
+                drift = self._run_boundary_functions(
+                    stable_identity,
+                    label,
+                    "28:1",
+                    "28:2",
+                )
+                self.assertNotEqual(drift.returncode, 0, drift.stderr)
+                self.assertIn(f"{label} identity changed during sealing", drift.stderr)
+
+        with tempfile.TemporaryDirectory(prefix="r11a-opt-seal-") as directory:
+            fixture = Path(directory) / "opt"
+            fixture.mkdir(mode=0o777)
+            os.chmod(fixture, 0o777)
+            before = fixture.stat()
+            for expected_initial_mode in (0o777, 0o755):
+                with self.subTest(opt_seal_initial_mode=oct(expected_initial_mode)):
+                    os.chmod(fixture, expected_initial_mode)
+                    completed = subprocess.run(
+                        ["/usr/bin/chmod", "0755", "--", str(fixture)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    observed = fixture.stat()
+                    self.assertEqual(
+                        (observed.st_dev, observed.st_ino),
+                        (before.st_dev, before.st_ino),
+                    )
+                    self.assertEqual(stat.S_IMODE(observed.st_mode), 0o755)
 
     def test_workflow_context_availability_and_runner_temp_scope(self) -> None:
         exact_commit = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"

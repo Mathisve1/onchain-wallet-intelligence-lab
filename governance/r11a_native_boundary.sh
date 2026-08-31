@@ -47,6 +47,106 @@ physical_path() {
     printf '%s\n' "$value"
 }
 
+assert_literal_github_filesystem_root_observation() {
+    local resolved=$1
+    local ownership_mode=$2
+    local writable=$3
+    local identity=$4
+
+    [[ "$resolved" = / ]] || die "GitHub filesystem root is not canonical and physical"
+    [[ "$ownership_mode" = 0:0:755 ]] || \
+        die "GitHub filesystem root does not match the trusted ownership/mode contract"
+    case "$writable" in
+        false)
+            ;;
+        true)
+            die "GitHub filesystem root is writable by the runner identity"
+            ;;
+        *)
+            die "GitHub filesystem root writability observation is invalid"
+            ;;
+    esac
+    [[ "$identity" =~ ^[0-9]+:[0-9]+$ ]] || \
+        die "GitHub filesystem root identity observation is invalid"
+    printf '%s\n' "$identity"
+}
+
+assert_literal_github_filesystem_root() {
+    local resolved ownership_mode writable identity
+
+    [[ $# = 0 ]] || die "literal GitHub filesystem root validator does not accept path arguments"
+    [[ -d / && ! -L / ]] || die "GitHub filesystem root is not a physical directory"
+    if ! resolved=$(/usr/bin/readlink -f -- /); then
+        die "GitHub filesystem root canonical resolution failed"
+    fi
+    if ! ownership_mode=$(/usr/bin/stat -c '%u:%g:%a' -- /); then
+        die "GitHub filesystem root ownership/mode inspection failed"
+    fi
+    if ! identity=$(/usr/bin/stat -c '%d:%i' -- /); then
+        die "GitHub filesystem root identity inspection failed"
+    fi
+    writable=false
+    if [[ -w / ]]; then
+        writable=true
+    fi
+    assert_literal_github_filesystem_root_observation \
+        "$resolved" "$ownership_mode" "$writable" "$identity"
+}
+
+assert_github_opt_ancestor_observation() {
+    local physical=$1
+    local resolved=$2
+    local root_identity=$3
+    local opt_identity=$4
+    local ownership_mode=$5
+    local writable=$6
+    local phase=$7
+
+    [[ "$physical" = true ]] || die "GitHub /opt ancestor is not a physical directory"
+    [[ "$resolved" = /opt ]] || die "GitHub /opt ancestor is not canonical and physical"
+    [[ "$root_identity" =~ ^[0-9]+:[0-9]+$ && "$opt_identity" =~ ^[0-9]+:[0-9]+$ ]] || \
+        die "GitHub /opt ancestor identity observation is invalid"
+    [[ "${opt_identity%%:*}" = "${root_identity%%:*}" ]] || \
+        die "GitHub /opt ancestor is not on the trusted root filesystem"
+    case "$writable" in
+        true|false)
+            ;;
+        *)
+            die "GitHub /opt ancestor writability observation is invalid"
+            ;;
+    esac
+    case "$phase" in
+        bootstrap)
+            case "$ownership_mode" in
+                0:0:777|0:0:755)
+                    ;;
+                *)
+                    die "GitHub /opt ancestor does not match the exact bootstrap contract: $ownership_mode"
+                    ;;
+            esac
+            ;;
+        sealed)
+            [[ "$ownership_mode" = 0:0:755 ]] || \
+                die "GitHub /opt ancestor is not sealed root:root mode 0755"
+            [[ "$writable" = false ]] || \
+                die "GitHub /opt ancestor remains writable by the runner identity"
+            ;;
+        *)
+            die "GitHub /opt ancestor observation phase is invalid"
+            ;;
+    esac
+}
+
+assert_filesystem_identity_stable() {
+    local label=$1
+    local expected=$2
+    local observed=$3
+
+    [[ "$expected" =~ ^[0-9]+:[0-9]+$ && "$observed" =~ ^[0-9]+:[0-9]+$ ]] || \
+        die "$label identity observation is invalid"
+    [[ "$observed" = "$expected" ]] || die "$label identity changed during sealing"
+}
+
 assert_regular_owned_file() {
     local path=$1
     local expected_mode=$2
@@ -176,39 +276,52 @@ assert_frozen_setup_python_tree() {
 }
 
 assert_github_opt_ancestor_sealed() {
-    [[ -d / && ! -L / ]] || die "GitHub filesystem root is not a physical directory"
-    [[ $(physical_path /) = / ]] || die "GitHub filesystem root is not canonical and physical"
-    [[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]] || \
-        die "GitHub filesystem root does not match the trusted ownership/mode contract"
-    [[ -d /opt && ! -L /opt ]] || die "GitHub /opt ancestor is not a physical directory"
-    [[ $(physical_path /opt) = /opt ]] || die "GitHub /opt ancestor is not canonical and physical"
-    [[ $(stat -c '%d' -- /opt) = "$(stat -c '%d' -- /)" ]] || \
-        die "GitHub /opt ancestor is not on the trusted root filesystem"
-    [[ $(stat -c '%u:%g:%a' -- /opt) = 0:0:755 ]] || \
-        die "GitHub /opt ancestor is not sealed root:root mode 0755"
-    [[ ! -w /opt ]] || die "GitHub /opt ancestor remains writable by the runner identity"
+    local root_identity opt_resolved opt_identity opt_contract opt_writable
+    local opt_physical=false
+
+    root_identity=$(assert_literal_github_filesystem_root)
+    opt_resolved=
+    opt_identity=
+    opt_contract=
+    opt_writable=unknown
+    if [[ -d /opt && ! -L /opt ]]; then
+        opt_physical=true
+        opt_resolved=$(physical_path /opt)
+        opt_identity=$(stat -c '%d:%i' -- /opt)
+        opt_contract=$(stat -c '%u:%g:%a' -- /opt)
+        opt_writable=false
+        if [[ -w /opt ]]; then
+            opt_writable=true
+        fi
+    fi
+    assert_github_opt_ancestor_observation \
+        "$opt_physical" "$opt_resolved" "$root_identity" "$opt_identity" \
+        "$opt_contract" "$opt_writable" sealed
 }
 
 seal_github_opt_ancestor() {
-    local opt_identity observed_identity opt_contract
+    local root_identity opt_resolved opt_identity opt_contract opt_writable
+    local observed_root_identity observed_opt_identity
+    local opt_physical=false
 
-    [[ -d / && ! -L / ]] || die "GitHub filesystem root is not a physical directory"
-    [[ $(physical_path /) = / ]] || die "GitHub filesystem root is not canonical and physical"
-    [[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]] || \
-        die "GitHub filesystem root does not match the trusted ownership/mode contract"
-    [[ -d /opt && ! -L /opt ]] || die "GitHub /opt ancestor is not a physical directory"
-    [[ $(physical_path /opt) = /opt ]] || die "GitHub /opt ancestor is not canonical and physical"
-    [[ $(stat -c '%d' -- /opt) = "$(stat -c '%d' -- /)" ]] || \
-        die "GitHub /opt ancestor is not on the trusted root filesystem"
-    opt_contract=$(stat -c '%u:%g:%a' -- /opt)
-    case "$opt_contract" in
-        0:0:777|0:0:755)
-            ;;
-        *)
-            die "GitHub /opt ancestor does not match the exact bootstrap contract: $opt_contract"
-            ;;
-    esac
-    opt_identity=$(stat -c '%d:%i' -- /opt)
+    root_identity=$(assert_literal_github_filesystem_root)
+    opt_resolved=
+    opt_identity=
+    opt_contract=
+    opt_writable=unknown
+    if [[ -d /opt && ! -L /opt ]]; then
+        opt_physical=true
+        opt_resolved=$(physical_path /opt)
+        opt_identity=$(stat -c '%d:%i' -- /opt)
+        opt_contract=$(stat -c '%u:%g:%a' -- /opt)
+        opt_writable=false
+        if [[ -w /opt ]]; then
+            opt_writable=true
+        fi
+    fi
+    assert_github_opt_ancestor_observation \
+        "$opt_physical" "$opt_resolved" "$root_identity" "$opt_identity" \
+        "$opt_contract" "$opt_writable" bootstrap
 
     # The exact Ubuntu hosted-runner image deliberately provisions /opt as
     # root:root 0777.  Seal that literal name-binding ancestor before any
@@ -216,9 +329,12 @@ seal_github_opt_ancestor() {
     /usr/bin/env -i PATH=/usr/bin:/bin \
         /usr/bin/sudo -n /usr/bin/chmod 0755 -- /opt
 
-    observed_identity=$(stat -c '%d:%i' -- /opt)
-    [[ "$observed_identity" = "$opt_identity" ]] || \
-        die "GitHub /opt ancestor identity changed during sealing"
+    observed_root_identity=$(assert_literal_github_filesystem_root)
+    observed_opt_identity=$(stat -c '%d:%i' -- /opt)
+    assert_filesystem_identity_stable \
+        "GitHub filesystem root" "$root_identity" "$observed_root_identity"
+    assert_filesystem_identity_stable \
+        "GitHub /opt ancestor" "$opt_identity" "$observed_opt_identity"
     assert_github_opt_ancestor_sealed
 }
 

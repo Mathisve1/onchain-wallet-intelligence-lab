@@ -21,7 +21,7 @@
   "aws_iam_mutations_executed_by_implementation": 0,
   "canonical_activation_present": false,
   "contract_id": "R11A-CORRECTIVE-R7-LOCAL-SEAL-001",
-  "contract_projection_sha256": "a2f513309cfe6d4d0f1325dd08db29960dd7a8235781fae12ad539b756dfc647",
+  "contract_projection_sha256": "ab87b49525d573dcda03e68fcae683ec5cfd570fe30d5d55baa3995ecaa67e60",
   "diagnostic_id": "HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002",
   "diagnostic_rows_created_by_implementation": 0,
   "downstream_authorizations": {
@@ -44,7 +44,7 @@
     "governance/generate_r11a_corrective_policies.py": "fa7d830e57512fc3437e50761a37ee64db93c3fb8f29f33463f2ecbfec974a6d",
     "governance/r11a_bytecode_boundary.c": "15c07b78d158f453be922a354b45af3b33b4b15c62e243dc692c6a22d791bcbf",
     "governance/r11a_github_review_evidence.py": "2598b52296eb15ce3c77c5272389f7c644b963dfc6fe4444808ae0ce4876f0ad",
-    "governance/r11a_native_boundary.sh": "5eeb94f9aba6a5d1d9413c0360cb24ebcfaefc552ff296589cf49ceddca540a8",
+    "governance/r11a_native_boundary.sh": "b40d22df62126e09bccdc04ed6ea9f2964413807265850cac6227b6d67aeaee7",
     "governance/r11a_post_approval_context.py": "25dd7c5f6d0ea02c8838d2af6e50e2e38bbefea85b808e819b7af5e74669145f",
     "governance/r11a_repository_provenance.py": "a54ce21bb278e4b8e5c19092216ee23f27bf7497ef4f3518136f3d48fab04ca9",
     "governance/r11a_stage_common_r4.py": "20f6751062c4bb2727269b744ba2956cc411b551db3e00298ba8951e6893a24a",
@@ -144,7 +144,7 @@
   "red_finding_count": 21,
   "repository_manifest_binding_mode": "ALL_ROWS_EXCEPT_SELF_OUTPUT_ROWS_EXACT_SHA256",
   "repository_manifest_path": "governance/REPOSITORY_MANIFEST.sha256",
-  "repository_manifest_projection_sha256": "e2bfcf5bd3cded6f3e4f8e283e3e1d99026bed880968403d8a45bb19fa09bf75",
+  "repository_manifest_projection_sha256": "fa1ddc62c188bdfb1c7831e2df258180afb69e146ad0641ca5b284e581fe65fd",
   "rerun_authorized": false,
   "runtime_authority": {
     "aws_iam_mutation": false,
@@ -212,7 +212,7 @@
     "tests/test_archive_inventory_r11a_runtime_binding_review.py": "bfbad56b9d5cd49797a3b4a0e66b602bf8619bc4dfe3b078402ac1dbbda5470c",
     "tests/test_archive_inventory_r11a_v2_bindings.py": "ad6095e825dbb747643a0b4d91771549b5b3903fa7e7f83ab9b0775be85e1e8b",
     "tests/test_archive_inventory_r11a_v2_preregistration.py": "b3da3794f35faee0a1514ee05896e02b2fadabfc8cd9e83be9be2b824a3e8988",
-    "tests/test_ci_exact_head.py": "0d973a360317de36fe3ca0a9613e4a112ee501ccc04494c142cdebfddbc8cbb9",
+    "tests/test_ci_exact_head.py": "92d14c00912d4acf25fb9d72c2d96261a7d27ce2f49e3c1c2397812011122557",
     "tests/test_r11a_workflow_identity.py": "caa08da83ec2e7811f74099fd31b9a9fd3ed0184985bcff1a11988a66a5e38ac"
   },
   "trading_authorizations": {
