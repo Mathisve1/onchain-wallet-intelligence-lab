@@ -43,7 +43,12 @@ byte-exact approval text is recorded with SHA-256
 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`
 and the canonical JSON receipt with SHA-256
 `531e61130b612fd12503e60ff56d1c3d51b05a64bb2785f1e10fa9c5471c7ae6`;
-the record awaits independent exact-head rereview after validator hardening.
+independent COMMENTED/GREEN review `5033303996` validated that exact G2 record
+at head `63526d6c39c9225e647a18693c70ec8e73535ff4`. The legacy future-stage
+validator chain is now aligned as an inert repository candidate and awaits its
+own independent exact-head review. The approved current pricing candidate is
+not installed at the historical runtime snapshot path; that exact byte
+projection remains a separately reviewed future installation prerequisite.
 The historical G1 package remains an
 immutable `AWAITING_EXPLICIT_OWNER_APPROVAL` readiness snapshot. PR #148
 remains draft and is not GitHub approval or runtime authority. The workflow

@@ -4,8 +4,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+_REPOSITORY_ROOT = Path(__file__).absolute().parents[1]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
+import difflib as _r11a_bytecode_boundary  # noqa: E402,F401
 
 try:
     from governance.regenerate_manifest import render_manifest
@@ -38,9 +44,11 @@ CANDIDATE_WORKFLOW = (
     "hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml"
 )
 DEVELOPMENT_WORKFLOW = ".github/workflows/r11a-r7-dev.yml"
+CONTINUOUS_INTEGRATION_WORKFLOW = ".github/workflows/ci.yml"
 REPOSITORY_MANIFEST = "governance/REPOSITORY_MANIFEST.sha256"
 
 R7_CODE_PATHS = (
+    "research/__init__.py",
     "research/archive_inventory/r11a_corrective/__init__.py",
     "research/archive_inventory/r11a_corrective/_artifact_contract_core_r7.py",
     "research/archive_inventory/r11a_corrective/_artifact_core_r7.py",
@@ -80,26 +88,47 @@ R7_CODE_PATHS = (
 GOVERNANCE_PATHS = (
     "governance/_validate_r11a_runtime_binding_core_r7.py",
     "governance/generate_r11a_corrective_policies.py",
+    "governance/r11a_github_review_evidence.py",
+    "governance/r11a_bytecode_boundary.c",
+    "governance/r11a_native_boundary.sh",
+    "governance/r11a_post_approval_context.py",
+    "governance/r11a_repository_provenance.py",
+    "governance/r11a_stage_common_r4.py",
+    "governance/r11a_workflow_identity.py",
     "governance/regenerate_manifest.py",
     "governance/run_r11a_network_deny.py",
     "governance/seal_r11a_corrective_r7.py",
     "governance/seal_r11a_v2_preregistration.py",
+    "governance/validate_r11a_activation_r4.py",
+    "governance/validate_r11a_approval_r4.py",
     "governance/validate_r11a_execution_artifact_r7.py",
+    "governance/validate_r11a_execution_release_r4.py",
+    "governance/validate_r11a_g2_owner_approval.py",
+    "governance/validate_r11a_post_approval_validator_alignment.py",
     "governance/validate_repository.py",
+    "governance/validate_r11a_role_attestation_r4.py",
+    "governance/validate_r11a_role_configuration_candidate_r4.py",
+    "governance/validate_r11a_role_preflight_evidence_r4.py",
     "governance/validate_r11a_runtime_binding_r7.py",
     "governance/validate_r11a_v2_bindings.py",
     "governance/validate_r11a_v2_preregistration.py",
+    "governance/validate_r11a_workflow_installation_r4.py",
 )
 
 SUPPORTING_PATHS = (
     ".gitattributes",
+    CONTINUOUS_INTEGRATION_WORKFLOW,
     DEVELOPMENT_WORKFLOW,
+    "DECISION_LOG.md",
     "PROJECT_STATE.md",
     "README.md",
     "ROADMAP.md",
     "research/archive_inventory/r11/R11_72H_SELECTION.json",
     "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json",
     "research/archive_inventory/r11a/R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_PREREGISTRATION.json",
+    "research/archive_inventory/r11a_alignment/R11A_POST_APPROVAL_VALIDATOR_ALIGNMENT.json",
+    "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json",
+    "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt",
     "research/archive_inventory/r11a_corrective/README.md",
     "research/archive_inventory/r11a_corrective/R11A_DEPENDENCIES.json",
     "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json",
@@ -108,6 +137,12 @@ SUPPORTING_PATHS = (
     "research/archive_inventory/r11a_corrective/R11A_RED_REVIEW_FINDINGS.json",
     "research/archive_inventory/r11a_corrective/R11A_RESOURCE_FEASIBILITY_R3.json",
     "research/archive_inventory/r11a_corrective/R11A_ROLE_DECISION.json",
+    "research/archive_inventory/r11a_g1/R11A_G1_EXECUTION_ENVELOPE.json",
+    "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_PACKAGE.json",
+    "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt",
+    "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json",
+    "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SNAPSHOT_CANDIDATE.json",
+    "research/archive_inventory/r11a_g1/R11A_G1_STATUS.json",
     SEALED_AMENDMENT,
     "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.md",
     V2_BINDINGS,
@@ -117,24 +152,52 @@ SUPPORTING_PATHS = (
 )
 
 TEST_PATHS = (
+    "tests/test_000_r11a_import_isolation.py",
     "tests/test_archive_inventory_r11a_corrective_artifacts.py",
     "tests/test_archive_inventory_r11a_corrective_r3.py",
     "tests/test_archive_inventory_r11a_corrective_r7.py",
     "tests/test_archive_inventory_r11a_corrective_r7_precedence.py",
+    "tests/test_archive_inventory_r11a_execution_artifact_hardening.py",
+    "tests/test_archive_inventory_r11a_g2_owner_approval.py",
+    "tests/test_archive_inventory_r11a_github_review_evidence.py",
+    "tests/test_archive_inventory_r11a_post_approval_validator_alignment.py",
+    "tests/test_archive_inventory_r11a_repository_provenance.py",
+    "tests/test_archive_inventory_r11a_review_stage_chain.py",
+    "tests/test_archive_inventory_r11a_runtime_binding_review.py",
     "tests/test_archive_inventory_r11a_v2_bindings.py",
     "tests/test_archive_inventory_r11a_v2_preregistration.py",
+    "tests/test_r11a_workflow_identity.py",
+    "tests/test_ci_exact_head.py",
 )
 
 EXECUTED_SECURITY_PATHS = frozenset(
     R7_CODE_PATHS
     + GOVERNANCE_PATHS
     + (
+        CONTINUOUS_INTEGRATION_WORKFLOW,
         DEVELOPMENT_WORKFLOW,
+        "PROJECT_STATE.md",
         SEALED_AMENDMENT,
         V2_BINDINGS,
         "research/archive_inventory/r11/R11_72H_SELECTION.json",
+        (
+            "research/archive_inventory/r11a_alignment/"
+            "R11A_POST_APPROVAL_VALIDATOR_ALIGNMENT.json"
+        ),
+        (
+            "research/archive_inventory/r11a_approval/"
+            "APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json"
+        ),
+        (
+            "research/archive_inventory/r11a_approval/"
+            "APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt"
+        ),
+        "research/archive_inventory/r11a_g1/R11A_G1_EXECUTION_ENVELOPE.json",
+        "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_PACKAGE.json",
+        "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json",
         "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json",
         "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json",
+        CANDIDATE_WORKFLOW,
     )
 )
 

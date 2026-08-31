@@ -2,7 +2,7 @@
 
 Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`, and canonical consumed-unresolved R11 evidence closure merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`.
 
-Post-GREEN G1 governance/pricing state verified 2026-08-25 against exact software head `443500de54917417276c39a635ae444458d03b0b`, authoritative independent review `5019067044`, current official AWS/ECB evidence and the unchanged canonical Amendment 002. Mathis Van Eeckhout returned the exact frozen approval statement on 2026-08-26. Its byte-exact canonical-record candidate is present and awaits independent exact-head review; it creates no IAM resource, installed workflow, release, activation or diagnostic execution.
+Post-GREEN G1 governance/pricing state verified 2026-08-25 against exact software head `443500de54917417276c39a635ae444458d03b0b`, authoritative independent review `5019067044`, current official AWS/ECB evidence and the unchanged canonical Amendment 002. Mathis Van Eeckhout returned the exact frozen approval statement on 2026-08-26. Its byte-exact canonical G2 record is independently GREEN under COMMENTED review `5033303996` at exact head `63526d6c39c9225e647a18693c70ec8e73535ff4`. The first post-approval validator-alignment review, COMMENTED review `5049607285` at exact head `44f9e912ca5b07bbe8f812d57a1706364d9c850b`, was RED. A seven-finding repository-only corrective remediation follows that RED review and awaits a new independent exact-head rereview; it creates no IAM resource, installed workflow, release, activation or diagnostic execution.
 
 ## Current status
 
@@ -12,7 +12,7 @@ Post-GREEN G1 governance/pricing state verified 2026-08-25 against exact softwar
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
-| archive diagnostic gate | `R11A_OWNER_APPROVAL_RECORDED_AWAITING_EXACT_HEAD_REVIEW_NO_CURRENT_RUNTIME` |
+| archive diagnostic gate | `R11A_SEVEN_FINDING_ALIGNMENT_REMEDIATION_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
@@ -88,10 +88,11 @@ Post-GREEN G1 governance/pricing state verified 2026-08-25 against exact softwar
 | R10D backward consistency | `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY` |
 | R10D legacy reducer reproduction | byte-exact; canonical unique-fill and event-time activity equivalence remain `UNKNOWN` |
 | R11A diagnostic | `HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002` |
-| R11A status | `OWNER_APPROVAL_RECORDED_AWAITING_INDEPENDENT_EXACT_HEAD_REVIEW_NO_CURRENT_RUNTIME` |
+| R11A status | `OWNER_APPROVAL_GREEN_ALIGNMENT_REMEDIATION_AWAITING_INDEPENDENT_REREVIEW_NO_CURRENT_RUNTIME` |
 | R11A software anchor | GREEN head `443500de54917417276c39a635ae444458d03b0b`; authoritative review `5019067044` |
 | R11A exact input | same 72 R11 objects; no 73rd object or wider window |
-| R11A owner approval | `PRESENT_AS_EXACT_RECORD_CANDIDATE`; approval `APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001`; exact text SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`; independent record review pending |
+| R11A owner approval | `PRESENT_INDEPENDENTLY_GREEN`; approval `APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001`; exact text SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`; COMMENTED/GREEN review `5033303996` |
+| R11A validator alignment | review `5049607285` was `RED` at `44f9e912ca5b07bbe8f812d57a1706364d9c850b`; seven-finding corrective remediation awaits an independent exact-head rereview; current pricing remains an uninstalled approved candidate and every operational successor artifact is absent |
 | R11A workflow / release / activation | absent / absent / absent |
 | R11A canonical Amendment 002 | `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; unchanged canonical V2 path; SHA-256 `bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f`; V2-bound |
 | R11A official pricing/EUR binding | `PASS`; `R11A-G1-PRICING-EUR-BINDING-001`; raw maximum EUR `0.191879`, 2x contingency EUR `0.383757`, proposed one-time ceiling EUR `0.50`, monthly EUR `0` |
@@ -281,15 +282,42 @@ r11a_owner_approval_ready = true
 r11a_owner_approval_id = APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001
 r11a_owner_approval_text_sha256 = 16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3
 r11a_owner_approval_present = true
-r11a_owner_approval_record_review_complete = false
+r11a_owner_approval_record_review_complete = true
+r11a_canonical_approval_record_present = true
+r11a_execution_authorized_by_this_approval = false
 r11a_post_approval_validator_alignment_required = true
 r11a_successor_role_created = false
+r11a_successor_role_attestation_present = false
+r11a_sts_preflight = false
 r11a_workflow_installed = false
 r11a_release_present = false
+r11a_runtime_release = false
+r11a_runtime_activation = false
+r11a_runtime_binding = false
+r11a_runtime_binding_review = false
+r11a_diagnostic_execution = false
+r11a_execution_evidence = false
 r11a_aws_oidc_authorized = false
 r11a_get_object_authorized = false
 r11a_decompression_authorized = false
 r11a_empirical_root_cause_known = false
+r11a_empirical_root_cause = UNKNOWN_PENDING_DIAGNOSTIC
+r11a_deduplication = false
+r11a_replay_suppression = false
+r11a_r11b_repair = false
+r11a_wallet_features = false
+r11a_wallet_ranking = false
+r11a_candidate_shortlisting = false
+r11a_pnl_alpha = false
+r11a_copyability = false
+r11a_entity_clustering = false
+r11a_strategy_inference = false
+r11a_integration = false
+r11a_paper_trading = false
+r11a_shadow_trading = false
+r11a_live_trading = false
+r11a_leverage = false
+r11a_capital_allocation = false
 r11a_repair_authorized = false
 fresh_paid_attempt_authorized = false
 fresh_list_attempt_authorized = false
@@ -321,7 +349,7 @@ All release-scoped R2 execution flags are false after consumption of release 002
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
 2. Preserve the immutable GREEN software anchor `443500de54917417276c39a635ae444458d03b0b`, authoritative review `5019067044`, canonical Amendment 002 and the exact current G1 pricing/envelope/policy/workflow hashes.
-3. Independently review the exact approval-record candidate. The owner statement is present, but its repository receipt is not self-validating and no operational action is authorized by this pending review.
-4. If the approval-record review is GREEN, repair the incompatible post-approval R4/R7 consumer validators in a separate governance-only, no-AWS stage and review that exact head before any identity action.
-5. Only after those gates may a separate stage create/configure the exact dedicated successor identity. Preserve later separate attestation, STS-only preflight, workflow-installation, inert release-candidate, runtime-binding and canonical single-use activation gates before one diagnostic run. Approval alone must not execute any of those stages.
+3. Preserve the independently GREEN G2 approval-record anchor at exact head `63526d6c39c9225e647a18693c70ec8e73535ff4` and COMMENTED review `5033303996`; owner approval is present, but it creates no current operational authority.
+4. Independently rereview the exact seven-finding post-approval validator-alignment remediation after RED review `5049607285`. This repository/governance-only rereview is the sole current next gate and must perform no AWS, IAM, OIDC, STS, S3, workflow installation, release, activation or runtime action.
+5. Only after that alignment review is GREEN may a separate stage create/configure the exact dedicated successor identity. Preserve later separate attestation, STS-only preflight, workflow-installation, inert release-candidate, runtime-binding and canonical single-use activation gates before one diagnostic run. Approval alone must not execute any of those stages.
 6. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.

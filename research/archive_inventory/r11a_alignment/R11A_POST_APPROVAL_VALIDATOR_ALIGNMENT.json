@@ -1,0 +1,169 @@
+{
+  "schema_version": "1.0",
+  "alignment_id": "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001",
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "status": "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "predecessor": {
+    "head": "63526d6c39c9225e647a18693c70ec8e73535ff4",
+    "tree": "eedeb4d6166c554b996ede740931c4bacb306f5d"
+  },
+  "g2_review": {
+    "review_id": 5033303996,
+    "review_event": "COMMENTED",
+    "review_verdict": "GREEN"
+  },
+  "prior_exact_head_review": {
+    "review_id": 5049607285,
+    "review_event": "COMMENTED",
+    "review_verdict": "RED",
+    "reviewed_head": "44f9e912ca5b07bbe8f812d57a1706364d9c850b",
+    "reviewed_tree": "739a3d3cf309d40258c8c725c72078ee571a5285"
+  },
+  "seven_finding_remediation": {
+    "finding_ids": [
+      "R11A-ALIGN-ISO-001",
+      "R11A-ALIGN-ISO-002",
+      "R11A-ALIGN-STATE-003",
+      "R11A-ALIGN-REV-004",
+      "R11A-ALIGN-ART-005",
+      "R11A-ALIGN-GATE-006",
+      "R11A-ALIGN-WF-007"
+    ],
+    "remediation_status": "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW",
+    "independent_closure_pending": true,
+    "repository_only": true,
+    "aws_or_runtime_action_performed": false
+  },
+  "approved_bound_bytes_unchanged": true,
+  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "no_aws_action_performed": true,
+  "canonical_approval": {
+    "receipt_path": "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json",
+    "receipt_sha256": "531e61130b612fd12503e60ff56d1c3d51b05a64bb2785f1e10fa9c5471c7ae6",
+    "statement_path": "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.txt",
+    "statement_sha256": "16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3",
+    "scalar_leaf_count": 136
+  },
+  "approved_bound_files": {
+    "research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json": "bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f",
+    "research/archive_inventory/r11a_v2/R11A_V2_PREREGISTRATION_BINDINGS.json": "f60f7d6eac5f5a4633a5453c1c79bd84a54add69d1395d9048658450211bd0ba",
+    "research/archive_inventory/r11/R11_72H_SELECTION.json": "7c134f4b62f547904126a5f810c177484dceeffa246d53c5c35944367d563eb2",
+    "research/archive_inventory/r11_evidence/run-31436753081/r11-result.json": "9d3266eb53791d83df29b6ec3ae5f33c254b29a8182f2e6be7e3261c02686862",
+    "research/archive_inventory/r11a_corrective/R11A_PERMISSION_POLICY.json": "2769afe520efff6f0b619fff352d2cf13d412d96d6c4642fcfc61a8165787e6a",
+    "research/archive_inventory/r11a_corrective/R11A_OIDC_TRUST_POLICY.json": "375e224b269a62873afb4516651a259483feed4f211e9184272cb2af91513668",
+    "research/archive_inventory/r11a_corrective/R11A_ROLE_DECISION.json": "20f9895c83c1d61c79640ed551afd2458fa276502bf3eb9e7f8f3aa040d83d8f",
+    "research/archive_inventory/r11a_corrective/R11A_DEPENDENCIES.json": "ce9387377db1f372c6425849549c25e2e47bf24e336510bca06892661e045d6a",
+    "research/archive_inventory/r11a_corrective/R11A_RESOURCE_FEASIBILITY_R3.json": "fa71f17591caa0cf939c163733b6f2d87835a06b2f223421b6a6c07cb8d76efb",
+    "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml": "c10b810304d6cdbc68f23cb3db113b57580d34f0f74e781aefa2140edd0b5e65",
+    "research/archive_inventory/r11a_g1/R11A_G1_EXECUTION_ENVELOPE.json": "89631f04394805bdf80be0a3784b1cc174eb0fe20e0627bc4eff63cc5f649b2e",
+    "research/archive_inventory/r11a_g1/R11A_G1_PRICING_EUR_BINDING.json": "3459dbfe25d2e7244823344312de5025b7064928c6f436fbe751c7299ea41574",
+    "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SNAPSHOT_CANDIDATE.json": "d5043062386b3d70f695f09c917f11719512918c56f318cace1e0530b709ac43",
+    "research/archive_inventory/r11a_g1/R11A_G1_OWNER_APPROVAL_STATEMENT.txt": "16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3"
+  },
+  "aligned_consumers": [
+    "governance/r11a_bytecode_boundary.c",
+    "governance/r11a_native_boundary.sh",
+    "governance/r11a_repository_provenance.py",
+    "governance/seal_r11a_v2_preregistration.py",
+    "governance/r11a_github_review_evidence.py",
+    "governance/r11a_post_approval_context.py",
+    "governance/r11a_stage_common_r4.py",
+    "governance/r11a_workflow_identity.py",
+    "governance/validate_r11a_approval_r4.py",
+    "governance/validate_r11a_g2_owner_approval.py",
+    "governance/validate_r11a_post_approval_validator_alignment.py",
+    "governance/validate_r11a_role_configuration_candidate_r4.py",
+    "governance/validate_r11a_role_attestation_r4.py",
+    "governance/validate_r11a_role_preflight_evidence_r4.py",
+    "governance/validate_r11a_workflow_installation_r4.py",
+    "governance/validate_r11a_execution_release_r4.py",
+    "governance/validate_r11a_activation_r4.py",
+    "governance/validate_r11a_runtime_binding_r7.py",
+    "governance/_validate_r11a_runtime_binding_core_r7.py",
+    "governance/validate_r11a_execution_artifact_r7.py",
+    "governance/validate_r11a_v2_bindings.py"
+  ],
+  "r7_workflow": {
+    "path": "research/archive_inventory/r11a_corrective/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic-r7.yml",
+    "sha256": "c10b810304d6cdbc68f23cb3db113b57580d34f0f74e781aefa2140edd0b5e65"
+  },
+  "future_runtime_pricing_projection": {
+    "status": "REQUIRED_LATER_NOT_PRESENT",
+    "source_path": "research/archive_inventory/r11a_g1/R11A_G1_RUNTIME_PRICING_SNAPSHOT_CANDIDATE.json",
+    "source_sha256": "d5043062386b3d70f695f09c917f11719512918c56f318cace1e0530b709ac43",
+    "target_historical_snapshot_path": "research/archive_inventory/r11a_corrective/R11A_PRICING_EUR_SNAPSHOT.json",
+    "target_historical_snapshot_current_sha256": "5e5a6469b921a15cbac1e2f03184e2dfcf6ffee51dc2e86833e9556a5c23c226",
+    "projection_present": false
+  },
+  "current_authority": {
+    "successor_role_created": false,
+    "aws_iam_mutation": false,
+    "aws_oidc": false,
+    "sts": false,
+    "workflow_installed": false,
+    "runtime_binding_present": false,
+    "runtime_release": false,
+    "runtime_activation": false,
+    "workflow_dispatch": false,
+    "requester_pays": false,
+    "get_object": false,
+    "object_body_download": false,
+    "decompression": false,
+    "diagnostic_execution": false,
+    "diagnostic_artifact_retention": false,
+    "pr_148_merge_or_github_approval": false,
+    "rerun": false
+  },
+  "future_authority_absence": {
+    "canonical_artifact_paths": [
+      "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_CREATION_CONFIGURATION_CANDIDATE.json",
+      "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
+      "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
+      "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
+      "research/archive_inventory/r11a_role_preflight/R11A_SUCCESSOR_ROLE_STS_PREFLIGHT_ATTESTATION.json",
+      "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE_CONSUMPTION.json",
+      "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION_CONTRACT.json",
+      "research/archive_inventory/r11a_runtime/R11A_RUNTIME_BINDING_R7.json",
+      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.json",
+      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE.sha256",
+      "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
+      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CANDIDATE.json",
+      "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CONSUMPTION.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ALIGNMENT_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_IDENTITY_CONFIGURATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ROLE_ATTESTATION_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_CANDIDATE_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_RELEASE_REVIEW_EVIDENCE.json",
+    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_WORKFLOW_INSTALLATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_CANDIDATE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_ACTIVATION_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_RUNTIME_BINDING_REVIEW_EVIDENCE.json"
+    ],
+    "prohibited_namespace_paths": [
+      "research/archive_inventory/r11a_role_attestation",
+      "research/archive_inventory/r11a_role_preflight",
+      "research/archive_inventory/r11a_workflow_installation",
+      "research/archive_inventory/r11a_runtime",
+      "research/archive_inventory/r11a_review_evidence",
+      "research/archive_inventory/r11a_evidence",
+      "research/archive_inventory/r11a_v2_approval",
+      "research/archive_inventory/r11a_v2_runtime",
+      "research/archive_inventory/r11a_v2_evidence"
+    ],
+    "installed_workflow_paths": [
+      ".github/workflows/hyperliquid-archive-r11a-identity-boundary-diagnostic.yml",
+      ".github/workflows/hyperliquid-archive-r11a-v2-identity-boundary-diagnostic.yml"
+    ],
+    "all_absent": true
+  },
+  "aws_activity": {
+    "iam": false,
+    "oidc": false,
+    "sts": false,
+    "s3": false
+  },
+  "independent_exact_head_review_pending": true,
+  "next_gate": "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
+}

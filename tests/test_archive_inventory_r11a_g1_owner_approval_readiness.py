@@ -16,6 +16,7 @@ from governance.validate_r11a_g1_owner_approval_readiness import (
     canonical_joined_rows,
     validate,
 )
+from governance.r11a_repository_provenance import authenticated_repository_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 STATUS_RELATIVE = Path("research/archive_inventory/r11a_g1/R11A_G1_STATUS.json")
@@ -231,12 +232,8 @@ def contradictory_value(
 
 class R11AG1OwnerApprovalReadinessTests(unittest.TestCase):
     def copy_repository(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
-        temporary = tempfile.TemporaryDirectory()
-        destination = Path(temporary.name) / "repository"
-        shutil.copytree(
+        temporary, destination = authenticated_repository_copy(
             ROOT,
-            destination,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
         )
         # G1 is the immutable pre-approval readiness snapshot. Successor owner
         # records must be absent whenever its historical semantics are tested.

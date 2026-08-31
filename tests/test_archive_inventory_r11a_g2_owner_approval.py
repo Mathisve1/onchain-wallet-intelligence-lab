@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from governance import validate_r11a_g2_owner_approval as approval
+from governance.r11a_repository_provenance import authenticated_repository_copy
 from governance.validate_r11a_g2_owner_approval import R11AG2ApprovalError, validate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,14 +83,9 @@ def contradictory(value: object) -> object:
 
 class R11AG2OwnerApprovalTests(unittest.TestCase):
     def copy_repository(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
-        temporary = tempfile.TemporaryDirectory()
-        destination = Path(temporary.name) / "repository"
-        shutil.copytree(
+        return authenticated_repository_copy(
             ROOT,
-            destination,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.pyo"),
         )
-        return temporary, destination
 
     def record_copy(self) -> tuple[tempfile.TemporaryDirectory[str], Path, Path, bytes, dict]:
         temporary, repository = self.copy_repository()
@@ -166,8 +162,25 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
             "import DEFAULT_LIMITS"
         )
         environment = os.environ.copy()
-        environment.pop("PYTHONPYCACHEPREFIX", None)
-        environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        for key in (
+            "PYTHONDONTWRITEBYTECODE",
+            "PYTHONPYCACHEPREFIX",
+            "PYTHONPATH",
+            "PYTHONSAFEPATH",
+            "PYTHONNOUSERSITE",
+            "R11A_PYCACHE_BOUNDARY_ACTIVE",
+            "R11A_NATIVE_BOUNDARY_ROOT",
+            "R11A_NATIVE_IMPORT_ROOT",
+            "R11A_NATIVE_BOUNDARY_BINARY",
+            "R11A_NATIVE_BOUNDARY_RECEIPT",
+            "R11A_NATIVE_BOUNDARY_RECEIPT_SHA256",
+            "R11A_NATIVE_ARTIFACT_SHA256",
+            "R11A_NATIVE_ARTIFACT_DEV",
+            "R11A_NATIVE_ARTIFACT_INO",
+            "R11A_REPOSITORY_ROOT",
+            "R11A_NATIVE_ENV_FILE",
+        ):
+            environment.pop(key, None)
 
         subprocess.run(
             [sys.executable, "-c", import_command],
@@ -177,9 +190,59 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         )
         self.assertTrue(corrective_cache.is_dir())
         self.assertTrue(any(corrective_cache.glob("*.pyc")))
+        self.assertNotIn(
+            corrective_cache.relative_to(repository).as_posix(),
+            approval.ALLOWED_R11A_DIRECTORIES,
+        )
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited",
+        ):
+            validate(repository)
 
-        shutil.rmtree(corrective_cache)
+        for generated_cache in sorted(
+            repository.rglob("__pycache__"),
+            key=lambda path: len(path.parts),
+            reverse=True,
+        ):
+            if generated_cache.exists():
+                shutil.rmtree(generated_cache)
         self.assertFalse(corrective_cache.exists())
+
+        corrective_cache.mkdir()
+        (corrective_cache / "synthetic.pyc").write_bytes(b"synthetic-pyc")
+        (corrective_cache / "synthetic.pyo").write_bytes(b"synthetic-pyo")
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited",
+        ):
+            validate(repository)
+        shutil.rmtree(corrective_cache)
+
+        for suffix in (".pyc", ".pyo"):
+            with self.subTest(standalone_bytecode=suffix):
+                standalone = corrective_cache.parent / f"synthetic{suffix}"
+                standalone.write_bytes(b"synthetic-bytecode")
+                try:
+                    with self.assertRaisesRegex(
+                        R11AG2ApprovalError,
+                        "Python bytecode file path prohibited",
+                    ):
+                        validate(repository)
+                finally:
+                    standalone.unlink()
+
+        cache_target = repository / "synthetic-cache-target"
+        cache_target.mkdir()
+        corrective_cache.symlink_to(cache_target, target_is_directory=True)
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "Python bytecode cache path prohibited|symlink",
+        ):
+            validate(repository)
+        corrective_cache.unlink()
+        cache_target.rmdir()
+
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         subprocess.run(
             [sys.executable, "-B", "-c", import_command],
@@ -195,6 +258,14 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
         with self.assertRaisesRegex(
             R11AG2ApprovalError,
             "unrecognized R11A authority namespace",
+        ):
+            validate(repository)
+        shutil.rmtree(unknown_descendant)
+
+        unknown_descendant.symlink_to(repository / "README.md")
+        with self.assertRaisesRegex(
+            R11AG2ApprovalError,
+            "symlink|unrecognized R11A authority namespace",
         ):
             validate(repository)
 
@@ -827,7 +898,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
                 try:
                     with self.assertRaisesRegex(
                         R11AG2ApprovalError,
-                        "approval.*alias|approval/authority data file|nested repository metadata",
+                        "approval.*alias|approval/authority data file|nested repository metadata|Python bytecode cache path prohibited",
                     ):
                         validate(repository)
                 finally:
@@ -835,7 +906,10 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
 
     def test_complete_r4_r7_authority_inventory_is_exact(self) -> None:
         expected_paths = {
+            "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_CREATION_CONFIGURATION_CANDIDATE.json",
             "research/archive_inventory/r11a_role_attestation/R11A_SUCCESSOR_ROLE_OPERATOR_ATTESTATION.json",
+            "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_CANDIDATE.json",
+            "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE.json",
             "research/archive_inventory/r11a_role_preflight/R11A_SUCCESSOR_ROLE_STS_PREFLIGHT_ATTESTATION.json",
             "research/archive_inventory/r11a_role_preflight/R11A_STS_PREFLIGHT_RELEASE_CONSUMPTION.json",
             "research/archive_inventory/r11a_workflow_installation/R11A_WORKFLOW_INSTALLATION_CONTRACT.json",
@@ -845,12 +919,24 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
             "research/archive_inventory/r11a_runtime/R11A_CANONICAL_ACTIVATION.json",
             "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CANDIDATE.json",
             "research/archive_inventory/r11a_runtime/R11A_EXECUTION_RELEASE_CONSUMPTION.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_ALIGNMENT_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_IDENTITY_CONFIGURATION_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_ROLE_ATTESTATION_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_CANDIDATE_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_RELEASE_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_WORKFLOW_INSTALLATION_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_CANDIDATE_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_ACTIVATION_REVIEW_EVIDENCE.json",
+            "research/archive_inventory/r11a_review_evidence/R11A_RUNTIME_BINDING_REVIEW_EVIDENCE.json",
         }
         expected_namespaces = {
             "research/archive_inventory/r11a_role_attestation",
             "research/archive_inventory/r11a_role_preflight",
             "research/archive_inventory/r11a_workflow_installation",
             "research/archive_inventory/r11a_runtime",
+            "research/archive_inventory/r11a_review_evidence",
             "research/archive_inventory/r11a_evidence",
             "research/archive_inventory/r11a_v2_approval",
             "research/archive_inventory/r11a_v2_runtime",
@@ -866,6 +952,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
 
         expected_directories = {
             "research/archive_inventory/r11a",
+            "research/archive_inventory/r11a_alignment",
             "research/archive_inventory/r11a_approval",
             "research/archive_inventory/r11a_corrective",
             "research/archive_inventory/r11a_corrective/workflows",
@@ -880,7 +967,7 @@ class R11AG2OwnerApprovalTests(unittest.TestCase):
             for path in (ROOT / "research/archive_inventory").rglob("*.json")
             if approval._is_r11a_archive_path(path.relative_to(ROOT).as_posix())
         }
-        self.assertEqual(len(observed_json), 29)
+        self.assertEqual(len(observed_json), 30)
         self.assertEqual(approval.CANONICAL_R11A_JSON_PATHS, observed_json)
 
         workflow_rows = []
