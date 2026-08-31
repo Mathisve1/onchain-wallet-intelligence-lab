@@ -175,6 +175,53 @@ assert_frozen_setup_python_tree() {
     [[ -z "$unsafe" ]] || die "setup-python installation contains a path with special permission bits: $unsafe"
 }
 
+assert_github_opt_ancestor_sealed() {
+    [[ -d / && ! -L / ]] || die "GitHub filesystem root is not a physical directory"
+    [[ $(physical_path /) = / ]] || die "GitHub filesystem root is not canonical and physical"
+    [[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]] || \
+        die "GitHub filesystem root does not match the trusted ownership/mode contract"
+    [[ -d /opt && ! -L /opt ]] || die "GitHub /opt ancestor is not a physical directory"
+    [[ $(physical_path /opt) = /opt ]] || die "GitHub /opt ancestor is not canonical and physical"
+    [[ $(stat -c '%d' -- /opt) = "$(stat -c '%d' -- /)" ]] || \
+        die "GitHub /opt ancestor is not on the trusted root filesystem"
+    [[ $(stat -c '%u:%g:%a' -- /opt) = 0:0:755 ]] || \
+        die "GitHub /opt ancestor is not sealed root:root mode 0755"
+    [[ ! -w /opt ]] || die "GitHub /opt ancestor remains writable by the runner identity"
+}
+
+seal_github_opt_ancestor() {
+    local opt_identity observed_identity opt_contract
+
+    [[ -d / && ! -L / ]] || die "GitHub filesystem root is not a physical directory"
+    [[ $(physical_path /) = / ]] || die "GitHub filesystem root is not canonical and physical"
+    [[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]] || \
+        die "GitHub filesystem root does not match the trusted ownership/mode contract"
+    [[ -d /opt && ! -L /opt ]] || die "GitHub /opt ancestor is not a physical directory"
+    [[ $(physical_path /opt) = /opt ]] || die "GitHub /opt ancestor is not canonical and physical"
+    [[ $(stat -c '%d' -- /opt) = "$(stat -c '%d' -- /)" ]] || \
+        die "GitHub /opt ancestor is not on the trusted root filesystem"
+    opt_contract=$(stat -c '%u:%g:%a' -- /opt)
+    case "$opt_contract" in
+        0:0:777|0:0:755)
+            ;;
+        *)
+            die "GitHub /opt ancestor does not match the exact bootstrap contract: $opt_contract"
+            ;;
+    esac
+    opt_identity=$(stat -c '%d:%i' -- /opt)
+
+    # The exact Ubuntu hosted-runner image deliberately provisions /opt as
+    # root:root 0777.  Seal that literal name-binding ancestor before any
+    # hosted-toolcache descendant is inspected; never repair wrong ownership.
+    /usr/bin/env -i PATH=/usr/bin:/bin \
+        /usr/bin/sudo -n /usr/bin/chmod 0755 -- /opt
+
+    observed_identity=$(stat -c '%d:%i' -- /opt)
+    [[ "$observed_identity" = "$opt_identity" ]] || \
+        die "GitHub /opt ancestor identity changed during sealing"
+    assert_github_opt_ancestor_sealed
+}
+
 assert_github_frozen_setup_python_tree() {
     local root=$1
     local runner_tool_cache=$2
@@ -187,6 +234,7 @@ assert_github_frozen_setup_python_tree() {
         "$root"
     )
 
+    assert_github_opt_ancestor_sealed
     for path in "${chain[@]}"; do
         assert_setup_python_path "$path" directory "trust-chain component" 0
     done
@@ -214,6 +262,8 @@ freeze_github_setup_python_tree() {
     assert_setup_python_system_helper /usr/bin/find 755 "tree-walk helper"
     assert_setup_python_system_helper /usr/bin/findmnt 755 "mount-table helper"
     assert_setup_python_system_helper /usr/bin/readlink 755 "symlink-resolution helper"
+
+    seal_github_opt_ancestor
 
     for path in "${chain[@]}"; do
         [[ -d "$path" && ! -L "$path" ]] || die "setup-python trust-chain component is not a physical directory: $path"

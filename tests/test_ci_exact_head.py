@@ -187,6 +187,68 @@ class ExactCIHeadTests(unittest.TestCase):
             'setup-python $label is writable by the effective user',
             self.boundary_text,
         )
+        self.assertIn(
+            "[[ $(stat -c '%u:%g:%a' -- /) = 0:0:755 ]]",
+            self.boundary_text,
+        )
+        self.assertIn(
+            '0:0:777|0:0:755)',
+            self.boundary_text,
+        )
+        self.assertIn(
+            '/usr/bin/sudo -n /usr/bin/chmod 0755 -- /opt',
+            self.boundary_text,
+        )
+        self.assertNotIn(
+            '/usr/bin/chown 0:0 -- /opt',
+            self.boundary_text,
+        )
+        self.assertIn(
+            "opt_identity=$(stat -c '%d:%i' -- /opt)",
+            self.boundary_text,
+        )
+        self.assertIn(
+            "observed_identity=$(stat -c '%d:%i' -- /opt)",
+            self.boundary_text,
+        )
+        self.assertIn(
+            '[[ "$observed_identity" = "$opt_identity" ]]',
+            self.boundary_text,
+        )
+        self.assertIn(
+            '[[ ! -w /opt ]]',
+            self.boundary_text,
+        )
+        self.assertEqual(
+            self.boundary_text.count('    seal_github_opt_ancestor\n'),
+            1,
+        )
+        self.assertGreaterEqual(
+            self.boundary_text.count('assert_github_opt_ancestor_sealed'),
+            3,
+        )
+        freeze_start = self.boundary_text.index(
+            'freeze_github_setup_python_tree() {'
+        )
+        freeze_end = self.boundary_text.index(
+            '\n}\n\ncheck_required_commands()',
+            freeze_start,
+        )
+        freeze_body = self.boundary_text[freeze_start:freeze_end]
+        self.assertLess(
+            freeze_body.index(
+                'assert_setup_python_system_helper /usr/bin/chmod 755'
+            ),
+            freeze_body.index('seal_github_opt_ancestor'),
+        )
+        self.assertLess(
+            freeze_body.index('seal_github_opt_ancestor'),
+            freeze_body.index('for path in "${chain[@]}"; do'),
+        )
+        self.assertLess(
+            freeze_body.index('seal_github_opt_ancestor'),
+            freeze_body.index('assert_setup_python_tree_shape "$root"'),
+        )
         self.assertNotIn("sudo -E", self.boundary_text)
 
     def test_workflow_context_availability_and_runner_temp_scope(self) -> None:
