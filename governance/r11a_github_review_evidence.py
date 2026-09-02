@@ -43,6 +43,21 @@ _KNOWN_AUTHOR_ASSOCIATIONS = frozenset(
 _AUTHORIZED_REVIEW_ASSOCIATIONS = frozenset({"COLLABORATOR", "MEMBER", "OWNER"})
 _AUTHORIZED_REPOSITORY_PERMISSIONS = frozenset({"write", "maintain", "admin"})
 
+OWNER_SELF_REVIEW_COMMENTED_GREEN = "OWNER_SELF_REVIEW_COMMENTED_GREEN"
+DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN = (
+    "DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN"
+)
+_REVIEWER_MODELS = frozenset(
+    {
+        OWNER_SELF_REVIEW_COMMENTED_GREEN,
+        DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN,
+    }
+)
+_GITHUB_APPROVAL_STATUS = "NOT_APPROVED"
+_THIRD_PARTY_INDEPENDENCE_STATUS = "NOT_CLAIMED"
+_AUTHORITY_STATUS = "NOT_GRANTED"
+_HUMAN_REVIEW_RESPONSIBILITY_STATUS = "RETAINED_BY_REVIEWER"
+
 
 class ReviewEvidenceError(AssertionError):
     pass
@@ -217,6 +232,7 @@ SEED_REVIEWS = (
 class ReviewerPolicy:
     expected_login: str | None = None
     expected_user_id: int | None = None
+    expected_model: str | None = None
     forbid_pull_request_author: bool = False
 
 
@@ -235,6 +251,7 @@ class ReviewEvidenceIdentity:
     review_node_id: str
     reviewer_login: str
     reviewer_id: int
+    reviewer_model: str
     reviewer_author_association: str
     reviewer_repository_permission: str
     reviewer_repository_role_name: str
@@ -514,6 +531,11 @@ def _validate_review_body(
     predecessor_head: str,
     predecessor_tree: str,
     predecessor_bundle: str,
+    reviewer_model: str,
+    reviewer_login: str,
+    reviewer_id: int,
+    reviewer_author_association: str,
+    reviewer_repository_permission: str,
 ) -> None:
     text = _text(body, "selected review body")
     nonempty = [line.strip() for line in text.splitlines() if line.strip()]
@@ -533,9 +555,45 @@ def _validate_review_body(
         "immediate predecessor head": predecessor_head,
         "immediate predecessor tree": predecessor_tree,
         "immediate predecessor bundle": predecessor_bundle,
+        "reviewer model": reviewer_model,
+        "reviewer login": reviewer_login,
+        "reviewer user ID": str(reviewer_id),
+        "reviewer author association": reviewer_author_association,
+        "reviewer repository permission": reviewer_repository_permission,
+        "github approval": _GITHUB_APPROVAL_STATUS,
+        "third-party independence": _THIRD_PARTY_INDEPENDENCE_STATUS,
+        "merge authority": _AUTHORITY_STATUS,
+        "AWS/IAM/OIDC/STS/S3 authority": _AUTHORITY_STATUS,
+        "workflow/release/activation/runtime/diagnostic authority": (
+            _AUTHORITY_STATUS
+        ),
+        "human substantive responsibility": _HUMAN_REVIEW_RESPONSIBILITY_STATUS,
     }
     for label, expected_value in expected.items():
         _require(_marker(text, label) == expected_value, f"review body {label} binding drift")
+    if reviewer_model == OWNER_SELF_REVIEW_COMMENTED_GREEN:
+        folded = text.casefold()
+        for prohibited_claim in (
+            "independent reviewer",
+            "third-party reviewer",
+            "independent third-party",
+            "third-party independent",
+        ):
+            _require(
+                prohibited_claim not in folded,
+                "owner self-review cannot claim third-party independence",
+            )
+    canonical_body = "\n".join(
+        (
+            "GREEN",
+            "",
+            *(f"{label}: `{value}`" for label, value in expected.items()),
+        )
+    )
+    _require(
+        text == canonical_body,
+        "selected review body is not the exact canonical machine-readable form",
+    )
 
 
 def _first_verdict(body: Any) -> str | None:
@@ -753,21 +811,46 @@ def _lineage_predecessor(
 
 
 def _validate_reuse(identity: ReviewEvidenceIdentity, consumed: Iterable[ReviewEvidenceIdentity]) -> None:
-    for seed in SEED_REVIEWS:
-        _require(identity.review_id != seed.review_id, f"{identity.gate_id} reuses {seed.label} seed review")
-        _require(identity.reviewed_head != seed.reviewed_head, f"{identity.gate_id} reuses {seed.label} reviewed head")
-        _require(identity.reviewed_tree != seed.reviewed_tree, f"{identity.gate_id} reuses {seed.label} reviewed tree")
+    lineage = (*tuple(consumed), identity)
     observed_gate_ids: set[str] = set()
-    for ancestor in consumed:
-        _require(isinstance(ancestor, ReviewEvidenceIdentity), "consumed review identity has wrong type")
-        _require(ancestor.gate_id not in observed_gate_ids, "consumed review gate is duplicated")
-        observed_gate_ids.add(ancestor.gate_id)
-        _require(identity.gate_id != ancestor.gate_id, "review gate consumes itself")
-        _require(identity.review_id != ancestor.review_id, "review ID reused across governance gates")
-        _require(identity.review_node_id != ancestor.review_node_id, "review node ID reused across governance gates")
-        _require(identity.evidence_sha256 != ancestor.evidence_sha256, "review evidence bytes reused across governance gates")
-        _require(identity.reviewed_head != ancestor.reviewed_head, "reviewed head reused across governance gates")
-        _require(identity.reviewed_tree != ancestor.reviewed_tree, "reviewed tree reused across governance gates")
+    for candidate in lineage:
+        _require(
+            isinstance(candidate, ReviewEvidenceIdentity),
+            "consumed review identity has wrong type",
+        )
+        _require(
+            candidate.gate_id not in observed_gate_ids,
+            "review gate reused in governance lineage",
+        )
+        observed_gate_ids.add(candidate.gate_id)
+        for seed in SEED_REVIEWS:
+            _require(
+                candidate.review_id != seed.review_id,
+                f"{candidate.gate_id} reuses {seed.label} seed review",
+            )
+            _require(
+                candidate.reviewed_head != seed.reviewed_head,
+                f"{candidate.gate_id} reuses {seed.label} reviewed head",
+            )
+            _require(
+                candidate.reviewed_tree != seed.reviewed_tree,
+                f"{candidate.gate_id} reuses {seed.label} reviewed tree",
+            )
+
+    reuse_fields = (
+        ("review_id", "review ID reused across governance gates"),
+        ("review_node_id", "review node ID reused across governance gates"),
+        ("evidence_sha256", "review evidence bytes reused across governance gates"),
+        ("reviewed_head", "reviewed head reused across governance gates"),
+        ("reviewed_tree", "reviewed tree reused across governance gates"),
+    )
+    for index, candidate in enumerate(lineage):
+        for ancestor in lineage[:index]:
+            for field, message in reuse_fields:
+                _require(
+                    getattr(candidate, field) != getattr(ancestor, field),
+                    message,
+                )
 
 
 def validate_gate_evidence(
@@ -829,6 +912,8 @@ def validate_gate_evidence(
                 "evidence_type",
                 "gate_id",
                 "selected_review_id",
+                "selected_review_node_id",
+                "reviewer_model",
                 "capture",
                 "source_payloads",
                 "reviewed_stage",
@@ -837,13 +922,22 @@ def validate_gate_evidence(
         ),
         "review evidence",
     )
-    _require(value["schema_version"] == "1.0", "review-evidence schema version drift")
+    _require(value["schema_version"] == "1.1", "review-evidence schema version drift")
     _require(
         value["evidence_type"] == "EXTERNALLY_CAPTURED_GITHUB_PULL_REQUEST_REVIEW",
         "review-evidence type drift",
     )
     _require(value["gate_id"] == gate_id, "review-evidence gate drift")
     selected_review_id = _positive_int(value["selected_review_id"], "selected review ID")
+    selected_review_node_id = _text(
+        value["selected_review_node_id"],
+        "selected review node ID",
+    )
+    declared_reviewer_model = _text(value["reviewer_model"], "reviewer model")
+    _require(
+        declared_reviewer_model in _REVIEWER_MODELS,
+        "reviewer model is unknown",
+    )
 
     capture = _exact_keys(
         value["capture"],
@@ -954,6 +1048,7 @@ def validate_gate_evidence(
         _member(pull, "user", "pull-request payload"),
         "pull-request author",
     )
+    _github_login(pull_author_login, "pull-request author login")
     pull_url = f"https://api.github.com/repos/{repository_name}/pulls/{pr_number}"
     _require(_member(pull, "url", "pull-request payload") == pull_url, "pull-request URL drift")
     pull_created_at = _utc(
@@ -1135,11 +1230,30 @@ def validate_gate_evidence(
     _require(len(selected) == 1, "selected review ID is absent or duplicated")
     review = selected[0]
     review_node_id = _text(_member(review, "node_id", "selected review"), "selected review node ID")
+    _require(
+        review_node_id == selected_review_node_id,
+        "selected review node ID binding drift",
+    )
     _require(_member(review, "state", "selected review") == "COMMENTED", "selected review event is not COMMENTED")
     _require(_member(review, "pull_request_url", "selected review") == pull_url, "selected review belongs to the wrong PR")
     _require(_member(review, "commit_id", "selected review") == head, "selected review belongs to the wrong head")
     reviewer_login, reviewer_id = _api_user(_member(review, "user", "selected review"), "reviewer")
     _github_login(reviewer_login, "reviewer login")
+    same_user_id = reviewer_id == pull_author_id
+    same_login = reviewer_login.casefold() == pull_author_login.casefold()
+    _require(
+        same_user_id == same_login,
+        "reviewer and pull-request-author identity partially match",
+    )
+    reviewer_model = (
+        OWNER_SELF_REVIEW_COMMENTED_GREEN
+        if same_user_id
+        else DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN
+    )
+    _require(
+        declared_reviewer_model == reviewer_model,
+        "declared reviewer model does not match immutable GitHub identities",
+    )
     reviewer_author_association = _text(
         _member(review, "author_association", "selected review"),
         "selected reviewer author association",
@@ -1147,11 +1261,6 @@ def validate_gate_evidence(
     _require(
         reviewer_author_association in _AUTHORIZED_REVIEW_ASSOCIATIONS,
         "selected reviewer is not repository-associated",
-    )
-    _require(
-        reviewer_id != pull_author_id
-        and reviewer_login.casefold() != pull_author_login.casefold(),
-        "pull-request author cannot satisfy an independent review gate",
     )
     permission_endpoint, permission_payload = _decode_payload(
         sources["reviewer_permission"],
@@ -1211,6 +1320,11 @@ def validate_gate_evidence(
         predecessor_head=predecessor_head,
         predecessor_tree=predecessor_tree,
         predecessor_bundle=predecessor_bundle,
+        reviewer_model=reviewer_model,
+        reviewer_login=reviewer_login,
+        reviewer_id=reviewer_id,
+        reviewer_author_association=reviewer_author_association,
+        reviewer_repository_permission=reviewer_repository_permission,
     )
 
     for other in all_reviews:
@@ -1227,10 +1341,21 @@ def validate_gate_evidence(
             _require(reviewer_login == expected_reviewer.expected_login, "unexpected reviewer login")
         if expected_reviewer.expected_user_id is not None:
             _require(reviewer_id == expected_reviewer.expected_user_id, "unexpected reviewer ID")
+        if expected_reviewer.expected_model is not None:
+            _require(
+                type(expected_reviewer.expected_model) is str
+                and expected_reviewer.expected_model in _REVIEWER_MODELS,
+                "configured reviewer model is unknown",
+            )
+            _require(
+                reviewer_model == expected_reviewer.expected_model,
+                "unexpected reviewer model",
+            )
         if expected_reviewer.forbid_pull_request_author:
             _require(
-                reviewer_id != pull_author_id and reviewer_login.casefold() != pull_author_login.casefold(),
-                "pull-request author cannot satisfy the configured independent-review policy",
+                reviewer_model
+                == DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN,
+                "pull-request author cannot satisfy the configured distinct-reviewer policy",
             )
 
     if reviewed_blob_reader is not None:
@@ -1256,6 +1381,7 @@ def validate_gate_evidence(
         review_node_id=review_node_id,
         reviewer_login=reviewer_login,
         reviewer_id=reviewer_id,
+        reviewer_model=reviewer_model,
         reviewer_author_association=reviewer_author_association,
         reviewer_repository_permission=reviewer_repository_permission,
         reviewer_repository_role_name=reviewer_repository_role_name,
@@ -1281,6 +1407,8 @@ __all__ = [
     "EVIDENCE_DIRECTORY",
     "GATE_REGISTRY",
     "ORIGIN_AUTHENTICATION_STATUS",
+    "OWNER_SELF_REVIEW_COMMENTED_GREEN",
+    "DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN",
     "REPOSITORY_FULL_NAME",
     "REPOSITORY_ID",
     "ROOT",

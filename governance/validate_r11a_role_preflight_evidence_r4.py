@@ -229,7 +229,7 @@ def validate_candidate(
     )
     require(
         candidate["status"]
-        == "CANDIDATE_AWAITING_INDEPENDENT_STS_ONLY_PREFLIGHT_RELEASE_REVIEW_NO_AWS",
+        == "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_STS_ONLY_PREFLIGHT_RELEASE_REVIEW_NO_AWS",
         "preflight candidate status drift",
     )
     require_gate_review(

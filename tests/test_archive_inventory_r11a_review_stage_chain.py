@@ -29,7 +29,7 @@ class ReviewStageChainTests(TestCase):
                 "R11A-SUCCESSOR-IDENTITY-CREATION-AND-CONFIGURATION-001"
             ),
             "status": (
-                "CANDIDATE_AWAITING_INDEPENDENT_"
+                "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_"
                 "IDENTITY_CONFIGURATION_REVIEW_NO_AWS"
             ),
             "alignment_id": common.ALIGNMENT_ID,

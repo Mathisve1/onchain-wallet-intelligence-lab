@@ -137,7 +137,7 @@ def validate(
     )
     require(
         candidate["status"]
-        == "CANDIDATE_AWAITING_INDEPENDENT_IDENTITY_CONFIGURATION_REVIEW_NO_AWS",
+        == "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_IDENTITY_CONFIGURATION_REVIEW_NO_AWS",
         "role configuration candidate status drift",
     )
     require(candidate["alignment_id"] == ALIGNMENT_ID, "role configuration alignment ID drift")

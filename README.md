@@ -31,8 +31,9 @@ R11 is canonically `CONSUMED_UNRESOLVED`; its exact artifact is retained and its
 single-use release has zero remaining request budget. The corrective R11A V2
 preregistration is sealed over exactly the same 72 objects. Its local R7
 implementation is separately sealed and is GREEN at exact software head
-`443500de54917417276c39a635ae444458d03b0b` under authoritative independent
-review `5019067044`. Canonical Amendment 002 is the unchanged
+`443500de54917417276c39a635ae444458d03b0b` under owner-authored clean-context
+review `5019067044`; no third-party independence is claimed. Canonical
+Amendment 002 is the unchanged
 `research/archive_inventory/r11a_v2/R11A_CORRECTIVE_PREREGISTRATION_AMENDMENT.json`
 with internal ID `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; its exact hash
 is bound by the V2 preregistration bindings. Current official AWS pricing and
@@ -43,15 +44,27 @@ byte-exact approval text is recorded with SHA-256
 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`
 and the canonical JSON receipt with SHA-256
 `531e61130b612fd12503e60ff56d1c3d51b05a64bb2785f1e10fa9c5471c7ae6`;
-independent COMMENTED/GREEN review `5033303996` validated that exact G2 record
-at head `63526d6c39c9225e647a18693c70ec8e73535ff4`. The legacy future-stage
-validator chain is now aligned as an inert repository candidate and awaits its
-own independent exact-head review. The approved current pricing candidate is
-not installed at the historical runtime snapshot path; that exact byte
-projection remains a separately reviewed future installation prerequisite.
+owner-authored COMMENTED/GREEN review `5033303996` validated that exact G2 record
+at head `63526d6c39c9225e647a18693c70ec8e73535ff4`. The selected governance model
+is `OWNER_SELF_REVIEW_COMMENTED_GREEN`: Mathis remains responsible for the
+substantive review, while immutable payload, exact-head/tree, permission,
+marker, chronology, bundle and non-reuse checks bind the evidence. It is not
+GitHub APPROVED, third-party independence or merge authority. Review
+`5087528366` remains unmodified historical content-GREEN for head
+`5616155ff7a70ca106be9a36288b4ca2d9eb0fd0` and tree
+`3cf4cfcb0f8341087cd361993a719cc070333594`, but is not machine-readable gate
+evidence. Once the stacked correction is integrated into the PR #151 source
+branch, a new owner COMMENTED/GREEN review on PR #151's exact updated corrective
+head and later separate evidence capture are required before any successor-role
+candidate. A review on the stacked delivery PR alone cannot satisfy the unchanged
+exact-G2-predecessor alignment gate. The approved
+current pricing candidate is not installed at the historical runtime snapshot
+path; that exact byte projection remains a separately reviewed future
+installation prerequisite.
 The historical G1 package remains an
-immutable `AWAITING_EXPLICIT_OWNER_APPROVAL` readiness snapshot. PR #148
-remains draft and is not GitHub approval or runtime authority. The workflow
+immutable `AWAITING_EXPLICIT_OWNER_APPROVAL` readiness snapshot. PR #148 is
+historical draft context; PR #151 remains draft and unmerged. Neither is GitHub
+approval or runtime authority. The workflow
 candidate remains outside `.github/workflows`; no role, installation, release,
 activation, AWS/S3 authority, diagnostic execution, empirical root-cause
 claim, deduplication, repair, wallet ranking or R12 promotion exists.

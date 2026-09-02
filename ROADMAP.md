@@ -26,15 +26,17 @@
 - [x] Retain the exact consumed R11 artifact and release-consumption record; preserve the unresolved duplicate-count deviation.
 - [x] Record R10D as byte-exact under its legacy reducer but uncertain under canonical identity and event-time activity.
 - [x] Freeze the four-layer R11A identity model and exact-same-72-object diagnostic as `PREREGISTERED_NO_EXECUTION`.
-- [x] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`.
+- [x] Complete the owner-authored clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative content-GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`; no third-party independence is claimed.
 - [x] Bind current official AWS pricing and ECB EUR evidence to the exact frozen diagnostic envelope with a conservative EUR 0.50 one-time / EUR 0 monthly ceiling.
 - [x] Obtain and record one exact hash-bound owner approval for package `R11A-G1-OWNER-APPROVAL-PACKAGE-001`; exact statement SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`. Approval alone grants no current runtime authority.
-- [x] Complete independent exact-head review `5033303996` of the byte-exact G2 approval record; owner approval is present but creates no current runtime authority.
-- [ ] Independently review the inert post-approval validator-alignment candidate before any identity action. The approved current pricing candidate remains uninstalled at the runtime snapshot path and must be projected only in its later separately reviewed installation gate.
+- [x] Complete owner-authored exact-head review `5033303996` of the byte-exact G2 approval record; owner approval is present but creates no current runtime authority or third-party-independence claim.
+- [x] Implement the repository-only `OWNER_SELF_REVIEW_COMMENTED_GREEN` correction while preserving COMMENTED state, qualified repository association and permission, immutable payload, exact-head/tree, exact body markers, chronology, target/predecessor bundles, later-RED supersession and cross-gate non-reuse checks. Preserve review `5087528366` unmodified as historical content-GREEN but not machine-readable gate evidence.
+- [ ] After the stacked corrective PR is integrated into the PR #151 source branch, obtain a new exact-head machine-readable owner COMMENTED/GREEN review by Mathis on PR #151's updated corrective head, followed by a separate immutable evidence capture. A review on the stacked delivery PR alone cannot close the unchanged exact-G2-predecessor alignment gate. Create no successor-role candidate before that evidence gate closes.
+- [ ] Keep the approved current pricing candidate uninstalled at the runtime snapshot path; project it only in its later separately reviewed installation gate.
 - [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
 - [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
 
-R11 remains unresolved and R12 remains blocked throughout Phase 1B. No step above authorizes wallet ranking, alpha/copyability interpretation or trading.
+R11 remains unresolved and R12 remains blocked throughout Phase 1B. Owner-authored COMMENTED/GREEN is not GitHub APPROVED, third-party independence or merge authority. No step above authorizes AWS/runtime action, wallet ranking, alpha/copyability interpretation or trading.
 
 ## Phase 2 — deterministic wallet ledger
 

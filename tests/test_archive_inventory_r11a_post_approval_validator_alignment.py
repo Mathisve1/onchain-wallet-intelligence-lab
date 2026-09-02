@@ -164,7 +164,7 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
                 "R11A-SUCCESSOR-IDENTITY-CREATION-AND-CONFIGURATION-001"
             ),
             "status": (
-                "CANDIDATE_AWAITING_INDEPENDENT_"
+                "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_"
                 "IDENTITY_CONFIGURATION_REVIEW_NO_AWS"
             ),
             "alignment_id": common.ALIGNMENT_ID,
@@ -239,7 +239,7 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
         return {
             "schema_version": "1.0",
             "preflight_candidate_id": "CANDIDATE_HL_ARCHIVE_R11A_STS_ONLY_PREFLIGHT_001",
-            "status": "CANDIDATE_AWAITING_INDEPENDENT_STS_ONLY_PREFLIGHT_RELEASE_REVIEW_NO_AWS",
+            "status": "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_STS_ONLY_PREFLIGHT_RELEASE_REVIEW_NO_AWS",
             "role_attestation_review_evidence_sha256": self.evidence_digest(
                 root, "R11A_ROLE_ATTESTATION_REVIEW"
             ),
@@ -403,7 +403,7 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
             "execution_release_candidate_id": (
                 "CANDIDATE_RELEASE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001"
             ),
-            "status": "CANDIDATE_AWAITING_INDEPENDENT_EXECUTION_RELEASE_REVIEW_NO_EXECUTION",
+            "status": "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_EXECUTION_RELEASE_REVIEW_NO_EXECUTION",
             "diagnostic_id": common.DIAGNOSTIC_ID,
             "installation_contract_sha256": common.sha256(root, common.INSTALLATION_RELATIVE),
             "approval_receipt_sha256": common.APPROVAL_RECEIPT_SHA,
@@ -953,6 +953,47 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
             record["seven_finding_remediation"]["finding_ids"],
             list(context.REMEDIATED_FINDING_IDS),
         )
+        self.assertEqual(
+            record["review_governance_model"]["classification"],
+            context.OWNER_REVIEW_MODEL,
+        )
+        self.assertTrue(
+            record["review_governance_model"][
+                "same_github_identity_as_pull_author_permitted"
+            ]
+        )
+        self.assertFalse(
+            record["review_governance_model"]["third_party_independence_claimed"]
+        )
+        self.assertTrue(
+            record["review_governance_model"][
+                "exact_canonical_marker_only_body_required"
+            ]
+        )
+        for nonreuse_key in (
+            "cross_gate_review_id_reuse_forbidden",
+            "cross_gate_review_node_id_reuse_forbidden",
+            "cross_gate_evidence_digest_reuse_forbidden",
+            "cross_gate_reviewed_head_reuse_forbidden",
+            "cross_gate_reviewed_tree_reuse_forbidden",
+        ):
+            with self.subTest(nonreuse_key=nonreuse_key):
+                self.assertTrue(record["review_governance_model"][nonreuse_key])
+        self.assertTrue(
+            record["review_governance_model"][
+                "human_substantive_responsibility_retained"
+            ]
+        )
+        self.assertEqual(
+            record["historical_content_review"]["review_id"],
+            context.HISTORICAL_CONTENT_REVIEW_ID,
+        )
+        self.assertTrue(record["historical_content_review"]["content_green"])
+        self.assertFalse(
+            record["historical_content_review"]["machine_readable_gate_evidence"]
+        )
+        self.assertFalse(record["historical_content_review"]["review_modified"])
+        self.assertFalse(record["alignment_review_gate_closed"])
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("r11a_owner_approval_record_review_complete = true", state)
         self.assertIn("r11a_execution_authorized_by_this_approval = false", state)

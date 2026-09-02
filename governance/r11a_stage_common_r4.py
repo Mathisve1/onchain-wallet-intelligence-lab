@@ -401,7 +401,7 @@ def require_gate_review(
     """Validate and consume one fixed, hash-bound external-review capture.
 
     Stage records carry only the digest of the fixed evidence object.  Review
-    metadata is parsed from the independently captured object and reconciled
+    metadata is parsed from the separately captured object and reconciled
     with its raw GitHub payloads by ``r11a_github_review_evidence``; editable
     stage JSON never supplies review event, verdict, head, tree, or identity.
     ``lineage`` makes review identities single-use across the entire call

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "alignment_id": "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001",
   "repository": "Mathisve1/onchain-wallet-intelligence-lab",
-  "status": "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "status": "REVIEW_MODEL_CORRECTED_AWAITING_NEW_EXACT_HEAD_OWNER_COMMENTED_GREEN_REVIEW_AND_SEPARATE_EVIDENCE_CAPTURE_NO_AWS",
   "predecessor": {
     "head": "63526d6c39c9225e647a18693c70ec8e73535ff4",
     "tree": "eedeb4d6166c554b996ede740931c4bacb306f5d"
@@ -19,6 +19,68 @@
     "reviewed_head": "44f9e912ca5b07bbe8f812d57a1706364d9c850b",
     "reviewed_tree": "739a3d3cf309d40258c8c725c72078ee571a5285"
   },
+  "later_exact_head_red_review": {
+    "review_id": 5054818123,
+    "review_event": "COMMENTED",
+    "review_verdict": "RED",
+    "reviewed_head": "6dc1bcccc66151b8aff7651965fa0d51ef9af0ed",
+    "reviewed_tree": "2ac5c826407633d700894922ba86d32851e44177"
+  },
+  "review_governance_model": {
+    "classification": "OWNER_SELF_REVIEW_COMMENTED_GREEN",
+    "same_github_identity_as_pull_author_permitted": true,
+    "distinct_qualified_reviewer_supported": true,
+    "review_event_required": "COMMENTED",
+    "authorized_author_associations": [
+      "OWNER",
+      "MEMBER",
+      "COLLABORATOR"
+    ],
+    "authorized_repository_permissions": [
+      "write",
+      "maintain",
+      "admin"
+    ],
+    "immutable_review_and_permission_payloads_required": true,
+    "exact_head_and_tree_required": true,
+    "exact_green_and_gate_markers_required": true,
+    "exact_canonical_marker_only_body_required": true,
+    "chronology_required": true,
+    "later_red_supersession_forbidden": true,
+    "target_and_predecessor_bundles_required": true,
+    "cross_gate_review_id_reuse_forbidden": true,
+    "cross_gate_review_node_id_reuse_forbidden": true,
+    "cross_gate_evidence_digest_reuse_forbidden": true,
+    "cross_gate_reviewed_head_reuse_forbidden": true,
+    "cross_gate_reviewed_tree_reuse_forbidden": true,
+    "human_substantive_responsibility_retained": true,
+    "github_approved": false,
+    "third_party_independence_claimed": false,
+    "merge_authority": false,
+    "aws_iam_oidc_sts_s3_authority": false,
+    "workflow_release_activation_runtime_diagnostic_authority": false
+  },
+  "historical_content_review": {
+    "review_id": 5087528366,
+    "review_event": "COMMENTED",
+    "content_verdict": "GREEN",
+    "reviewed_head": "5616155ff7a70ca106be9a36288b4ca2d9eb0fd0",
+    "reviewed_tree": "3cf4cfcb0f8341087cd361993a719cc070333594",
+    "submitted_at": "2026-09-02T08:49:22Z",
+    "author_login": "Mathisve1",
+    "author_user_id": 163474992,
+    "content_green": true,
+    "machine_readable_gate_evidence": false,
+    "review_modified": false,
+    "review_dismissed": false,
+    "review_deleted": false,
+    "evidence_capture_present": false,
+    "failure_reasons": [
+      "FIRST_NONEMPTY_LINE_NOT_EXACT_GREEN",
+      "REQUIRED_GATE_TARGET_AND_PREDECESSOR_MARKERS_ABSENT",
+      "OWNER_REVIEW_CONTAINS_INDEPENDENCE_CLAIM"
+    ]
+  },
   "seven_finding_remediation": {
     "finding_ids": [
       "R11A-ALIGN-ISO-001",
@@ -29,13 +91,15 @@
       "R11A-ALIGN-GATE-006",
       "R11A-ALIGN-WF-007"
     ],
-    "remediation_status": "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW",
-    "independent_closure_pending": true,
+    "remediation_status": "IMPLEMENTED_AWAITING_NEW_EXACT_HEAD_OWNER_COMMENTED_GREEN_REVIEW_AND_SEPARATE_EVIDENCE_CAPTURE",
+    "machine_readable_owner_review_pending": true,
+    "separate_evidence_capture_pending": true,
+    "review_gate_closed": false,
     "repository_only": true,
     "aws_or_runtime_action_performed": false
   },
   "approved_bound_bytes_unchanged": true,
-  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_REVIEW_MODEL_CORRECTED_PENDING_NEW_OWNER_REVIEW_AND_SEPARATE_EVIDENCE_NO_AWS",
   "no_aws_action_performed": true,
   "canonical_approval": {
     "receipt_path": "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json",
@@ -164,6 +228,8 @@
     "sts": false,
     "s3": false
   },
-  "independent_exact_head_review_pending": true,
-  "next_gate": "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
+  "machine_readable_owner_review_pending": true,
+  "separate_review_evidence_capture_pending": true,
+  "alignment_review_gate_closed": false,
+  "next_gate": "NEW_EXACT_HEAD_MACHINE_READABLE_OWNER_COMMENTED_GREEN_REVIEW_ON_UPDATED_ALIGNMENT_PR_151_THEN_SEPARATE_EVIDENCE_CAPTURE_NO_AWS"
 }
