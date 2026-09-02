@@ -236,7 +236,7 @@ def validate_candidate(
     )
     require(
         candidate["status"]
-        == "CANDIDATE_AWAITING_INDEPENDENT_EXECUTION_RELEASE_REVIEW_NO_EXECUTION",
+        == "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_EXECUTION_RELEASE_REVIEW_NO_EXECUTION",
         "release candidate status drift",
     )
     require(candidate["diagnostic_id"] == DIAGNOSTIC_ID, "release candidate diagnostic ID drift")

@@ -29,7 +29,7 @@ class ReviewStageChainTests(TestCase):
                 "R11A-SUCCESSOR-IDENTITY-CREATION-AND-CONFIGURATION-001"
             ),
             "status": (
-                "CANDIDATE_AWAITING_INDEPENDENT_"
+                "CANDIDATE_AWAITING_EXACT_HEAD_COMMENTED_GREEN_"
                 "IDENTITY_CONFIGURATION_REVIEW_NO_AWS"
             ),
             "alignment_id": common.ALIGNMENT_ID,
@@ -181,6 +181,31 @@ class ReviewStageChainTests(TestCase):
         )
 
     def test_review_gate_lineage_is_exact_and_cannot_skip_or_reuse(self) -> None:
+        self.assertEqual(
+            ("review_id", "review_node_id", "reviewed_head", "reviewed_tree"),
+            common._review_evidence.HISTORICAL_SEED_NON_REUSE_FIELDS,
+        )
+        self.assertEqual(
+            (
+                "review_id",
+                "review_node_id",
+                "evidence_sha256",
+                "reviewed_head",
+                "reviewed_tree",
+            ),
+            common._review_evidence.SCHEMA_1_1_GATE_NON_REUSE_FIELDS,
+        )
+        self.assertEqual(
+            (
+                "PRR_kwDOTw6wFs8AAAABKyjipA",
+                "PRR_kwDOTw6wFs8AAAABK6wxjQ",
+                "PRR_kwDOTw6wFs8AAAABLAIfvA",
+            ),
+            tuple(
+                seed.review_node_id
+                for seed in common._review_evidence.SEED_REVIEWS
+            ),
+        )
         lineage: list[object] = []
 
         def identity(_root: Path, gate_id: str, **kwargs: object) -> object:

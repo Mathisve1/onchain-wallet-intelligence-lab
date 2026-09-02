@@ -26,15 +26,19 @@
 - [x] Retain the exact consumed R11 artifact and release-consumption record; preserve the unresolved duplicate-count deviation.
 - [x] Record R10D as byte-exact under its legacy reducer but uncertain under canonical identity and event-time activity.
 - [x] Freeze the four-layer R11A identity model and exact-same-72-object diagnostic as `PREREGISTERED_NO_EXECUTION`.
-- [x] Complete a new independent clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`.
+- [x] Complete the owner-authored clean-context review of the D1 RED-remediated, locally sealed R11A V2 R7 implementation and workflow candidate outside `.github/workflows`; preserve canonical Amendment 002 unchanged at its V2 path and exact binding. Authoritative content-GREEN review: `5019067044` at exact head `443500de54917417276c39a635ae444458d03b0b`; no third-party independence is claimed.
 - [x] Bind current official AWS pricing and ECB EUR evidence to the exact frozen diagnostic envelope with a conservative EUR 0.50 one-time / EUR 0 monthly ceiling.
 - [x] Obtain and record one exact hash-bound owner approval for package `R11A-G1-OWNER-APPROVAL-PACKAGE-001`; exact statement SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`. Approval alone grants no current runtime authority.
-- [x] Complete independent exact-head review `5033303996` of the byte-exact G2 approval record; owner approval is present but creates no current runtime authority.
-- [ ] Independently review the inert post-approval validator-alignment candidate before any identity action. The approved current pricing candidate remains uninstalled at the runtime snapshot path and must be projected only in its later separately reviewed installation gate.
+- [x] Complete owner-authored exact-head review `5033303996` of the byte-exact G2 approval record; owner approval is present but creates no current runtime authority or third-party-independence claim.
+- [x] Implement the repository-only `OWNER_SELF_REVIEW_COMMENTED_GREEN` correction with exact login plus exact user-ID owner equivalence, case-fold-collision rejection, exact permission-payload identity binding, four-field historical-seed non-reuse and five-field pairwise schema-1.1 gate non-reuse. Preserve review `5087528366` unchanged and claim no historical seed evidence digest.
+- [x] Remediate `R11A-OWNER-ID-001` and `R11A-SEED-NONREUSE-002` from unchanged historical COMMENTED/RED review `5089909132` on PR #152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8`; status remains `IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW`, with review closure false.
+- [ ] Obtain a new owner-authored substantive exact-head review of PR #152. Do not integrate the new head into PR #151 before that review.
+- [ ] After a GREEN PR #152 rereview, integrate the correction into the PR #151 source branch, then obtain a new exact-head machine-readable owner COMMENTED/GREEN review on updated PR #151 followed by a separate immutable evidence capture. Create no successor-role candidate before that evidence gate closes.
+- [ ] Keep the approved current pricing candidate uninstalled at the runtime snapshot path; project it only in its later separately reviewed installation gate.
 - [ ] Preserve separate post-approval workflow-installation, release-candidate, single-use activation and evidence gates.
 - [ ] Select any replay suppression or canonicalization only from complete R11A evidence; then repair and revalidate the 72-hour aggregation separately.
 
-R11 remains unresolved and R12 remains blocked throughout Phase 1B. No step above authorizes wallet ranking, alpha/copyability interpretation or trading.
+R11 remains unresolved and R12 remains blocked throughout Phase 1B. Owner-authored COMMENTED/GREEN is not GitHub APPROVED, third-party independence or merge authority. No step above authorizes AWS/runtime action, wallet ranking, alpha/copyability interpretation or trading.
 
 ## Phase 2 — deterministic wallet ledger
 

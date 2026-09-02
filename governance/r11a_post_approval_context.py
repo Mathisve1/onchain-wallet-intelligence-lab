@@ -18,8 +18,10 @@ REPOSITORY = _g2.REPOSITORY
 
 ALIGNMENT_ID = "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001"
 ALIGNMENT_PATH = _g2.ALIGNMENT_PATH
+OWNER_REVIEW_MODEL = "OWNER_SELF_REVIEW_COMMENTED_GREEN"
 ALIGNMENT_STATUS = (
-    "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS"
+    "OWNER_REVIEW_MODEL_RED_FINDINGS_REMEDIATED_AWAITING_NEW_EXACT_HEAD_"
+    "REVIEW_NO_AWS"
 )
 
 PREDECESSOR_HEAD = "63526d6c39c9225e647a18693c70ec8e73535ff4"
@@ -28,6 +30,24 @@ G2_REVIEW_ID = 5033303996
 RED_REVIEW_ID = 5049607285
 RED_REVIEWED_HEAD = "44f9e912ca5b07bbe8f812d57a1706364d9c850b"
 RED_REVIEWED_TREE = "739a3d3cf309d40258c8c725c72078ee571a5285"
+LATER_RED_REVIEW_ID = 5054818123
+LATER_RED_REVIEWED_HEAD = "6dc1bcccc66151b8aff7651965fa0d51ef9af0ed"
+LATER_RED_REVIEWED_TREE = "2ac5c826407633d700894922ba86d32851e44177"
+HISTORICAL_CONTENT_REVIEW_ID = 5087528366
+HISTORICAL_CONTENT_REVIEWED_HEAD = "5616155ff7a70ca106be9a36288b4ca2d9eb0fd0"
+HISTORICAL_CONTENT_REVIEWED_TREE = "3cf4cfcb0f8341087cd361993a719cc070333594"
+HISTORICAL_CONTENT_REVIEW_SUBMITTED_AT = "2026-09-02T08:49:22Z"
+HISTORICAL_CONTENT_REVIEW_AUTHOR_LOGIN = "Mathisve1"
+HISTORICAL_CONTENT_REVIEW_AUTHOR_USER_ID = 163474992
+OWNER_MODEL_RED_REVIEW_ID = 5089909132
+OWNER_MODEL_RED_REVIEW_NODE_ID = "PRR_kwDOTw6wFs8AAAABL2HZjA"
+OWNER_MODEL_RED_REVIEWED_HEAD = "be602f5d0651ff7562ef0efb55bfe81316f391f8"
+OWNER_MODEL_RED_REVIEWED_TREE = "5a7b06d0f30a5137019841db1b17e4d6f1c69f46"
+OWNER_MODEL_RED_REVIEW_SUBMITTED_AT = "2026-09-02T12:59:59Z"
+OWNER_MODEL_RED_FINDING_IDS = (
+    "R11A-OWNER-ID-001",
+    "R11A-SEED-NONREUSE-002",
+)
 REMEDIATED_FINDING_IDS = (
     "R11A-ALIGN-ISO-001",
     "R11A-ALIGN-ISO-002",
@@ -64,7 +84,7 @@ RUNTIME_PRICING_TARGET_SHA = (
 )
 
 NEXT_GATE = (
-    "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
+    "NEW_OWNER_AUTHORED_EXACT_HEAD_SUBSTANTIVE_REVIEW_OF_PR_152"
 )
 
 ALIGNED_CONSUMERS = (
@@ -367,19 +387,119 @@ def expected_alignment_record(root: Path = ROOT) -> dict[str, Any]:
             "reviewed_head": RED_REVIEWED_HEAD,
             "reviewed_tree": RED_REVIEWED_TREE,
         },
+        "later_exact_head_red_review": {
+            "review_id": LATER_RED_REVIEW_ID,
+            "review_event": "COMMENTED",
+            "review_verdict": "RED",
+            "reviewed_head": LATER_RED_REVIEWED_HEAD,
+            "reviewed_tree": LATER_RED_REVIEWED_TREE,
+        },
+        "review_governance_model": {
+            "classification": OWNER_REVIEW_MODEL,
+            "same_github_identity_as_pull_author_permitted": True,
+            "owner_exact_login_string_required": True,
+            "owner_exact_user_id_required": True,
+            "casefold_collision_with_different_exact_login_rejected": True,
+            "distinct_qualified_reviewer_supported": True,
+            "review_event_required": "COMMENTED",
+            "authorized_author_associations": ["OWNER", "MEMBER", "COLLABORATOR"],
+            "authorized_repository_permissions": ["write", "maintain", "admin"],
+            "immutable_review_and_permission_payloads_required": True,
+            "permission_payload_reviewer_login_exact_match_required": True,
+            "permission_payload_reviewer_user_id_exact_match_required": True,
+            "exact_head_and_tree_required": True,
+            "exact_green_and_gate_markers_required": True,
+            "exact_canonical_marker_only_body_required": True,
+            "chronology_required": True,
+            "later_red_supersession_forbidden": True,
+            "target_and_predecessor_bundles_required": True,
+            "historical_seed_reviews": [
+                {
+                    "label": seed.label,
+                    "review_id": seed.review_id,
+                    "review_node_id": seed.review_node_id,
+                    "reviewed_head": seed.reviewed_head,
+                    "reviewed_tree": seed.reviewed_tree,
+                }
+                for seed in _review_evidence.SEED_REVIEWS
+            ],
+            "historical_seed_non_reuse_fields": list(
+                _review_evidence.HISTORICAL_SEED_NON_REUSE_FIELDS
+            ),
+            "schema_1_1_governance_gate_non_reuse_fields": list(
+                _review_evidence.SCHEMA_1_1_GATE_NON_REUSE_FIELDS
+            ),
+            "historical_seed_evidence_sha256_non_reuse_claimed": False,
+            "seed_evidence_digests_fabricated": False,
+            "human_substantive_responsibility_retained": True,
+            "github_approved": False,
+            "third_party_independence_claimed": False,
+            "merge_authority": False,
+            "aws_iam_oidc_sts_s3_authority": False,
+            "workflow_release_activation_runtime_diagnostic_authority": False,
+        },
+        "historical_content_review": {
+            "review_id": HISTORICAL_CONTENT_REVIEW_ID,
+            "review_event": "COMMENTED",
+            "content_verdict": "GREEN",
+            "reviewed_head": HISTORICAL_CONTENT_REVIEWED_HEAD,
+            "reviewed_tree": HISTORICAL_CONTENT_REVIEWED_TREE,
+            "submitted_at": HISTORICAL_CONTENT_REVIEW_SUBMITTED_AT,
+            "author_login": HISTORICAL_CONTENT_REVIEW_AUTHOR_LOGIN,
+            "author_user_id": HISTORICAL_CONTENT_REVIEW_AUTHOR_USER_ID,
+            "content_green": True,
+            "machine_readable_gate_evidence": False,
+            "review_modified": False,
+            "review_dismissed": False,
+            "review_deleted": False,
+            "evidence_capture_present": False,
+            "failure_reasons": [
+                "FIRST_NONEMPTY_LINE_NOT_EXACT_GREEN",
+                "REQUIRED_GATE_TARGET_AND_PREDECESSOR_MARKERS_ABSENT",
+                "OWNER_REVIEW_CONTAINS_INDEPENDENCE_CLAIM",
+            ],
+        },
+        "owner_review_model_red_review": {
+            "review_id": OWNER_MODEL_RED_REVIEW_ID,
+            "review_node_id": OWNER_MODEL_RED_REVIEW_NODE_ID,
+            "review_event": "COMMENTED",
+            "review_verdict": "RED",
+            "reviewed_head": OWNER_MODEL_RED_REVIEWED_HEAD,
+            "reviewed_tree": OWNER_MODEL_RED_REVIEWED_TREE,
+            "submitted_at": OWNER_MODEL_RED_REVIEW_SUBMITTED_AT,
+            "author_login": HISTORICAL_CONTENT_REVIEW_AUTHOR_LOGIN,
+            "author_user_id": HISTORICAL_CONTENT_REVIEW_AUTHOR_USER_ID,
+            "author_association": "OWNER",
+            "finding_ids": list(OWNER_MODEL_RED_FINDING_IDS),
+            "historical": True,
+            "review_modified": False,
+            "superseded_by_later_exact_head_review": False,
+        },
+        "owner_review_model_red_finding_remediation": {
+            "finding_ids": list(OWNER_MODEL_RED_FINDING_IDS),
+            "remediation_status": "IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW",
+            "independent_closure": False,
+            "review_closure": False,
+            "new_exact_head_review_pending": True,
+            "repository_only": True,
+            "aws_or_runtime_action_performed": False,
+        },
         "seven_finding_remediation": {
             "finding_ids": list(REMEDIATED_FINDING_IDS),
             "remediation_status": (
-                "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW"
+                "IMPLEMENTED_AWAITING_NEW_EXACT_HEAD_OWNER_COMMENTED_GREEN_"
+                "REVIEW_AND_SEPARATE_EVIDENCE_CAPTURE"
             ),
-            "independent_closure_pending": True,
+            "machine_readable_owner_review_pending": True,
+            "separate_evidence_capture_pending": True,
+            "review_gate_closed": False,
             "repository_only": True,
             "aws_or_runtime_action_performed": False,
         },
         "approved_bound_bytes_unchanged": True,
         "alignment_implementation_status": (
-            "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_"
-            "INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS"
+            "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_REVIEW_MODEL_CORRECTED_"
+            "PENDING_NEW_OWNER_REVIEW_AND_SEPARATE_EVIDENCE_NO_AWS"
         ),
         "no_aws_action_performed": True,
         "canonical_approval": {
@@ -416,7 +536,10 @@ def expected_alignment_record(root: Path = ROOT) -> dict[str, Any]:
             "sts": False,
             "s3": False,
         },
-        "independent_exact_head_review_pending": True,
+        "machine_readable_owner_review_pending": True,
+        "separate_review_evidence_capture_pending": True,
+        "owner_review_model_exact_head_rereview_pending": True,
+        "alignment_review_gate_closed": False,
         "next_gate": NEXT_GATE,
     }
 
@@ -477,7 +600,17 @@ __all__ = [
     "CANONICAL_FUTURE_AUTHORITY_PATHS",
     "FUTURE_STAGE_PATHS",
     "G2_REVIEW_ID",
+    "HISTORICAL_CONTENT_REVIEW_AUTHOR_LOGIN",
+    "HISTORICAL_CONTENT_REVIEW_AUTHOR_USER_ID",
+    "HISTORICAL_CONTENT_REVIEW_ID",
+    "HISTORICAL_CONTENT_REVIEW_SUBMITTED_AT",
+    "HISTORICAL_CONTENT_REVIEWED_HEAD",
+    "HISTORICAL_CONTENT_REVIEWED_TREE",
+    "LATER_RED_REVIEW_ID",
+    "LATER_RED_REVIEWED_HEAD",
+    "LATER_RED_REVIEWED_TREE",
     "NEXT_GATE",
+    "OWNER_REVIEW_MODEL",
     "PREDECESSOR_HEAD",
     "PREDECESSOR_TREE",
     "PROHIBITED_AUTHORITY_NAMESPACES",

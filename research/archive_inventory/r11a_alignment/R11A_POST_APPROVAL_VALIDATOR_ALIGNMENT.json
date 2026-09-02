@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "alignment_id": "R11A-POST-APPROVAL-VALIDATOR-ALIGNMENT-001",
   "repository": "Mathisve1/onchain-wallet-intelligence-lab",
-  "status": "REMEDIATED_AFTER_RED_REVIEW_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "status": "OWNER_REVIEW_MODEL_RED_FINDINGS_REMEDIATED_AWAITING_NEW_EXACT_HEAD_REVIEW_NO_AWS",
   "predecessor": {
     "head": "63526d6c39c9225e647a18693c70ec8e73535ff4",
     "tree": "eedeb4d6166c554b996ede740931c4bacb306f5d"
@@ -19,6 +19,137 @@
     "reviewed_head": "44f9e912ca5b07bbe8f812d57a1706364d9c850b",
     "reviewed_tree": "739a3d3cf309d40258c8c725c72078ee571a5285"
   },
+  "later_exact_head_red_review": {
+    "review_id": 5054818123,
+    "review_event": "COMMENTED",
+    "review_verdict": "RED",
+    "reviewed_head": "6dc1bcccc66151b8aff7651965fa0d51ef9af0ed",
+    "reviewed_tree": "2ac5c826407633d700894922ba86d32851e44177"
+  },
+  "review_governance_model": {
+    "classification": "OWNER_SELF_REVIEW_COMMENTED_GREEN",
+    "same_github_identity_as_pull_author_permitted": true,
+    "owner_exact_login_string_required": true,
+    "owner_exact_user_id_required": true,
+    "casefold_collision_with_different_exact_login_rejected": true,
+    "distinct_qualified_reviewer_supported": true,
+    "review_event_required": "COMMENTED",
+    "authorized_author_associations": [
+      "OWNER",
+      "MEMBER",
+      "COLLABORATOR"
+    ],
+    "authorized_repository_permissions": [
+      "write",
+      "maintain",
+      "admin"
+    ],
+    "immutable_review_and_permission_payloads_required": true,
+    "permission_payload_reviewer_login_exact_match_required": true,
+    "permission_payload_reviewer_user_id_exact_match_required": true,
+    "exact_head_and_tree_required": true,
+    "exact_green_and_gate_markers_required": true,
+    "exact_canonical_marker_only_body_required": true,
+    "chronology_required": true,
+    "later_red_supersession_forbidden": true,
+    "target_and_predecessor_bundles_required": true,
+    "historical_seed_reviews": [
+      {
+        "label": "software",
+        "review_id": 5019067044,
+        "review_node_id": "PRR_kwDOTw6wFs8AAAABKyjipA",
+        "reviewed_head": "443500de54917417276c39a635ae444458d03b0b",
+        "reviewed_tree": "516d72a43545c454ef163e02ee1146005e6cfb5c"
+      },
+      {
+        "label": "g1",
+        "review_id": 5027672461,
+        "review_node_id": "PRR_kwDOTw6wFs8AAAABK6wxjQ",
+        "reviewed_head": "4da7e67b600ef1ca10fb4f2e62b493d81d4dfcc3",
+        "reviewed_tree": "b4c7b1524e8856450028e53be7912a88d3a675e1"
+      },
+      {
+        "label": "g2",
+        "review_id": 5033303996,
+        "review_node_id": "PRR_kwDOTw6wFs8AAAABLAIfvA",
+        "reviewed_head": "63526d6c39c9225e647a18693c70ec8e73535ff4",
+        "reviewed_tree": "eedeb4d6166c554b996ede740931c4bacb306f5d"
+      }
+    ],
+    "historical_seed_non_reuse_fields": [
+      "review_id",
+      "review_node_id",
+      "reviewed_head",
+      "reviewed_tree"
+    ],
+    "schema_1_1_governance_gate_non_reuse_fields": [
+      "review_id",
+      "review_node_id",
+      "evidence_sha256",
+      "reviewed_head",
+      "reviewed_tree"
+    ],
+    "historical_seed_evidence_sha256_non_reuse_claimed": false,
+    "seed_evidence_digests_fabricated": false,
+    "human_substantive_responsibility_retained": true,
+    "github_approved": false,
+    "third_party_independence_claimed": false,
+    "merge_authority": false,
+    "aws_iam_oidc_sts_s3_authority": false,
+    "workflow_release_activation_runtime_diagnostic_authority": false
+  },
+  "historical_content_review": {
+    "review_id": 5087528366,
+    "review_event": "COMMENTED",
+    "content_verdict": "GREEN",
+    "reviewed_head": "5616155ff7a70ca106be9a36288b4ca2d9eb0fd0",
+    "reviewed_tree": "3cf4cfcb0f8341087cd361993a719cc070333594",
+    "submitted_at": "2026-09-02T08:49:22Z",
+    "author_login": "Mathisve1",
+    "author_user_id": 163474992,
+    "content_green": true,
+    "machine_readable_gate_evidence": false,
+    "review_modified": false,
+    "review_dismissed": false,
+    "review_deleted": false,
+    "evidence_capture_present": false,
+    "failure_reasons": [
+      "FIRST_NONEMPTY_LINE_NOT_EXACT_GREEN",
+      "REQUIRED_GATE_TARGET_AND_PREDECESSOR_MARKERS_ABSENT",
+      "OWNER_REVIEW_CONTAINS_INDEPENDENCE_CLAIM"
+    ]
+  },
+  "owner_review_model_red_review": {
+    "review_id": 5089909132,
+    "review_node_id": "PRR_kwDOTw6wFs8AAAABL2HZjA",
+    "review_event": "COMMENTED",
+    "review_verdict": "RED",
+    "reviewed_head": "be602f5d0651ff7562ef0efb55bfe81316f391f8",
+    "reviewed_tree": "5a7b06d0f30a5137019841db1b17e4d6f1c69f46",
+    "submitted_at": "2026-09-02T12:59:59Z",
+    "author_login": "Mathisve1",
+    "author_user_id": 163474992,
+    "author_association": "OWNER",
+    "finding_ids": [
+      "R11A-OWNER-ID-001",
+      "R11A-SEED-NONREUSE-002"
+    ],
+    "historical": true,
+    "review_modified": false,
+    "superseded_by_later_exact_head_review": false
+  },
+  "owner_review_model_red_finding_remediation": {
+    "finding_ids": [
+      "R11A-OWNER-ID-001",
+      "R11A-SEED-NONREUSE-002"
+    ],
+    "remediation_status": "IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW",
+    "independent_closure": false,
+    "review_closure": false,
+    "new_exact_head_review_pending": true,
+    "repository_only": true,
+    "aws_or_runtime_action_performed": false
+  },
   "seven_finding_remediation": {
     "finding_ids": [
       "R11A-ALIGN-ISO-001",
@@ -29,13 +160,15 @@
       "R11A-ALIGN-GATE-006",
       "R11A-ALIGN-WF-007"
     ],
-    "remediation_status": "IMPLEMENTED_AWAITING_INDEPENDENT_EXACT_HEAD_REREVIEW",
-    "independent_closure_pending": true,
+    "remediation_status": "IMPLEMENTED_AWAITING_NEW_EXACT_HEAD_OWNER_COMMENTED_GREEN_REVIEW_AND_SEPARATE_EVIDENCE_CAPTURE",
+    "machine_readable_owner_review_pending": true,
+    "separate_evidence_capture_pending": true,
+    "review_gate_closed": false,
     "repository_only": true,
     "aws_or_runtime_action_performed": false
   },
   "approved_bound_bytes_unchanged": true,
-  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_PENDING_INDEPENDENT_EXACT_HEAD_REREVIEW_NO_AWS",
+  "alignment_implementation_status": "SEVEN_FINDING_REMEDIATION_IMPLEMENTED_INERT_REVIEW_MODEL_CORRECTED_PENDING_NEW_OWNER_REVIEW_AND_SEPARATE_EVIDENCE_NO_AWS",
   "no_aws_action_performed": true,
   "canonical_approval": {
     "receipt_path": "research/archive_inventory/r11a_approval/APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001.json",
@@ -132,9 +265,9 @@
       "research/archive_inventory/r11a_review_evidence/R11A_ALIGNMENT_REVIEW_EVIDENCE.json",
       "research/archive_inventory/r11a_review_evidence/R11A_IDENTITY_CONFIGURATION_REVIEW_EVIDENCE.json",
       "research/archive_inventory/r11a_review_evidence/R11A_ROLE_ATTESTATION_REVIEW_EVIDENCE.json",
-    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_CANDIDATE_REVIEW_EVIDENCE.json",
-    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_RELEASE_REVIEW_EVIDENCE.json",
-    "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_CANDIDATE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_RELEASE_REVIEW_EVIDENCE.json",
+      "research/archive_inventory/r11a_review_evidence/R11A_STS_PREFLIGHT_REVIEW_EVIDENCE.json",
       "research/archive_inventory/r11a_review_evidence/R11A_WORKFLOW_INSTALLATION_REVIEW_EVIDENCE.json",
       "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_CANDIDATE_REVIEW_EVIDENCE.json",
       "research/archive_inventory/r11a_review_evidence/R11A_EXECUTION_RELEASE_REVIEW_EVIDENCE.json",
@@ -164,6 +297,9 @@
     "sts": false,
     "s3": false
   },
-  "independent_exact_head_review_pending": true,
-  "next_gate": "INDEPENDENT_EXACT_HEAD_REREVIEW_OF_SEVEN_FINDING_REMEDIATION_NO_AWS"
+  "machine_readable_owner_review_pending": true,
+  "separate_review_evidence_capture_pending": true,
+  "owner_review_model_exact_head_rereview_pending": true,
+  "alignment_review_gate_closed": false,
+  "next_gate": "NEW_OWNER_AUTHORED_EXACT_HEAD_SUBSTANTIVE_REVIEW_OF_PR_152"
 }
