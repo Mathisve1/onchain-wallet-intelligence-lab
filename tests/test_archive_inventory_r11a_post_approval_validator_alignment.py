@@ -962,6 +962,17 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
                 "same_github_identity_as_pull_author_permitted"
             ]
         )
+        for exact_identity_key in (
+            "owner_exact_login_string_required",
+            "owner_exact_user_id_required",
+            "casefold_collision_with_different_exact_login_rejected",
+            "permission_payload_reviewer_login_exact_match_required",
+            "permission_payload_reviewer_user_id_exact_match_required",
+        ):
+            with self.subTest(exact_identity_key=exact_identity_key):
+                self.assertTrue(
+                    record["review_governance_model"][exact_identity_key]
+                )
         self.assertFalse(
             record["review_governance_model"]["third_party_independence_claimed"]
         )
@@ -970,15 +981,36 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
                 "exact_canonical_marker_only_body_required"
             ]
         )
-        for nonreuse_key in (
-            "cross_gate_review_id_reuse_forbidden",
-            "cross_gate_review_node_id_reuse_forbidden",
-            "cross_gate_evidence_digest_reuse_forbidden",
-            "cross_gate_reviewed_head_reuse_forbidden",
-            "cross_gate_reviewed_tree_reuse_forbidden",
-        ):
-            with self.subTest(nonreuse_key=nonreuse_key):
-                self.assertTrue(record["review_governance_model"][nonreuse_key])
+        model = record["review_governance_model"]
+        self.assertEqual(
+            ["review_id", "review_node_id", "reviewed_head", "reviewed_tree"],
+            model["historical_seed_non_reuse_fields"],
+        )
+        self.assertEqual(
+            [
+                "review_id",
+                "review_node_id",
+                "evidence_sha256",
+                "reviewed_head",
+                "reviewed_tree",
+            ],
+            model["schema_1_1_governance_gate_non_reuse_fields"],
+        )
+        self.assertEqual(
+            [
+                ("software", 5019067044, "PRR_kwDOTw6wFs8AAAABKyjipA"),
+                ("g1", 5027672461, "PRR_kwDOTw6wFs8AAAABK6wxjQ"),
+                ("g2", 5033303996, "PRR_kwDOTw6wFs8AAAABLAIfvA"),
+            ],
+            [
+                (seed["label"], seed["review_id"], seed["review_node_id"])
+                for seed in model["historical_seed_reviews"]
+            ],
+        )
+        self.assertFalse(
+            model["historical_seed_evidence_sha256_non_reuse_claimed"]
+        )
+        self.assertFalse(model["seed_evidence_digests_fabricated"])
         self.assertTrue(
             record["review_governance_model"][
                 "human_substantive_responsibility_retained"
@@ -993,6 +1025,26 @@ class PostApprovalValidatorAlignmentTests(unittest.TestCase):
             record["historical_content_review"]["machine_readable_gate_evidence"]
         )
         self.assertFalse(record["historical_content_review"]["review_modified"])
+        red_review = record["owner_review_model_red_review"]
+        self.assertEqual(context.OWNER_MODEL_RED_REVIEW_ID, red_review["review_id"])
+        self.assertEqual(
+            context.OWNER_MODEL_RED_REVIEW_NODE_ID,
+            red_review["review_node_id"],
+        )
+        self.assertEqual("RED", red_review["review_verdict"])
+        self.assertFalse(red_review["review_modified"])
+        remediation = record["owner_review_model_red_finding_remediation"]
+        self.assertEqual(
+            list(context.OWNER_MODEL_RED_FINDING_IDS),
+            remediation["finding_ids"],
+        )
+        self.assertEqual(
+            "IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW",
+            remediation["remediation_status"],
+        )
+        self.assertFalse(remediation["independent_closure"])
+        self.assertFalse(remediation["review_closure"])
+        self.assertEqual(context.NEXT_GATE, record["next_gate"])
         self.assertFalse(record["alignment_review_gate_closed"])
         state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
         self.assertIn("r11a_owner_approval_record_review_complete = true", state)

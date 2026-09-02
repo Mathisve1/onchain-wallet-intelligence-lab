@@ -46,18 +46,24 @@ and the canonical JSON receipt with SHA-256
 `531e61130b612fd12503e60ff56d1c3d51b05a64bb2785f1e10fa9c5471c7ae6`;
 owner-authored COMMENTED/GREEN review `5033303996` validated that exact G2 record
 at head `63526d6c39c9225e647a18693c70ec8e73535ff4`. The selected governance model
-is `OWNER_SELF_REVIEW_COMMENTED_GREEN`: Mathis remains responsible for the
-substantive review, while immutable payload, exact-head/tree, permission,
-marker, chronology, bundle and non-reuse checks bind the evidence. It is not
-GitHub APPROVED, third-party independence or merge authority. Review
-`5087528366` remains unmodified historical content-GREEN for head
+is `OWNER_SELF_REVIEW_COMMENTED_GREEN`: owner equivalence requires an exact
+login-string match and exact user-ID match, while any case-fold-only collision
+fails. Immutable review and exact permission-payload identity, head/tree,
+marker, chronology and bundle bindings remain mandatory. Historical
+software/G1/G2 seeds block review ID, review node ID, head and tree reuse;
+schema-1.1 governance gates additionally block evidence-SHA-256 reuse between
+gates. No seed evidence digest exists or is claimed. This is not GitHub
+APPROVED, third-party independence or merge authority. Review `5087528366`
+remains unchanged historical content-GREEN for head
 `5616155ff7a70ca106be9a36288b4ca2d9eb0fd0` and tree
 `3cf4cfcb0f8341087cd361993a719cc070333594`, but is not machine-readable gate
-evidence. Once the stacked correction is integrated into the PR #151 source
-branch, a new owner COMMENTED/GREEN review on PR #151's exact updated corrective
-head and later separate evidence capture are required before any successor-role
-candidate. A review on the stacked delivery PR alone cannot satisfy the unchanged
-exact-G2-predecessor alignment gate. The approved
+evidence. Review `5089909132` remains unchanged historical COMMENTED/RED on PR
+#152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8` / tree
+`5a7b06d0f30a5137019841db1b17e4d6f1c69f46`; both blocking findings are
+implemented but remain `IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW`. The exact
+next gate is a new owner-authored substantive exact-head review of PR #152.
+Only after that review may the correction be integrated into PR #151 and its
+separate machine-readable review/evidence sequence continue. The approved
 current pricing candidate is not installed at the historical runtime snapshot
 path; that exact byte projection remains a separately reviewed future
 installation prerequisite.

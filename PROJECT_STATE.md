@@ -2,7 +2,7 @@
 
 Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed R10D run `31420197671`, canonical R11 dispatch `baca1925c23ef6b0136aa3d96d6d479ac7717bdf`, R11 run `31436753081` / job `93612467250` / artifact `9082810554`, independently reconstructed provider artifact SHA-256 `45ee57df7a63561bef1772d8612d5fe32b06b9c407d9c1464ce0a02b65a15cc5`, and canonical consumed-unresolved R11 evidence closure merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`.
 
-Post-GREEN G1 governance/pricing state was verified 2026-08-25 against exact software head `443500de54917417276c39a635ae444458d03b0b`, owner-authored clean-context review `5019067044`, current official AWS/ECB evidence and the unchanged canonical Amendment 002. Mathis Van Eeckhout returned the exact frozen approval statement on 2026-08-26; its byte-exact canonical G2 record is GREEN under owner-authored COMMENTED review `5033303996` at exact head `63526d6c39c9225e647a18693c70ec8e73535ff4`. Review `5087528366`, also authored by `Mathisve1` / `163474992`, is retained unmodified as the historical content-GREEN COMMENTED review of PR #151 head `5616155ff7a70ca106be9a36288b4ca2d9eb0fd0` and tree `3cf4cfcb0f8341087cd361993a719cc070333594`, but it is not machine-readable gate evidence. The repository-only correction adopts `OWNER_SELF_REVIEW_COMMENTED_GREEN`; after the correction is integrated into the PR #151 source branch, a new exact-head machine-readable owner review on that updated corrective head, followed by separate evidence capture, remains required. A review placed only on the stacked delivery PR cannot close `R11A_ALIGNMENT_REVIEW`, because that PR is based on the prior alignment head rather than the exact G2 predecessor. No third-party independence, GitHub APPROVED state, merge authority, IAM resource, installed workflow, release, activation or diagnostic execution is claimed or created.
+Post-GREEN G1 governance/pricing state was verified 2026-08-25 against exact software head `443500de54917417276c39a635ae444458d03b0b`, owner-authored clean-context review `5019067044`, current official AWS/ECB evidence and the unchanged canonical Amendment 002. Mathis Van Eeckhout returned the exact frozen approval statement on 2026-08-26; its byte-exact canonical G2 record is GREEN under owner-authored COMMENTED review `5033303996` at exact head `63526d6c39c9225e647a18693c70ec8e73535ff4`. Review `5087528366`, also authored by `Mathisve1` / `163474992`, remains unchanged historical content-GREEN for PR #151 head `5616155ff7a70ca106be9a36288b4ca2d9eb0fd0` / tree `3cf4cfcb0f8341087cd361993a719cc070333594`, but is not machine-readable gate evidence. Review `5089909132` remains unchanged historical COMMENTED/RED on PR #152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8` / tree `5a7b06d0f30a5137019841db1b17e4d6f1c69f46`; its blocking findings `R11A-OWNER-ID-001` and `R11A-SEED-NONREUSE-002` are now implemented but not closed pending a new exact-head owner-authored substantive review of PR #152. The correction requires exact login-string and exact user-ID equality for owner review, rejects case-fold collisions, binds the three historical seed node IDs, applies four-field non-reuse against seeds and five-field non-reuse between schema-1.1 gates, and claims no seed evidence digest. No third-party independence, GitHub APPROVED state, merge authority, IAM resource, installed workflow, release, activation or diagnostic execution is claimed or created.
 
 ## Current status
 
@@ -12,7 +12,7 @@ Post-GREEN G1 governance/pricing state was verified 2026-08-25 against exact sof
 | current study | `WALLET-COPYABILITY-STUDY-001` |
 | research status | `REQUIRES_FURTHER_TESTING` |
 | lifecycle stage | `PRE_ARCHIVE_INVENTORY` |
-| archive diagnostic gate | `R11A_REVIEW_MODEL_CORRECTED_AWAITING_NEW_EXACT_HEAD_OWNER_COMMENTED_GREEN_REVIEW_AND_SEPARATE_EVIDENCE_CAPTURE_NO_AWS` |
+| archive diagnostic gate | `OWNER_REVIEW_MODEL_RED_FINDINGS_REMEDIATED_AWAITING_NEW_EXACT_HEAD_REVIEW_NO_AWS` |
 | experiment status | `PUBLIC_TECHNICAL_PROBE_ATTESTED_ARCHIVE_ACCESS_RESTRICTED` |
 | public-probe result | `PUBLIC_PROBE_PASS` |
 | public-probe run / job / artifact | `31200124642` / `92937868268` / `9002459643` |
@@ -88,12 +88,12 @@ Post-GREEN G1 governance/pricing state was verified 2026-08-25 against exact sof
 | R10D backward consistency | `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY` |
 | R10D legacy reducer reproduction | byte-exact; canonical unique-fill and event-time activity equivalence remain `UNKNOWN` |
 | R11A diagnostic | `HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002` |
-| R11A status | `OWNER_APPROVAL_GREEN_REVIEW_MODEL_CORRECTED_AWAITING_OWNER_REVIEW_AND_EVIDENCE_NO_CURRENT_RUNTIME` |
+| R11A status | `OWNER_REVIEW_MODEL_RED_FINDINGS_REMEDIATED_AWAITING_NEW_EXACT_HEAD_REVIEW_NO_CURRENT_RUNTIME` |
 | R11A software anchor | GREEN head `443500de54917417276c39a635ae444458d03b0b`; owner-authored clean-context review `5019067044` |
 | R11A exact input | same 72 R11 objects; no 73rd object or wider window |
 | R11A owner approval | `PRESENT_OWNER_REVIEWED_GREEN`; approval `APPROVE_HL_ARCHIVE_R11A_IDENTITY_BOUNDARY_DIAGNOSTIC_001`; exact text SHA-256 `16f9f2c31ff90952033251d917884b1ca55771511e82e4b813414dc1a3f807d3`; owner-authored COMMENTED/GREEN review `5033303996` |
-| R11A review governance model | `OWNER_SELF_REVIEW_COMMENTED_GREEN`; same PR-author identity allowed only with COMMENTED, OWNER/MEMBER/COLLABORATOR, write/maintain/admin and all immutable-payload, exact-head/tree, body, chronology, bundle and non-reuse checks; a distinct qualified reviewer remains supported |
-| R11A validator alignment | reviews `5049607285` and `5054818123` remain historical RED reviews on superseded heads; review `5087528366` remains unmodified historical content-GREEN at exact head `5616155ff7a70ca106be9a36288b4ca2d9eb0fd0` / tree `3cf4cfcb0f8341087cd361993a719cc070333594`, but is not machine-readable gate evidence; a new corrective-head owner review and separate evidence capture remain pending |
+| R11A review governance model | `OWNER_SELF_REVIEW_COMMENTED_GREEN`; owner equivalence requires exact login string plus exact user ID and rejects case-fold-only collisions; permission-payload identity binding remains exact; historical seeds block review ID, review node ID, head and tree, while schema-1.1 gates additionally block evidence SHA-256 pairwise; no seed evidence digest is claimed |
+| R11A validator alignment | reviews `5049607285` and `5054818123` remain historical RED reviews on superseded PR #151 heads; review `5087528366` remains unchanged historical content-GREEN on PR #151 head `5616155ff7a70ca106be9a36288b4ca2d9eb0fd0`; review `5089909132` remains unchanged historical COMMENTED/RED on PR #152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8`; both owner-model findings are implemented awaiting exact-head rereview and neither review closure nor the PR #151 alignment gate is claimed |
 | R11A GitHub APPROVED / third-party independence / merge authority | `false` / `false` / `false` |
 | R11A workflow / release / activation | absent / absent / absent |
 | R11A canonical Amendment 002 | `R11A-CORRECTIVE-PREREGISTRATION-AMENDMENT-002`; unchanged canonical V2 path; SHA-256 `bdd610c678189e8098381d8c4a0fd12296bf2e0cd8e9ec0fed375b073872552f`; V2-bound |
@@ -120,9 +120,11 @@ R11 is not closed and R12 is not ready. Any new object read requires a new prere
 
 R11A freezes a diagnostic identity model but does not authorize execution. The legacy `wallet+tid` projection is semantically under-keyed: the diagnostic preserves raw observation provenance, validates archive-block invariants, uses exact wrapper `block_time` plus exact source `coin` plus strict JSON uint50 `tid` for protocol-trade identity, and adds the validated wallet for wallet-user-fill identity. It must retain complete repeat provenance and classify every group without deduplication or repair.
 
-Mathis is the substantive reviewer under the chosen `OWNER_SELF_REVIEW_COMMENTED_GREEN` model. A same-user review must still be exactly COMMENTED, repository-associated as OWNER, MEMBER or COLLABORATOR, authorized with write, maintain or admin permission, bound to the selected head and tree through immutable review and permission payloads, carry the exact GREEN and gate markers in the canonical marker-only body, satisfy chronology and later-RED rules, bind the exact target and predecessor bundles, and reject cross-gate review ID, node ID, evidence digest, head or tree reuse. Free-form additions, including contradictory independence or authority claims, fail closed. Cryptographic and evidence binding protects provenance; it does not replace Mathis's human responsibility for the content. The model also continues to support a genuinely distinct qualified reviewer.
+Mathis is the substantive reviewer under the chosen `OWNER_SELF_REVIEW_COMMENTED_GREEN` model. Owner equivalence requires the reviewer login to equal the pull-request-author login byte-for-byte and the reviewer user ID to equal the author user ID. A case-fold collision between different exact login strings fails regardless of user-ID equality. A distinct qualified reviewer must have both a different exact login and a different user ID without a case-fold collision. The review must still be exactly COMMENTED, repository-associated as OWNER, MEMBER or COLLABORATOR, authorized with write, maintain or admin permission, bound through exact reviewer-permission payload login and user ID, immutable review payloads, exact head/tree, canonical GREEN and gate markers, chronology, later-RED rules and exact target/predecessor bundles. Every schema-1.1 governance identity differs from software/G1/G2 historical seeds on review ID, review node ID, reviewed head and reviewed tree; schema-1.1 gates differ pairwise on those four fields plus evidence SHA-256. No canonical seed evidence envelope exists, so no seed evidence SHA-256 is fabricated or claimed as checked. Cryptographic binding does not replace Mathis's human responsibility.
 
 Historical review `5087528366` reached a substantive GREEN conclusion but cannot close the machine gate: its first nonempty line is `GREEN — ...` rather than exact `GREEN`, its required gate/target/predecessor markers are absent, and its independence wording is incompatible with owner-self-review classification. It remains unmodified, undismissed and undeleted. No review-evidence capture exists for it, and this correction creates neither review evidence nor a successor-role candidate.
+
+Historical review `5089909132` is COMMENTED/RED on exact PR #152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8` and tree `5a7b06d0f30a5137019841db1b17e4d6f1c69f46`. It remains unmodified. Its two blocking findings are implemented with remediation status `IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW`; `independent_closure=false` and `review_closure=false`. It is superseded only if a later corrective head receives a new exact-head review.
 
 The R10D artifact is reproducible byte-for-byte under its historical reducer. That does not prove equivalence under canonical block/wallet-fill identity or event-time activity because R10D did not retain the necessary occurrence-level ledger. Its backward-consistency class is therefore `C_R10D_UNCERTAIN_UNDER_CANONICAL_IDENTITY`.
 
@@ -294,6 +296,13 @@ r11a_execution_authorized_by_this_approval = false
 r11a_post_approval_validator_alignment_required = true
 r11a_review_governance_model = OWNER_SELF_REVIEW_COMMENTED_GREEN
 r11a_owner_self_review_allowed = true
+r11a_owner_exact_login_string_required = true
+r11a_owner_exact_user_id_required = true
+r11a_casefold_collision_rejected = true
+r11a_historical_seed_non_reuse_fields = review_id,review_node_id,reviewed_head,reviewed_tree
+r11a_schema_1_1_gate_non_reuse_fields = review_id,review_node_id,evidence_sha256,reviewed_head,reviewed_tree
+r11a_seed_evidence_sha256_non_reuse_claimed = false
+r11a_seed_evidence_digests_fabricated = false
 r11a_distinct_qualified_reviewer_supported = true
 r11a_third_party_independence_claimed = false
 r11a_github_approved = false
@@ -301,6 +310,11 @@ r11a_merge_authorized = false
 r11a_review_5087528366_content_green = true
 r11a_review_5087528366_machine_readable_gate_evidence = false
 r11a_review_5087528366_modified = false
+r11a_review_5089909132_comment_red = true
+r11a_review_5089909132_modified = false
+r11a_owner_model_findings_remediation_status = IMPLEMENTED_AWAITING_EXACT_HEAD_REREVIEW
+r11a_owner_model_independent_closure = false
+r11a_owner_model_review_closure = false
 r11a_alignment_review_gate_closed = false
 r11a_alignment_review_evidence_capture_present = false
 r11a_aws_iam_authorized = false
@@ -376,6 +390,8 @@ All release-scoped R2 execution flags are false after consumption of release 002
 2. Preserve the immutable GREEN software anchor `443500de54917417276c39a635ae444458d03b0b`, authoritative review `5019067044`, canonical Amendment 002 and the exact current G1 pricing/envelope/policy/workflow hashes.
 3. Preserve the GREEN G2 approval-record anchor at exact head `63526d6c39c9225e647a18693c70ec8e73535ff4` and owner-authored COMMENTED review `5033303996`; owner approval is present, but it creates no current operational authority or third-party-independence claim.
 4. Preserve review `5087528366` unmodified as historical content-GREEN only. It is not machine-readable gate evidence and does not close the alignment gate.
-5. After the stacked corrective PR is integrated into the PR #151 source branch, obtain one new exact-head machine-readable COMMENTED/GREEN owner review by Mathis on PR #151's updated corrective head under `OWNER_SELF_REVIEW_COMMENTED_GREEN`, then perform a separate immutable review-evidence capture. That is the exact next governance gate. A review on the stacked delivery PR alone cannot satisfy the unchanged exact-predecessor rule; none is posted by this correction. The gate must perform no AWS, IAM, OIDC, STS, S3, workflow, release, activation, runtime or diagnostic action.
-6. Only after that separate evidence capture validates may a later stage create/configure the exact dedicated successor identity. Preserve later separate attestation, STS-only preflight, workflow-installation, inert release-candidate, runtime-binding and canonical single-use activation gates before one diagnostic run. Neither owner review nor evidence capture executes any of those stages.
-7. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
+5. Preserve review `5089909132` unchanged as historical COMMENTED/RED on PR #152 head `be602f5d0651ff7562ef0efb55bfe81316f391f8` / tree `5a7b06d0f30a5137019841db1b17e4d6f1c69f46`. Its two findings are implemented but remain open pending rereview.
+6. Obtain a new owner-authored substantive exact-head review of PR #152. This is the exact next gate. Do not post that review in this implementation session, merge PR #152, modify PR #151 or create review evidence.
+7. Only after PR #152 receives an exact-head GREEN rereview may the correction be integrated into PR #151. A later updated PR #151 head then requires its own machine-readable COMMENTED/GREEN owner review and separate immutable evidence capture before any successor-role stage.
+8. Only after that separate evidence capture validates may a later stage create/configure the exact dedicated successor identity. Preserve later separate attestation, STS-only preflight, workflow-installation, inert release-candidate, runtime-binding and canonical single-use activation gates before one diagnostic run.
+9. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.

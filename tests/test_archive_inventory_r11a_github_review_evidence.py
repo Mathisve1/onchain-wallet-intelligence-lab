@@ -817,9 +817,13 @@ class GithubReviewEvidenceTests(unittest.TestCase):
         *,
         association: str = "OWNER",
         permission: str = "admin",
+        reviewer_login: str = OWNER_LOGIN,
+        reviewer_user_id: int = OWNER_USER_ID,
+        reviewer_model: str = evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN,
     ) -> dict[str, Any]:
         changed = copy.deepcopy(self.fixture.envelope)
         owner = {"login": OWNER_LOGIN, "id": OWNER_USER_ID}
+        reviewer = {"login": reviewer_login, "id": reviewer_user_id}
         self._mutate_source(
             changed,
             "pull_request",
@@ -827,12 +831,12 @@ class GithubReviewEvidenceTests(unittest.TestCase):
         )
 
         def make_owner_review(value: dict[str, Any]) -> None:
-            value["user"] = owner
+            value["user"] = reviewer
             value["author_association"] = association
             value["body"] = self.fixture.review_body(
-                reviewer_model=evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN,
-                reviewer_login=OWNER_LOGIN,
-                reviewer_user_id=OWNER_USER_ID,
+                reviewer_model=reviewer_model,
+                reviewer_login=reviewer_login,
+                reviewer_user_id=reviewer_user_id,
                 reviewer_author_association=association,
                 reviewer_repository_permission=permission,
             )
@@ -840,15 +844,46 @@ class GithubReviewEvidenceTests(unittest.TestCase):
         self._mutate_review(changed, make_owner_review)
         prefix = f"/repos/{evidence.REPOSITORY_FULL_NAME}"
         changed["source_payloads"]["reviewer_permission"] = _payload(
-            f"{prefix}/collaborators/{OWNER_LOGIN}/permission",
+            f"{prefix}/collaborators/{reviewer_login}/permission",
             {
                 "permission": permission,
                 "role_name": permission,
-                "user": owner,
+                "user": reviewer,
             },
         )
-        changed["reviewer_model"] = evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN
+        changed["reviewer_model"] = reviewer_model
         return changed
+
+    def test_exact_owner_and_fully_distinct_reviewer_models_pass(self) -> None:
+        owner_identity = self.fixture.validate(
+            self.root,
+            raw=self.fixture.raw(self._owner_envelope()),
+        )
+        self.assertEqual(
+            evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN,
+            owner_identity.reviewer_model,
+        )
+        self.assertEqual(OWNER_LOGIN, owner_identity.reviewer_login)
+        self.assertEqual(OWNER_USER_ID, owner_identity.reviewer_id)
+
+        distinct_identity = self.fixture.validate(
+            self.root,
+            raw=self.fixture.raw(
+                self._owner_envelope(
+                    reviewer_login="different-reviewer",
+                    reviewer_user_id=OWNER_USER_ID + 1,
+                    reviewer_model=(
+                        evidence.DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN
+                    ),
+                )
+            ),
+        )
+        self.assertEqual(
+            evidence.DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN,
+            distinct_identity.reviewer_model,
+        )
+        self.assertEqual("different-reviewer", distinct_identity.reviewer_login)
+        self.assertEqual(OWNER_USER_ID + 1, distinct_identity.reviewer_id)
 
     def test_reviewer_identity_and_configured_self_review_policy_fail_closed(self) -> None:
         with self.assertRaisesRegex(evidence.ReviewEvidenceError, "unexpected reviewer"):
@@ -953,17 +988,24 @@ class GithubReviewEvidenceTests(unittest.TestCase):
         with self.assertRaises(evidence.ReviewEvidenceError):
             self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
-        changed = self._owner_envelope()
-        self._mutate_source(
-            changed,
-            "reviewer_permission",
-            lambda value: value["user"].__setitem__("id", OWNER_USER_ID + 1),
-        )
-        with self.assertRaisesRegex(
-            evidence.ReviewEvidenceError,
-            "permission identity drift",
+        for field, value in (
+            ("login", "different-reviewer"),
+            ("id", OWNER_USER_ID + 1),
         ):
-            self.fixture.validate(self.root, raw=self.fixture.raw(changed))
+            with self.subTest(permission_identity_field=field):
+                changed = self._owner_envelope()
+                self._mutate_source(
+                    changed,
+                    "reviewer_permission",
+                    lambda payload, field=field, value=value: payload[
+                        "user"
+                    ].__setitem__(field, value),
+                )
+                with self.assertRaisesRegex(
+                    evidence.ReviewEvidenceError,
+                    "permission identity drift",
+                ):
+                    self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
     def test_owner_review_rejects_unassociated_or_partially_matching_identity(self) -> None:
         for association in ("NONE", "CONTRIBUTOR"):
@@ -978,30 +1020,58 @@ class GithubReviewEvidenceTests(unittest.TestCase):
                         raw=self.fixture.raw(changed),
                     )
 
-        changed = self._owner_envelope()
-        self._mutate_review(
-            changed,
-            lambda value: value["user"].__setitem__(
-                "login",
-                "different-reviewer",
+        ambiguous_cases = (
+            ("mathisve1", OWNER_USER_ID, evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN),
+            ("MATHISVE1", OWNER_USER_ID, evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN),
+            (
+                "mathisve1",
+                OWNER_USER_ID + 1,
+                evidence.DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN,
             ),
         )
-        with self.assertRaisesRegex(
-            evidence.ReviewEvidenceError,
-            "partially match",
-        ):
-            self.fixture.validate(self.root, raw=self.fixture.raw(changed))
+        for reviewer_login, reviewer_user_id, reviewer_model in ambiguous_cases:
+            with self.subTest(
+                case_ambiguous_login=reviewer_login,
+                reviewer_user_id=reviewer_user_id,
+            ):
+                changed = self._owner_envelope(
+                    reviewer_login=reviewer_login,
+                    reviewer_user_id=reviewer_user_id,
+                    reviewer_model=reviewer_model,
+                )
+                with self.assertRaisesRegex(
+                    evidence.ReviewEvidenceError,
+                    "reviewer login case ambiguity",
+                ):
+                    self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
-        changed = self._owner_envelope()
-        self._mutate_review(
-            changed,
-            lambda value: value["user"].__setitem__("id", OWNER_USER_ID + 1),
+        partial_match_cases = (
+            (
+                OWNER_LOGIN,
+                OWNER_USER_ID + 1,
+                evidence.DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN,
+            ),
+            (
+                "different-reviewer",
+                OWNER_USER_ID,
+                evidence.OWNER_SELF_REVIEW_COMMENTED_GREEN,
+            ),
         )
-        with self.assertRaisesRegex(
-            evidence.ReviewEvidenceError,
-            "partially match",
-        ):
-            self.fixture.validate(self.root, raw=self.fixture.raw(changed))
+        for reviewer_login, reviewer_user_id, reviewer_model in partial_match_cases:
+            with self.subTest(
+                partial_login=reviewer_login,
+                reviewer_user_id=reviewer_user_id,
+            ):
+                changed = self._owner_envelope(
+                    reviewer_login=reviewer_login,
+                    reviewer_user_id=reviewer_user_id,
+                    reviewer_model=reviewer_model,
+                )
+                with self.assertRaisesRegex(
+                    evidence.ReviewEvidenceError,
+                    "partially match",
+                ):
+                    self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
     def test_owner_review_exact_head_tree_review_and_node_bindings_fail_closed(
         self,
@@ -1257,10 +1327,71 @@ class GithubReviewEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(evidence.ReviewEvidenceError, "superseded"):
             self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
+    def test_historical_seed_identities_and_non_reuse_fields_are_exact(self) -> None:
+        self.assertEqual(
+            (
+                "review_id",
+                "review_node_id",
+                "reviewed_head",
+                "reviewed_tree",
+            ),
+            evidence.HISTORICAL_SEED_NON_REUSE_FIELDS,
+        )
+        self.assertEqual(
+            (
+                "review_id",
+                "review_node_id",
+                "evidence_sha256",
+                "reviewed_head",
+                "reviewed_tree",
+            ),
+            evidence.SCHEMA_1_1_GATE_NON_REUSE_FIELDS,
+        )
+        self.assertEqual(
+            (
+                (
+                    "software",
+                    5019067044,
+                    "PRR_kwDOTw6wFs8AAAABKyjipA",
+                    "443500de54917417276c39a635ae444458d03b0b",
+                    "516d72a43545c454ef163e02ee1146005e6cfb5c",
+                ),
+                (
+                    "g1",
+                    5027672461,
+                    "PRR_kwDOTw6wFs8AAAABK6wxjQ",
+                    "4da7e67b600ef1ca10fb4f2e62b493d81d4dfcc3",
+                    "b4c7b1524e8856450028e53be7912a88d3a675e1",
+                ),
+                (
+                    "g2",
+                    5033303996,
+                    "PRR_kwDOTw6wFs8AAAABLAIfvA",
+                    "63526d6c39c9225e647a18693c70ec8e73535ff4",
+                    "eedeb4d6166c554b996ede740931c4bacb306f5d",
+                ),
+            ),
+            tuple(
+                (
+                    seed.label,
+                    seed.review_id,
+                    seed.review_node_id,
+                    seed.reviewed_head,
+                    seed.reviewed_tree,
+                )
+                for seed in evidence.SEED_REVIEWS
+            ),
+        )
+        self.assertNotIn("evidence_sha256", evidence.ReviewSeed.__dataclass_fields__)
+        for field in evidence.HISTORICAL_SEED_NON_REUSE_FIELDS:
+            with self.subTest(unique_seed_field=field):
+                values = tuple(getattr(seed, field) for seed in evidence.SEED_REVIEWS)
+                self.assertEqual(len(values), len(set(values)))
+
     def test_seed_and_cross_gate_review_reuse_fail_closed(self) -> None:
         owner = self._owner_envelope()
         owner_raw = self.fixture.raw(owner)
-        self.fixture.validate(self.root, raw=owner_raw)
+        owner_identity = self.fixture.validate(self.root, raw=owner_raw)
         with self.assertRaisesRegex(evidence.ReviewEvidenceError, "exact review-gate prefix"):
             self.fixture.validate(self.root, raw=owner_raw, consumed=())
 
@@ -1317,44 +1448,74 @@ class GithubReviewEvidenceTests(unittest.TestCase):
                         consumed=tuple(reused_lineage),
                     )
 
-        seed_reuse_values: tuple[tuple[str, object, str], ...] = (
-            ("review_id", evidence.SEED_REVIEWS[-1].review_id, "seed review"),
-            (
-                "reviewed_head",
-                evidence.SEED_REVIEWS[-1].reviewed_head,
-                "reviewed head",
-            ),
-            (
-                "reviewed_tree",
-                evidence.SEED_REVIEWS[-1].reviewed_tree,
-                "reviewed tree",
-            ),
-        )
-        for field, value, message in seed_reuse_values:
-            with self.subTest(seed_reused_by_ancestor=field):
-                reused_lineage = list(self.fixture.lineage)
-                reused_lineage[0] = replace(
-                    reused_lineage[0],
-                    **{field: value},
-                )
+        seed_messages = {
+            "review_id": "seed review ID",
+            "review_node_id": "seed review node ID",
+            "reviewed_head": "seed reviewed head",
+            "reviewed_tree": "seed reviewed tree",
+        }
+        for seed in evidence.SEED_REVIEWS:
+            for field in evidence.HISTORICAL_SEED_NON_REUSE_FIELDS:
+                with self.subTest(seed=seed.label, seed_reused_by_ancestor=field):
+                    reused_lineage = list(self.fixture.lineage)
+                    reused_lineage[0] = replace(
+                        reused_lineage[0],
+                        **{field: getattr(seed, field)},
+                    )
+                    with self.assertRaisesRegex(
+                        evidence.ReviewEvidenceError,
+                        seed_messages[field],
+                    ):
+                        evidence._validate_reuse(
+                            owner_identity,
+                            tuple(reused_lineage),
+                        )
+
+            changed = copy.deepcopy(owner)
+            changed["selected_review_id"] = seed.review_id
+            self._mutate_review(
+                changed,
+                lambda value, seed=seed: value.__setitem__(
+                    "id",
+                    seed.review_id,
+                ),
+            )
+            with self.subTest(seed=seed.label, candidate_reuses="review_id"):
                 with self.assertRaisesRegex(
                     evidence.ReviewEvidenceError,
-                    message,
+                    "seed review ID",
                 ):
-                    self.fixture.validate(
-                        self.root,
-                        raw=owner_raw,
-                        consumed=tuple(reused_lineage),
-                    )
+                    self.fixture.validate(self.root, raw=self.fixture.raw(changed))
 
-        changed = copy.deepcopy(owner)
-        changed["selected_review_id"] = 5033303996
-        self._mutate_review(
-            changed,
-            lambda value: value.__setitem__("id", 5033303996),
-        )
-        with self.assertRaisesRegex(evidence.ReviewEvidenceError, "seed review"):
-            self.fixture.validate(self.root, raw=self.fixture.raw(changed))
+            changed = copy.deepcopy(owner)
+            changed["selected_review_node_id"] = seed.review_node_id
+            self._mutate_review(
+                changed,
+                lambda value, seed=seed: value.__setitem__(
+                    "node_id",
+                    seed.review_node_id,
+                ),
+            )
+            with self.subTest(seed=seed.label, candidate_reuses="review_node_id"):
+                with self.assertRaisesRegex(
+                    evidence.ReviewEvidenceError,
+                    "seed review node ID",
+                ):
+                    self.fixture.validate(self.root, raw=self.fixture.raw(changed))
+
+            for field in ("reviewed_head", "reviewed_tree"):
+                with self.subTest(seed=seed.label, candidate_reuses=field):
+                    with self.assertRaisesRegex(
+                        evidence.ReviewEvidenceError,
+                        seed_messages[field],
+                    ):
+                        evidence._validate_reuse(
+                            replace(
+                                owner_identity,
+                                **{field: getattr(seed, field)},
+                            ),
+                            self.fixture.lineage,
+                        )
 
         shrunken_predecessor = list(self.fixture.lineage)
         shrunken_predecessor[-1] = replace(

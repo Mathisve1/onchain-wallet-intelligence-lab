@@ -202,6 +202,7 @@ GATE_REGISTRY: Mapping[str, GateContract] = MappingProxyType(
 class ReviewSeed:
     label: str
     review_id: int
+    review_node_id: str
     reviewed_head: str
     reviewed_tree: str
 
@@ -210,22 +211,52 @@ SEED_REVIEWS = (
     ReviewSeed(
         "software",
         5019067044,
+        "PRR_kwDOTw6wFs8AAAABKyjipA",
         "443500de54917417276c39a635ae444458d03b0b",
         "516d72a43545c454ef163e02ee1146005e6cfb5c",
     ),
     ReviewSeed(
         "g1",
         5027672461,
+        "PRR_kwDOTw6wFs8AAAABK6wxjQ",
         "4da7e67b600ef1ca10fb4f2e62b493d81d4dfcc3",
         "b4c7b1524e8856450028e53be7912a88d3a675e1",
     ),
     ReviewSeed(
         "g2",
         5033303996,
+        "PRR_kwDOTw6wFs8AAAABLAIfvA",
         "63526d6c39c9225e647a18693c70ec8e73535ff4",
         "eedeb4d6166c554b996ede740931c4bacb306f5d",
     ),
 )
+
+# Historical seed reviews predate the schema-1.1 evidence envelope. Their
+# GitHub-native identities therefore bind exactly these four fields. No
+# canonical seed evidence digest exists or is claimed here.
+HISTORICAL_SEED_NON_REUSE_FIELDS = (
+    "review_id",
+    "review_node_id",
+    "reviewed_head",
+    "reviewed_tree",
+)
+
+# Canonical schema-1.1 governance-gate evidence identities additionally bind
+# the digest of the complete evidence envelope.
+SCHEMA_1_1_GATE_NON_REUSE_FIELDS = (
+    "review_id",
+    "review_node_id",
+    "evidence_sha256",
+    "reviewed_head",
+    "reviewed_tree",
+)
+
+for _seed_field in HISTORICAL_SEED_NON_REUSE_FIELDS:
+    _require(
+        len({getattr(seed, _seed_field) for seed in SEED_REVIEWS})
+        == len(SEED_REVIEWS),
+        f"historical seed {_seed_field} values must be unique",
+    )
 
 
 @dataclass(frozen=True)
@@ -824,32 +855,34 @@ def _validate_reuse(identity: ReviewEvidenceIdentity, consumed: Iterable[ReviewE
         )
         observed_gate_ids.add(candidate.gate_id)
         for seed in SEED_REVIEWS:
-            _require(
-                candidate.review_id != seed.review_id,
-                f"{candidate.gate_id} reuses {seed.label} seed review",
-            )
-            _require(
-                candidate.reviewed_head != seed.reviewed_head,
-                f"{candidate.gate_id} reuses {seed.label} reviewed head",
-            )
-            _require(
-                candidate.reviewed_tree != seed.reviewed_tree,
-                f"{candidate.gate_id} reuses {seed.label} reviewed tree",
-            )
+            seed_messages = {
+                "review_id": "seed review ID",
+                "review_node_id": "seed review node ID",
+                "reviewed_head": "seed reviewed head",
+                "reviewed_tree": "seed reviewed tree",
+            }
+            for field in HISTORICAL_SEED_NON_REUSE_FIELDS:
+                _require(
+                    getattr(candidate, field) != getattr(seed, field),
+                    (
+                        f"{candidate.gate_id} reuses {seed.label} "
+                        f"{seed_messages[field]}"
+                    ),
+                )
 
-    reuse_fields = (
-        ("review_id", "review ID reused across governance gates"),
-        ("review_node_id", "review node ID reused across governance gates"),
-        ("evidence_sha256", "review evidence bytes reused across governance gates"),
-        ("reviewed_head", "reviewed head reused across governance gates"),
-        ("reviewed_tree", "reviewed tree reused across governance gates"),
-    )
+    reuse_messages = {
+        "review_id": "review ID reused across governance gates",
+        "review_node_id": "review node ID reused across governance gates",
+        "evidence_sha256": "review evidence bytes reused across governance gates",
+        "reviewed_head": "reviewed head reused across governance gates",
+        "reviewed_tree": "reviewed tree reused across governance gates",
+    }
     for index, candidate in enumerate(lineage):
         for ancestor in lineage[:index]:
-            for field, message in reuse_fields:
+            for field in SCHEMA_1_1_GATE_NON_REUSE_FIELDS:
                 _require(
                     getattr(candidate, field) != getattr(ancestor, field),
-                    message,
+                    reuse_messages[field],
                 )
 
 
@@ -1239,15 +1272,23 @@ def validate_gate_evidence(
     _require(_member(review, "commit_id", "selected review") == head, "selected review belongs to the wrong head")
     reviewer_login, reviewer_id = _api_user(_member(review, "user", "selected review"), "reviewer")
     _github_login(reviewer_login, "reviewer login")
+    exact_same_login = reviewer_login == pull_author_login
+    casefold_same_login = (
+        reviewer_login.casefold() == pull_author_login.casefold()
+    )
     same_user_id = reviewer_id == pull_author_id
-    same_login = reviewer_login.casefold() == pull_author_login.casefold()
+    case_ambiguous_login = casefold_same_login and not exact_same_login
     _require(
-        same_user_id == same_login,
+        not case_ambiguous_login,
+        "reviewer login case ambiguity",
+    )
+    _require(
+        same_user_id == exact_same_login,
         "reviewer and pull-request-author identity partially match",
     )
     reviewer_model = (
         OWNER_SELF_REVIEW_COMMENTED_GREEN
-        if same_user_id
+        if same_user_id and exact_same_login
         else DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN
     )
     _require(
@@ -1406,6 +1447,7 @@ __all__ = [
     "CAPTURE_METHOD",
     "EVIDENCE_DIRECTORY",
     "GATE_REGISTRY",
+    "HISTORICAL_SEED_NON_REUSE_FIELDS",
     "ORIGIN_AUTHENTICATION_STATUS",
     "OWNER_SELF_REVIEW_COMMENTED_GREEN",
     "DISTINCT_REPOSITORY_ASSOCIATED_COMMENTED_GREEN",
@@ -1416,6 +1458,7 @@ __all__ = [
     "ReviewEvidenceIdentity",
     "ReviewerPolicy",
     "SEED_REVIEWS",
+    "SCHEMA_1_1_GATE_NON_REUSE_FIELDS",
     "bundle_sha256",
     "canonical_json_bytes",
     "evidence_path",
