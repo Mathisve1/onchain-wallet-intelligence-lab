@@ -17,7 +17,7 @@ FORBIDDEN_ROOTS = {
     "aiohttp", "boto3", "botocore", "httpx", "requests", "socket", "subprocess",
     "urllib", "websocket", "websockets", "http", "ssl", "asyncio",
 }
-ALLOWED_SIBLING_IMPORTS = {"loader.py": {"src.live_data.storage"}}
+ALLOWED_SIBLING_IMPORTS = {"loader.py": {"src.live_data.storage", "src.live_data.ingest"}}
 FORBIDDEN_TOKENS = ("/exchange", "api.hyperliquid", "private_key", "signature", "secret")
 
 

@@ -20,6 +20,11 @@ SIDE_BUY = "B"
 SIDE_SELL = "A"
 SIDES = frozenset({SIDE_BUY, SIDE_SELL})
 
+#: The venue settles funding once an hour.
+FUNDING_PERIOD_MS = 3_600_000
+
+LIQUIDITY_SOURCES = frozenset({"ASSUMED", "MEASURED"})
+
 
 class InputError(ValueError):
     """Raised when an input value is malformed."""
@@ -184,6 +189,18 @@ class FundingSchedule:
         """Events with ``start_ms < time_ms <= end_ms``."""
         return [e for e in self._events.get(coin, []) if start_ms < e.time_ms <= end_ms]
 
+    def expected_periods(self, start_ms: int, end_ms: int) -> int:
+        """How many hourly settlement instants fall inside ``(start, end]``.
+
+        The venue settles on the hour. Counting boundaries rather than
+        elapsed duration means a position opened at 10:59 and closed at
+        11:01 expects exactly the one settlement it straddled, and one held
+        from 11:01 to 11:59 expects none.
+        """
+        if end_ms <= start_ms:
+            return 0
+        return end_ms // FUNDING_PERIOD_MS - start_ms // FUNDING_PERIOD_MS
+
     def coins(self) -> frozenset[str]:
         return frozenset(self._events)
 
@@ -203,6 +220,10 @@ class LiquidityProfile:
     half_spread_bps: Decimal
     depth_notional: Decimal
     impact_bps_per_depth: Decimal
+    #: Where these numbers came from. The read-only surface exposes no order
+    #: book, so on this data every profile is ASSUMED; the label travels into
+    #: every outcome so an assumed slippage never prints as a measured one.
+    source: str = "ASSUMED"
 
     def __post_init__(self) -> None:
         if not self.coin:
@@ -212,6 +233,12 @@ class LiquidityProfile:
             if value <= 0:
                 raise InputError(f"liquidity {name} must be positive for {self.coin}")
             object.__setattr__(self, name, value)
+        if self.source not in LIQUIDITY_SOURCES:
+            raise InputError(f"liquidity source must be one of {sorted(LIQUIDITY_SOURCES)}")
+
+    @property
+    def assumed(self) -> bool:
+        return self.source != "MEASURED"
 
 
 @dataclass(frozen=True, slots=True)

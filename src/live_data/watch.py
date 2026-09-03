@@ -76,8 +76,12 @@ class WatchMixin:
             "positions": {
                 "attempted": bool(self._config.tracked_wallets),
                 "wallets": len(self._config.tracked_wallets),
+                # The exact subscription list: coverage is credited to these
+                # and to nothing else, whatever else wrote rows meanwhile.
+                "tracked_wallets": list(self._config.tracked_wallets),
                 "interval_seconds": self._config.snapshot_interval_seconds,
             },
+            "connection": {"reconnects": 0},
         }
         try:
             self._ws.connect()
@@ -115,6 +119,7 @@ class WatchMixin:
         coverage["trades"]["seen"] = result.trades_seen
         coverage["trades"]["written"] = result.trades_written
         coverage["trades"]["wallets_discovered"] = result.wallets_discovered
+        coverage["connection"]["reconnects"] = self._ws.reconnects
         coverage["requests"] = self._requests_coverage()
         self._store.finish_run(
             run_id,

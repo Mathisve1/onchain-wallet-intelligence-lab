@@ -40,8 +40,15 @@ class PointInTimeView:
         if self.horizon_ms <= 0:
             raise InputError("horizon must be a positive millisecond timestamp")
 
-    def price_at(self, coin: str, time_ms: int) -> PricePoint | None:
-        """Latest price at or before ``time_ms``, which must not exceed the horizon."""
+    def price_at(
+        self, coin: str, time_ms: int, *, max_age_ms: int | None = None
+    ) -> PricePoint | None:
+        """Latest price at or before ``time_ms``, which must not exceed the horizon.
+
+        With ``max_age_ms`` a point older than that is treated as no price at
+        all: a two-day-old quote is not a price a follower could have traded
+        at, and pricing an action on it would hide the hole in the data.
+        """
         if time_ms > self.horizon_ms:
             raise LookAheadError(
                 f"price requested at {time_ms} beyond horizon {self.horizon_ms} for {coin}"
@@ -54,6 +61,8 @@ class PointInTimeView:
             raise LookAheadError(
                 f"{coin} price series returned {point.time_ms} for a query at {time_ms}"
             )
+        if point is not None and max_age_ms is not None and time_ms - point.time_ms > max_age_ms:
+            return None
         return point
 
     def fills_until(self, time_ms: int) -> list[SourceFill]:

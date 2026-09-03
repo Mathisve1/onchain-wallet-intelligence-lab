@@ -7,9 +7,13 @@ baseline's return on the same amount. An absolute difference between a copy
 that deployed a few hundred and a hold that deployed a hundred thousand is
 capital scale, not insight, and is not reported.
 
-Two labels travel with every outcome and may never be dropped: the wallet's
-classification, and whether its funding cost is a lower bound because the
-venue's response cap truncated the funding history.
+Four disclosures travel with every outcome and may never be dropped: the
+wallet's classification; the share of the follower's own funding hours the
+rate schedule actually priced (unpriced hours were charged as zero, in either
+direction, so the net is uncertain by that much rather than bounded); whether
+the source wallet's funding history was truncated at the venue's cap; and
+whether the liquidity behind the slippage figure was assumed rather than
+measured.
 """
 
 from __future__ import annotations
@@ -64,8 +68,16 @@ class Outcome:
     wallet: str
     latency_ms: int
     classification: str
-    funding_truncated: bool
-    cost_is_lower_bound: bool
+    #: Share of the follower's own funding settlements the schedule priced.
+    #: 1 means every held hour was charged; less means the remainder was
+    #: charged as zero and the net is uncertain, not bounded, by that much.
+    funding_coverage: Decimal | None
+    funding_incomplete: bool
+    #: The source wallet's own funding history hit the venue's response cap.
+    #: A fact about the source ledger, disclosed; it does not bound the
+    #: follower's cost, which comes from the rate schedule.
+    source_funding_truncated: bool
+    liquidity_assumed: bool
     net: Decimal
     gross: Decimal
     cost_total: Decimal
@@ -81,6 +93,8 @@ class Outcome:
     turnover: Decimal | None
     trade_count: int
     skipped_fills: int
+    stale_price_skips: int
+    fills_after_cutoff: int
     interval_days: Decimal
     source_net: Decimal
     source_fill_count: int
@@ -95,6 +109,7 @@ def outcome_for(
     *,
     profile: WalletProfile,
     funding_truncated: bool,
+    liquidity_assumed: bool,
 ) -> Outcome:
     """Assemble the outcome; the comparison type keeps the two P&Ls apart."""
     comparison = PnlComparison(source=source, follower=run.pnl)
@@ -104,14 +119,16 @@ def outcome_for(
     deployed = run.peak_deployed_notional
     ret = (net / deployed) if deployed > 0 else None
     versus = {name: ret - value for name, value in baseline_returns.items()} if ret is not None else {}
+    expected = run.funding_periods_expected
+    coverage = (Decimal(run.funding_periods_priced) / Decimal(expected)) if expected else None
     return Outcome(
         wallet=run.interval.wallet,
         latency_ms=follower.latency_ms,
         classification=profile.classification,
-        funding_truncated=funding_truncated,
-        # A truncated funding history means unpaid funding is missing from the
-        # cost side, so the cost is a floor and the net a ceiling.
-        cost_is_lower_bound=funding_truncated,
+        funding_coverage=coverage,
+        funding_incomplete=coverage is not None and coverage < 1,
+        source_funding_truncated=funding_truncated,
+        liquidity_assumed=liquidity_assumed,
         net=net,
         gross=follower.gross,
         cost_total=follower.costs.total,
@@ -127,6 +144,8 @@ def outcome_for(
         turnover=(run.traded_notional / deployed) if deployed > 0 else None,
         trade_count=follower.trade_count,
         skipped_fills=run.skipped_fills,
+        stale_price_skips=run.stale_price_skips,
+        fills_after_cutoff=run.fills_after_cutoff,
         interval_days=days,
         source_net=comparison.source.net,
         source_fill_count=comparison.source.fill_count,
@@ -138,28 +157,33 @@ def outcome_for(
 def as_row(outcome: Outcome, *, places: int = 4) -> dict[str, object]:
     """A flat, JSON-ready view with decimals rendered as strings.
 
-    The labels come first so they cannot be missed, and a truncated wallet's
-    net is rendered with the ``<=`` marker the disclosure requires.
+    The disclosures come first so they cannot be missed. An incomplete
+    funding coverage is rendered as a share, never as a directional bound:
+    funding can be paid or received, so a missing hour moves the net either way.
     """
     q = Decimal(1).scaleb(-places)
 
     def fmt(value: Decimal | None) -> str | None:
         return None if value is None else str(value.quantize(q))
 
-    net = fmt(outcome.net)
     row: dict[str, object] = {
         "wallet": outcome.wallet,
         "latency_ms": outcome.latency_ms,
         "classification": outcome.classification,
-        "funding_truncated": outcome.funding_truncated,
-        "cost_is_lower_bound": outcome.cost_is_lower_bound,
-        "net": f"<= {net}" if outcome.cost_is_lower_bound else net,
+        "funding_coverage": fmt(outcome.funding_coverage),
+        "funding_incomplete": outcome.funding_incomplete,
+        "source_funding_truncated": outcome.source_funding_truncated,
+        "liquidity_assumed": outcome.liquidity_assumed,
+        "net": fmt(outcome.net),
+        "net_certainty": (
+            "funding partly unpriced" if outcome.funding_incomplete else "all funding hours priced"
+        ),
         "gross": fmt(outcome.gross),
-        "cost_total": (">= " if outcome.cost_is_lower_bound else "") + str(fmt(outcome.cost_total)),
+        "cost_total": fmt(outcome.cost_total),
         "cost_fee": fmt(outcome.cost_fee),
         "cost_spread": fmt(outcome.cost_spread),
         "cost_slippage": fmt(outcome.cost_slippage),
-        "cost_funding": (">= " if outcome.cost_is_lower_bound else "") + str(fmt(outcome.cost_funding)),
+        "cost_funding": fmt(outcome.cost_funding),
         "deployed_capital": fmt(outcome.deployed_capital),
         "return_on_deployed": fmt(outcome.return_on_deployed),
         "net_per_trade": fmt(outcome.net_per_trade),
@@ -169,6 +193,8 @@ def as_row(outcome: Outcome, *, places: int = 4) -> dict[str, object]:
         "turnover": fmt(outcome.turnover),
         "trade_count": outcome.trade_count,
         "skipped_fills": outcome.skipped_fills,
+        "stale_price_skips": outcome.stale_price_skips,
+        "fills_after_cutoff": outcome.fills_after_cutoff,
         "interval_days": fmt(outcome.interval_days),
         "source_net": fmt(outcome.source_net),
         "source_fill_count": outcome.source_fill_count,

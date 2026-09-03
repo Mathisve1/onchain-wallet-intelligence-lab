@@ -19,6 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
+from src.live_data.ingest import MAX_FUNDING_PER_RESPONSE
 from src.live_data.storage import LiveDataStore
 
 from .coverage import CoverageLedger, ObservedInterval
@@ -70,7 +71,10 @@ def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
         if not run["coverage"]:
             continue
         funding = json.loads(run["coverage"]).get("funding", {})
-        hit_cap = bool(funding.get("truncated_at_response_cap")) or funding.get("seen", 0) >= 500
+        hit_cap = (
+            bool(funding.get("truncated_at_response_cap"))
+            or funding.get("seen", 0) >= MAX_FUNDING_PER_RESPONSE
+        )
         wallet = run["wallet_address"]
         truncated[wallet] = truncated.get(wallet, False) or hit_cap
     return truncated
@@ -105,22 +109,31 @@ def load_trade_prices(store: LiveDataStore, coins: Iterable[str]) -> dict[str, P
     return series
 
 
-def load_fill_prices(store: LiveDataStore, coins: Iterable[str]) -> dict[str, PriceSeries]:
-    """Price series per coin from every retained fill, whoever's it was.
+def load_fill_prices(
+    store: LiveDataStore, coins: Iterable[str], *, exclude_wallet: str | None = None
+) -> dict[str, PriceSeries]:
+    """Price series per coin from retained fills, whoever's they were.
 
     The public tape only exists while a session was connected, but backfilled
     fills reach back through the whole window and each one is a real traded
     price at a real time. Pooled across wallets they form a point-in-time
-    series that covers the backfill period, which is what lets that period be
-    scored at all. The last fill in a millisecond wins.
+    series that covers the backfill period. The last fill in a millisecond wins.
+
+    ``exclude_wallet`` leaves the scored wallet's own fills out. With them in,
+    a copy of a fill on a coin nobody else traded would be priced at the
+    source's own fill price at every latency, and the latency grid would
+    measure nothing. A series built this way is still not independent of the
+    sample as a whole; only a polled tape is, and L2 uses one.
     """
     series: dict[str, PriceSeries] = {}
     for coin in sorted(set(coins)):
         last: dict[int, Decimal] = {}
-        for r in store.connection.execute(
-            "SELECT event_time_ms, price FROM fills WHERE coin = ? ORDER BY event_time_ms, trade_id",
-            (coin,),
-        ):
+        query = "SELECT event_time_ms, price FROM fills WHERE coin = ?"
+        params: tuple[Any, ...] = (coin,)
+        if exclude_wallet is not None:
+            query += " AND wallet_address != ?"
+            params = (coin, exclude_wallet)
+        for r in store.connection.execute(query + " ORDER BY event_time_ms, trade_id", params):
             last[r["event_time_ms"]] = Decimal(r["price"])
         series[coin] = PriceSeries(coin, last.items())
     return series
@@ -151,29 +164,52 @@ def load_coverage(store: LiveDataStore) -> CoverageLedger:
             window = coverage.get("window", {})
             if not fills.get("attempted") or "start_time_ms" not in window:
                 continue
-            end = fills.get("covered_until_ms", window.get("end_time_ms"))
-            complete = bool(fills.get("completed")) and end is not None
+            # A walk stopped by the page cap still collected every fill up to
+            # covered_until_ms, so that prefix is fully observed and certifiable;
+            # only the tail beyond it is unknown. A record with neither a
+            # completion flag nor a covered-until bound proves nothing.
+            end = fills.get("covered_until_ms", window.get("end_time_ms") if fills.get("completed") else None)
             observed.append(ObservedInterval(
                 wallet=run["wallet_address"], start_ms=window["start_time_ms"],
                 end_ms=end if end is not None else window["start_time_ms"],
-                complete=complete, source=f"backfill:{run['run_id']}",
+                complete=end is not None, source=f"backfill:{run['run_id']}",
             ))
         elif run["mode"] == "watch" and run["finished_at_ms"]:
-            for wallet in _watched_wallets(store, run):
+            # A session that reconnected has unobserved gaps it did not time;
+            # its interval is therefore not complete. Reconnect counts live in
+            # the notes of older records and in coverage for newer ones.
+            reconnected = _reconnects(run, coverage) > 0
+            for wallet in _watched_wallets(coverage):
                 observed.append(ObservedInterval(
                     wallet=wallet, start_ms=run["started_at_ms"], end_ms=run["finished_at_ms"],
-                    complete=True, source=f"watch:{run['run_id']}",
+                    complete=not reconnected, source=f"watch:{run['run_id']}",
                 ))
     return CoverageLedger(observed)
 
 
-def _watched_wallets(store: LiveDataStore, run: Any) -> list[str]:
-    """Wallets a watch session tracked: those it snapshotted during the run."""
-    rows = store.connection.execute(
-        "SELECT DISTINCT wallet_address FROM positions_snapshot WHERE ingested_at_ms BETWEEN ? AND ?",
-        (run["started_at_ms"], run["finished_at_ms"]),
-    ).fetchall()
-    return [r["wallet_address"] for r in rows]
+def _watched_wallets(coverage: dict) -> list[str]:
+    """Wallets a watch session subscribed to, from its own coverage record.
+
+    Only the tracked list counts. Inferring from snapshots written during the
+    run would credit a wallet whose backfill happened to run at the same time
+    with coverage the websocket never gave it.
+    """
+    tracked = coverage.get("positions", {}).get("tracked_wallets")
+    return list(tracked) if isinstance(tracked, list) else []
+
+
+def _reconnects(run: Any, coverage: dict) -> int:
+    recorded = coverage.get("connection", {}).get("reconnects")
+    if isinstance(recorded, int):
+        return recorded
+    notes = run["notes"] or ""
+    marker = "reconnects: "
+    if marker in notes:
+        try:
+            return int(notes.split(marker, 1)[1].split(";")[0].strip())
+        except ValueError:
+            return 1
+    return 0
 
 
 PRICE_SOURCES = {"fills": load_fill_prices, "trades": load_trade_prices, "mids": load_prices}
@@ -181,18 +217,22 @@ PRICE_SOURCES = {"fills": load_fill_prices, "trades": load_trade_prices, "mids":
 
 def build_market(
     store: LiveDataStore, coins: Iterable[str], liquidity: dict[str, LiquidityProfile], *,
-    price_source: str = "fills",
+    price_source: str = "fills", exclude_wallet: str | None = None,
 ) -> MarketData:
     """Assemble market data from one price source.
 
     ``fills`` is the default because it is the only source that spans the
     backfill window; ``trades`` and ``mids`` exist only while a session was
-    connected.
+    connected. ``exclude_wallet`` applies to the fills source only and should
+    name the wallet being scored.
     """
     if price_source not in PRICE_SOURCES:
         raise ValueError(f"price_source must be one of {sorted(PRICE_SOURCES)}")
     coins = sorted(set(coins))
-    prices = PRICE_SOURCES[price_source](store, coins)
+    if price_source == "fills":
+        prices = load_fill_prices(store, coins, exclude_wallet=exclude_wallet)
+    else:
+        prices = PRICE_SOURCES[price_source](store, coins)
     return MarketData(prices=prices, funding=load_funding_rates(store, coins), liquidity=liquidity)
 
 

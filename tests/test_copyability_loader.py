@@ -85,9 +85,15 @@ class LoaderTests(unittest.TestCase):
         finish(s, "bf-t", mode="backfill_wallet", wallet=TRUNCATED, start=1_000, end=1_100, coverage=backfill_coverage(1_000, 1_100, completed=False, covered_until=1_080))
         # FAILED: contributes nothing even though it wrote some fills.
         finish(s, "bf-f", mode="backfill_wallet", wallet=FAILED, start=1_000, end=1_100, status=RUN_STATUS_FAILED, coverage={"fills": {"attempted": True, "completed": False}})
-        # A watch from 1_200 to 1_300 that snapshotted W (and only W).
+        # A watch from 1_200 to 1_300 that tracked W (and only W). GAPPED's
+        # backfill snapshot lands inside the same span and must not count.
         s.write_position_snapshot(*clearinghouse(W, 1_250), ingested_at_ms=1_250)
-        finish(s, "watch-1", mode="watch", wallet=None, start=1_200, end=1_300, coverage={"fills": {"attempted": True}})
+        s.write_position_snapshot(*clearinghouse(GAPPED, 1_260), ingested_at_ms=1_260)
+        finish(s, "watch-1", mode="watch", wallet=None, start=1_200, end=1_300,
+               coverage={"fills": {"attempted": True}, "positions": {"tracked_wallets": [W]}, "connection": {"reconnects": 0}})
+        # A watch that reconnected: its span has untimed holes and certifies nothing.
+        finish(s, "watch-2", mode="watch", wallet=None, start=1_400, end=1_500,
+               coverage={"fills": {"attempted": True}, "positions": {"tracked_wallets": [W]}, "connection": {"reconnects": 2}})
 
         s.write_fills([fill_row(W, 1, 1_010, "100"), fill_row(W, 2, 1_020, "110")], source="rest", ingested_at_ms=1)
         s.write_fills([fill_row(FAILED, 3, 1_030, "120")], source="rest", ingested_at_ms=1)
@@ -97,13 +103,18 @@ class LoaderTests(unittest.TestCase):
 
     def test_coverage_merges_touching_runs_and_keeps_gaps(self) -> None:
         ledger = load_coverage(self.store)
-        self.assertEqual(ledger.covered(W), [(1_000, 1_100), (1_200, 1_300)])  # gap 1_100..1_200 kept
+        # gap 1_100..1_200 kept; the reconnected watch-2 span is not credited
+        self.assertEqual(ledger.covered(W), [(1_000, 1_100), (1_200, 1_300)])
+        # GAPPED's snapshot inside watch-1 does not buy it watch coverage
         self.assertEqual(ledger.covered(GAPPED), [(1_000, 1_050), (1_052, 1_100)])
         self.assertFalse(ledger.is_fully_known(GAPPED, 1_000, 1_100))
 
-    def test_a_truncated_backfill_and_a_failed_run_certify_nothing(self) -> None:
+    def test_a_truncated_backfill_certifies_its_prefix_and_a_failed_run_nothing(self) -> None:
         ledger = load_coverage(self.store)
-        self.assertEqual(ledger.covered(TRUNCATED), [])
+        # Every fill up to covered_until_ms was collected; that prefix is known.
+        self.assertEqual(ledger.covered(TRUNCATED), [(1_000, 1_080)])
+        self.assertTrue(ledger.is_fully_known(TRUNCATED, 1_000, 1_080))
+        self.assertFalse(ledger.is_fully_known(TRUNCATED, 1_000, 1_081))
         self.assertEqual(ledger.covered(FAILED), [])
         with self.assertRaises(UnknownIntervalError):
             ledger.certify(FAILED, 1_000, 1_100)

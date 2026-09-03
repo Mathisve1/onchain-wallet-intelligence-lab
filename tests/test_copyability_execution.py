@@ -84,17 +84,21 @@ class SimulatorRefusesUnknownIntervalsTests(unittest.TestCase):
         self.assertEqual([o.latency_ms for o in study.outcomes], [0, 1_000])
         self.assertEqual(study.profile.classification, "INSUFFICIENT_FILLS")
         for outcome in study.outcomes:
-            self.assertTrue(outcome.funding_truncated)
-            self.assertTrue(outcome.cost_is_lower_bound)
+            self.assertTrue(outcome.source_funding_truncated)
+            self.assertTrue(outcome.liquidity_assumed)  # LIQ carries the default ASSUMED source
             self.assertEqual(outcome.classification, "INSUFFICIENT_FILLS")
-            self.assertTrue(as_row(outcome)["net"].startswith("<= "))
+            row = as_row(outcome)
+            self.assertTrue(row["source_funding_truncated"])
+            self.assertTrue(row["liquidity_assumed"])
+            self.assertIn("funding", row["net_certainty"])
 
     def test_the_study_refuses_a_wallet_whose_funding_status_is_unknown(self) -> None:
         ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
         config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
-        with self.assertRaises(Exception):
-            run_study(fills_by_wallet={W: []}, market=market(FLAT), ledger=ledger, config=config,
-                      funding_truncated={})
+        (study,) = run_study(fills_by_wallet={W: []}, market=market(FLAT), ledger=ledger, config=config,
+                             funding_truncated={})
+        self.assertEqual(study.outcomes, ())
+        self.assertIn("funding truncation status unknown", study.refusal)
 
     def test_baselines_are_compared_on_the_capital_the_copy_deployed(self) -> None:
         # The copy holds 1 BTC (~100 notional) on a rising market; buy-and-hold
@@ -138,13 +142,19 @@ class FollowerExecutionTests(unittest.TestCase):
         self.assertEqual(late.pnl.gross, D("10"))  # 124 - 114: the follower still catches the drift
         self.assertGreater(late.pnl.costs.total, instant.pnl.costs.total)  # bigger notional, bigger cost
 
-    def test_a_copy_that_would_land_after_the_interval_is_skipped_not_priced(self) -> None:
+    def test_a_fill_after_the_decision_cutoff_is_excluded_not_skipped(self) -> None:
         fills = [fill(W, 99_500, 1, "B", "100")]
         run = simulate_follower(certified(), latency_ms=1_000, fills=fills, market=market(FLAT),
                                 cost_model=MODEL, config=CONFIG)
-        self.assertEqual(run.skipped_fills, 1)
+        # Without an explicit cutoff it is end - latency, so this fill is out.
+        self.assertEqual(run.decision_cutoff_ms, 99_000)
+        self.assertEqual(run.fills_after_cutoff, 1)
+        self.assertEqual(run.skipped_fills, 0)
         self.assertEqual(run.pnl.trade_count, 0)
         self.assertEqual(run.pnl.net, D("0"))
+        with self.assertRaises(Exception):
+            simulate_follower(certified(), latency_ms=1_000, fills=fills, market=market(FLAT),
+                              cost_model=MODEL, config=CONFIG, decision_cutoff_ms=99_500)
 
     def test_funding_accrues_on_held_notional_between_actions(self) -> None:
         funding = [FundingEvent("BTC", 15_000, D("0.001"))]  # 10 bps on 100 notional = 0.1 paid by a long
@@ -263,20 +273,22 @@ class MetricsTests(unittest.TestCase):
         profile = profile_wallet(certified(), fills)
         outcome = outcome_for(
             run, source_pnl(certified(), fills), {"no_trade": D("0"), "buy_and_hold": D("-0.01")},
-            profile=profile, funding_truncated=False,
+            profile=profile, funding_truncated=False, liquidity_assumed=True,
         )
+        self.assertTrue(outcome.liquidity_assumed)
+        self.assertTrue(as_row(outcome)["liquidity_assumed"])
         self.assertEqual(outcome.deployed_capital, D("100"))
         self.assertEqual(outcome.return_on_deployed, outcome.net / D("100"))
         self.assertEqual(outcome.versus["no_trade"], outcome.return_on_deployed)
         self.assertEqual(outcome.versus["buy_and_hold"], outcome.return_on_deployed + D("0.01"))
         self.assertEqual(outcome.turnover, D("200") / D("100"))
         self.assertEqual(outcome.net_per_trade, outcome.net / 2)
-        self.assertFalse(outcome.cost_is_lower_bound)
+        self.assertFalse(outcome.source_funding_truncated)
         row = as_row(outcome)
         self.assertEqual(row["trade_count"], 2)
         self.assertIn("versus_buy_and_hold", row)
         self.assertEqual(row["cost_total"], str(outcome.cost_total.quantize(D("0.0001"))))
-        self.assertFalse(row["net"].startswith("<="))
+        self.assertEqual(row["net"], str(outcome.net.quantize(D("0.0001"))))
 
     def test_a_copy_that_deployed_nothing_has_no_return_and_no_comparison(self) -> None:
         from src.copyability.classify import profile_wallet
@@ -284,7 +296,10 @@ class MetricsTests(unittest.TestCase):
         run = simulate_follower(certified(), latency_ms=0, fills=[], market=market(FLAT),
                                 cost_model=MODEL, config=CONFIG)
         outcome = outcome_for(run, source_pnl(certified(), []), {"no_trade": D("0")},
-                              profile=profile_wallet(certified(), []), funding_truncated=False)
+                              profile=profile_wallet(certified(), []), funding_truncated=False,
+                              liquidity_assumed=True)
+        self.assertIsNone(outcome.funding_coverage)  # nothing held, nothing to price
+        self.assertFalse(outcome.funding_incomplete)
         self.assertEqual(outcome.deployed_capital, D("0"))
         self.assertIsNone(outcome.return_on_deployed)
         self.assertIsNone(outcome.turnover)

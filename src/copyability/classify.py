@@ -26,7 +26,7 @@ from statistics import median
 from typing import Sequence
 
 from .coverage import KnownInterval
-from .inputs import SIDE_BUY, SourceFill
+from .inputs import SIDE_BUY, SIDE_SELL, SourceFill
 
 PROBABLE_MARKET_MAKER = "PROBABLE_MARKET_MAKER"
 DIRECTIONAL = "DIRECTIONAL"
@@ -127,7 +127,7 @@ def _two_sided_share(rows: Sequence[SourceFill], window_ms: int) -> Decimal:
         by_coin_side.setdefault((f.coin, f.side), []).append(f.time_ms)
     hits = 0
     for f in rows:
-        opposite = SIDE_BUY if f.side != SIDE_BUY else "A"
+        opposite = SIDE_BUY if f.side != SIDE_BUY else SIDE_SELL
         times = by_coin_side.get((f.coin, opposite), [])
         lo = bisect_left(times, f.time_ms - window_ms)
         hi = bisect_right(times, f.time_ms + window_ms)

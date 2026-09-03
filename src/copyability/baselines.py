@@ -139,10 +139,16 @@ def matched_random(
     returns: list[Decimal] = []
     for wallet in chosen:
         peer_interval = certify(wallet, interval.start_ms, interval.end_ms)
-        run = simulate_follower(
-            peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
-            cost_model=cost_model, config=config,
-        )
+        try:
+            run = simulate_follower(
+                peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
+                cost_model=cost_model, config=config,
+            )
+        except InputError:
+            # A peer the market cannot price (a coin with no series or no
+            # liquidity profile) is not the target's problem; it drops out of
+            # the baseline rather than refusing the wallet being scored.
+            continue
         if run.peak_deployed_notional > 0:
             returns.append(run.pnl.net / run.peak_deployed_notional)
     if not returns:

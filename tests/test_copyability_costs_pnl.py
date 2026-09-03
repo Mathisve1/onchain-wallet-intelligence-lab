@@ -44,7 +44,9 @@ class NoCostIsSilentlyZeroTests(unittest.TestCase):
         self.assertEqual(breakdown.total, D("17"))
         for name in COST_COMPONENTS:
             self.assertNotEqual(breakdown.total - getattr(breakdown, name), breakdown.total, name)
-        breakdown.assert_complete()
+        # There is no stored total that could drift: the property is the only
+        # total, computed from the components every time it is read.
+        self.assertFalse(hasattr(CostBreakdown, "assert_complete"))
 
     def test_the_component_contract_is_pinned(self) -> None:
         self.assertEqual(COST_COMPONENTS, ("fee", "spread", "slippage", "funding"))

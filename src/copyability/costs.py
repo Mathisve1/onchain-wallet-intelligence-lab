@@ -79,14 +79,6 @@ class CostBreakdown:
     def zero(cls) -> CostBreakdown:
         return cls(Decimal(0), Decimal(0), Decimal(0), Decimal(0))
 
-    def assert_complete(self) -> None:
-        """Fail unless the total is exactly the sum of all named components."""
-        recomputed = Decimal(0)
-        for name in COST_COMPONENTS:
-            recomputed += getattr(self, name)
-        if recomputed != self.total:
-            raise CostError("cost total does not equal the sum of its components")
-
 
 @dataclass(frozen=True, slots=True)
 class CostModel:

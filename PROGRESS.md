@@ -55,6 +55,11 @@ closed it.
 | Copyability simulator | 2026-09-03 | `BUILT_FIXTURE_TESTED` | `src/copyability`, 11 modules, deterministic, network-free; latency grid, full cost model, typed P&L separation, certified-interval scoring, look-ahead probe |
 | L1 instrument validation | 2026-09-03 | `INSTRUMENT_VALIDATED_SAMPLE_UNUSABLE` | DEC-041; 7 wallets x 6 latencies on equal capital; 4 of 7 probable market makers; funding lower-bound on 5; five real-data breaks catalogued in `evidence/L1_INSTRUMENT_VALIDATION_001.md` |
 | L2 proposal | 2026-09-03 | `PROPOSED_NOT_BUILT` | `research/wallet_copyability/live_data/L2_PROPOSAL.md`; waits on one owner decision |
+| L2 power analysis | 2026-09-04 | `DESIGN_UNDERPOWERED_AT_14D` | `evidence/L2_POWER_001.json`: 14 d x 130 directional wallets detects only about 1.05 pt per 14 d (27 %/yr); 56 d reaches 0.53; build held for the owner's window choice |
+| L2 approval | 2026-09-04 | `APPROVED_BUILD_HELD` | DEC-042; `APPROVE_HL_LIVE_DATA_L2_FORWARD_STUDY_001` SHA-256 `7caa6b24…3deb` bound to `b8c1225`; four owner corrections recorded; analysis plan drafted (`L2_ANALYSIS_PLAN.md`) |
+| L1 report artifact | 2026-09-04 | `PUBLISHED_PRIVATE` | https://claude.ai/code/artifact/b95990bc-142c-4c2b-ae5a-4473a22e55f2 |
+| Simulator code review | 2026-09-04 | `TEN_FINDINGS_ALL_ADDRESSED` | `code-review` skill, high effort; confirmed: silent zero funding, latency-dependent fill sets, sign-wrong lower-bound label, tautological cost check; plausible: stale prices, assumed depth undisclosed, own fills pricing own copies, truncated prefix dropped, watch coverage inferred from snapshots, study aborted by one wallet |
+| L1 instrument revision 2 | 2026-09-04 | `RESCORED` | common decision cutoff, 15-min price age bound, own fills excluded from prices, funding coverage as a share, liquidity labelled assumed; 1734 to 16710 copies per wallet now unpriceable, which is the honest state of a fills-derived price source; 95 copyability tests |
 
 ## Open gates
 
@@ -64,12 +69,12 @@ Ordered by what unblocks the most.
    evidence, discovery, the coverage fixes and `src/copyability` are on the
    branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
    fail only on Windows.
-2. **L2 owner decision** — the proposal in
-   `research/wallet_copyability/live_data/L2_PROPOSAL.md` asks for one decision
-   of the same shape as L1's: a 300-wallet REST characterisation cap, a
-   14-day forward window after a frozen selection instant, operator-initiated
-   repeated sweeps, ranking on the evaluation set for the L2 report only.
-   Nothing is built until it is answered.
+2. **L2 window decision** — the approval (DEC-042) fixes 14 days, but
+   `L2-POWER-001` shows 14 days with about 130 directional wallets detects only
+   an edge of about 1.05 pt per 14 d (27 %/yr) while a realistic edge after
+   costs is 0.3 to 0.5 pt. The owner chooses: a 14-day large-edge screen with a
+   declared 1.0 pt target, or a longer window (56 d reaches 0.53 pt at n=130).
+   No L2 code is written until then; the analysis plan is drafted for both.
 3. **Fixes that precede any collection** — response-size weight charged
    locally, `userFunding` paged past 500 rows, the public tape kept connected
    for evaluation prices, one common window for every wallet.

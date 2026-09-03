@@ -88,7 +88,19 @@ class FollowerRun:
     pnl: FollowerPnl
     equity_curve: tuple[EquityPoint, ...]
     traded_notional: Decimal
+    #: Copies dropped because no usable price existed at the copy moment.
     skipped_fills: int
+    #: Of those, copies dropped because the only price was older than the
+    #: allowed age: a hole in the data, not a fault of the wallet.
+    stale_price_skips: int
+    #: Source fills after the decision cutoff, excluded for every latency alike.
+    fills_after_cutoff: int
+    decision_cutoff_ms: int
+    #: Funding settlements a held position should have seen, and how many of
+    #: them the schedule actually priced. Anything unpriced was charged as
+    #: zero, so the funding cost is unknown in that proportion.
+    funding_periods_expected: int
+    funding_periods_priced: int
     capital: Decimal
     #: Largest capital committed to open positions at any action, at cost
     #: basis, summed over coins. This is what the copy actually put to work,
@@ -117,14 +129,32 @@ def simulate_follower(
     market: MarketData,
     cost_model: CostModel,
     config: FollowerConfig,
+    decision_cutoff_ms: int | None = None,
+    max_price_age_ms: int | None = None,
 ) -> FollowerRun:
-    """Copy every source fill in the interval after ``latency_ms``, at full cost."""
+    """Copy every source fill up to the cutoff after ``latency_ms``, at full cost.
+
+    ``decision_cutoff_ms`` is the last source-fill time any latency may copy.
+    A study runs every latency on the grid against the same cutoff, chosen as
+    the interval end minus the largest latency, so each latency scores the
+    same fills and a slower copy is not also a copy of fewer trades. Without
+    it, the cutoff is the interval end minus this latency.
+
+    ``max_price_age_ms`` bounds how old a price may be to execute or mark
+    against. Older means no price: the copy is skipped and counted as stale.
+    """
     _require_known(interval)
     if latency_ms < 0:
         raise InputError("latency cannot be negative")
+    if decision_cutoff_ms is None:
+        decision_cutoff_ms = interval.end_ms - latency_ms
+    if decision_cutoff_ms + latency_ms > interval.end_ms:
+        raise InputError("decision cutoff plus latency would land copies after the interval end")
     model = require_complete_model(cost_model)
     view = PointInTimeView(market, fills, horizon_ms=interval.end_ms)
-    source = _fills_in(interval, fills)
+    all_source = _fills_in(interval, fills)
+    source = [f for f in all_source if f.time_ms <= decision_cutoff_ms]
+    fills_after_cutoff = len(all_source) - len(source)
 
     positions: dict[str, _Position] = {}
     funding_checked: dict[str, int] = {}
@@ -132,7 +162,10 @@ def simulate_follower(
     realized = Decimal(0)
     traded = Decimal(0)
     skipped = 0
+    stale = 0
     trades = 0
+    periods_expected = 0
+    periods_priced = 0
     peak_deployed = Decimal(0)
     curve: list[EquityPoint] = [EquityPoint(interval.start_ms, config.capital)]
 
@@ -140,17 +173,19 @@ def simulate_follower(
         ((f.time_ms + latency_ms, f) for f in source), key=lambda pair: (pair[0], pair[1].trade_id)
     )
     for action_time, fill in actions:
-        if action_time > interval.end_ms:
-            # The copy would land after the last observed moment. That is not
-            # a fill we can price honestly, so it is skipped and counted.
-            skipped += 1
-            continue
         position = positions.setdefault(fill.coin, _Position())
-        costs += _accrue_funding(view, fill.coin, position, funding_checked, until_ms=action_time,
-                                 default_from_ms=interval.start_ms, model=model)
-        point = view.price_at(fill.coin, action_time)
+        charge, expected, priced = _accrue_funding(
+            view, fill.coin, position, funding_checked, until_ms=action_time,
+            default_from_ms=interval.start_ms, model=model, max_price_age_ms=max_price_age_ms,
+        )
+        costs += charge
+        periods_expected += expected
+        periods_priced += priced
+        point = view.price_at(fill.coin, action_time, max_age_ms=max_price_age_ms)
         if point is None:
             skipped += 1
+            if view.price_at(fill.coin, action_time) is not None:
+                stale += 1
             continue
         _, liquidity = market.require_coin(fill.coin)
         size = fill.size * config.size_scale
@@ -165,12 +200,22 @@ def simulate_follower(
 
     unrealized = Decimal(0)
     for coin, position in positions.items():
-        costs += _accrue_funding(view, coin, position, funding_checked, until_ms=interval.end_ms,
-                                 default_from_ms=interval.start_ms, model=model)
+        charge, expected, priced = _accrue_funding(
+            view, coin, position, funding_checked, until_ms=interval.end_ms,
+            default_from_ms=interval.start_ms, model=model, max_price_age_ms=max_price_age_ms,
+        )
+        costs += charge
+        periods_expected += expected
+        periods_priced += priced
         if position.size != 0:
+            # The final mark uses the last price whatever its age: an open
+            # position has to be valued at something. A stale mark is counted
+            # so the outcome can say the valuation rests on an old quote.
             point = view.price_at(coin, interval.end_ms)
             if point is None:
                 raise InputError(f"no price to mark {coin} at the end of the interval")
+            if max_price_age_ms is not None and interval.end_ms - point.time_ms > max_price_age_ms:
+                stale += 1
             unrealized += (point.price - position.avg_price) * position.size
     curve.append(EquityPoint(interval.end_ms, config.capital + realized + unrealized - costs.total))
 
@@ -180,24 +225,40 @@ def simulate_follower(
     )
     return FollowerRun(
         interval=interval, pnl=pnl, equity_curve=tuple(curve), traded_notional=traded,
-        skipped_fills=skipped, capital=config.capital, peak_deployed_notional=peak_deployed,
+        skipped_fills=skipped, stale_price_skips=stale, fills_after_cutoff=fills_after_cutoff,
+        decision_cutoff_ms=decision_cutoff_ms, funding_periods_expected=periods_expected,
+        funding_periods_priced=periods_priced, capital=config.capital,
+        peak_deployed_notional=peak_deployed,
     )
 
 
 def _accrue_funding(
     view: PointInTimeView, coin: str, position: _Position, checked: dict[str, int], *,
-    until_ms: int, default_from_ms: int, model: CostModel,
-) -> CostBreakdown:
-    """Charge every funding event since the last check on the held notional."""
+    until_ms: int, default_from_ms: int, model: CostModel, max_price_age_ms: int | None = None,
+) -> tuple[CostBreakdown, int, int]:
+    """Charge every funding event since the last check on the held notional.
+
+    Returns ``(charge, periods_expected, periods_priced)``. A held position
+    that saw fewer events than the venue's hourly settlement implies was
+    charged nothing for the missing hours; the caller carries that count into
+    the outcome so an unpriced funding hour is never mistaken for a free one.
+    """
     since = checked.get(coin, default_from_ms)
     total = CostBreakdown.zero()
+    expected = 0
+    priced = 0
     if position.size != 0:
-        for event in view.funding_between(coin, since, until_ms):
-            point = view.price_at(coin, event.time_ms)
+        expected = view.market.funding.expected_periods(since, until_ms)
+        events = view.funding_between(coin, since, until_ms)
+        # Never more priced than expected: a settlement timestamped a few
+        # milliseconds past the hour still belongs to that hour's boundary.
+        priced = min(len(events), expected)
+        for event in events:
+            point = view.price_at(coin, event.time_ms, max_age_ms=max_price_age_ms)
             price = point.price if point is not None else position.avg_price
             total += model.funding_payment(position_notional=position.notional_at(price), rate=event.rate)
     checked[coin] = until_ms
-    return total
+    return total, expected, priced
 
 
 def _mark(

@@ -81,7 +81,6 @@ class FollowerPnl:
         object.__setattr__(self, "gross", _decimal(self.gross, "gross"))
         if not isinstance(self.costs, CostBreakdown):
             raise TypeError("follower costs must be a CostBreakdown")
-        self.costs.assert_complete()
         if self.latency_ms < 0 or self.trade_count < 0:
             raise ValueError("latency and trade_count cannot be negative")
 
