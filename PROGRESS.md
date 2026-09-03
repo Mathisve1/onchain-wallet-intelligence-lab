@@ -122,10 +122,10 @@ conflict, are both owner decisions rather than review outcomes.
   `stat.st_blocks`, which CPython only populates on POSIX. Pre-existing,
   unrelated to the live-data work, and green in Linux CI. Everything else
   passes: 1217 of 1219 local, 199 of 199 live-data.
-- `C:\Users\mathi\Desktop\onchain-wallet-intelligence-lab-main` is a stale
-  extracted copy, not a clone. It predates `results.py`,
-  `test_live_data_coverage.py` and the whole `r11a_corrective` work. Do not
-  edit it; `owil-repo` is the repository.
+- `C:\Users\mathi\Desktop\onchain-wallet-intelligence-lab-main` is an unpacked
+  zip with no `.git`. Its contents match `origin/main`, so it looks current,
+  but it can never produce a branch, commit or PR and it lacks everything on
+  the feature branches. `owil-repo` is the repository; do not work in the zip.
 
 ## Standing boundaries
 
