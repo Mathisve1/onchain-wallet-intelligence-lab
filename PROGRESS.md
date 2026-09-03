@@ -50,18 +50,26 @@ closed it.
 | R11A identity diagnostic | 2026-08-11 | `PREREGISTERED_NO_EXECUTION` | DEC-038; no approval, workflow or release |
 | Live-data pipeline build | 2026-09-03 | `BUILT_UNGOVERNED` | branch `feature/live-data-pipeline`, head `5397434`; 199 tests pass |
 | L1 live-data preregistration | 2026-09-03 | `PREREGISTERED_NO_EXECUTION` | DEC-039; `L1_PREREGISTRATION_VALID`; 25 governance tests; 893 manifest files |
+| L1 owner decision | 2026-09-03 | `APPROVED_RELEASED` | DEC-040; approval SHA-256 `d87df45c…dede1b` bound to `e3610cd`; one decision, three gates, no precedent |
+| L1 session 001 | 2026-09-03 | `CONSUMED_INSIDE_ENVELOPE` | 839 wallets discovered, 7 backfilled, 130457 fills, 2012 weight; DB SHA-256 `b5da970d…77c9`; 3 backfills hit HTTP 429, not retried |
+| Copyability simulator | 2026-09-03 | `BUILT_FIXTURE_TESTED` | `src/copyability`, 11 modules, deterministic, network-free; latency grid, full cost model, typed P&L separation, certified-interval scoring, look-ahead probe |
 
 ## Open gates
 
 Ordered by what unblocks the most.
 
-1. **L1 owner approval** — one hash-bound human approval of the L1 envelope,
-   using the exact text in
-   `research/wallet_copyability/live_data/HUMAN_APPROVAL_TEMPLATE.md`. Only the
-   owner can give this; it cannot be produced from inside the repo. Until it
-   exists the pipeline stays inert.
-2. **L1 single-use execution release** — bound to the canonical implementation
-   commit, after approval. Merging the implementation is not a release.
+1. **Merge `feature/live-data-pipeline`** — preregistration, decision,
+   evidence, discovery, the coverage fixes and `src/copyability` are on the
+   branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
+   fail only on Windows.
+2. **Wallet-ranking authorization** — the simulator can score the seven
+   backfilled wallets over their certified intervals at six latencies against
+   four baselines, but `wallet_ranking_authorized` and
+   `copyability_claim_authorized` are both false in the approval. Scoring real
+   wallets waits for that decision.
+3. **Successor collection session** — needs a new owner decision. Fix first:
+   charge response-size weight locally (three backfills hit HTTP 429 after the
+   approved retries) and page `userFunding` past its 500-row cap.
 3. **R11A implementation merge** — review and merge the fully inert R11A
    implementation and workflow candidate, kept outside `.github/workflows`.
 4. **R11A owner approval** — one hash-bound approval of the diagnostic scope,

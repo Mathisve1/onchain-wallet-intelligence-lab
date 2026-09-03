@@ -154,6 +154,11 @@ def _cmd_backfill(args: argparse.Namespace, dependencies: Dependencies) -> int:
         f"{result.funding_written} new of {result.funding_seen} funding rows, "
         f"{'1' if result.snapshot_taken else '0'} position snapshot, "
         f"{orchestrator.consumed_weight} request weight"
+        + (
+            ""
+            if result.window_exhausted
+            else f"; WINDOW TRUNCATED at page cap, covered until {result.covered_until_ms} ms"
+        )
     )
     return 0
 

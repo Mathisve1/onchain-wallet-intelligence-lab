@@ -28,6 +28,9 @@ MILLISECONDS_PER_DAY = 86_400_000
 #: A hard stop so a pagination bug cannot turn into an unbounded request loop.
 DEFAULT_MAX_PAGES = 200
 
+#: The venue returns at most this many rows for one ``userFunding`` call.
+MAX_FUNDING_PER_RESPONSE = 500
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -80,13 +83,21 @@ class IngestOrchestrator(WatchMixin):
         start_time_ms: int,
         end_time_ms: int | None,
         max_pages: int,
-    ) -> tuple[int, int, int, int]:
-        """Page ``userFillsByTime`` forward. Returns (pages, seen, written, forced)."""
+    ) -> tuple[int, int, int, int, bool, int]:
+        """Page ``userFillsByTime`` forward.
+
+        Returns ``(pages, seen, written, forced, exhausted, covered_until_ms)``.
+        ``exhausted`` is False when the page cap stopped the walk before the
+        venue ran out of fills; the window is then only covered up to
+        ``covered_until_ms``, and a caller that records it as complete would be
+        confusing "the wallet did nothing after that" with "we stopped looking".
+        """
         cursor = start_time_ms
         pages = 0
         seen = 0
         written = 0
         forced = 0
+        exhausted = False
         while pages < max_pages:
             payload = self._rest.request(
                 "userFillsByTime", user=address, start_time=cursor, end_time=end_time_ms
@@ -100,6 +111,7 @@ class IngestOrchestrator(WatchMixin):
             seen += result.seen
             written += result.written
             if len(rows) < MAX_FILLS_PER_RESPONSE:
+                exhausted = True
                 break
             # The venue caps a time-ranged response, so resume from the last
             # timestamp. Overlap is intentional: idempotent writes absorb it.
@@ -112,17 +124,27 @@ class IngestOrchestrator(WatchMixin):
                 forced += 1
             cursor = next_cursor
             if end_time_ms is not None and cursor > end_time_ms:
+                exhausted = True
                 break
-        return pages, seen, written, forced
+        covered_until_ms = end_time_ms if exhausted and end_time_ms is not None else cursor
+        return pages, seen, written, forced, exhausted, covered_until_ms
 
-    def _collect_funding(self, address: str, *, start_time_ms: int | None) -> tuple[int, int]:
-        """Persist funding payments. Returns (seen, written)."""
+    def _collect_funding(
+        self, address: str, *, start_time_ms: int | None
+    ) -> tuple[int, int, bool]:
+        """Persist funding payments. Returns (seen, written, exhausted).
+
+        The venue answers one ``userFunding`` call with at most
+        :data:`MAX_FUNDING_PER_RESPONSE` rows and this path does not page, so
+        a full response means the window may hold more than was returned.
+        That is reported as not exhausted rather than assumed complete.
+        """
         payload = self._rest.request("userFunding", user=address, start_time=start_time_ms)
         rows = require_list(payload, "userFunding")
         deltas = parse_funding(payload, address)
         pairs = list(zip(deltas, rows, strict=True))
         result = self._store.write_funding(pairs, ingested_at_ms=self._clock_ms())
-        return result.seen, result.written
+        return result.seen, result.written, len(rows) < MAX_FUNDING_PER_RESPONSE
 
     def backfill_wallet(
         self, wallet: str, days: int, *, max_pages: int = DEFAULT_MAX_PAGES
@@ -163,14 +185,21 @@ class IngestOrchestrator(WatchMixin):
         result = WalletBackfillResult(run_id=run_id, wallet_address=address)
         try:
             coverage["fills"] = {"attempted": True, "completed": False}
-            pages, seen, written, forced = self._collect_fills(
+            pages, seen, written, forced, exhausted, covered_until = self._collect_fills(
                 address, start_time_ms=window_start, end_time_ms=started_at, max_pages=max_pages
             )
             result.pages, result.fills_seen, result.fills_written = pages, seen, written
             result.forced_cursor_advances = forced
+            result.window_exhausted, result.covered_until_ms = exhausted, covered_until
+            # Completed means the venue ran out of fills inside the window. A
+            # walk stopped by the page cap covers only part of it, and saying
+            # otherwise would let a later ledger read the uncovered tail as a
+            # period in which the wallet did nothing.
             coverage["fills"] = {
                 "attempted": True,
-                "completed": True,
+                "completed": exhausted,
+                "truncated_at_page_cap": not exhausted,
+                "covered_until_ms": covered_until,
                 "seen": seen,
                 "written": written,
                 "pages": pages,
@@ -178,13 +207,15 @@ class IngestOrchestrator(WatchMixin):
             }
 
             coverage["funding"] = {"attempted": True, "completed": False}
-            funding_seen, funding_written = self._collect_funding(
+            funding_seen, funding_written, funding_exhausted = self._collect_funding(
                 address, start_time_ms=window_start
             )
             result.funding_seen, result.funding_written = funding_seen, funding_written
+            result.funding_exhausted = funding_exhausted
             coverage["funding"] = {
                 "attempted": True,
-                "completed": True,
+                "completed": funding_exhausted,
+                "truncated_at_response_cap": not funding_exhausted,
                 "seen": funding_seen,
                 "written": funding_written,
             }
@@ -252,7 +283,7 @@ class IngestOrchestrator(WatchMixin):
         self._store.upsert_wallet(address, observed_at_ms=started_at)
 
         try:
-            pages, seen, written, forced = self._collect_fills(
+            pages, seen, written, forced, exhausted, covered_until = self._collect_fills(
                 address,
                 start_time_ms=start_time_ms,
                 end_time_ms=end_time_ms,
@@ -282,7 +313,9 @@ class IngestOrchestrator(WatchMixin):
             coverage={
                 "fills": {
                     "attempted": True,
-                    "completed": True,
+                    "completed": exhausted,
+                    "truncated_at_page_cap": not exhausted,
+                    "covered_until_ms": covered_until,
                     "seen": seen,
                     "written": written,
                     "pages": pages,
@@ -290,6 +323,7 @@ class IngestOrchestrator(WatchMixin):
                 },
                 "funding": {"attempted": False},
                 "positions": {"attempted": False},
+                "requests": self._requests_coverage(),
             },
         )
         return BackfillResult(
@@ -301,6 +335,8 @@ class IngestOrchestrator(WatchMixin):
             records_seen=seen,
             records_written=written,
             forced_cursor_advances=forced,
+            window_exhausted=exhausted,
+            covered_until_ms=covered_until,
         )
 
     def backfill_days(
@@ -341,5 +377,5 @@ class IngestOrchestrator(WatchMixin):
     def backfill_wallet_funding(self, wallet: str, *, start_time_ms: int | None = None) -> int:
         """Persist funding payments for one wallet. Returns rows written."""
         address = normalize_wallet_address(wallet)
-        _, written = self._collect_funding(address, start_time_ms=start_time_ms)
+        _, written, _ = self._collect_funding(address, start_time_ms=start_time_ms)
         return written

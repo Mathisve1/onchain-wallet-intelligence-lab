@@ -116,6 +116,25 @@ class BackfillFillsEveryTableTests(CoverageTestCase):
             ["userFillsByTime", "userFunding", "clearinghouseState"],
         )
 
+    def test_a_full_funding_response_is_recorded_as_not_exhausted(self) -> None:
+        # The venue caps one userFunding answer at 500 rows and this path does
+        # not page. A full answer therefore proves nothing about the rest of
+        # the window, and the run must say so instead of claiming completion.
+        funding = [
+            {**FUNDING_ROW, "time": FUNDING_ROW["time"] + index, "delta": {**FUNDING_ROW["delta"]}}
+            for index in range(500)
+        ]
+        orchestrator, _ = self.build(
+            [[fill_payload(1, 1_699_000_000_000)], funding, clearinghouse_payload()]
+        )
+        result = orchestrator.backfill_wallet(WALLET, days=30)
+        self.assertEqual(result.funding_seen, 500)
+        self.assertFalse(result.funding_exhausted)
+        coverage = self.coverage_of(result.run_id)["funding"]
+        self.assertTrue(coverage["attempted"])
+        self.assertFalse(coverage["completed"])
+        self.assertTrue(coverage["truncated_at_response_cap"])
+
     def test_backfill_is_idempotent_across_all_three_datasets(self) -> None:
         payloads = [[fill_payload(1, 1_699_000_000_000)], [FUNDING_ROW], clearinghouse_payload()]
         orchestrator, _ = self.build(payloads + list(payloads))

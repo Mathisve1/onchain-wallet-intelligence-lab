@@ -40,12 +40,13 @@
   "execution_release": {
     "release_id": "RELEASE_HL_LIVE_DATA_COLLECTION_L1_001",
     "single_use": true,
-    "status": "RELEASED_NOT_YET_CONSUMED",
+    "status": "CONSUMED",
     "session_definition": "One operator-initiated observation session: one discovery watch over the tracked coins, at most 10 wallet backfills, and one tracking watch over at most 10 wallets, each command inside the approved per-command bounds and the aggregate inside the 1200 weight-per-minute budget.",
     "database_location": "OUTSIDE_THE_REPOSITORY",
     "database_committed": false,
-    "evidence_path": null,
-    "consumed_by": null,
+    "evidence_path": "research/wallet_copyability/live_data/evidence/L1_SESSION_001.json",
+    "consumed_by": "L1-SESSION-001",
+    "consumed_at_utc": "2026-09-03T18:35:31Z",
     "rerun_authorized": false
   },
   "created_by_this_decision": {

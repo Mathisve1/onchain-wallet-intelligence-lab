@@ -23,6 +23,11 @@ class BackfillResult:
     records_seen: int
     records_written: int
     forced_cursor_advances: int
+    #: True when the venue ran out of fills inside the window. False means the
+    #: page cap stopped the walk first and the window is covered only up to
+    #: ``covered_until_ms``.
+    window_exhausted: bool = True
+    covered_until_ms: int | None = None
 
 
 @dataclass(slots=True)
@@ -38,6 +43,11 @@ class WalletBackfillResult:
     funding_written: int = 0
     snapshot_taken: bool = False
     forced_cursor_advances: int = 0
+    #: See :attr:`BackfillResult.window_exhausted`.
+    window_exhausted: bool = True
+    covered_until_ms: int | None = None
+    #: False when the single funding response was full, so more may exist.
+    funding_exhausted: bool = True
 
 
 @dataclass(slots=True)

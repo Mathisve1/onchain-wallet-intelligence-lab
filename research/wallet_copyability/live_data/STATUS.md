@@ -3,33 +3,32 @@
 | Dimension | State |
 |---|---|
 | pilot | `HL-LIVE-DATA-COLLECTION-L1-001` |
-| status | `PREREGISTERED_NO_EXECUTION` |
-| owner approval | `NOT_PRESENT` |
-| execution release | `ABSENT` |
+| preregistration | `PREREGISTERED_NO_EXECUTION` at commit `e3610cd494211f6a399caffd7741a2f526b3287a` |
+| owner approval | `PRESENT`; exact text SHA-256 `d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b` |
+| owner decision | `L1-OWNER-DECISION-001`: approval, implementation review and single-use release in one decision (DEC-040) |
+| execution release | `RELEASE_HL_LIVE_DATA_COLLECTION_L1_001`, `CONSUMED` by `L1-SESSION-001`; rerun not authorized |
+| session window | `2026-09-03T18:20:42Z` to `2026-09-03T18:35:31Z` |
+| wallets discovered / backfilled | `839` / `7` (3 backfills failed on HTTP 429 after the approved 3 retries) |
+| fills / funding / snapshots / trades / mids | `130457` / `3004` / `35` / `3358` / `273` |
+| request weight | `2012` total over `133` attempts, `16` retries; local budget `1200`/min never exceeded |
+| envelope | pinched, not widened: venue weights large responses above the documented base weight |
+| database | outside the repository; SHA-256 `b5da970da812907e19cc760b1583df007b2bfb87129541fdbde791e2961777c9`; not committed |
 | workflow installed | `false` |
-| REST requests executed | `0` |
-| websocket connections opened | `0` |
-| database rows written | `0` |
-| market data ingested | `false` |
-| empirical result | `null` |
-| maximum one-time / monthly budget | `EUR 0` / `EUR 0` |
+| empirical result / wallet ranking / copyability claim | `null` / `false` / `false` |
 | trading authorizations | all `false` |
 
-## Implementation
+## Coverage caveats
 
-The deterministic core is `src/live_data` and carries no network dependency: its
-only absolute imports are standard library, it constructs no transport and it
-has no executable entry point. The concrete transports live in
-`research/wallet_copyability/live_data_collector` and are injected by the
-caller, which is what keeps `src/` offline-testable end to end.
-
-199 live-data tests pass, covering config validation, request-body construction,
-weight accounting, retry charging, websocket routing, storage idempotency,
-coverage tracking and the read-only guard.
+Five of seven backfills hit the venue's 500-row funding cap; their funding is
+not complete and the run records predate the truncation flag that now exists.
+Fill windows were exhausted for all seven. Position snapshots exist only from
+the session onward.
 
 ## Next gate
 
-One hash-bound owner approval of the exact envelope in
-`L1_LIVE_DATA_COLLECTION_PREREGISTRATION.json`, using the exact text in
-`HUMAN_APPROVAL_TEMPLATE.md`. Until that exists, no observation session is
-authorized and this pilot executes nothing.
+A successor session needs a new owner decision. Before one is requested, the
+local weight accounting should charge response size so the venue's throttle is
+never reached first. Scoring wallets over certified intervals waits on a
+wallet-ranking authorization; the simulator that would do it lives in
+`src/copyability` and refuses to score anything the coverage ledger has not
+certified.

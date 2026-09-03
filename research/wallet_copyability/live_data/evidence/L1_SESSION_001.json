@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "session_id": "L1-SESSION-001",
+  "pilot_id": "HL-LIVE-DATA-COLLECTION-L1-001",
+  "release_id": "RELEASE_HL_LIVE_DATA_COLLECTION_L1_001",
+  "owner_decision_id": "L1-OWNER-DECISION-001",
+  "executed_from_commit": "08df1bd",
+  "executed_on": "operator workstation, Windows 10, CPython 3.14.2, websockets 16.0",
+  "session_window_utc": {"start": "2026-09-03T18:20:42Z", "end": "2026-09-03T18:35:31Z"},
+  "envelope_breached": false,
+  "envelope_pinch": {
+    "observed": true,
+    "what": "Three of ten wallet backfills failed with HTTP 429 after the approved 3 retries, while the local token bucket stayed inside 1200 weight per minute.",
+    "cause_as_understood": "The venue weights large userFillsByTime responses more heavily than the documented base weight the local bucket charges, so back-to-back multi-thousand-row pages exceed the venue's accounting before they exceed ours.",
+    "action_taken": "None. The failed runs are recorded as failed with their coverage; they were not retried and the envelope was not widened.",
+    "follow_up_outside_this_session": "Charge response-size weight locally and lengthen backoff before any successor session."
+  },
+  "commands": [
+    {"step": 1, "command": "watch --coins BTC ETH SOL --max-iterations 1000", "max_iterations": 1000, "run_id": "958d4c6b521f4c3688f92ed3d390b713", "status": "completed", "duration_seconds": 254, "request_weight": 0, "trades_seen": 6369, "trades_written": 2123, "wallets_discovered": 588, "mids_written": 150},
+    {"step": 2, "command": "backfill --wallet <10 most active discovered> --days 7 (sequential)", "attempted": 10, "completed": 7, "failed": 3, "failure": "RestHttpError: HTTP 429 after 3 retries"},
+    {"step": 3, "command": "watch --wallets <7 backfilled> --coins BTC ETH SOL --max-iterations 1000", "max_iterations": 1000, "run_id": "9adff8ddb18f47759c8d0a07f0f8450a", "status": "completed", "duration_seconds": 209, "request_weight": 56, "fills_written": 670, "snapshots_taken": 28, "snapshots_written": 28, "trades_written": 1235, "wallets_discovered": 447, "mids_written": 123}
+  ],
+  "counts": {
+    "wallets_discovered": 839,
+    "wallets_backfilled": 7,
+    "wallets_backfill_failed": 3,
+    "fills": 130457,
+    "fills_rest": 129787,
+    "fills_websocket": 670,
+    "funding": 3004,
+    "positions_snapshot": 35,
+    "trades": 3358,
+    "mids": 273,
+    "ingest_runs": 12,
+    "fill_coins": 113
+  },
+  "wallets_backfilled": [
+    "0x091159a8106b077c13e89bc09701117e8b5f129a",
+    "0x654086857e1fad6dcf05cf6695cce51ea3984268",
+    "0x6e8bc7cd0978397b06a14af2a8c31f5daeffea79",
+    "0xa775d1bd91ee2cc4cae6113e5fd9c0c17b355277",
+    "0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36",
+    "0xd4c1f7e8d876c4749228d515473d36f919583d1d",
+    "0xf5d81a135f756ca16544e53c20fc20643ec3ad53"
+  ],
+  "wallets_backfill_failed": [
+    "0x3bcae23e8c380dab4732e9a159c0456f12d866f3",
+    "0x73588c0a7079c4243810c44dc4eac8ea118f5516",
+    "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00"
+  ],
+  "fill_span_ms": [1787898938120, 1788460530687],
+  "request_weight": {"total": 2012, "attempted_requests": 133, "retried_requests": 16, "budget_per_minute": 1200},
+  "coverage_caveats": [
+    "Five of seven backfills received exactly 500 funding rows, the venue's per-response cap. Those run records predate the funding truncation flag and say completed=true; this evidence overrides that: their funding is at-cap and must not be read as complete. The flag now exists in the code so a successor session records it itself.",
+    "Backfill fill windows were exhausted for all seven wallets (no page-cap truncation).",
+    "Position snapshots exist only from the session onward; the venue exposes no snapshot history."
+  ],
+  "database": {
+    "location": "OUTSIDE_THE_REPOSITORY",
+    "path": "C:/Users/mathi/Desktop/owil-data/l1_session_001/hyperliquid_live.sqlite3",
+    "sha256": "b5da970da812907e19cc760b1583df007b2bfb87129541fdbde791e2961777c9",
+    "size_bytes": 114339840,
+    "schema_version": 3,
+    "committed": false
+  },
+  "empirical_result": null,
+  "wallet_ranking_produced": false,
+  "copyability_claim_produced": false,
+  "trading_authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  }
+}

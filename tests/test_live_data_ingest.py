@@ -193,6 +193,16 @@ class BackfillTests(IngestTestCase):
         orchestrator, _ = self.build([page, second])
         result = orchestrator.backfill_wallet_fills(WALLET, start_time_ms=1_000, max_pages=2)
         self.assertEqual(result.pages, 2)
+        # Two full pages and then the cap: the venue was not exhausted, so the
+        # window is covered only up to the last cursor and the run must not be
+        # recorded as complete. Otherwise "we stopped looking" would read as
+        # "the wallet stopped trading".
+        self.assertFalse(result.window_exhausted)
+        self.assertEqual(result.covered_until_ms, 1_699_000_001_000 + MAX_FILLS_PER_RESPONSE - 1)
+        coverage = json.loads(self.store.recent_runs(1)[0]["coverage"])["fills"]
+        self.assertFalse(coverage["completed"])
+        self.assertTrue(coverage["truncated_at_page_cap"])
+        self.assertEqual(coverage["covered_until_ms"], result.covered_until_ms)
 
     def test_the_end_of_the_window_stops_pagination(self) -> None:
         page = [fill_payload(index, 1_699_000_000_000 + index) for index in range(MAX_FILLS_PER_RESPONSE)]
@@ -202,6 +212,8 @@ class BackfillTests(IngestTestCase):
         )
         self.assertEqual(result.pages, 1)
         self.assertEqual(transport.bodies[0]["endTime"], 1_699_000_000_100)
+        self.assertTrue(result.window_exhausted)
+        self.assertEqual(result.covered_until_ms, 1_699_000_000_100)
 
     def test_the_run_is_recorded_as_completed_with_its_counts(self) -> None:
         orchestrator, _ = self.build([[fill_payload(1, 1_699_000_000_000)]])
