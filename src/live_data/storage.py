@@ -15,11 +15,11 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from .models import ClearinghouseState, Fill, FundingDelta
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
@@ -108,10 +108,17 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         records_seen INTEGER NOT NULL DEFAULT 0,
         records_written INTEGER NOT NULL DEFAULT 0,
         error_count INTEGER NOT NULL DEFAULT 0,
-        notes TEXT
+        notes TEXT,
+        coverage TEXT
     )
     """,
 )
+
+#: Upgrades from one schema version to the next. A version with no entry here
+#: cannot be opened: the guard fails closed rather than guessing at a shape.
+_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    2: ("ALTER TABLE ingest_runs ADD COLUMN coverage TEXT",),
+}
 
 RUN_STATUS_RUNNING = "running"
 RUN_STATUS_COMPLETED = "completed"
@@ -214,10 +221,22 @@ class LiveDataStore:
                 f"database schema version {version} is newer than supported {SCHEMA_VERSION}; "
                 "refusing to operate on it"
             )
-        raise StorageError(
-            f"database schema version {version} predates {SCHEMA_VERSION}; "
-            "no migration path is defined"
-        )
+        # Every step from the installed version to the current one must be
+        # declared. A single missing step fails closed: a half-migrated
+        # database is worse than one that refuses to open.
+        missing = [step for step in range(version + 1, SCHEMA_VERSION + 1) if step not in _MIGRATIONS]
+        if missing:
+            raise StorageError(
+                f"database schema version {version} predates {SCHEMA_VERSION}; "
+                f"no migration path is defined for version(s) {missing}"
+            )
+        with self._connection:
+            for step in range(version + 1, SCHEMA_VERSION + 1):
+                for statement in _MIGRATIONS[step]:
+                    self._connection.execute(statement)
+                self._connection.execute(
+                    "INSERT INTO schema_version (version, applied_at_ms) VALUES (?, 0)", (step,)
+                )
 
     # -- writes ---------------------------------------------------------------------
 
@@ -388,16 +407,26 @@ class LiveDataStore:
         records_written: int,
         error_count: int = 0,
         notes: str | None = None,
+        coverage: Mapping[str, Any] | None = None,
     ) -> None:
+        """Close out a run.
+
+        ``coverage`` records what the run actually attempted per dataset, so a
+        run that never tried to snapshot positions is distinguishable from one
+        that tried and found none. A null coverage means the run predates this
+        column, not that it covered nothing.
+        """
         _require_positive_ms(finished_at_ms, "finished_at_ms")
         if status not in _RUN_STATUSES:
             raise StorageError(f"unknown run status: {status!r}")
+        if coverage is not None and not isinstance(coverage, Mapping):
+            raise StorageError("coverage must be a mapping")
         with self._connection:
             cursor = self._connection.execute(
                 """
                 UPDATE ingest_runs SET
                     finished_at_ms = ?, status = ?, records_seen = ?,
-                    records_written = ?, error_count = ?, notes = ?
+                    records_written = ?, error_count = ?, notes = ?, coverage = ?
                 WHERE run_id = ?
                 """,
                 (
@@ -407,6 +436,7 @@ class LiveDataStore:
                     records_written,
                     error_count,
                     notes,
+                    None if coverage is None else _dump(dict(coverage)),
                     run_id,
                 ),
             )

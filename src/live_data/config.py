@@ -28,6 +28,16 @@ DEFAULT_WEIGHT_PER_MINUTE = 1200
 DEFAULT_WS_HEARTBEAT_SECONDS = 50.0
 WS_SERVER_TIMEOUT_SECONDS = 60.0
 
+#: The venue allows at most this many distinct users across user-scoped
+#: websocket subscriptions, which caps how many wallets one watch session can
+#: follow and therefore bounds the position-snapshot budget.
+MAX_WS_TRACKED_USERS = 10
+
+#: Cadence for clearinghouse snapshots, so a wallet that trades nothing still
+#: produces an equity time series. At the venue's 10-wallet websocket cap this
+#: costs 10 x 2 = 20 request weight per minute, against a 1200/minute budget.
+DEFAULT_SNAPSHOT_INTERVAL_SECONDS = 60.0
+
 _ADDRESS_PATTERN = re.compile(r"^0x[0-9a-f]{40}$")
 
 
@@ -111,6 +121,7 @@ class LiveDataConfig:
     request_timeout_seconds: float = 10.0
     max_retries: int = 3
     ws_heartbeat_seconds: float = DEFAULT_WS_HEARTBEAT_SECONDS
+    snapshot_interval_seconds: float = DEFAULT_SNAPSHOT_INTERVAL_SECONDS
     authorizations: TradingAuthorizations = field(default_factory=TradingAuthorizations)
 
     def __post_init__(self) -> None:
@@ -128,6 +139,8 @@ class LiveDataConfig:
             raise ConfigError("max retries must be nonnegative")
         if not 0 < self.ws_heartbeat_seconds < WS_SERVER_TIMEOUT_SECONDS:
             raise ConfigError("heartbeat must be positive and below the 60s server timeout")
+        if self.snapshot_interval_seconds <= 0:
+            raise ConfigError("snapshot interval must be positive")
         object.__setattr__(self, "tracked_coins", tuple(normalize_coin(c) for c in self.tracked_coins))
         object.__setattr__(
             self, "tracked_wallets", tuple(normalize_wallet_address(w) for w in self.tracked_wallets)
@@ -136,6 +149,11 @@ class LiveDataConfig:
             raise ConfigError("duplicate tracked coin")
         if len(set(self.tracked_wallets)) != len(self.tracked_wallets):
             raise ConfigError("duplicate tracked wallet")
+        if len(self.tracked_wallets) > MAX_WS_TRACKED_USERS:
+            raise ConfigError(
+                f"at most {MAX_WS_TRACKED_USERS} wallets may be tracked: the venue caps "
+                "distinct users across user-scoped websocket subscriptions"
+            )
         object.__setattr__(self, "database_path", Path(self.database_path))
         self.authorizations.assert_read_only()
 

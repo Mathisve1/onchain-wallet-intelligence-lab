@@ -44,16 +44,43 @@ def fill_payload(tid: int, time_ms: int, **overrides: object) -> dict[str, objec
     return payload
 
 
+def clearinghouse_payload(snapshot_time_ms: int = 1_699_000_000_000) -> dict[str, object]:
+    summary = {
+        "accountValue": "10000.0",
+        "totalNtlPos": "2500.0",
+        "totalRawUsd": "7500.0",
+        "totalMarginUsed": "250.0",
+    }
+    return {
+        "marginSummary": dict(summary),
+        "crossMarginSummary": dict(summary),
+        "withdrawable": "9750.0",
+        "time": snapshot_time_ms,
+        "assetPositions": [],
+    }
+
+
 class ScriptedTransport:
+    """Replays queued payloads, then answers position snapshots automatically.
+
+    ``watch`` now takes a clearinghouse snapshot per tracked wallet, which is
+    REST traffic every watch test would otherwise have to script by hand. The
+    fallback only applies once the explicit queue is exhausted, so a test that
+    scripts its own snapshot still gets exactly that payload.
+    """
+
     def __init__(self, payloads: list[object]) -> None:
         self._payloads = list(payloads)
         self.bodies: list[dict[str, Any]] = []
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        self.bodies.append(json.loads(request.body))
-        if not self._payloads:
-            raise AssertionError("more requests issued than the test scripted")
-        return HttpResponse(status_code=200, body=json.dumps(self._payloads.pop(0)))
+        body = json.loads(request.body)
+        self.bodies.append(body)
+        if self._payloads:
+            return HttpResponse(status_code=200, body=json.dumps(self._payloads.pop(0)))
+        if body.get("type") == "clearinghouseState":
+            return HttpResponse(status_code=200, body=json.dumps(clearinghouse_payload()))
+        raise AssertionError("more requests issued than the test scripted")
 
 
 class FakeConnection:

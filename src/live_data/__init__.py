@@ -36,7 +36,8 @@ from .hyperliquid_ws import (
     build_subscribe_message,
     build_unsubscribe_message,
 )
-from .ingest import BackfillResult, IngestError, IngestOrchestrator, WatchResult
+from .ingest import IngestError, IngestOrchestrator
+from .results import BackfillResult, WalletBackfillResult, WatchResult
 from .models import (
     AssetPosition,
     ClearinghouseState,
@@ -85,6 +86,7 @@ __all__ = [
     "Subscription",
     "TokenBucket",
     "TradingAuthorizations",
+    "WalletBackfillResult",
     "WatchResult",
     "WebSocketError",
     "WriteResult",

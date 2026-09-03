@@ -79,6 +79,7 @@ class PackageSurfaceTests(unittest.TestCase):
                 "ingest.py",
                 "models.py",
                 "rate_limit.py",
+                "results.py",
                 "storage.py",
             },
         )

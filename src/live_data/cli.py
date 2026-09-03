@@ -18,7 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from .config import LiveDataConfig, normalize_coin, normalize_wallet_address
+from .config import (
+    DEFAULT_SNAPSHOT_INTERVAL_SECONDS,
+    LiveDataConfig,
+    normalize_coin,
+    normalize_wallet_address,
+)
 from .hyperliquid_rest import HyperliquidRestClient, Transport
 from .hyperliquid_ws import ConnectionFactory, HyperliquidWebSocketClient
 from .ingest import IngestOrchestrator
@@ -71,7 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("init-db", help="create the database schema")
 
-    backfill = subparsers.add_parser("backfill", help="backfill a wallet's fills over REST")
+    backfill = subparsers.add_parser(
+        "backfill", help="backfill a wallet's fills, funding and a position snapshot over REST"
+    )
     backfill.add_argument("--wallet", type=_wallet, required=True)
     backfill.add_argument("--days", type=int, required=True, help="trailing window in days")
 
@@ -83,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_MAX_WATCH_ITERATIONS,
         help="stop after this many websocket frames",
+    )
+    watch.add_argument(
+        "--snapshot-interval",
+        type=float,
+        default=DEFAULT_SNAPSHOT_INTERVAL_SECONDS,
+        help="seconds between clearinghouse position snapshots per tracked wallet",
     )
 
     subparsers.add_parser("status", help="report row counts and recent ingest runs")
@@ -129,10 +142,12 @@ def _cmd_backfill(args: argparse.Namespace, dependencies: Dependencies) -> int:
     config = LiveDataConfig(database_path=args.db, tracked_wallets=(args.wallet,))
     with LiveDataStore(args.db) as store:
         orchestrator = _build_orchestrator(config, store, dependencies, with_ws=False)
-        result = orchestrator.backfill_days(args.wallet, args.days)
+        result = orchestrator.backfill_wallet(args.wallet, args.days)
     print(
-        f"run {result.run_id}: {result.records_written} new of {result.records_seen} fills "
-        f"over {result.pages} page(s)"
+        f"run {result.run_id}: {result.fills_written} new of {result.fills_seen} fills "
+        f"over {result.pages} page(s), "
+        f"{result.funding_written} new of {result.funding_seen} funding rows, "
+        f"{'1' if result.snapshot_taken else '0'} position snapshot"
     )
     return 0
 
@@ -148,13 +163,16 @@ def _cmd_watch(args: argparse.Namespace, dependencies: Dependencies) -> int:
         database_path=args.db,
         tracked_wallets=tuple(args.wallets),
         tracked_coins=tuple(args.coins),
+        snapshot_interval_seconds=args.snapshot_interval,
     )
     with LiveDataStore(args.db) as store:
         orchestrator = _build_orchestrator(config, store, dependencies, with_ws=True)
         result = orchestrator.watch(max_iterations=args.max_iterations)
     print(
         f"run {result.run_id}: {result.fills_written} new fills, "
-        f"{result.mids_written} mids, {len(result.errors)} handler error(s)"
+        f"{result.mids_written} mids, {result.snapshots_written} new of "
+        f"{result.snapshots_taken} position snapshot(s), "
+        f"{len(result.errors)} handler error(s)"
     )
     return 0
 

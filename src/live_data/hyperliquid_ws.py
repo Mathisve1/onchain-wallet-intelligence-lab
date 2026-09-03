@@ -336,7 +336,13 @@ class HyperliquidWebSocketClient:
                 continue
             return
 
-    def run(self, *, max_iterations: int, stop: Callable[[], bool] | None = None) -> int:
+    def run(
+        self,
+        *,
+        max_iterations: int,
+        stop: Callable[[], bool] | None = None,
+        on_iteration: Callable[[], None] | None = None,
+    ) -> int:
         """Pump the socket for a bounded number of iterations.
 
         Bounded on purpose: an unbounded loop is untestable and, in a research
@@ -351,4 +357,9 @@ class HyperliquidWebSocketClient:
             self.heartbeat_if_due()
             if self.poll_once():
                 dispatched += 1
+            if on_iteration is not None:
+                # Time-driven work the caller wants interleaved with the feed.
+                # It runs per loop iteration, so it advances only while frames
+                # are arriving -- see the cadence note in ingest.watch().
+                on_iteration()
         return dispatched
