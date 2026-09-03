@@ -92,6 +92,21 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | R11A workflow / release / activation | absent / absent / absent |
 | R11A empirical root cause | `UNKNOWN_PENDING_DIAGNOSTIC` |
 | R11A repair selected / R11B authorized | `false` / `false` |
+| live-data pilot | `HL-LIVE-DATA-COLLECTION-L1-001` |
+| L1 status | `PREREGISTERED_NO_EXECUTION` |
+| L1 track | forward-only public observation; independent of the archive track |
+| L1 venue / endpoints | `HYPERLIQUID_PUBLIC_MAINNET`; `POST /info` and `wss://api.hyperliquid.xyz/ws` only |
+| L1 authentication / credentials / signing | `false` / `false` / `false` |
+| L1 owner approval | `NOT_PRESENT` |
+| L1 execution release / workflow | absent / absent |
+| L1 maximum one-time / monthly budget | `EUR 0` / `EUR 0` |
+| L1 enforced weight budget | `1200` per minute; retries charged against it |
+| L1 maximum tracked wallets | `10`; venue cap on distinct user-scoped subscriptions |
+| L1 worst-case snapshot cost | `20` weight per minute at the 60 s cadence |
+| L1 REST request types | `7` informational; `l2Book` excluded from the supported set |
+| L1 REST / websocket executed | `0` / `0` |
+| L1 implementation | `src/live_data` deterministic core; transports injected from `research/` |
+| L1 tests | `199` pass |
 | R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` after consumption |
 | R2 aggregate S3 requests / metadata entries observed | `5` / `125` |
 | larger 300-request inventory | `false` |
@@ -295,14 +310,46 @@ shadow_authorized = false
 live_authorized = false
 leverage_authorized = false
 capital_allocation_authorized = false
+l1_pilot_id = HL-LIVE-DATA-COLLECTION-L1-001
+l1_status = PREREGISTERED_NO_EXECUTION
+l1_owner_approval_present = false
+l1_execution_release_present = false
+l1_workflow_installed = false
+l1_scheduled_execution_authorized = false
+l1_manual_operator_run_authorized = false
+l1_authentication_authorized = false
+l1_signed_action_authorized = false
+l1_order_endpoint_authorized = false
+l1_paid_request_authorized = false
+l1_maximum_one_time_budget_eur = 0
+l1_maximum_monthly_budget_eur = 0
+l1_rest_requests_executed = 0
+l1_websocket_connections_opened = 0
+l1_database_rows_written = 0
+l1_market_data_ingested = false
+l1_empirical_result = null
+l1_wallet_ranking_authorized = false
+l1_copyability_claim_authorized = false
 ```
 
-All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well.
+All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well. Every L1 flag is false or zero: the live-data pilot is preregistered only and has executed no request against the venue.
 
 ## Exact next gate
+
+Two tracks are open. They share no release, role or budget, and neither gates the other.
+
+### Archive track
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
 2. Review and merge a fully inert R11A implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
 3. After exact-head CI and clean-context review of the inert implementation, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
 4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
 5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
+
+### Live-data track
+
+1. Merge the L1 preregistration and the reviewed read-only implementation after exact-head CI. Merging the implementation is not an execution release and authorizes no request.
+2. Request one hash-bound owner approval of the exact L1 envelope using `research/wallet_copyability/live_data/HUMAN_APPROVAL_TEMPLATE.md`: public unauthenticated `/info` and websocket only, EUR 0 one-time / EUR 0 monthly, 1200 weight per minute with retries charged against it, at most 3 retries on HTTP 429 only, at most 10 tracked wallets, 60 s snapshot cadence, 50 s heartbeat, 1000 watch iterations and no redirect following.
+3. After approval, build a separate single-use execution release bound to the canonical implementation commit. No workflow installation and no scheduled or unattended execution is authorized at any point.
+4. Only then may one operator-initiated observation session run, inside the approved envelope, writing to a local database.
+5. Point-in-time eligibility, wallet ranking, alpha/copyability interpretation, entity clustering and every trading/capital action remain unauthorized and stay gated behind Phase 3.

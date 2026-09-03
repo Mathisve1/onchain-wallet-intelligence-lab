@@ -1,0 +1,182 @@
+{
+  "schema_version": "1.0",
+  "pilot_id": "HL-LIVE-DATA-COLLECTION-L1-001",
+  "status": "PREREGISTERED_NO_EXECUTION",
+  "study_id": "WALLET-COPYABILITY-STUDY-001",
+  "study_role": "FORWARD_ONLY_PUBLIC_OBSERVATION_INDEPENDENT_OF_ARCHIVE_TRACK",
+  "research_question": "CAN_A_READ_ONLY_PUBLIC_VENUE_OBSERVER_ACCUMULATE_A_POINT_IN_TIME_WALLET_LEDGER_WITHOUT_ARCHIVE_ACCESS",
+  "parent_bindings": {
+    "parent_probe_status": "ATTESTED_PUBLIC_PROBE_PASS",
+    "parent_probe_run_id": 31200124642,
+    "parent_data_contract": "HYPERLIQUID_WALLET_COPYABILITY_DATA_CONTRACT_V1",
+    "archive_track_dependency": false,
+    "blocked_by_r11_unresolved": false,
+    "rationale": "The archive track reconstructs history from S3 and is blocked at R11. This pilot only accumulates forward-looking public observations and shares no release, role or budget with it."
+  },
+  "exact_network_target": {
+    "venue": "HYPERLIQUID_PUBLIC_MAINNET",
+    "rest_base_url": "https://api.hyperliquid.xyz",
+    "rest_path_allowlist": ["/info"],
+    "rest_method": "POST",
+    "websocket_url": "wss://api.hyperliquid.xyz/ws",
+    "authentication_required": false,
+    "requester_pays": false,
+    "aws_involved": false,
+    "cloud_credentials_involved": false
+  },
+  "proposed_request_envelope": {
+    "maximum_one_time_budget_eur": 0,
+    "maximum_monthly_budget_eur": 0,
+    "cost_source": "PUBLIC_UNAUTHENTICATED_ENDPOINT_NO_METERED_CHARGE",
+    "documented_ip_weight_budget_per_minute": 1200,
+    "enforced_weight_budget_per_minute": 1200,
+    "request_weights": {
+      "allMids": 2,
+      "clearinghouseState": 2,
+      "l2Book": 2,
+      "meta": 20,
+      "openOrders": 20,
+      "userFills": 20,
+      "userFillsByTime": 20,
+      "userFunding": 20,
+      "unlisted_request_type_default": 20
+    },
+    "maximum_retries_per_request": 3,
+    "retryable_http_statuses": [429],
+    "retries_charged_against_weight_budget": true,
+    "request_timeout_seconds": 10.0,
+    "maximum_tracked_wallets": 10,
+    "maximum_tracked_wallets_rationale": "The venue caps distinct users across user-scoped websocket subscriptions at 10; this also bounds the position-snapshot cost.",
+    "default_snapshot_interval_seconds": 60.0,
+    "worst_case_snapshot_weight_per_minute": 20,
+    "websocket_heartbeat_seconds": 50.0,
+    "websocket_server_timeout_seconds": 60.0,
+    "default_maximum_watch_iterations": 1000,
+    "maximum_fills_per_response": 500,
+    "http_redirect_following_authorized": false
+  },
+  "rest_request_type_allowlist": [
+    "allMids",
+    "clearinghouseState",
+    "meta",
+    "openOrders",
+    "userFills",
+    "userFillsByTime",
+    "userFunding"
+  ],
+  "rest_request_type_denylist_present_in_code": ["l2Book"],
+  "websocket_subscription_allowlist": [
+    "allMids",
+    "l2Book",
+    "trades",
+    "userEvents",
+    "userFills"
+  ],
+  "read_only_boundary": {
+    "read_only": true,
+    "exchange_credentials_allowed": false,
+    "wallet_private_keys_allowed": false,
+    "signed_actions_allowed": false,
+    "order_endpoint_allowed": false,
+    "order_submission_allowed": false,
+    "live_orders_allowed": false,
+    "paper_orders_allowed": false,
+    "write_path_present_in_codebase": false,
+    "write_path_absence_is_structural": true,
+    "write_path_absence_rationale": "The REST path allowlist is a single-element frozenset and no /exchange path string exists in the package. Write capability is absent from the codebase, not merely disabled by a flag."
+  },
+  "layering_boundary": {
+    "deterministic_core_path": "src/live_data",
+    "network_transport_path": "research/wallet_copyability/live_data_collector",
+    "core_constructs_transports": false,
+    "core_has_executable_entry_point": false,
+    "core_import_side_effects": false,
+    "transports_injected_by_caller": true,
+    "forbidden_core_import_roots": [
+      "aiohttp",
+      "boto3",
+      "botocore",
+      "httpx",
+      "requests",
+      "socket",
+      "subprocess",
+      "urllib",
+      "websocket",
+      "websockets"
+    ]
+  },
+  "retained_schema": {
+    "storage_engine": "SQLITE3_LOCAL_FILE",
+    "schema_version": 2,
+    "default_database_path": "research/live_data/hyperliquid_live.sqlite3",
+    "tables": [
+      "fills",
+      "funding",
+      "ingest_runs",
+      "mids",
+      "positions_snapshot",
+      "schema_version",
+      "wallets"
+    ],
+    "idempotent_deduplication_required": true,
+    "run_coverage_recorded": true,
+    "raw_response_bodies_retained": false
+  },
+  "retention_and_privacy": {
+    "public_data_only": true,
+    "wallet_addresses_are_public_venue_identifiers": true,
+    "real_world_identity_claim_allowed": false,
+    "personal_data_collected": false,
+    "third_party_redistribution_authorized": false
+  },
+  "stop_conditions": [
+    "WEIGHT_BUDGET_EXHAUSTED",
+    "RETRY_LIMIT_REACHED",
+    "MAX_WATCH_ITERATIONS_REACHED",
+    "NON_RETRYABLE_HTTP_STATUS",
+    "SCHEMA_VERSION_NEWER_THAN_SUPPORTED",
+    "TRACKED_WALLET_CAP_EXCEEDED",
+    "TRADING_AUTHORIZATION_OBSERVED_OPEN"
+  ],
+  "governance_gates": {
+    "owner_approval_required_before_execution": true,
+    "single_use_release_required_before_execution": true,
+    "canonical_implementation_merge_is_not_execution_release": true,
+    "exact_head_ci_required_before_merge": true,
+    "workflow_installation_authorized": false,
+    "scheduled_or_unattended_execution_authorized": false,
+    "manual_operator_run_authorized": false
+  },
+  "owner_approval_status": {
+    "approval_id": "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001",
+    "approval_present": false,
+    "approval_text_sha256": null,
+    "approval_timestamp_utc": null,
+    "bound_preregistration_commit": null
+  },
+  "created_by_this_preregistration": {
+    "network_requests_executed": 0,
+    "rest_requests_executed": 0,
+    "websocket_connections_opened": 0,
+    "database_rows_written": 0,
+    "market_data_ingested": false,
+    "empirical_result": null,
+    "wallet_ranking_produced": false,
+    "copyability_claim_produced": false
+  },
+  "downstream_authorizations": {
+    "wallet_ranking_authorized": false,
+    "alpha_interpretation_authorized": false,
+    "copyability_claim_authorized": false,
+    "entity_clustering_authorized": false,
+    "backtest_publication_authorized": false
+  },
+  "trading_authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  }
+}
