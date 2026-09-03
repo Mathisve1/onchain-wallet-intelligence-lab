@@ -36,6 +36,16 @@ CHANNEL_BY_SUBSCRIPTION: dict[str, str] = {
     "userEvents": "user",
 }
 
+#: Channels whose frames belong to exactly one wallet. Several wallets share a
+#: channel name, so the wallet is part of the routing key and a frame for one
+#: must never reach another wallet's handler.
+USER_SCOPED_CHANNELS = frozenset({"userFills", "user"})
+
+#: Channels whose payload identifies its own wallet. ``WsUserFills`` carries a
+#: ``user`` field; ``WsUserEvent`` (channel ``user``) does not, so a userEvents
+#: frame can only be attributed when a single such subscription is open.
+SELF_IDENTIFYING_CHANNELS = frozenset({"userFills"})
+
 PING_MESSAGE = {"method": "ping"}
 PONG_CHANNEL = "pong"
 SUBSCRIPTION_RESPONSE_CHANNEL = "subscriptionResponse"
@@ -88,6 +98,20 @@ class Subscription:
     @property
     def channel(self) -> str:
         return CHANNEL_BY_SUBSCRIPTION[self.type]
+
+    @property
+    def route_key(self) -> tuple[str, str | None]:
+        """Key that inbound frames are routed on.
+
+        Including the wallet for user-scoped channels is what makes a
+        misdelivery impossible rather than merely unlikely: routing on the
+        channel alone would hand every wallet's frames to every wallet's
+        handler, and correctness would depend on each handler remembering to
+        filter.
+        """
+        if self.channel in USER_SCOPED_CHANNELS:
+            return (self.channel, self.user)
+        return (self.channel, None)
 
     def as_payload(self) -> dict[str, str]:
         payload: dict[str, str] = {"type": self.type}
@@ -156,6 +180,7 @@ class HyperliquidWebSocketClient:
         self.pongs_received = 0
         self.acknowledged_subscriptions = 0
         self.unrouted_messages = 0
+        self.ambiguous_messages = 0
         self.handler_errors: list[str] = []
         self.connect_attempts = 0
         self.reconnects = 0
@@ -223,6 +248,35 @@ class HyperliquidWebSocketClient:
 
     # -- inbound ---------------------------------------------------------------------
 
+    def _route_key_for(self, channel: str, message: dict[str, Any]) -> tuple[str, str | None]:
+        """Resolve the routing key of one inbound frame.
+
+        ``userFills`` payloads name their own wallet. ``userEvents`` frames
+        (channel ``user``) do not, so they can only be attributed when exactly
+        one such subscription is open; otherwise this fails closed rather than
+        guessing which wallet the events belong to.
+        """
+        if channel not in USER_SCOPED_CHANNELS:
+            return (channel, None)
+        if channel in SELF_IDENTIFYING_CHANNELS:
+            data = message.get("data")
+            if not isinstance(data, dict):
+                raise WebSocketError(f"{channel} frame has no object 'data'")
+            user = data.get("user")
+            if not isinstance(user, str):
+                raise WebSocketError(f"{channel} frame does not name its wallet")
+            return (channel, normalize_wallet_address(user))
+        candidates = {
+            subscription.route_key
+            for subscription in self._subscriptions
+            if subscription.channel == channel
+        }
+        if len(candidates) != 1:
+            raise WebSocketError(
+                f"{channel} frame carries no wallet and {len(candidates)} subscriptions are open"
+            )
+        return candidates.pop()
+
     def dispatch(self, raw: str) -> str:
         """Validate one inbound frame and route it. Returns the channel name."""
         try:
@@ -242,10 +296,17 @@ class HyperliquidWebSocketClient:
             return channel
         if channel == ERROR_CHANNEL:
             raise WebSocketError(f"venue error frame: {message.get('data')!r}")
+        try:
+            route = self._route_key_for(channel, message)
+        except WebSocketError:
+            # An unattributable user frame is dropped, never fanned out: giving
+            # it to every wallet would corrupt per-wallet provenance.
+            self.ambiguous_messages += 1
+            return channel
         handlers = [
             handler
             for subscription, registered in self._subscriptions.items()
-            if subscription.channel == channel
+            if subscription.route_key == route
             for handler in registered
         ]
         if not handlers:

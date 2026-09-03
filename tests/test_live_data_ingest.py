@@ -20,6 +20,7 @@ from src.live_data.rate_limit import TokenBucket
 from src.live_data.storage import RUN_STATUS_COMPLETED, RUN_STATUS_FAILED, LiveDataStore
 
 WALLET = "0x" + "ab" * 20
+OTHER_WALLET = "0x" + "cd" * 20
 
 
 def fill_payload(tid: int, time_ms: int, **overrides: object) -> dict[str, object]:
@@ -315,6 +316,43 @@ class WatchTests(IngestTestCase):
         run = self.store.recent_runs()[0]
         self.assertEqual(run["status"], RUN_STATUS_COMPLETED)
         self.assertEqual(run["error_count"], 1)
+
+    def test_records_seen_counts_observations_not_tracked_wallets(self) -> None:
+        # One frame carrying one fill for one wallet is one observation, no
+        # matter how many wallets the session is watching. Counting it once per
+        # tracked wallet would overstate ingest_runs.records_seen by N.
+        frame = json.dumps(
+            {
+                "channel": "userFills",
+                "data": {"user": WALLET, "fills": [fill_payload(1, 1_699_000_000_000)]},
+            }
+        )
+        connection = FakeConnection([frame])
+        config = LiveDataConfig(tracked_wallets=(WALLET, OTHER_WALLET))
+        orchestrator, _ = self.build([], config=config, ws_connection=connection)
+        result = orchestrator.watch(max_iterations=1)
+
+        self.assertEqual((result.fills_seen, result.fills_written), (1, 1))
+        run = self.store.recent_runs()[0]
+        self.assertEqual(run["records_seen"], 1)
+        self.assertEqual(run["records_written"], 1)
+        self.assertEqual(self.store.count("fills"), 1)
+
+    def test_each_tracked_wallet_gets_its_own_subscription(self) -> None:
+        connection = FakeConnection([])
+        config = LiveDataConfig(tracked_wallets=(WALLET, OTHER_WALLET))
+        orchestrator, _ = self.build([], config=config, ws_connection=connection)
+        orchestrator.watch(max_iterations=0)
+        self.assertEqual(
+            connection.sent,
+            [
+                {"method": "subscribe", "subscription": {"type": "userFills", "user": WALLET}},
+                {
+                    "method": "subscribe",
+                    "subscription": {"type": "userFills", "user": OTHER_WALLET},
+                },
+            ],
+        )
 
     def test_watch_records_run_provenance(self) -> None:
         connection = FakeConnection([json.dumps({"channel": "pong"})])

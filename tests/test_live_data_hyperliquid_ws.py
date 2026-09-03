@@ -15,6 +15,7 @@ from src.live_data.hyperliquid_ws import (
 )
 
 WALLET = "0x" + "ab" * 20
+OTHER_WALLET = "0x" + "cd" * 20
 
 
 class FakeConnection:
@@ -235,7 +236,9 @@ class DispatchTests(unittest.TestCase):
         client.subscribe(Subscription(type="userFills", user=WALLET), received.append)
         client.subscribe(Subscription(type="userEvents", user=WALLET), received.append)
         client.connect()
-        client.dispatch(json.dumps({"channel": "userFills", "data": {"fills": []}}))
+        client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": WALLET, "fills": []}})
+        )
         client.dispatch(json.dumps({"channel": "user", "data": {"fills": []}}))
         self.assertEqual([message["channel"] for message in received], ["userFills", "user"])
 
@@ -276,6 +279,151 @@ class DispatchTests(unittest.TestCase):
         client.dispatch(json.dumps({"channel": "allMids", "data": {"mids": {}}}))
         self.assertEqual(len(client.handler_errors), 1)
         self.assertIn("handler bug", client.handler_errors[0])
+
+
+class UserScopedRoutingTests(unittest.TestCase):
+    """Frames must reach exactly the wallet they belong to.
+
+    Routing on the channel alone would deliver every wallet's frames to every
+    wallet's handler, so per-wallet provenance would depend on each handler
+    remembering to filter. The wallet is part of the routing key instead.
+    """
+
+    def test_route_key_carries_the_wallet_only_for_user_scoped_channels(self) -> None:
+        self.assertEqual(
+            Subscription(type="userFills", user=WALLET).route_key, ("userFills", WALLET)
+        )
+        self.assertEqual(Subscription(type="userEvents", user=WALLET).route_key, ("user", WALLET))
+        self.assertEqual(Subscription(type="allMids").route_key, ("allMids", None))
+        self.assertEqual(Subscription(type="trades", coin="BTC").route_key, ("trades", None))
+
+    def test_a_frame_reaches_only_the_wallet_it_names(self) -> None:
+        first: list[dict[str, Any]] = []
+        second: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="userFills", user=WALLET), first.append)
+        client.subscribe(Subscription(type="userFills", user=OTHER_WALLET), second.append)
+        client.connect()
+        client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": WALLET, "fills": []}})
+        )
+        self.assertEqual(len(first), 1)
+        self.assertEqual(second, [])
+
+    def test_a_frame_for_an_untracked_wallet_is_unrouted_not_misdelivered(self) -> None:
+        received: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="userFills", user=WALLET), received.append)
+        client.connect()
+        client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": OTHER_WALLET, "fills": []}})
+        )
+        self.assertEqual(received, [])
+        self.assertEqual(client.unrouted_messages, 1)
+
+    def test_unsubscribing_one_wallet_leaves_the_other_subscribed_and_routed(self) -> None:
+        first: list[dict[str, Any]] = []
+        second: list[dict[str, Any]] = []
+        connection = FakeConnection()
+        client, _, _ = build_client([connection])
+        subscription_a = Subscription(type="userFills", user=WALLET)
+        subscription_b = Subscription(type="userFills", user=OTHER_WALLET)
+        client.subscribe(subscription_a, first.append)
+        client.subscribe(subscription_b, second.append)
+        client.connect()
+        client.unsubscribe(subscription_a)
+        self.assertEqual(
+            connection.sent[-1],
+            {"method": "unsubscribe", "subscription": {"type": "userFills", "user": WALLET}},
+        )
+        self.assertEqual(client.subscriptions, (subscription_b,))
+        client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": WALLET, "fills": []}})
+        )
+        client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": OTHER_WALLET, "fills": []}})
+        )
+        self.assertEqual(first, [])
+        self.assertEqual(len(second), 1)
+        self.assertEqual(client.unrouted_messages, 1)
+
+    def test_reconnect_resubscribes_every_wallet_and_routing_survives(self) -> None:
+        first_connection = FakeConnection()  # drops on the first recv
+        second_connection = FakeConnection(
+            [json.dumps({"channel": "userFills", "data": {"user": OTHER_WALLET, "fills": []}})]
+        )
+        client, factory, _ = build_client([first_connection, second_connection])
+        first: list[dict[str, Any]] = []
+        second: list[dict[str, Any]] = []
+        client.subscribe(Subscription(type="userFills", user=WALLET), first.append)
+        client.subscribe(Subscription(type="userFills", user=OTHER_WALLET), second.append)
+        client.connect()
+
+        self.assertFalse(client.poll_once())  # socket drops, triggers reconnect
+        self.assertEqual(len(factory.created), 2)
+        # Both wallets must be restored; dropping one would silently stop
+        # observing that wallet for the rest of the run.
+        self.assertEqual(
+            second_connection.sent,
+            [
+                {"method": "subscribe", "subscription": {"type": "userFills", "user": WALLET}},
+                {
+                    "method": "subscribe",
+                    "subscription": {"type": "userFills", "user": OTHER_WALLET},
+                },
+            ],
+        )
+        self.assertTrue(client.poll_once())
+        self.assertEqual(first, [])
+        self.assertEqual(len(second), 1)
+
+    def test_user_events_route_when_exactly_one_subscription_is_open(self) -> None:
+        received: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="userEvents", user=WALLET), received.append)
+        client.connect()
+        client.dispatch(json.dumps({"channel": "user", "data": {"fills": []}}))
+        self.assertEqual(len(received), 1)
+        self.assertEqual(client.ambiguous_messages, 0)
+
+    def test_user_events_fail_closed_when_two_wallets_are_watched(self) -> None:
+        # WsUserEvent carries no wallet, so with two subscriptions open the
+        # frame is unattributable. Dropping it is correct; handing it to both
+        # would fabricate an observation for a wallet that produced none.
+        first: list[dict[str, Any]] = []
+        second: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="userEvents", user=WALLET), first.append)
+        client.subscribe(Subscription(type="userEvents", user=OTHER_WALLET), second.append)
+        client.connect()
+        client.dispatch(json.dumps({"channel": "user", "data": {"fills": []}}))
+        self.assertEqual((first, second), ([], []))
+        self.assertEqual(client.ambiguous_messages, 1)
+
+    def test_a_user_fills_frame_that_names_no_wallet_is_dropped(self) -> None:
+        received: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="userFills", user=WALLET), received.append)
+        client.connect()
+        for raw in (
+            json.dumps({"channel": "userFills", "data": {"fills": []}}),
+            json.dumps({"channel": "userFills", "data": None}),
+            json.dumps({"channel": "userFills", "data": {"user": 7, "fills": []}}),
+        ):
+            with self.subTest(raw=raw):
+                client.dispatch(raw)
+        self.assertEqual(received, [])
+        self.assertEqual(client.ambiguous_messages, 3)
+
+    def test_public_channels_still_route_without_a_wallet(self) -> None:
+        received: list[dict[str, Any]] = []
+        client, _, _ = build_client([FakeConnection()])
+        client.subscribe(Subscription(type="allMids"), received.append)
+        client.subscribe(Subscription(type="userFills", user=WALLET), received.append)
+        client.connect()
+        client.dispatch(json.dumps({"channel": "allMids", "data": {"mids": {"BTC": "1"}}}))
+        self.assertEqual(len(received), 1)
+        self.assertEqual(client.ambiguous_messages, 0)
 
 
 class ReconnectTests(unittest.TestCase):

@@ -147,6 +147,44 @@ class RetryPolicyTests(unittest.TestCase):
         for status in (200, 201, 301, 400, 401, 403, 404, 422, 600):
             self.assertFalse(is_retryable(status), status)
 
+    def test_every_attempt_including_retries_spends_its_weight(self) -> None:
+        # A retry is a real request against the venue's IP budget. Spending
+        # weight once per logical request would under-report consumption by up
+        # to max_retries + 1 times, precisely while we are being throttled.
+        transport = RecordingTransport([HttpResponse(429, "rate limited")] * 4)
+        bucket = TokenBucket(1200, 20.0, clock=lambda: 0.0, sleeper=lambda _: None)
+        client = HyperliquidRestClient(
+            LiveDataConfig(max_retries=3),
+            transport=transport,
+            bucket=bucket,
+            sleeper=lambda _: None,
+        )
+        before = bucket.available()
+        with self.assertRaises(RestHttpError):
+            client.request("allMids")
+
+        issued = len(transport.requests)
+        spent = before - bucket.available()
+        self.assertEqual(issued, 4)  # one attempt plus three retries
+        self.assertEqual(client.attempted_requests, issued)
+        self.assertEqual(spent, request_weight("allMids") * issued)
+
+    def test_weight_accounting_holds_for_a_heavier_request_type(self) -> None:
+        transport = RecordingTransport([HttpResponse(500, "boom")] * 3)
+        bucket = TokenBucket(1200, 20.0, clock=lambda: 0.0, sleeper=lambda _: None)
+        client = HyperliquidRestClient(
+            LiveDataConfig(max_retries=2),
+            transport=transport,
+            bucket=bucket,
+            sleeper=lambda _: None,
+        )
+        before = bucket.available()
+        with self.assertRaises(RestHttpError):
+            client.request("userFills", user=WALLET)
+        issued = len(transport.requests)
+        self.assertEqual(issued, 3)
+        self.assertEqual(before - bucket.available(), request_weight("userFills") * issued)
+
     def test_429_is_retried_with_exponential_backoff(self) -> None:
         client, transport, slept = build_client(
             [

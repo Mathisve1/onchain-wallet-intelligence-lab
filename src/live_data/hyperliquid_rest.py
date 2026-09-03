@@ -240,10 +240,15 @@ class HyperliquidRestClient:
         """Issue one validated ``/info`` request and return the decoded JSON."""
         body = build_info_body(request_type, **params)
         payload = json.dumps(body, separators=(",", ":"), sort_keys=True)
-        self._bucket.acquire(request_weight(request_type))
+        weight = request_weight(request_type)
 
         attempt = 0
         while True:
+            # Charged per attempt, not per logical request: a retry is a real
+            # request against the venue's IP budget and costs the same weight.
+            # Spending it only once would under-report our own consumption by
+            # up to max_retries + 1 times, exactly while we are being throttled.
+            self._bucket.acquire(weight)
             self.attempted_requests += 1
             response = self._transport(
                 HttpRequest(
