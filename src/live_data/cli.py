@@ -1,7 +1,9 @@
-"""Command line entry point for the read-only live data pipeline.
+"""Argument parsing and orchestrator wiring for the read-only live data pipeline.
 
-Run as ``python -m live_data.cli`` with ``src`` on ``PYTHONPATH``, or as
-``python -m src.live_data.cli`` from the project root.
+This module is deliberately not an executable entry point. It builds no
+transports: the concrete network implementations, and the entry point that
+supplies them, live in the outer collector layer under ``research/``. Keeping
+them there is what lets ``src/`` depend on nothing outside itself.
 
 Importing this module has no side effects: it opens no database, performs no
 network call and constructs no client until :func:`main` is invoked.
@@ -12,16 +14,30 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
 from .config import LiveDataConfig, normalize_coin, normalize_wallet_address
-from .hyperliquid_rest import HyperliquidRestClient
-from .hyperliquid_ws import HyperliquidWebSocketClient
+from .hyperliquid_rest import HyperliquidRestClient, Transport
+from .hyperliquid_ws import ConnectionFactory, HyperliquidWebSocketClient
 from .ingest import IngestOrchestrator
 from .storage import LiveDataStore
 
 DEFAULT_MAX_WATCH_ITERATIONS = 1000
+
+
+@dataclass(frozen=True, slots=True)
+class Dependencies:
+    """Concrete I/O supplied by the caller.
+
+    Commands that only touch the local database need nothing here. Commands
+    that reach the venue require the matching dependency and fail with a clear
+    message rather than silently constructing a transport of their own.
+    """
+
+    transport: Transport | None = None
+    connection_factory: ConnectionFactory | None = None
 
 
 def _wallet(value: str) -> str:
@@ -74,29 +90,45 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _build_orchestrator(
-    config: LiveDataConfig, store: LiveDataStore, *, with_ws: bool
+    config: LiveDataConfig,
+    store: LiveDataStore,
+    dependencies: Dependencies,
+    *,
+    with_ws: bool,
 ) -> IngestOrchestrator:
+    if dependencies.transport is None:
+        raise ValueError("no HTTP transport was supplied")
+    ws_client = None
+    if with_ws:
+        if dependencies.connection_factory is None:
+            raise ValueError("no websocket connection factory was supplied")
+        ws_client = HyperliquidWebSocketClient(
+            config, connection_factory=dependencies.connection_factory
+        )
     return IngestOrchestrator(
         config,
         store,
-        HyperliquidRestClient(config),
-        ws_client=HyperliquidWebSocketClient(config) if with_ws else None,
+        HyperliquidRestClient(config, transport=dependencies.transport),
+        ws_client=ws_client,
     )
 
 
-def _cmd_init_db(args: argparse.Namespace) -> int:
+def _cmd_init_db(args: argparse.Namespace, dependencies: Dependencies) -> int:
     with LiveDataStore(args.db) as store:
         print(f"initialized {args.db} ({store.count('ingest_runs')} ingest runs recorded)")
     return 0
 
 
-def _cmd_backfill(args: argparse.Namespace) -> int:
+def _cmd_backfill(args: argparse.Namespace, dependencies: Dependencies) -> int:
     if args.days <= 0:
         print("days must be positive", file=sys.stderr)
         return 2
+    if dependencies.transport is None:
+        print("backfill needs an HTTP transport; run the collector entry point", file=sys.stderr)
+        return 2
     config = LiveDataConfig(database_path=args.db, tracked_wallets=(args.wallet,))
     with LiveDataStore(args.db) as store:
-        orchestrator = _build_orchestrator(config, store, with_ws=False)
+        orchestrator = _build_orchestrator(config, store, dependencies, with_ws=False)
         result = orchestrator.backfill_days(args.wallet, args.days)
     print(
         f"run {result.run_id}: {result.records_written} new of {result.records_seen} fills "
@@ -105,9 +137,12 @@ def _cmd_backfill(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_watch(args: argparse.Namespace) -> int:
+def _cmd_watch(args: argparse.Namespace, dependencies: Dependencies) -> int:
     if not args.wallets and not args.coins:
         print("watch requires at least one --wallets or --coins value", file=sys.stderr)
+        return 2
+    if dependencies.transport is None or dependencies.connection_factory is None:
+        print("watch needs network transports; run the collector entry point", file=sys.stderr)
         return 2
     config = LiveDataConfig(
         database_path=args.db,
@@ -115,7 +150,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         tracked_coins=tuple(args.coins),
     )
     with LiveDataStore(args.db) as store:
-        orchestrator = _build_orchestrator(config, store, with_ws=True)
+        orchestrator = _build_orchestrator(config, store, dependencies, with_ws=True)
         result = orchestrator.watch(max_iterations=args.max_iterations)
     print(
         f"run {result.run_id}: {result.fills_written} new fills, "
@@ -124,7 +159,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_status(args: argparse.Namespace) -> int:
+def _cmd_status(args: argparse.Namespace, dependencies: Dependencies) -> int:
     with LiveDataStore(args.db, create=False) as store:
         report = {
             "database": str(args.db),
@@ -146,10 +181,12 @@ _COMMANDS = {
 }
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, dependencies: Dependencies | None = None) -> int:
+    """Parse ``argv`` and run the selected command against injected dependencies.
+
+    There is no ``__main__`` guard here on purpose. Running this module
+    directly would need it to build its own transports, which is exactly the
+    dependency this package refuses to take.
+    """
     args = build_parser().parse_args(argv)
-    return _COMMANDS[args.command](args)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return _COMMANDS[args.command](args, dependencies or Dependencies())

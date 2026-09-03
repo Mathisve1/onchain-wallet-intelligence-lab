@@ -130,34 +130,19 @@ def build_unsubscribe_message(subscription: Subscription) -> dict[str, Any]:
     return {"method": "unsubscribe", "subscription": subscription.as_payload()}
 
 
-def build_default_connection_factory() -> ConnectionFactory:
-    """Lazily bind the optional ``websockets`` package as the real transport.
-
-    The dependency is deliberately not required: tests inject a fake factory
-    and the import error is raised only when a live socket is actually needed.
-    """
-
-    def factory(url: str) -> Connection:
-        try:
-            from websockets.sync.client import connect  # noqa: PLC0415 - optional dependency
-        except ImportError as exc:  # pragma: no cover - environment dependent
-            raise WebSocketError(
-                "no websocket transport available: install 'websockets' "
-                "or pass connection_factory=..."
-            ) from exc
-        return connect(url)  # pragma: no cover - requires a live socket
-
-    return factory
-
-
 class HyperliquidWebSocketClient:
-    """Subscription registry, heartbeat and reconnect loop over one connection."""
+    """Subscription registry, heartbeat and reconnect loop over one connection.
+
+    The connection factory is supplied by the caller and this module builds
+    none: no concrete socket implementation lives under ``src/``. The outer
+    collector layer under ``research/`` owns that.
+    """
 
     def __init__(
         self,
         config: LiveDataConfig,
         *,
-        connection_factory: ConnectionFactory | None = None,
+        connection_factory: ConnectionFactory,
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
         backoff_base_seconds: float = 1.0,
@@ -166,7 +151,7 @@ class HyperliquidWebSocketClient:
     ) -> None:
         config.authorizations.assert_read_only()
         self._config = config
-        self._factory = connection_factory or build_default_connection_factory()
+        self._factory = connection_factory
         self._clock = clock
         self._sleeper = sleeper
         self._backoff_base_seconds = backoff_base_seconds

@@ -181,42 +181,20 @@ def build_info_body(request_type: str, **params: Any) -> dict[str, Any]:
     return body
 
 
-def build_urllib_transport() -> Transport:
-    """Default stdlib transport. Read-only: it can only issue the POST it is given.
-
-    The HTTP stack is imported here rather than at module scope so that
-    importing this package loads no network machinery at all. Governance
-    tooling asserts that ``src/archive_inventory`` carries no network imports;
-    meeting the same standard here costs nothing, because the transport is
-    injected and the stdlib one is built only when a caller actually wants it.
-    """
-    import urllib.error  # noqa: PLC0415 - deferred on purpose, see docstring
-    import urllib.request  # noqa: PLC0415
-
-    def transport(request: HttpRequest) -> HttpResponse:
-        raw = urllib.request.Request(  # noqa: S310 - scheme is validated in LiveDataConfig
-            request.url,
-            data=request.body.encode("utf-8"),
-            headers=dict(request.headers),
-            method=request.method,
-        )
-        try:
-            with urllib.request.urlopen(raw, timeout=request.timeout_seconds) as response:
-                return HttpResponse(status_code=response.status, body=response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:  # status-bearing failure, let the retry policy decide
-            return HttpResponse(status_code=exc.code, body=exc.read().decode("utf-8", "replace"))
-
-    return transport
-
-
 class HyperliquidRestClient:
-    """Weight-budgeted, retrying, read-only ``/info`` client."""
+    """Weight-budgeted, retrying, read-only ``/info`` client.
+
+    The transport is supplied by the caller and this module builds none: no
+    concrete HTTP implementation lives under ``src/``. The outer collector
+    layer under ``research/`` owns that, so this package stays deterministic
+    and provably free of network machinery.
+    """
 
     def __init__(
         self,
         config: LiveDataConfig,
         *,
-        transport: Transport | None = None,
+        transport: Transport,
         bucket: TokenBucket | None = None,
         sleeper: Sleeper = time.sleep,
         backoff_base_seconds: float = 0.5,
@@ -225,7 +203,7 @@ class HyperliquidRestClient:
         if INFO_PATH not in READ_ONLY_REST_PATHS:  # pragma: no cover - constant guard
             raise RestError("read-only path allowlist drift")
         self._config = config
-        self._transport = transport or build_urllib_transport()
+        self._transport = transport
         self._bucket = bucket or TokenBucket.from_config(config, sleeper=sleeper)
         self._sleeper = sleeper
         self._backoff_base_seconds = backoff_base_seconds
