@@ -53,6 +53,7 @@ from .models import (
 )
 from .rate_limit import RateLimitError, TokenBucket
 from .storage import SCHEMA_VERSION, LiveDataStore, StorageError, WriteResult
+from .trades import DISCOVERY_LABEL, Trade, parse_trades
 
 __all__ = [
     "AssetPosition",

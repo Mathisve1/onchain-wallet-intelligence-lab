@@ -29,8 +29,10 @@ class ArgumentParsingTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     self.parser.parse_args(argv)
 
-    def test_the_command_set_is_exactly_the_read_only_four(self) -> None:
-        self.assertEqual(set(cli._COMMANDS), {"init-db", "backfill", "watch", "status"})
+    def test_the_command_set_is_exactly_the_read_only_five(self) -> None:
+        self.assertEqual(
+            set(cli._COMMANDS), {"init-db", "backfill", "watch", "status", "wallets"}
+        )
 
     def test_init_db_uses_the_configured_default_database(self) -> None:
         args = self.parser.parse_args(["init-db"])

@@ -209,6 +209,9 @@ class HyperliquidRestClient:
         self._backoff_base_seconds = backoff_base_seconds
         self.attempted_requests = 0
         self.retried_requests = 0
+        #: Total request weight spent against the venue's IP budget, counting
+        #: every attempt. This is the number to compare with the envelope.
+        self.consumed_weight = 0
 
     @property
     def config(self) -> LiveDataConfig:
@@ -228,6 +231,7 @@ class HyperliquidRestClient:
             # up to max_retries + 1 times, exactly while we are being throttled.
             self._bucket.acquire(weight)
             self.attempted_requests += 1
+            self.consumed_weight += weight
             response = self._transport(
                 HttpRequest(
                     url=self._config.info_url,

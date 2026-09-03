@@ -13,22 +13,15 @@ from typing import Any, Callable
 
 from .config import LiveDataConfig, normalize_wallet_address
 from .hyperliquid_rest import MAX_FILLS_PER_RESPONSE, HyperliquidRestClient
-from .hyperliquid_ws import HyperliquidWebSocketClient, Subscription
-from .models import (
-    ClearinghouseState,
-    Fill,
-    PayloadError,
-    parse_all_mids,
-    parse_funding,
-    require_list,
-    require_mapping,
-)
-from .results import BackfillResult, WalletBackfillResult, WatchResult
+from .hyperliquid_ws import HyperliquidWebSocketClient
+from .models import ClearinghouseState, Fill, parse_funding, require_list
+from .results import BackfillResult, WalletBackfillResult
 from .storage import (
     RUN_STATUS_COMPLETED,
     RUN_STATUS_FAILED,
     LiveDataStore,
 )
+from .watch import IngestError, WatchMixin
 
 MILLISECONDS_PER_DAY = 86_400_000
 
@@ -36,15 +29,11 @@ MILLISECONDS_PER_DAY = 86_400_000
 DEFAULT_MAX_PAGES = 200
 
 
-class IngestError(RuntimeError):
-    """Raised when an ingest run cannot proceed safely."""
-
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-class IngestOrchestrator:
+class IngestOrchestrator(WatchMixin):
     """Drives REST and websocket ingest for the configured wallets."""
 
     def __init__(
@@ -68,6 +57,19 @@ class IngestOrchestrator:
     @property
     def store(self) -> LiveDataStore:
         return self._store
+
+    @property
+    def consumed_weight(self) -> int:
+        """Request weight spent so far by this orchestrator's REST client."""
+        return self._rest.consumed_weight
+
+    def _requests_coverage(self) -> dict[str, int]:
+        """What the run cost against the venue budget, for the run record."""
+        return {
+            "attempted": self._rest.attempted_requests,
+            "retried": self._rest.retried_requests,
+            "weight": self._rest.consumed_weight,
+        }
 
     # -- REST backfill ---------------------------------------------------------------
 
@@ -197,6 +199,7 @@ class IngestOrchestrator:
                 "written": snapshot_written,
             }
         except Exception as exc:
+            coverage["requests"] = self._requests_coverage()
             self._store.finish_run(
                 run_id,
                 finished_at_ms=self._clock_ms(),
@@ -212,6 +215,7 @@ class IngestOrchestrator:
         notes = None if result.forced_cursor_advances == 0 else (
             f"forced cursor advances: {result.forced_cursor_advances}"
         )
+        coverage["requests"] = self._requests_coverage()
         self._store.finish_run(
             run_id,
             finished_at_ms=self._clock_ms(),
@@ -339,155 +343,3 @@ class IngestOrchestrator:
         address = normalize_wallet_address(wallet)
         _, written = self._collect_funding(address, start_time_ms=start_time_ms)
         return written
-
-    # -- websocket tailing -------------------------------------------------------------
-
-    def build_watch_subscriptions(self) -> tuple[Subscription, ...]:
-        """One ``userFills`` stream per tracked wallet, plus ``allMids`` if coins are tracked."""
-        subscriptions = [
-            Subscription(type="userFills", user=wallet) for wallet in self._config.tracked_wallets
-        ]
-        if self._config.tracked_coins:
-            subscriptions.append(Subscription(type="allMids"))
-        if not subscriptions:
-            raise IngestError("nothing to watch: configure tracked wallets or coins")
-        return tuple(subscriptions)
-
-    def watch(self, *, max_iterations: int) -> WatchResult:
-        """Tail the websocket, persisting fills and mids as they arrive."""
-        if self._ws is None:
-            raise IngestError("watch requires a websocket client")
-        run_id = self._run_id_factory()
-        started_at = self._clock_ms()
-        self._store.start_run(run_id, mode="watch", started_at_ms=started_at)
-        result = WatchResult(run_id=run_id, iterations=0)
-
-        for wallet in self._config.tracked_wallets:
-            self._store.upsert_wallet(wallet, observed_at_ms=started_at)
-        for subscription in self.build_watch_subscriptions():
-            handler = (
-                self._make_user_fills_handler(result)
-                if subscription.type == "userFills"
-                else self._make_all_mids_handler(result)
-            )
-            self._ws.subscribe(subscription, handler)
-
-        snapshot_due: dict[str, float] = {}
-        coverage: dict[str, Any] = {
-            "fills": {"attempted": True, "source": "ws:userFills"},
-            "mids": {"attempted": bool(self._config.tracked_coins)},
-            "positions": {
-                "attempted": bool(self._config.tracked_wallets),
-                "wallets": len(self._config.tracked_wallets),
-                "interval_seconds": self._config.snapshot_interval_seconds,
-            },
-        }
-        try:
-            self._ws.connect()
-            # Baseline before any frame arrives: a wallet that trades nothing
-            # during the session still needs one position record, otherwise an
-            # empty query is indistinguishable from an unobserved wallet.
-            self._snapshot_tracked_wallets(result, snapshot_due, force=True)
-            result.iterations = self._ws.run(
-                max_iterations=max_iterations,
-                on_iteration=lambda: self._snapshot_tracked_wallets(result, snapshot_due),
-            )
-        except Exception as exc:
-            coverage["positions"]["snapshots"] = result.snapshots_taken
-            self._store.finish_run(
-                run_id,
-                finished_at_ms=self._clock_ms(),
-                status=RUN_STATUS_FAILED,
-                records_seen=result.fills_seen,
-                records_written=result.fills_written,
-                error_count=len(result.errors) + 1,
-                notes=f"{type(exc).__name__}: {exc}",
-                coverage=coverage,
-            )
-            raise
-        finally:
-            self._ws.close()
-
-        result.errors.extend(self._ws.handler_errors)
-        coverage["fills"]["seen"] = result.fills_seen
-        coverage["fills"]["written"] = result.fills_written
-        coverage["mids"]["written"] = result.mids_written
-        coverage["positions"]["snapshots"] = result.snapshots_taken
-        coverage["positions"]["written"] = result.snapshots_written
-        self._store.finish_run(
-            run_id,
-            finished_at_ms=self._clock_ms(),
-            status=RUN_STATUS_COMPLETED,
-            records_seen=result.fills_seen,
-            records_written=result.fills_written,
-            error_count=len(result.errors),
-            notes=(
-                f"mids written: {result.mids_written}; snapshots: {result.snapshots_taken}; "
-                f"reconnects: {self._ws.reconnects}"
-            ),
-            coverage=coverage,
-        )
-        return result
-
-    def _snapshot_tracked_wallets(
-        self, result: WatchResult, due: dict[str, float], *, force: bool = False
-    ) -> None:
-        """Snapshot each tracked wallet whose interval has elapsed.
-
-        Cadence is a baseline on connect plus a fixed interval floor, and
-        deliberately not fill-triggered. Position *state* is already
-        reconstructible from the fill stream, which carries ``startPosition``,
-        ``dir`` and size; what snapshots uniquely provide is account value,
-        and equity drifts with mark prices continuously rather than stepping
-        with fills. So sampling on a clock is what the data actually needs,
-        and a fill trigger would add cost and burstiness for information the
-        fills already carry.
-
-        Known limitation: this runs per websocket loop iteration, so it only
-        advances while frames arrive. With ``allMids`` subscribed that is
-        continuous; a wallets-only session with no activity will not refresh
-        past the baseline until a frame arrives. A receive timeout would fix
-        it and is deliberately out of scope here.
-        """
-        now_ms = self._clock_ms()
-        for wallet in self._config.tracked_wallets:
-            deadline = due.get(wallet)
-            if not force and deadline is not None and now_ms < deadline:
-                continue
-            try:
-                _, written = self._write_snapshot(wallet)
-                result.snapshots_taken += 1
-                result.snapshots_written += written
-            except Exception as exc:  # one wallet's failure must not stop the feed
-                result.errors.append(f"snapshot {wallet}: {type(exc).__name__}: {exc}")
-            due[wallet] = now_ms + self._config.snapshot_interval_seconds * 1000.0
-
-    def _make_user_fills_handler(self, result: WatchResult) -> Callable[[dict[str, Any]], None]:
-        def handle(message: dict[str, Any]) -> None:
-            data = require_mapping(message.get("data"), "ws.userFills.data")
-            user = data.get("user")
-            if not isinstance(user, str):
-                raise PayloadError("ws.userFills.data.user must be a string")
-            address = normalize_wallet_address(user)
-            rows = require_list(data.get("fills"), "ws.userFills.data.fills")
-            pairs = [(Fill.parse(row, address), row) for row in rows]
-            written = self._store.write_fills(
-                pairs, source="ws:userFills", ingested_at_ms=self._clock_ms()
-            )
-            result.fills_seen += written.seen
-            result.fills_written += written.written
-
-        return handle
-
-    def _make_all_mids_handler(self, result: WatchResult) -> Callable[[dict[str, Any]], None]:
-        def handle(message: dict[str, Any]) -> None:
-            data = require_mapping(message.get("data"), "ws.allMids.data")
-            mids = parse_all_mids(data)
-            tracked = set(self._config.tracked_coins)
-            selected = {coin: mid for coin, mid in mids.items() if coin in tracked}
-            observed_at = self._clock_ms()
-            result.mids_written += self._store.write_mids(
-                selected, data, observed_at_ms=observed_at, ingested_at_ms=observed_at
-            ).written
-
-        return handle

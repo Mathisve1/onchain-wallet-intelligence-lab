@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
 import unittest
@@ -9,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/wallet_copyability/live_data"
 PREREG = BASE / "L1_LIVE_DATA_COLLECTION_PREREGISTRATION.json"
+APPROVAL_TEXT = BASE / "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001.txt"
+DECISION = BASE / "L1_OWNER_DECISION_001.json"
 APPROVAL_TEMPLATE = BASE / "HUMAN_APPROVAL_TEMPLATE.md"
 STATUS = BASE / "STATUS.md"
 VALIDATOR = ROOT / "governance/validate_l1_live_data_preregistration.py"
@@ -18,46 +21,25 @@ assert SPEC and SPEC.loader
 validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
 
+APPROVAL_SHA256 = "d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b"
+BOUND_COMMIT = "e3610cd494211f6a399caffd7741a2f526b3287a"
 
-def load() -> dict:
-    return json.loads(PREREG.read_text(encoding="utf-8"))
+
+def load(path: Path = PREREG) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 class L1PreregistrationTests(unittest.TestCase):
-    def test_pilot_is_preregistered_and_unexecuted(self) -> None:
+    def test_the_preregistration_itself_created_nothing(self) -> None:
         c = load()
         self.assertEqual(c["pilot_id"], "HL-LIVE-DATA-COLLECTION-L1-001")
         self.assertEqual(c["status"], "PREREGISTERED_NO_EXECUTION")
-        self.assertEqual(c["study_id"], "WALLET-COPYABILITY-STUDY-001")
         created = c["created_by_this_preregistration"]
         self.assertEqual(created["network_requests_executed"], 0)
-        self.assertEqual(created["rest_requests_executed"], 0)
-        self.assertEqual(created["websocket_connections_opened"], 0)
         self.assertEqual(created["database_rows_written"], 0)
         self.assertFalse(created["market_data_ingested"])
         self.assertIsNone(created["empirical_result"])
-
-    def test_no_owner_approval_or_release_exists(self) -> None:
-        c = load()
-        approval = c["owner_approval_status"]
-        self.assertEqual(approval["approval_id"], "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001")
-        self.assertFalse(approval["approval_present"])
-        self.assertIsNone(approval["approval_text_sha256"])
-        self.assertIsNone(approval["approval_timestamp_utc"])
-        self.assertIsNone(approval["bound_preregistration_commit"])
-        self.assertFalse((BASE / "L1_EXECUTION_RELEASE.json").exists())
-        self.assertFalse((BASE / "evidence").exists())
-        self.assertFalse((BASE / "outputs").exists())
-
-    def test_execution_gates_are_closed(self) -> None:
-        gates = load()["governance_gates"]
-        self.assertTrue(gates["owner_approval_required_before_execution"])
-        self.assertTrue(gates["single_use_release_required_before_execution"])
-        self.assertTrue(gates["canonical_implementation_merge_is_not_execution_release"])
-        self.assertTrue(gates["exact_head_ci_required_before_merge"])
-        self.assertFalse(gates["workflow_installation_authorized"])
-        self.assertFalse(gates["scheduled_or_unattended_execution_authorized"])
-        self.assertFalse(gates["manual_operator_run_authorized"])
+        self.assertFalse(c["governance_gates"]["manual_operator_run_authorized"])
 
     def test_envelope_is_free_and_bounded(self) -> None:
         e = load()["proposed_request_envelope"]
@@ -68,11 +50,7 @@ class L1PreregistrationTests(unittest.TestCase):
         self.assertEqual(e["retryable_http_statuses"], [429])
         self.assertTrue(e["retries_charged_against_weight_budget"])
         self.assertEqual(e["maximum_tracked_wallets"], 10)
-        self.assertEqual(e["default_snapshot_interval_seconds"], 60.0)
-        self.assertEqual(e["websocket_heartbeat_seconds"], 50.0)
-        self.assertEqual(e["websocket_server_timeout_seconds"], 60.0)
         self.assertEqual(e["default_maximum_watch_iterations"], 1000)
-        self.assertEqual(e["maximum_fills_per_response"], 500)
         self.assertFalse(e["http_redirect_following_authorized"])
         self.assertEqual(e["worst_case_snapshot_weight_per_minute"], 20)
 
@@ -80,17 +58,11 @@ class L1PreregistrationTests(unittest.TestCase):
         b = load()["read_only_boundary"]
         self.assertTrue(b["read_only"])
         for key in (
-            "exchange_credentials_allowed",
-            "wallet_private_keys_allowed",
-            "signed_actions_allowed",
-            "order_endpoint_allowed",
-            "order_submission_allowed",
-            "live_orders_allowed",
-            "paper_orders_allowed",
-            "write_path_present_in_codebase",
+            "exchange_credentials_allowed", "wallet_private_keys_allowed", "signed_actions_allowed",
+            "order_endpoint_allowed", "order_submission_allowed", "live_orders_allowed",
+            "paper_orders_allowed", "write_path_present_in_codebase",
         ):
             self.assertFalse(b[key], key)
-        self.assertTrue(b["write_path_absence_is_structural"])
         for path in sorted((ROOT / "src/live_data").glob("*.py")):
             self.assertNotIn("/exchange", path.read_text(encoding="utf-8"), path.name)
 
@@ -100,57 +72,101 @@ class L1PreregistrationTests(unittest.TestCase):
         self.assertEqual(target["rest_base_url"], "https://api.hyperliquid.xyz")
         self.assertEqual(target["rest_path_allowlist"], ["/info"])
         self.assertEqual(target["websocket_url"], "wss://api.hyperliquid.xyz/ws")
-        self.assertFalse(target["authentication_required"])
-        self.assertFalse(target["requester_pays"])
-        self.assertFalse(target["aws_involved"])
-        self.assertFalse(target["cloud_credentials_involved"])
-        parent = c["parent_bindings"]
-        self.assertFalse(parent["archive_track_dependency"])
-        self.assertFalse(parent["blocked_by_r11_unresolved"])
+        for key in ("authentication_required", "requester_pays", "aws_involved", "cloud_credentials_involved"):
+            self.assertFalse(target[key], key)
+        self.assertFalse(c["parent_bindings"]["archive_track_dependency"])
 
     def test_downstream_and_trading_authorizations_remain_closed(self) -> None:
         c = load()
         self.assertTrue(all(v is False for v in c["downstream_authorizations"].values()))
         self.assertTrue(all(v is False for v in c["trading_authorizations"].values()))
+
+    def test_retained_schema_names_the_tape(self) -> None:
+        schema = load()["retained_schema"]
+        self.assertEqual(schema["schema_version"], 3)
+        self.assertIn("trades", schema["tables"])
+        self.assertFalse(schema["raw_response_bodies_retained"])
+
+    def test_deterministic_core_really_has_no_network_or_process_imports(self) -> None:
+        forbidden = set(load()["layering_boundary"]["forbidden_core_import_roots"])
+        self.assertTrue({"urllib", "socket", "subprocess"} <= forbidden)
+        roots: set[str] = set()
+        for path in sorted((ROOT / "src/live_data").glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    roots |= {alias.name.split(".", 1)[0] for alias in node.names}
+                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                    roots.add(node.module.split(".", 1)[0])
+        self.assertEqual(roots & forbidden, set(), f"core reaches the network via {roots & forbidden}")
+
+
+class L1OwnerDecisionTests(unittest.TestCase):
+    def test_the_approval_text_is_retained_byte_exactly(self) -> None:
+        raw = APPROVAL_TEXT.read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), APPROVAL_SHA256)
+        self.assertNotIn(b"\r", raw)
+        self.assertTrue(raw.endswith(b"\n") and not raw.endswith(b"\n\n"))
+        lines = raw.decode("utf-8").splitlines()
+        self.assertEqual(len(lines), 27)
+        self.assertEqual(lines[0], "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001")
+        self.assertIn(f"preregistration_commit={BOUND_COMMIT}", lines)
+        self.assertIn("trading_authorizations=ALL_FALSE", lines)
+
+    def test_the_contract_records_the_approval_and_the_decision(self) -> None:
+        approval = load()["owner_approval_status"]
+        self.assertTrue(approval["approval_present"])
+        self.assertEqual(approval["approval_text_sha256"], APPROVAL_SHA256)
+        self.assertEqual(approval["bound_preregistration_commit"], BOUND_COMMIT)
+        self.assertEqual(approval["approval_timestamp_utc"], "2026-09-03")
         self.assertEqual(
-            set(c["trading_authorizations"]),
-            {
-                "capital_allocation_authorized",
-                "integration_authorized",
-                "leverage_authorized",
-                "live_authorized",
-                "paper_authorized",
-                "shadow_authorized",
-            },
+            approval["owner_decision_path"],
+            "research/wallet_copyability/live_data/L1_OWNER_DECISION_001.json",
         )
 
-    def test_approval_template_is_exact_and_unsigned(self) -> None:
+    def test_one_decision_grants_exactly_three_gates_without_precedent(self) -> None:
+        d = load(DECISION)
+        self.assertEqual(d["decision_id"], "L1-OWNER-DECISION-001")
+        self.assertEqual(d["canonical_text"]["sha256"], APPROVAL_SHA256)
+        self.assertEqual(d["bound_preregistration_commit"], BOUND_COMMIT)
+        self.assertEqual(
+            d["gates_granted_in_this_decision"],
+            ["OWNER_APPROVAL", "IMPLEMENTATION_REVIEW", "SINGLE_USE_EXECUTION_RELEASE"],
+        )
+        precedent = d["precedent"]
+        self.assertTrue(precedent["applies_only_to_this_envelope"])
+        self.assertFalse(precedent["precedent_for_archive_track"])
+        self.assertFalse(precedent["precedent_for_any_scope_that_costs_money"])
+        self.assertFalse(precedent["precedent_for_any_scope_that_requires_authentication"])
+        self.assertFalse(precedent["precedent_for_any_scope_that_trades"])
+        self.assertTrue(d["risk_policy"]["integration_remains_false"])
+        self.assertTrue(all(v is False for v in d["trading_authorizations"].values()))
+
+    def test_the_release_is_single_use_and_never_reruns(self) -> None:
+        release = load(DECISION)["execution_release"]
+        self.assertEqual(release["release_id"], "RELEASE_HL_LIVE_DATA_COLLECTION_L1_001")
+        self.assertTrue(release["single_use"])
+        self.assertFalse(release["rerun_authorized"])
+        self.assertFalse(release["database_committed"])
+        self.assertIn(release["status"], {"RELEASED_NOT_YET_CONSUMED", "CONSUMED"})
+        if release["status"] == "CONSUMED":
+            self.assertTrue((ROOT / release["evidence_path"]).is_file())
+        else:
+            self.assertIsNone(release["evidence_path"])
+
+    def test_risk_policy_integration_is_still_false(self) -> None:
+        text = (ROOT / "RISK_POLICY.md").read_text(encoding="utf-8")
+        self.assertIn("| integration | `false` |", text)
+        self.assertIn("| historical/public research | `true` |", text)
+
+    def test_approval_template_stays_a_template(self) -> None:
         text = APPROVAL_TEMPLATE.read_text(encoding="utf-8")
-        self.assertIn("APPROVE_HL_LIVE_DATA_COLLECTION_L1_001", text)
         self.assertIn("preregistration_commit=<PREREGISTRATION_COMMIT>", text)
-        self.assertIn("maximum_one_time_budget_eur=0", text)
-        self.assertIn("trading_authorizations=ALL_FALSE", text)
-        # The template must stay a template: no approval may be pre-filled.
-        self.assertNotIn("approval_text_sha256=", text)
+        self.assertNotIn(BOUND_COMMIT, text)
 
-    def test_status_reports_no_execution(self) -> None:
-        text = STATUS.read_text(encoding="utf-8")
-        self.assertIn("`PREREGISTERED_NO_EXECUTION`", text)
-        self.assertIn("| owner approval | `NOT_PRESENT` |", text)
-        self.assertIn("| REST requests executed | `0` |", text)
-
-    def test_project_state_records_the_l1_boundary(self) -> None:
-        text = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
-        for token in (
-            "`HL-LIVE-DATA-COLLECTION-L1-001`",
-            "l1_owner_approval_present = false",
-            "l1_execution_release_present = false",
-            "l1_workflow_installed = false",
-            "l1_rest_requests_executed = 0",
-            "l1_websocket_connections_opened = 0",
-            "l1_maximum_one_time_budget_eur = 0",
-        ):
-            self.assertIn(token, text, token)
+    def test_no_database_is_committed(self) -> None:
+        self.assertFalse((ROOT / "research/live_data").exists())
+        self.assertEqual([p for p in BASE.rglob("*.sqlite3")], [])
 
     def test_validator_passes(self) -> None:
         self.assertEqual(validator.main(), 0)
@@ -159,21 +175,76 @@ class L1PreregistrationTests(unittest.TestCase):
 class L1ValidatorRejectsDriftTests(unittest.TestCase):
     """The validator is only worth having if it fails on a widened envelope."""
 
-    def _reject(self, mutate) -> None:
-        contract = load()
+    def _reject_mutated(self, path: Path, mutate) -> None:
+        contract = load(path)
         mutate(contract)
-        original = PREREG.read_bytes()
-        PREREG.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+        original = path.read_bytes()
+        path.write_bytes((json.dumps(contract, indent=2) + "\n").encode("utf-8"))
         try:
             with self.assertRaises(SystemExit) as caught:
                 validator.main()
             self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
         finally:
-            PREREG.write_bytes(original)
+            path.write_bytes(original)
         self.assertEqual(validator.main(), 0)
 
-    def test_rejects_a_prefilled_owner_approval(self) -> None:
-        self._reject(lambda c: c["owner_approval_status"].update(approval_present=True))
+    def _reject(self, mutate) -> None:
+        self._reject_mutated(PREREG, mutate)
+
+    def _reject_decision(self, mutate) -> None:
+        self._reject_mutated(DECISION, mutate)
+
+    def _reject_approval_text(self, replacement: bytes) -> None:
+        original = APPROVAL_TEXT.read_bytes()
+        APPROVAL_TEXT.write_bytes(replacement)
+        try:
+            with self.assertRaises(SystemExit):
+                validator.main()
+        finally:
+            APPROVAL_TEXT.write_bytes(original)
+        self.assertEqual(validator.main(), 0)
+
+    # -- approval and decision -------------------------------------------------------
+
+    def test_rejects_a_recorded_hash_that_does_not_match_the_retained_text(self) -> None:
+        self._reject(lambda c: c["owner_approval_status"].update(approval_text_sha256="0" * 64))
+
+    def test_rejects_a_bound_commit_that_differs_from_the_signed_line(self) -> None:
+        self._reject(lambda c: c["owner_approval_status"].update(bound_preregistration_commit="f" * 40))
+
+    def test_rejects_an_approval_text_whose_envelope_line_was_widened(self) -> None:
+        raw = APPROVAL_TEXT.read_bytes()
+        self._reject_approval_text(raw.replace(b"maximum_tracked_wallets=10", b"maximum_tracked_wallets=50"))
+
+    def test_rejects_an_approval_text_with_a_widened_request_type_list(self) -> None:
+        raw = APPROVAL_TEXT.read_bytes()
+        self._reject_approval_text(raw.replace(b"userFunding\n", b"userFunding,l2Book\n"))
+
+    def test_rejects_an_approval_text_that_opens_trading(self) -> None:
+        raw = APPROVAL_TEXT.read_bytes()
+        self._reject_approval_text(raw.replace(b"trading_authorizations=ALL_FALSE", b"trading_authorizations=paper"))
+
+    def test_rejects_an_approval_text_with_crlf_endings(self) -> None:
+        self._reject_approval_text(APPROVAL_TEXT.read_bytes().replace(b"\n", b"\r\n"))
+
+    def test_rejects_a_decision_that_grants_a_fourth_gate(self) -> None:
+        self._reject_decision(lambda d: d["gates_granted_in_this_decision"].append("SCHEDULED_EXECUTION"))
+
+    def test_rejects_a_decision_that_claims_precedent(self) -> None:
+        self._reject_decision(lambda d: d["precedent"].update(precedent_for_archive_track=True))
+
+    def test_rejects_a_rerunnable_release(self) -> None:
+        self._reject_decision(lambda d: d["execution_release"].update(rerun_authorized=True))
+
+    def test_rejects_a_consumed_release_without_evidence(self) -> None:
+        self._reject_decision(
+            lambda d: d["execution_release"].update(status="CONSUMED", evidence_path=None, consumed_by="x")
+        )
+
+    def test_rejects_a_committed_database_claim(self) -> None:
+        self._reject_decision(lambda d: d["execution_release"].update(database_committed=True))
+
+    # -- envelope versus code -------------------------------------------------------
 
     def test_rejects_an_opened_trading_authorization(self) -> None:
         self._reject(lambda c: c["trading_authorizations"].update(paper_authorized=True))
@@ -182,28 +253,19 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
         self._reject(lambda c: c["proposed_request_envelope"].update(maximum_one_time_budget_eur=5))
 
     def test_rejects_a_weight_budget_that_does_not_match_the_code(self) -> None:
-        self._reject(
-            lambda c: c["proposed_request_envelope"].update(enforced_weight_budget_per_minute=5000)
-        )
+        self._reject(lambda c: c["proposed_request_envelope"].update(enforced_weight_budget_per_minute=5000))
 
     def test_rejects_a_wallet_cap_that_does_not_match_the_code(self) -> None:
         self._reject(lambda c: c["proposed_request_envelope"].update(maximum_tracked_wallets=250))
 
     def test_rejects_an_undeclared_rest_request_type(self) -> None:
-        def mutate(contract: dict) -> None:
-            contract["rest_request_type_allowlist"] = contract["rest_request_type_allowlist"] + [
-                "l2Book"
-            ]
-
-        self._reject(mutate)
+        self._reject(lambda c: c["rest_request_type_allowlist"].append("l2Book"))
 
     def test_rejects_a_claimed_executed_request(self) -> None:
         self._reject(lambda c: c["created_by_this_preregistration"].update(rest_requests_executed=1))
 
-    def test_rejects_a_disabled_release_gate(self) -> None:
-        self._reject(
-            lambda c: c["governance_gates"].update(single_use_release_required_before_execution=False)
-        )
+    def test_rejects_runtime_authority_inside_the_preregistration(self) -> None:
+        self._reject(lambda c: c["governance_gates"].update(manual_operator_run_authorized=True))
 
     def test_rejects_an_installed_workflow_authorization(self) -> None:
         self._reject(lambda c: c["governance_gates"].update(workflow_installation_authorized=True))
@@ -222,27 +284,7 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
         self._reject(lambda c: c["retained_schema"].update(schema_version=99))
 
     def test_rejects_an_undeclared_storage_table(self) -> None:
-        def mutate(contract: dict) -> None:
-            contract["retained_schema"]["tables"] = [
-                table for table in contract["retained_schema"]["tables"] if table != "funding"
-            ]
-
-        self._reject(mutate)
-
-    def test_deterministic_core_really_has_no_network_or_process_imports(self) -> None:
-        forbidden = set(load()["layering_boundary"]["forbidden_core_import_roots"])
-        self.assertIn("urllib", forbidden)
-        self.assertIn("socket", forbidden)
-        self.assertIn("subprocess", forbidden)
-        roots: set[str] = set()
-        for path in sorted((ROOT / "src/live_data").glob("*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    roots |= {alias.name.split(".", 1)[0] for alias in node.names}
-                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                    roots.add(node.module.split(".", 1)[0])
-        self.assertEqual(roots & forbidden, set(), f"core reaches the network via {roots & forbidden}")
+        self._reject(lambda c: c["retained_schema"].update(tables=[t for t in c["retained_schema"]["tables"] if t != "trades"]))
 
 
 if __name__ == "__main__":

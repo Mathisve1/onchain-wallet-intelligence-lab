@@ -107,7 +107,7 @@
   },
   "retained_schema": {
     "storage_engine": "SQLITE3_LOCAL_FILE",
-    "schema_version": 2,
+    "schema_version": 3,
     "default_database_path": "research/live_data/hyperliquid_live.sqlite3",
     "tables": [
       "fills",
@@ -116,6 +116,7 @@
       "mids",
       "positions_snapshot",
       "schema_version",
+      "trades",
       "wallets"
     ],
     "idempotent_deduplication_required": true,
@@ -149,10 +150,12 @@
   },
   "owner_approval_status": {
     "approval_id": "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001",
-    "approval_present": false,
-    "approval_text_sha256": null,
-    "approval_timestamp_utc": null,
-    "bound_preregistration_commit": null
+    "approval_present": true,
+    "approval_text_path": "research/wallet_copyability/live_data/APPROVE_HL_LIVE_DATA_COLLECTION_L1_001.txt",
+    "approval_text_sha256": "d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b",
+    "approval_timestamp_utc": "2026-09-03",
+    "bound_preregistration_commit": "e3610cd494211f6a399caffd7741a2f526b3287a",
+    "owner_decision_path": "research/wallet_copyability/live_data/L1_OWNER_DECISION_001.json"
   },
   "created_by_this_preregistration": {
     "network_requests_executed": 0,

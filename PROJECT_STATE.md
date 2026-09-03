@@ -97,13 +97,16 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | L1 track | forward-only public observation; independent of the archive track |
 | L1 venue / endpoints | `HYPERLIQUID_PUBLIC_MAINNET`; `POST /info` and `wss://api.hyperliquid.xyz/ws` only |
 | L1 authentication / credentials / signing | `false` / `false` / `false` |
-| L1 owner approval | `NOT_PRESENT` |
-| L1 execution release / workflow | absent / absent |
+| L1 owner approval | `PRESENT`; exact text SHA-256 `d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b`; bound to `e3610cd494211f6a399caffd7741a2f526b3287a` |
+| L1 owner decision | `L1-OWNER-DECISION-001`: approval, implementation review and single-use release granted in one owner decision; no precedent beyond this envelope |
+| L1 execution release / workflow | `RELEASE_HL_LIVE_DATA_COLLECTION_L1_001` single-use, `RELEASED_NOT_YET_CONSUMED` / absent |
 | L1 maximum one-time / monthly budget | `EUR 0` / `EUR 0` |
 | L1 enforced weight budget | `1200` per minute; retries charged against it |
 | L1 maximum tracked wallets | `10`; venue cap on distinct user-scoped subscriptions |
 | L1 worst-case snapshot cost | `20` weight per minute at the 60 s cadence |
 | L1 REST request types | `7` informational; `l2Book` excluded from the supported set |
+| L1 wallet discovery | public `trades` websocket tape (allowlisted); retained as schema v3 `trades` table |
+| L1 `integration` in RISK_POLICY | unchanged `false`; public reads are not trading integration |
 | L1 REST / websocket executed | `0` / `0` |
 | L1 implementation | `src/live_data` deterministic core; transports injected from `research/` |
 | L1 tests | `199` pass |
@@ -312,8 +315,16 @@ leverage_authorized = false
 capital_allocation_authorized = false
 l1_pilot_id = HL-LIVE-DATA-COLLECTION-L1-001
 l1_status = PREREGISTERED_NO_EXECUTION
-l1_owner_approval_present = false
-l1_execution_release_present = false
+l1_owner_approval_present = true
+l1_approval_text_sha256 = d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b
+l1_bound_preregistration_commit = e3610cd494211f6a399caffd7741a2f526b3287a
+l1_owner_decision_id = L1-OWNER-DECISION-001
+l1_execution_release_present = true
+l1_execution_release_id = RELEASE_HL_LIVE_DATA_COLLECTION_L1_001
+l1_execution_release_single_use = true
+l1_execution_release_consumed = false
+l1_rerun_authorized = false
+l1_database_committed = false
 l1_workflow_installed = false
 l1_scheduled_execution_authorized = false
 l1_manual_operator_run_authorized = false
@@ -332,7 +343,7 @@ l1_wallet_ranking_authorized = false
 l1_copyability_claim_authorized = false
 ```
 
-All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well. Every L1 flag is false or zero: the live-data pilot is preregistered only and has executed no request against the venue.
+All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well. The L1 owner decision is recorded and its single-use release is granted; every L1 execution counter is zero until session evidence is retained, and every L1 trading and precedent flag stays false.
 
 ## Exact next gate
 
@@ -348,8 +359,7 @@ Two tracks are open. They share no release, role or budget, and neither gates th
 
 ### Live-data track
 
-1. Merge the L1 preregistration and the reviewed read-only implementation after exact-head CI. Merging the implementation is not an execution release and authorizes no request.
-2. Request one hash-bound owner approval of the exact L1 envelope using `research/wallet_copyability/live_data/HUMAN_APPROVAL_TEMPLATE.md`: public unauthenticated `/info` and websocket only, EUR 0 one-time / EUR 0 monthly, 1200 weight per minute with retries charged against it, at most 3 retries on HTTP 429 only, at most 10 tracked wallets, 60 s snapshot cadence, 50 s heartbeat, 1000 watch iterations and no redirect following.
-3. After approval, build a separate single-use execution release bound to the canonical implementation commit. No workflow installation and no scheduled or unattended execution is authorized at any point.
-4. Only then may one operator-initiated observation session run, inside the approved envelope, writing to a local database.
-5. Point-in-time eligibility, wallet ranking, alpha/copyability interpretation, entity clustering and every trading/capital action remain unauthorized and stay gated behind Phase 3.
+1. The owner approval, implementation review and single-use release `RELEASE_HL_LIVE_DATA_COLLECTION_L1_001` are granted in `L1-OWNER-DECISION-001` (DEC-040), bound to preregistration commit `e3610cd494211f6a399caffd7741a2f526b3287a`. No workflow installation and no scheduled or unattended execution is authorized at any point.
+2. Run exactly one operator-initiated observation session inside the approved envelope: one discovery watch, at most 10 wallet backfills, one tracking watch; database kept outside the repository. Record its consumption with retained session evidence (counts, request weight, database SHA-256). The release cannot be rerun.
+3. Merge the preregistration, decision, implementation and evidence after exact-head CI.
+4. Point-in-time eligibility, wallet ranking, alpha/copyability interpretation, entity clustering and every trading/capital action remain unauthorized and stay gated behind Phase 3.

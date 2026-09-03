@@ -18,107 +18,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .models import ClearinghouseState, Fill, FundingDelta
-
-SCHEMA_VERSION = 2
-
-_SCHEMA_STATEMENTS: tuple[str, ...] = (
-    """
-    CREATE TABLE schema_version (
-        version INTEGER NOT NULL PRIMARY KEY,
-        applied_at_ms INTEGER NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE wallets (
-        address TEXT NOT NULL PRIMARY KEY,
-        label TEXT,
-        first_seen_at_ms INTEGER NOT NULL,
-        last_seen_at_ms INTEGER NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE fills (
-        wallet_address TEXT NOT NULL,
-        coin TEXT NOT NULL,
-        trade_id INTEGER NOT NULL,
-        event_time_ms INTEGER NOT NULL,
-        side TEXT NOT NULL,
-        price TEXT NOT NULL,
-        size TEXT NOT NULL,
-        fee TEXT NOT NULL,
-        closed_pnl TEXT NOT NULL,
-        start_position TEXT NOT NULL,
-        direction TEXT NOT NULL,
-        order_id INTEGER NOT NULL,
-        crossed INTEGER NOT NULL,
-        tx_hash TEXT NOT NULL,
-        fee_token TEXT,
-        raw_payload TEXT NOT NULL,
-        source TEXT NOT NULL,
-        ingested_at_ms INTEGER NOT NULL,
-        PRIMARY KEY (wallet_address, coin, trade_id, event_time_ms)
-    )
-    """,
-    "CREATE INDEX fills_by_wallet_time ON fills (wallet_address, event_time_ms)",
-    """
-    CREATE TABLE positions_snapshot (
-        wallet_address TEXT NOT NULL,
-        snapshot_time_ms INTEGER NOT NULL,
-        account_value TEXT NOT NULL,
-        total_notional_position TEXT NOT NULL,
-        total_margin_used TEXT NOT NULL,
-        withdrawable TEXT NOT NULL,
-        open_position_count INTEGER NOT NULL,
-        raw_payload TEXT NOT NULL,
-        ingested_at_ms INTEGER NOT NULL,
-        PRIMARY KEY (wallet_address, snapshot_time_ms)
-    )
-    """,
-    """
-    CREATE TABLE mids (
-        coin TEXT NOT NULL,
-        observed_at_ms INTEGER NOT NULL,
-        mid TEXT NOT NULL,
-        raw_payload TEXT NOT NULL,
-        ingested_at_ms INTEGER NOT NULL,
-        PRIMARY KEY (coin, observed_at_ms)
-    )
-    """,
-    """
-    CREATE TABLE funding (
-        wallet_address TEXT NOT NULL,
-        coin TEXT NOT NULL,
-        event_time_ms INTEGER NOT NULL,
-        usdc TEXT NOT NULL,
-        funding_rate TEXT NOT NULL,
-        signed_size TEXT NOT NULL,
-        raw_payload TEXT NOT NULL,
-        ingested_at_ms INTEGER NOT NULL,
-        PRIMARY KEY (wallet_address, coin, event_time_ms)
-    )
-    """,
-    """
-    CREATE TABLE ingest_runs (
-        run_id TEXT NOT NULL PRIMARY KEY,
-        mode TEXT NOT NULL,
-        wallet_address TEXT,
-        started_at_ms INTEGER NOT NULL,
-        finished_at_ms INTEGER,
-        status TEXT NOT NULL,
-        records_seen INTEGER NOT NULL DEFAULT 0,
-        records_written INTEGER NOT NULL DEFAULT 0,
-        error_count INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        coverage TEXT
-    )
-    """,
-)
-
-#: Upgrades from one schema version to the next. A version with no entry here
-#: cannot be opened: the guard fails closed rather than guessing at a shape.
-_MIGRATIONS: dict[int, tuple[str, ...]] = {
-    2: ("ALTER TABLE ingest_runs ADD COLUMN coverage TEXT",),
-}
+from .schema import _MIGRATIONS, _SCHEMA_STATEMENTS, SCHEMA_VERSION
+from .trades import Trade
 
 RUN_STATUS_RUNNING = "running"
 RUN_STATUS_COMPLETED = "completed"
@@ -380,6 +281,41 @@ class LiveDataStore:
                 written += cursor.rowcount if cursor.rowcount > 0 else 0
         return WriteResult(seen=len(rows), written=written)
 
+    def write_trades(
+        self, rows: Sequence[tuple[Trade, Any]], *, ingested_at_ms: int
+    ) -> WriteResult:
+        """Insert public trades, keyed on the venue's own trade id per coin."""
+        _require_positive_ms(ingested_at_ms, "ingested_at_ms")
+        written = 0
+        with self._connection:
+            for trade, raw in rows:
+                if not isinstance(trade, Trade):
+                    raise StorageError(f"expected Trade, got {type(trade).__name__}")
+                cursor = self._connection.execute(
+                    """
+                    INSERT INTO trades (
+                        coin, trade_id, event_time_ms, side, price, size, tx_hash,
+                        buyer, seller, raw_payload, ingested_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (coin, trade_id) DO NOTHING
+                    """,
+                    (
+                        trade.coin,
+                        trade.trade_id,
+                        trade.event_time_ms,
+                        trade.side,
+                        str(trade.price),
+                        str(trade.size),
+                        trade.tx_hash,
+                        trade.buyer,
+                        trade.seller,
+                        _dump(raw),
+                        ingested_at_ms,
+                    ),
+                )
+                written += cursor.rowcount if cursor.rowcount > 0 else 0
+        return WriteResult(seen=len(rows), written=written)
+
     # -- run provenance --------------------------------------------------------------
 
     def start_run(
@@ -446,10 +382,38 @@ class LiveDataStore:
     # -- reads ------------------------------------------------------------------------
 
     def count(self, table: str) -> int:
-        if table not in {"wallets", "fills", "positions_snapshot", "mids", "funding", "ingest_runs"}:
+        if table not in {
+            "wallets", "fills", "positions_snapshot", "mids", "funding", "trades", "ingest_runs"
+        }:
             raise StorageError(f"unknown table: {table!r}")
         row = self._connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
         return int(row["n"])
+
+    def most_active_wallets(self, limit: int) -> list[dict[str, Any]]:
+        """Wallets ranked by how many retained public trades they took part in.
+
+        This is an activity count over the observed tape, nothing more: it says
+        which addresses were busy while we watched, and deliberately carries no
+        notion of profit, skill or copyability.
+        """
+        if limit <= 0:
+            raise StorageError("limit must be positive")
+        rows: Iterable[sqlite3.Row] = self._connection.execute(
+            """
+            SELECT address, COUNT(*) AS trade_count, MIN(event_time_ms) AS first_trade_ms,
+                   MAX(event_time_ms) AS last_trade_ms
+            FROM (
+                SELECT buyer AS address, event_time_ms FROM trades
+                UNION ALL
+                SELECT seller AS address, event_time_ms FROM trades
+            )
+            GROUP BY address
+            ORDER BY trade_count DESC, address ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def latest_fill_time_ms(self, wallet_address: str) -> int | None:
         row = self._connection.execute(

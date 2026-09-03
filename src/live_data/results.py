@@ -55,4 +55,10 @@ class WatchResult:
     #: venue state did not advance between polls, which is deduplication
     #: working rather than a failure.
     snapshots_written: int = 0
+    #: Public trades observed on the tape and rows actually stored.
+    trades_seen: int = 0
+    trades_written: int = 0
+    #: Wallets first seen on the tape during this session. Counted once per
+    #: address, however many trades it appeared in.
+    wallets_discovered: int = 0
     errors: list[str] = field(default_factory=list)

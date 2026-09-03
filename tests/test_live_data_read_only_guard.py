@@ -80,7 +80,10 @@ class PackageSurfaceTests(unittest.TestCase):
                 "models.py",
                 "rate_limit.py",
                 "results.py",
+                "schema.py",
                 "storage.py",
+                "trades.py",
+                "watch.py",
             },
         )
 

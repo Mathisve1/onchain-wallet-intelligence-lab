@@ -314,6 +314,7 @@ class WatchTests(IngestTestCase):
             [
                 {"method": "subscribe", "subscription": {"type": "userFills", "user": WALLET}},
                 {"method": "subscribe", "subscription": {"type": "allMids"}},
+                {"method": "subscribe", "subscription": {"type": "trades", "coin": "BTC"}},
             ],
         )
         self.assertEqual((result.fills_seen, result.fills_written), (1, 1))
@@ -407,7 +408,13 @@ class WatchTests(IngestTestCase):
         orchestrator, _ = self.build([], config=config, ws_connection=FakeConnection([]))
         self.assertEqual(
             orchestrator.build_watch_subscriptions(),
-            (Subscription(type="userFills", user=WALLET), Subscription(type="allMids")),
+            (
+                Subscription(type="userFills", user=WALLET),
+                Subscription(type="allMids"),
+                # The public tape per coin: the only stream that discovers wallets.
+                Subscription(type="trades", coin="BTC"),
+                Subscription(type="trades", coin="ETH"),
+            ),
         )
 
 

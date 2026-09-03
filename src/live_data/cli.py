@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("status", help="report row counts and recent ingest runs")
+
+    wallets = subparsers.add_parser(
+        "wallets", help="list wallets discovered on the public tape, most active first"
+    )
+    wallets.add_argument("--limit", type=int, default=10)
     return parser
 
 
@@ -147,7 +152,8 @@ def _cmd_backfill(args: argparse.Namespace, dependencies: Dependencies) -> int:
         f"run {result.run_id}: {result.fills_written} new of {result.fills_seen} fills "
         f"over {result.pages} page(s), "
         f"{result.funding_written} new of {result.funding_seen} funding rows, "
-        f"{'1' if result.snapshot_taken else '0'} position snapshot"
+        f"{'1' if result.snapshot_taken else '0'} position snapshot, "
+        f"{orchestrator.consumed_weight} request weight"
     )
     return 0
 
@@ -172,7 +178,10 @@ def _cmd_watch(args: argparse.Namespace, dependencies: Dependencies) -> int:
         f"run {result.run_id}: {result.fills_written} new fills, "
         f"{result.mids_written} mids, {result.snapshots_written} new of "
         f"{result.snapshots_taken} position snapshot(s), "
-        f"{len(result.errors)} handler error(s)"
+        f"{result.trades_written} new of {result.trades_seen} trades, "
+        f"{result.wallets_discovered} wallet(s) discovered, "
+        f"{len(result.errors)} handler error(s), "
+        f"{orchestrator.consumed_weight} request weight"
     )
     return 0
 
@@ -183,11 +192,23 @@ def _cmd_status(args: argparse.Namespace, dependencies: Dependencies) -> int:
             "database": str(args.db),
             "counts": {
                 table: store.count(table)
-                for table in ("wallets", "fills", "positions_snapshot", "mids", "funding")
+                for table in (
+                    "wallets", "fills", "positions_snapshot", "mids", "funding", "trades"
+                )
             },
             "recent_runs": store.recent_runs(5),
         }
     print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_wallets(args: argparse.Namespace, dependencies: Dependencies) -> int:
+    if args.limit <= 0:
+        print("limit must be positive", file=sys.stderr)
+        return 2
+    with LiveDataStore(args.db, create=False) as store:
+        rows = store.most_active_wallets(args.limit)
+    print(json.dumps(rows, indent=2, sort_keys=True))
     return 0
 
 
@@ -196,6 +217,7 @@ _COMMANDS = {
     "backfill": _cmd_backfill,
     "watch": _cmd_watch,
     "status": _cmd_status,
+    "wallets": _cmd_wallets,
 }
 
 
