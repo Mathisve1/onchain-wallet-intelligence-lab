@@ -41,12 +41,16 @@ def buy_and_hold(
     config: FollowerConfig,
 ) -> FollowerRun:
     view = PointInTimeView(market, (), horizon_ms=interval.end_ms)
-    entry = view.price_at(coin, interval.start_ms)
-    if entry is None:
-        raise InputError(f"no {coin} price at the start of the interval")
+    series, _ = market.require_coin(coin)
+    # Enter on the first quote inside the interval. Real coverage windows
+    # start before the first observed price, and a hold that cannot begin
+    # until a price exists is the honest version of "buy at the start".
+    entry = series.at_or_after(interval.start_ms)
+    if entry is None or entry.time_ms > interval.end_ms:
+        raise InputError(f"no {coin} price inside the interval")
     size = config.capital / entry.price / config.size_scale
     fills = (
-        _synthetic(interval.wallet, coin, interval.start_ms, SIDE_BUY, entry.price, size, 1),
+        _synthetic(interval.wallet, coin, entry.time_ms, SIDE_BUY, entry.price, size, 1),
     )
     exit_point = view.price_at(coin, interval.end_ms)
     if exit_point is None:
@@ -102,13 +106,16 @@ def matched_random(
     pool: Mapping[str, Sequence[SourceFill]], market: MarketData, cost_model: CostModel,
     config: FollowerConfig, certify, seed: int, sample_size: int, tolerance: Decimal = Decimal("0.5"),
 ) -> tuple[Decimal | None, tuple[str, ...]]:
-    """Mean follower net over wallets of similar activity, chosen by a seeded RNG.
+    """Mean follower return on deployed capital over similar-activity peers.
 
+    Each peer is copied at the same latency and costs; its net is divided by
+    the capital that copy actually deployed, so peers of different size are
+    comparable and the result sits in the same return space as the target.
     ``certify(wallet, start, end)`` must return a :class:`KnownInterval` or
     raise; wallets whose coverage does not certify the same window are not
     eligible, since scoring them would be scoring a gap. Returns ``None`` and
-    an empty tuple when no eligible peer exists, which the caller must report
-    rather than treat as zero.
+    an empty tuple when no eligible peer exists (or none deployed capital),
+    which the caller must report rather than treat as zero.
     """
     if sample_size <= 0:
         raise InputError("sample_size must be positive")
@@ -129,15 +136,18 @@ def matched_random(
     if not candidates:
         return None, ()
     chosen = tuple(random.Random(seed).sample(candidates, min(sample_size, len(candidates))))
-    nets: list[Decimal] = []
+    returns: list[Decimal] = []
     for wallet in chosen:
         peer_interval = certify(wallet, interval.start_ms, interval.end_ms)
         run = simulate_follower(
             peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
             cost_model=cost_model, config=config,
         )
-        nets.append(run.pnl.net)
-    return sum(nets, Decimal(0)) / len(nets), chosen
+        if run.peak_deployed_notional > 0:
+            returns.append(run.pnl.net / run.peak_deployed_notional)
+    if not returns:
+        return None, chosen
+    return sum(returns, Decimal(0)) / len(returns), chosen
 
 
 def _synthetic(

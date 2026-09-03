@@ -11,7 +11,7 @@ numbers are decimal strings and binary floats would quietly change them.
 
 from __future__ import annotations
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Sequence
@@ -60,10 +60,16 @@ class SourceFill:
     fee: Decimal
     closed_pnl: Decimal
     trade_id: int
+    #: True when the fill crossed the spread (taker), False when it rested
+    #: (maker), None when the source did not say. Used only to characterise
+    #: the wallet; the follower is always a taker.
+    crossed: bool | None = None
 
     def __post_init__(self) -> None:
         if not self.wallet or not self.coin:
             raise InputError("fill needs a wallet and a coin")
+        if self.crossed is not None and not isinstance(self.crossed, bool):
+            raise InputError("crossed must be a bool or None")
         if self.side not in SIDES:
             raise InputError(f"fill side must be one of {sorted(SIDES)}, got {self.side!r}")
         object.__setattr__(self, "time_ms", _positive_ms(self.time_ms, "time_ms"))
@@ -125,6 +131,18 @@ class PriceSeries:
         if index == 0:
             return None
         return PricePoint(self._times[index - 1], self._prices[index - 1])
+
+    def at_or_after(self, time_ms: int) -> PricePoint | None:
+        """Earliest point observed at or after ``time_ms``.
+
+        For a baseline that needs an entry: the first quote inside a window
+        is a price a participant could actually have acted on. It is never
+        used to price a decision made before it.
+        """
+        index = bisect_left(self._times, time_ms)
+        if index >= len(self._times):
+            return None
+        return PricePoint(self._times[index], self._prices[index])
 
     def points(self) -> Sequence[PricePoint]:
         return [PricePoint(t, p) for t, p in zip(self._times, self._prices, strict=True)]

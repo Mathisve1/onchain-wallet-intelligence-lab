@@ -11,6 +11,14 @@ entry point. The only sibling dependency is ``src.live_data.storage`` inside
 """
 
 from .baselines import BASELINE_NAMES, buy_and_hold, matched_random, momentum, no_trade
+from .classify import (
+    DIRECTIONAL,
+    INSUFFICIENT_FILLS,
+    PROBABLE_MARKET_MAKER,
+    ClassifierThresholds,
+    WalletProfile,
+    profile_wallet,
+)
 from .costs import COST_COMPONENTS, CostBreakdown, CostError, CostModel, FeeSchedule
 from .coverage import CoverageLedger, KnownInterval, ObservedInterval, UnknownIntervalError
 from .execution import (
@@ -39,7 +47,9 @@ from .pnl import FollowerPnl, PnlComparison, PnlMixingError, SourcePnl
 from .simulate import StudyConfig, WalletStudy, run_study
 
 __all__ = [
-    "BASELINE_NAMES", "COST_COMPONENTS", "LATENCY_GRID_MS", "SIDE_BUY", "SIDE_SELL",
+    "BASELINE_NAMES", "COST_COMPONENTS", "DIRECTIONAL", "INSUFFICIENT_FILLS", "LATENCY_GRID_MS",
+    "PROBABLE_MARKET_MAKER", "SIDE_BUY", "SIDE_SELL", "ClassifierThresholds", "WalletProfile",
+    "profile_wallet",
     "CostBreakdown", "CostError", "CostModel", "CoverageLedger", "Drawdown", "EquityPoint",
     "FeeSchedule", "FollowerConfig", "FollowerPnl", "FollowerRun", "FundingEvent",
     "FundingSchedule", "InputError", "KnownInterval", "LiquidityProfile", "LookAheadError",

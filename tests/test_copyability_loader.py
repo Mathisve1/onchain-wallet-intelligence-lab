@@ -126,6 +126,28 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(len(tape), 2)
         self.assertEqual(tape.at_or_before(1_210).price, D("201"))
 
+    def test_funding_truncation_is_read_from_either_flag_or_a_full_response(self) -> None:
+        from src.copyability.loader import load_funding_truncation
+
+        s = self.store
+        # A record that predates the flag but received exactly the cap.
+        finish(s, "bf-old", mode="backfill_wallet", wallet="0x" + "34" * 20, start=1, end=2,
+               coverage={"window": {"start_time_ms": 1, "end_time_ms": 2}, "fills": {"attempted": True, "completed": True, "covered_until_ms": 2},
+                         "funding": {"attempted": True, "completed": True, "seen": 500}, "positions": {"attempted": True}})
+        # A record with the flag set.
+        finish(s, "bf-new", mode="backfill_wallet", wallet="0x" + "56" * 20, start=1, end=2,
+               coverage={"window": {"start_time_ms": 1, "end_time_ms": 2}, "fills": {"attempted": True, "completed": True, "covered_until_ms": 2},
+                         "funding": {"attempted": True, "completed": False, "truncated_at_response_cap": True, "seen": 500}, "positions": {"attempted": True}})
+        truncated = load_funding_truncation(s)
+        self.assertTrue(truncated["0x" + "34" * 20])
+        self.assertTrue(truncated["0x" + "56" * 20])
+        self.assertFalse(truncated[W])  # setUp's backfill_coverage says funding completed, no count
+        self.assertNotIn(FAILED, truncated)  # failed runs say nothing either way
+
+    def test_fills_carry_the_crossed_flag(self) -> None:
+        fills = load_fills(self.store, [W])
+        self.assertTrue(all(f.crossed is True for f in fills[W]))
+
     def test_funding_rates_are_venue_facts_deduplicated_across_wallets(self) -> None:
         schedule = load_funding_rates(self.store, ["BTC"])
         events = schedule.between("BTC", 0, 2_000)

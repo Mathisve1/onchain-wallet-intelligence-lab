@@ -14,7 +14,8 @@
 | envelope | pinched, not widened: venue weights large responses above the documented base weight |
 | database | outside the repository; SHA-256 `b5da970da812907e19cc760b1583df007b2bfb87129541fdbde791e2961777c9`; not committed |
 | workflow installed | `false` |
-| empirical result / wallet ranking / copyability claim | `null` / `false` / `false` |
+| empirical result / copyability claim | `null` / `false` |
+| instrument validation | `L1-INSTRUMENT-VALIDATION-001` under DEC-041: ranking authorised for the seven wallets only to test the instrument; results stay in the repository; sample declared unusable for the study question |
 | trading authorizations | all `false` |
 
 ## Coverage caveats

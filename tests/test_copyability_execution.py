@@ -69,18 +69,48 @@ class SimulatorRefusesUnknownIntervalsTests(unittest.TestCase):
         fills = {W: [fill(W, 60_000, 1, "B", "100")]}
         config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
         (study,) = run_study(fills_by_wallet=fills, market=market(FLAT), ledger=ledger,
-                             config=config, window=(1_000, 100_000))
+                             config=config, funding_truncated={W: False}, window=(1_000, 100_000))
         self.assertIsNone(study.interval)
         self.assertEqual(study.outcomes, ())
         self.assertIn("not fully observed", study.refusal)
 
-    def test_a_certified_window_scores_and_an_uncovered_one_is_named(self) -> None:
+    def test_a_certified_window_scores_and_carries_both_labels(self) -> None:
         ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
         fills = {W: [fill(W, 10_000, 1, "B", "100"), fill(W, 20_000, 2, "A", "100")]}
         config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0, 1_000))
-        (study,) = run_study(fills_by_wallet=fills, market=market(FLAT), ledger=ledger, config=config)
+        (study,) = run_study(fills_by_wallet=fills, market=market(FLAT), ledger=ledger, config=config,
+                             funding_truncated={W: True})
         self.assertIsNone(study.refusal)
         self.assertEqual([o.latency_ms for o in study.outcomes], [0, 1_000])
+        self.assertEqual(study.profile.classification, "INSUFFICIENT_FILLS")
+        for outcome in study.outcomes:
+            self.assertTrue(outcome.funding_truncated)
+            self.assertTrue(outcome.cost_is_lower_bound)
+            self.assertEqual(outcome.classification, "INSUFFICIENT_FILLS")
+            self.assertTrue(as_row(outcome)["net"].startswith("<= "))
+
+    def test_the_study_refuses_a_wallet_whose_funding_status_is_unknown(self) -> None:
+        ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
+        config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
+        with self.assertRaises(Exception):
+            run_study(fills_by_wallet={W: []}, market=market(FLAT), ledger=ledger, config=config,
+                      funding_truncated={})
+
+    def test_baselines_are_compared_on_the_capital_the_copy_deployed(self) -> None:
+        # The copy holds 1 BTC (~100 notional) on a rising market; buy-and-hold
+        # on the same 100 earns the same move, so in return space they tie
+        # before costs and the versus is a small cost difference, not -4834.
+        ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
+        fills = {W: [fill(W, 1_000, 1, "B", "100")]}
+        config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
+        (study,) = run_study(fills_by_wallet=fills, market=market(RISING), ledger=ledger, config=config,
+                             funding_truncated={W: False})
+        (outcome,) = study.outcomes
+        self.assertEqual(outcome.deployed_capital, D("100"))  # cost basis, not the end mark
+        self.assertIsNotNone(outcome.return_on_deployed)
+        self.assertIn("buy_and_hold", outcome.versus)
+        self.assertLess(abs(outcome.versus["buy_and_hold"]), D("0.01"))
+        self.assertEqual(outcome.versus["no_trade"], outcome.return_on_deployed)
 
 
 class FollowerExecutionTests(unittest.TestCase):
@@ -166,6 +196,16 @@ class BaselineTests(unittest.TestCase):
         self.assertGreater(run.pnl.costs.total, 0)
         self.assertLess(run.pnl.net, run.pnl.gross)
 
+    def test_buy_and_hold_enters_on_the_first_quote_when_prices_start_late(self) -> None:
+        # Real coverage windows begin before the first observed price: the
+        # backfill window opened 12 hours before the first BTC fill in L1.
+        late = [(t, "100") for t in range(50_000, 100_001, 1_000)]
+        run = baselines.buy_and_hold(certified(), coin="BTC", market=market(late), cost_model=MODEL, config=CONFIG)
+        self.assertEqual(run.pnl.trade_count, 2)
+        self.assertEqual(run.equity_curve[1].time_ms, 50_000)  # entered at the first quote, not at 1_000
+        with self.assertRaises(Exception):
+            baselines.buy_and_hold(certified(), coin="BTC", market=market([(200_000, "1")]), cost_model=MODEL, config=CONFIG)
+
     def test_momentum_is_flat_on_a_flat_market_and_long_on_a_rising_one(self) -> None:
         flat = baselines.momentum(certified(), coin="BTC", market=market(FLAT), cost_model=MODEL,
                                   config=CONFIG, lookback_ms=5_000, step_ms=1_000)
@@ -214,19 +254,42 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(dd.fraction_of_peak, D("30") / D("120"))
         self.assertEqual((dd.peak_time_ms, dd.trough_time_ms), (2, 3))
 
-    def test_an_outcome_reports_net_versus_every_baseline(self) -> None:
+    def test_an_outcome_reports_return_versus_every_baseline_on_equal_capital(self) -> None:
+        from src.copyability.classify import profile_wallet
+
         fills = [fill(W, 10_000, 1, "B", "100"), fill(W, 20_000, 2, "A", "100")]
         run = simulate_follower(certified(), latency_ms=0, fills=fills, market=market(FLAT),
                                 cost_model=MODEL, config=CONFIG)
-        outcome = outcome_for(run, source_pnl(certified(), fills), {"no_trade": D("0"), "buy_and_hold": D("-1")})
-        self.assertEqual(outcome.versus["no_trade"], outcome.net)
-        self.assertEqual(outcome.versus["buy_and_hold"], outcome.net + 1)
-        self.assertEqual(outcome.turnover, D("200") / D("10000"))
+        profile = profile_wallet(certified(), fills)
+        outcome = outcome_for(
+            run, source_pnl(certified(), fills), {"no_trade": D("0"), "buy_and_hold": D("-0.01")},
+            profile=profile, funding_truncated=False,
+        )
+        self.assertEqual(outcome.deployed_capital, D("100"))
+        self.assertEqual(outcome.return_on_deployed, outcome.net / D("100"))
+        self.assertEqual(outcome.versus["no_trade"], outcome.return_on_deployed)
+        self.assertEqual(outcome.versus["buy_and_hold"], outcome.return_on_deployed + D("0.01"))
+        self.assertEqual(outcome.turnover, D("200") / D("100"))
         self.assertEqual(outcome.net_per_trade, outcome.net / 2)
+        self.assertFalse(outcome.cost_is_lower_bound)
         row = as_row(outcome)
         self.assertEqual(row["trade_count"], 2)
         self.assertIn("versus_buy_and_hold", row)
         self.assertEqual(row["cost_total"], str(outcome.cost_total.quantize(D("0.0001"))))
+        self.assertFalse(row["net"].startswith("<="))
+
+    def test_a_copy_that_deployed_nothing_has_no_return_and_no_comparison(self) -> None:
+        from src.copyability.classify import profile_wallet
+
+        run = simulate_follower(certified(), latency_ms=0, fills=[], market=market(FLAT),
+                                cost_model=MODEL, config=CONFIG)
+        outcome = outcome_for(run, source_pnl(certified(), []), {"no_trade": D("0")},
+                              profile=profile_wallet(certified(), []), funding_truncated=False)
+        self.assertEqual(outcome.deployed_capital, D("0"))
+        self.assertIsNone(outcome.return_on_deployed)
+        self.assertIsNone(outcome.turnover)
+        self.assertEqual(outcome.versus, {})
+        self.assertEqual(outcome.baseline_returns, {})
 
 
 if __name__ == "__main__":

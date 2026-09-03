@@ -30,8 +30,9 @@ class LayeringTests(unittest.TestCase):
         self.assertEqual(
             {p.name for p in sources()},
             {
-                "__init__.py", "baselines.py", "costs.py", "coverage.py", "execution.py",
-                "inputs.py", "loader.py", "metrics.py", "pit.py", "pnl.py", "simulate.py",
+                "__init__.py", "baselines.py", "classify.py", "costs.py", "coverage.py",
+                "execution.py", "inputs.py", "loader.py", "metrics.py", "pit.py", "pnl.py",
+                "simulate.py",
             },
         )
 

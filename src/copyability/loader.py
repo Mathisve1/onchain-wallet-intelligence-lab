@@ -33,7 +33,10 @@ from .inputs import (
 
 
 def load_fills(store: LiveDataStore, wallets: Iterable[str] | None = None) -> dict[str, list[SourceFill]]:
-    query = "SELECT wallet_address, coin, trade_id, event_time_ms, side, price, size, fee, closed_pnl FROM fills"
+    query = (
+        "SELECT wallet_address, coin, trade_id, event_time_ms, side, price, size, fee, closed_pnl, crossed "
+        "FROM fills"
+    )
     params: tuple[Any, ...] = ()
     if wallets is not None:
         chosen = sorted(set(wallets))
@@ -46,9 +49,31 @@ def load_fills(store: LiveDataStore, wallets: Iterable[str] | None = None) -> di
             wallet=row["wallet_address"], coin=row["coin"], time_ms=row["event_time_ms"],
             side=row["side"], price=Decimal(row["price"]), size=Decimal(row["size"]),
             fee=Decimal(row["fee"]), closed_pnl=Decimal(row["closed_pnl"]), trade_id=row["trade_id"],
+            crossed=None if row["crossed"] is None else bool(row["crossed"]),
         )
         result.setdefault(fill.wallet, []).append(fill)
     return result
+
+
+def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
+    """Per wallet: did any completed backfill hit the venue's funding cap?
+
+    Older run records predate the ``truncated_at_response_cap`` flag and say
+    ``completed`` even when they received exactly the cap, so a full response
+    is treated as truncated whichever way the record phrases it. A truncated
+    wallet's funding cost is a lower bound and every result for it must say so.
+    """
+    truncated: dict[str, bool] = {}
+    for run in store.connection.execute(
+        "SELECT wallet_address, coverage FROM ingest_runs WHERE mode = 'backfill_wallet' AND status = 'completed'"
+    ):
+        if not run["coverage"]:
+            continue
+        funding = json.loads(run["coverage"]).get("funding", {})
+        hit_cap = bool(funding.get("truncated_at_response_cap")) or funding.get("seen", 0) >= 500
+        wallet = run["wallet_address"]
+        truncated[wallet] = truncated.get(wallet, False) or hit_cap
+    return truncated
 
 
 def load_prices(store: LiveDataStore, coins: Iterable[str]) -> dict[str, PriceSeries]:

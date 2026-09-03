@@ -53,6 +53,8 @@ closed it.
 | L1 owner decision | 2026-09-03 | `APPROVED_RELEASED` | DEC-040; approval SHA-256 `d87df45c…dede1b` bound to `e3610cd`; one decision, three gates, no precedent |
 | L1 session 001 | 2026-09-03 | `CONSUMED_INSIDE_ENVELOPE` | 839 wallets discovered, 7 backfilled, 130457 fills, 2012 weight; DB SHA-256 `b5da970d…77c9`; 3 backfills hit HTTP 429, not retried |
 | Copyability simulator | 2026-09-03 | `BUILT_FIXTURE_TESTED` | `src/copyability`, 11 modules, deterministic, network-free; latency grid, full cost model, typed P&L separation, certified-interval scoring, look-ahead probe |
+| L1 instrument validation | 2026-09-03 | `INSTRUMENT_VALIDATED_SAMPLE_UNUSABLE` | DEC-041; 7 wallets x 6 latencies on equal capital; 4 of 7 probable market makers; funding lower-bound on 5; five real-data breaks catalogued in `evidence/L1_INSTRUMENT_VALIDATION_001.md` |
+| L2 proposal | 2026-09-03 | `PROPOSED_NOT_BUILT` | `research/wallet_copyability/live_data/L2_PROPOSAL.md`; waits on one owner decision |
 
 ## Open gates
 
@@ -62,14 +64,15 @@ Ordered by what unblocks the most.
    evidence, discovery, the coverage fixes and `src/copyability` are on the
    branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
    fail only on Windows.
-2. **Wallet-ranking authorization** — the simulator can score the seven
-   backfilled wallets over their certified intervals at six latencies against
-   four baselines, but `wallet_ranking_authorized` and
-   `copyability_claim_authorized` are both false in the approval. Scoring real
-   wallets waits for that decision.
-3. **Successor collection session** — needs a new owner decision. Fix first:
-   charge response-size weight locally (three backfills hit HTTP 429 after the
-   approved retries) and page `userFunding` past its 500-row cap.
+2. **L2 owner decision** — the proposal in
+   `research/wallet_copyability/live_data/L2_PROPOSAL.md` asks for one decision
+   of the same shape as L1's: a 300-wallet REST characterisation cap, a
+   14-day forward window after a frozen selection instant, operator-initiated
+   repeated sweeps, ranking on the evaluation set for the L2 report only.
+   Nothing is built until it is answered.
+3. **Fixes that precede any collection** — response-size weight charged
+   locally, `userFunding` paged past 500 rows, the public tape kept connected
+   for evaluation prices, one common window for every wallet.
 3. **R11A implementation merge** — review and merge the fully inert R11A
    implementation and workflow candidate, kept outside `.github/workflows`.
 4. **R11A owner approval** — one hash-bound approval of the diagnostic scope,

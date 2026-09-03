@@ -90,6 +90,11 @@ class FollowerRun:
     traded_notional: Decimal
     skipped_fills: int
     capital: Decimal
+    #: Largest capital committed to open positions at any action, at cost
+    #: basis, summed over coins. This is what the copy actually put to work,
+    #: and the only fair base for comparing it with a baseline that deploys
+    #: everything it is given.
+    peak_deployed_notional: Decimal
 
 
 def source_pnl(interval: KnownInterval, fills: Sequence[SourceFill]) -> SourcePnl:
@@ -128,6 +133,7 @@ def simulate_follower(
     traded = Decimal(0)
     skipped = 0
     trades = 0
+    peak_deployed = Decimal(0)
     curve: list[EquityPoint] = [EquityPoint(interval.start_ms, config.capital)]
 
     actions = sorted(
@@ -153,7 +159,9 @@ def simulate_follower(
         realized += position.apply(fill.signed_size * config.size_scale, point.price)
         traded += notional
         trades += 1
-        curve.append(EquityPoint(action_time, _equity(config, realized, costs, positions, view, action_time)))
+        equity, deployed = _mark(config, realized, costs, positions, view, action_time)
+        peak_deployed = max(peak_deployed, deployed)
+        curve.append(EquityPoint(action_time, equity))
 
     unrealized = Decimal(0)
     for coin, position in positions.items():
@@ -172,7 +180,7 @@ def simulate_follower(
     )
     return FollowerRun(
         interval=interval, pnl=pnl, equity_curve=tuple(curve), traded_notional=traded,
-        skipped_fills=skipped, capital=config.capital,
+        skipped_fills=skipped, capital=config.capital, peak_deployed_notional=peak_deployed,
     )
 
 
@@ -192,18 +200,27 @@ def _accrue_funding(
     return total
 
 
-def _equity(
+def _mark(
     config: FollowerConfig, realized: Decimal, costs: CostBreakdown,
     positions: dict[str, _Position], view: PointInTimeView, time_ms: int,
-) -> Decimal:
+) -> tuple[Decimal, Decimal]:
+    """Equity at ``time_ms`` and the capital committed to open positions.
+
+    Deployed capital is taken at cost basis, ``|size| x average entry``: it is
+    what the follower had to put up, and it does not drift with the mark. A
+    mark-to-market figure would let an appreciating position inflate its own
+    denominator and understate the return.
+    """
     unrealized = Decimal(0)
+    deployed = Decimal(0)
     for coin, position in positions.items():
         if position.size == 0:
             continue
         point = view.price_at(coin, time_ms)
-        if point is not None:
-            unrealized += (point.price - position.avg_price) * position.size
-    return config.capital + realized + unrealized - costs.total
+        price = point.price if point is not None else position.avg_price
+        unrealized += (price - position.avg_price) * position.size
+        deployed += abs(position.size) * position.avg_price
+    return config.capital + realized + unrealized - costs.total, deployed
 
 
 def _require_known(interval: object) -> None:
