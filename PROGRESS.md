@@ -71,6 +71,49 @@ Ordered by what unblocks the most.
 6. **R11 closure and R12 readiness** — evidence-gated, after the diagnostic
    resolves the duplicate root cause.
 
+## R11A review (2026-09-03)
+
+The R11A work is not one branch but a stack of five open draft PRs, each
+containing the one below it. `#152` is the tip and contains `#151`, `#150` and
+`#149`, which in turn sit on `#148`. Two branches, `research/r11a-v2-implementation`
+and `research/r11a-corrective-core-v2`, both dated 2026-08-11, are outside the
+stack and look superseded by the corrective R7 line.
+
+| PR | Branch | What it adds |
+|---|---|---|
+| `#148` | `research/r11a-corrective-r3` | R11A R7 corrective package; base of the stack |
+| `#149` | `governance/r11a-post-green-g1` | Post-GREEN owner-approval readiness binding |
+| `#150` | `governance/r11a-owner-approval-001` | Records the exact G1 owner approval |
+| `#151` | `governance/r11a-post-approval-validator-alignment` | Aligns the post-approval validator chain |
+| `#152` | `governance/r11a-owner-review-model-correction` | Corrects the owner-review model; cumulative tip |
+
+What the review found, on the tip:
+
+- The stack records a **hash-bound owner approval** dated 2026-08-26, sourced as
+  `EXPLICIT_CHAT_APPROVAL_EXACT_BLOCK` and attributed to the owner by name. It
+  binds software GREEN head `443500de54917417276c39a635ae444458d03b0b`, an
+  EUR 0.50 one-time ceiling, and a 72-object / zero-retry / no-LIST / no-HEAD
+  envelope. Its own `record_review_status` is still
+  `AWAITING_INDEPENDENT_EXACT_HEAD_REVIEW`. Merging it flips
+  `r11a_owner_approval_present` from `false` to `true`.
+- The approval targets diagnostic `HL-ARCHIVE-R11A-IDENTITY-BOUNDARY-DIAGNOSTIC-002`,
+  not the `-001` frozen on `main`. The corrective line has moved on from the
+  preregistration currently recorded in `PROJECT_STATE.md`.
+- The tip **installs `.github/workflows/r11a-r7-dev.yml`** and modifies `ci.yml`.
+  The frozen gate text says no `.github/workflows` installation may appear at
+  this stage. In substance the file is inert — `permissions: contents: read`
+  only, so OIDC is structurally impossible, and it carries no AWS, S3, secret or
+  `id-token` reference, running its tests under a network-deny harness — but it
+  contradicts the gate as literally written, and it is hard-scoped to PR `#148`,
+  which makes it dead weight once that PR closes.
+- The actual diagnostic workflow candidate remains correctly outside
+  `.github/workflows`, and `r11a_workflow_installed`, `r11a_release_present`,
+  `r11a_aws_oidc_authorized` and `r11a_get_object_authorized` all stay `false`
+  on the tip.
+
+Not merged. Merging a recorded human approval, and resolving the gate-text
+conflict, are both owner decisions rather than review outcomes.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
