@@ -60,6 +60,8 @@ closed it.
 | L1 report artifact | 2026-09-04 | `PUBLISHED_PRIVATE` | https://claude.ai/code/artifact/b95990bc-142c-4c2b-ae5a-4473a22e55f2 |
 | Simulator code review | 2026-09-04 | `TEN_FINDINGS_ALL_ADDRESSED` | `code-review` skill, high effort; confirmed: silent zero funding, latency-dependent fill sets, sign-wrong lower-bound label, tautological cost check; plausible: stale prices, assumed depth undisclosed, own fills pricing own copies, truncated prefix dropped, watch coverage inferred from snapshots, study aborted by one wallet |
 | L1 instrument revision 2 | 2026-09-04 | `RESCORED` | common decision cutoff, 15-min price age bound, own fills excluded from prices, funding coverage as a share, liquidity labelled assumed; 1734 to 16710 copies per wallet now unpriceable, which is the honest state of a fills-derived price source; 95 copyability tests |
+| L2 two-arm approval | 2026-09-04 | `APPROVED_BUILD_HELD` | DEC-043; `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` SHA-256 `3ac5e20a…a8b4` bound to `3edfbf3`; 600 candidates, arm A historical (90 d backfill, 30 d characterisation, 7 d buffer, 53 d evaluation), arm B forward 56 d as out-of-sample test; target 0.5 pt / 14 d |
+| Candle probe | 2026-09-04 | `MEASURED` | `evidence/L2_CANDLE_PROBE_001.json`: candleSnapshot exists (1m…1d), ~5000 candles per interval rolling — 15 m reaches 52 d, 5 m 17.5 d, 1 m 3.6 d, 1 h 208 d; 110 of 113 cohort coins complete at 15 m with max gap 15 min; the approved 53-day arm A window is not coverable at 15 m, 45 days are |
 
 ## Open gates
 
@@ -69,12 +71,14 @@ Ordered by what unblocks the most.
    evidence, discovery, the coverage fixes and `src/copyability` are on the
    branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
    fail only on Windows.
-2. **L2 window decision** — the approval (DEC-042) fixes 14 days, but
-   `L2-POWER-001` shows 14 days with about 130 directional wallets detects only
-   an edge of about 1.05 pt per 14 d (27 %/yr) while a realistic edge after
-   costs is 0.3 to 0.5 pt. The owner chooses: a 14-day large-edge screen with a
-   declared 1.0 pt target, or a longer window (56 d reaches 0.53 pt at n=130).
-   No L2 code is written until then; the analysis plan is drafted for both.
+2. **Arm A window decision** — DEC-043 replaced the 14-day window with two
+   arms. The candle probe shows an independent 15-minute price series exists
+   only for the last 52 days (rolling), so the approved 53-day historical
+   evaluation cannot be covered at the 15-minute age bound. The owner chooses
+   A-45 (45 days at 15 m), A-53 (oldest 8 days on 1-hour candles, flagged), or
+   arm B alone. Retention rolls daily, so T0 and the candle fetch follow the
+   decision immediately. No L2 code is written until then; the analysis plan
+   (`L2_ANALYSIS_PLAN.md`) is drafted for all three.
 3. **Fixes that precede any collection** — response-size weight charged
    locally, `userFunding` paged past 500 rows, the public tape kept connected
    for evaluation prices, one common window for every wallet.
