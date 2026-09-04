@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from .models import ClearinghouseState, Fill, FundingDelta
+from .models import Candle, ClearinghouseState, Fill, FundingDelta
 from .schema import _MIGRATIONS, _SCHEMA_STATEMENTS, SCHEMA_VERSION
 from .trades import Trade
 
@@ -316,6 +316,46 @@ class LiveDataStore:
                 written += cursor.rowcount if cursor.rowcount > 0 else 0
         return WriteResult(seen=len(rows), written=written)
 
+    def write_candles(
+        self, rows: Sequence[tuple[Candle, Any]], *, ingested_at_ms: int
+    ) -> WriteResult:
+        """Insert candles, keyed on coin, interval and open time.
+
+        The venue's retention is rolling and pages overlap at their edges, so
+        a refetch offers rows already stored; the primary key absorbs them and
+        ``written`` reports only what was genuinely new.
+        """
+        _require_positive_ms(ingested_at_ms, "ingested_at_ms")
+        written = 0
+        with self._connection:
+            for candle, raw in rows:
+                if not isinstance(candle, Candle):
+                    raise StorageError(f"expected Candle, got {type(candle).__name__}")
+                cursor = self._connection.execute(
+                    """
+                    INSERT OR IGNORE INTO candles (
+                        coin, interval, open_time_ms, close_time_ms, open, high, low,
+                        close, volume, trade_count, raw_payload, ingested_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        candle.coin,
+                        candle.interval,
+                        candle.open_time_ms,
+                        candle.close_time_ms,
+                        str(candle.open),
+                        str(candle.high),
+                        str(candle.low),
+                        str(candle.close),
+                        str(candle.volume),
+                        candle.trade_count,
+                        _dump(raw),
+                        ingested_at_ms,
+                    ),
+                )
+                written += cursor.rowcount if cursor.rowcount > 0 else 0
+        return WriteResult(seen=len(rows), written=written)
+
     # -- run provenance --------------------------------------------------------------
 
     def start_run(
@@ -383,7 +423,8 @@ class LiveDataStore:
 
     def count(self, table: str) -> int:
         if table not in {
-            "wallets", "fills", "positions_snapshot", "mids", "funding", "trades", "ingest_runs"
+            "wallets", "fills", "positions_snapshot", "mids", "funding", "trades",
+            "candles", "ingest_runs",
         }:
             raise StorageError(f"unknown table: {table!r}")
         row = self._connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
@@ -421,6 +462,26 @@ class LiveDataStore:
             (wallet_address,),
         ).fetchone()
         return None if row["t"] is None else int(row["t"])
+
+    def latest_funding_time_ms(self, wallet_address: str) -> int | None:
+        """The newest funding event stored for a wallet, or None if it has none."""
+        row = self._connection.execute(
+            "SELECT MAX(event_time_ms) AS t FROM funding WHERE wallet_address = ?",
+            (wallet_address,),
+        ).fetchone()
+        return None if row["t"] is None else int(row["t"])
+
+    def distinct_fill_coins(self, wallets: Sequence[str]) -> list[str]:
+        """Coins these wallets have traded, sorted. Empty for an empty list."""
+        if not wallets:
+            return []
+        placeholders = ",".join("?" for _ in wallets)
+        rows: Iterable[sqlite3.Row] = self._connection.execute(
+            f"SELECT DISTINCT coin FROM fills WHERE wallet_address IN ({placeholders})"
+            " ORDER BY coin",
+            tuple(wallets),
+        ).fetchall()
+        return [str(row["coin"]) for row in rows]
 
     def recent_runs(self, limit: int = 10) -> list[dict[str, Any]]:
         if limit <= 0:

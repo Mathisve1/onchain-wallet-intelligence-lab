@@ -93,6 +93,10 @@ class Outcome:
     turnover: Decimal | None
     trade_count: int
     skipped_fills: int
+    #: Entries made at the start of the window to stand in the positions the
+    #: source already held. Part of ``trade_count`` and of the costs, but not
+    #: a copy of anything the wallet did inside the window.
+    catch_up_fills: int
     stale_price_skips: int
     fills_after_cutoff: int
     interval_days: Decimal
@@ -144,6 +148,7 @@ def outcome_for(
         turnover=(run.traded_notional / deployed) if deployed > 0 else None,
         trade_count=follower.trade_count,
         skipped_fills=run.skipped_fills,
+        catch_up_fills=run.catch_up_fills,
         stale_price_skips=run.stale_price_skips,
         fills_after_cutoff=run.fills_after_cutoff,
         interval_days=days,
@@ -193,6 +198,7 @@ def as_row(outcome: Outcome, *, places: int = 4) -> dict[str, object]:
         "turnover": fmt(outcome.turnover),
         "trade_count": outcome.trade_count,
         "skipped_fills": outcome.skipped_fills,
+        "catch_up_fills": outcome.catch_up_fills,
         "stale_price_skips": outcome.stale_price_skips,
         "fills_after_cutoff": outcome.fills_after_cutoff,
         "interval_days": fmt(outcome.interval_days),

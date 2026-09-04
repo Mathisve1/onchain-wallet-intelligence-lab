@@ -118,7 +118,10 @@ class TradeStorageTests(unittest.TestCase):
     def test_a_version_two_database_gains_the_trades_table_in_place(self) -> None:
         self.store.close()
         connection = sqlite3.connect(self.db_path)
+        # Everything added after version 2 goes, so the migration ladder is
+        # walked from 2 to the current version rather than partway.
         connection.execute("DROP TABLE trades")
+        connection.execute("DROP TABLE candles")
         connection.execute("DELETE FROM schema_version")
         connection.execute("INSERT INTO schema_version (version, applied_at_ms) VALUES (2, 0)")
         connection.commit()

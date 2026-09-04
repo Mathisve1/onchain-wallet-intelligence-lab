@@ -116,22 +116,91 @@ class BackfillFillsEveryTableTests(CoverageTestCase):
             ["userFillsByTime", "userFunding", "clearinghouseState"],
         )
 
-    def test_a_full_funding_response_is_recorded_as_not_exhausted(self) -> None:
-        # The venue caps one userFunding answer at 500 rows and this path does
-        # not page. A full answer therefore proves nothing about the rest of
-        # the window, and the run must say so instead of claiming completion.
+    def test_a_single_full_funding_page_followed_by_an_empty_page_is_exhausted(self) -> None:
+        # The venue caps one userFunding answer at 500 rows. A full answer
+        # therefore proves nothing about the rest of the window by itself, so
+        # the walk pages again; a short (here empty) follow-up page is what
+        # actually confirms the window was read completely.
         funding = [
             {**FUNDING_ROW, "time": FUNDING_ROW["time"] + index, "delta": {**FUNDING_ROW["delta"]}}
             for index in range(500)
         ]
         orchestrator, _ = self.build(
-            [[fill_payload(1, 1_699_000_000_000)], funding, clearinghouse_payload()]
+            [[fill_payload(1, 1_699_000_000_000)], funding, [], clearinghouse_payload()]
         )
         result = orchestrator.backfill_wallet(WALLET, days=30)
         self.assertEqual(result.funding_seen, 500)
-        self.assertFalse(result.funding_exhausted)
+        self.assertTrue(result.funding_exhausted)
         coverage = self.coverage_of(result.run_id)["funding"]
         self.assertTrue(coverage["attempted"])
+        self.assertTrue(coverage["completed"])
+        self.assertFalse(coverage["truncated_at_response_cap"])
+        self.assertEqual(coverage["pages"], 2)
+
+    def test_a_capped_funding_window_is_paged_past_the_response_cap(self) -> None:
+        # Three scripted userFunding pages: two full (500 rows each) and a
+        # short final page. The walk must page past each cap and land on
+        # exhausted=True once the short page arrives.
+        def funding_page(count: int, start_time: int) -> list[dict]:
+            return [
+                {
+                    **FUNDING_ROW,
+                    "time": start_time + index,
+                    "delta": {**FUNDING_ROW["delta"]},
+                }
+                for index in range(count)
+            ]
+
+        page_one = funding_page(500, FUNDING_ROW["time"])
+        page_two = funding_page(500, page_one[-1]["time"] + 1)
+        page_three = funding_page(120, page_two[-1]["time"] + 1)
+        orchestrator, transport = self.build(
+            [
+                [fill_payload(1, 1_699_000_000_000)],
+                page_one,
+                page_two,
+                page_three,
+                clearinghouse_payload(),
+            ]
+        )
+        result = orchestrator.backfill_wallet(WALLET, days=30)
+        self.assertEqual(result.funding_seen, 1120)
+        self.assertTrue(result.funding_exhausted)
+        coverage = self.coverage_of(result.run_id)["funding"]
+        self.assertEqual(coverage["pages"], 3)
+        self.assertTrue(coverage["completed"])
+
+        funding_requests = [
+            body for body in transport.bodies if body.get("type") == "userFunding"
+        ]
+        self.assertEqual(len(funding_requests), 3)
+        self.assertEqual(funding_requests[1]["startTime"], page_one[-1]["time"] + 1)
+        self.assertEqual(funding_requests[2]["startTime"], page_two[-1]["time"] + 1)
+
+    def test_the_page_cap_stops_funding_before_it_is_exhausted(self) -> None:
+        def funding_page(count: int, start_time: int) -> list[dict]:
+            return [
+                {
+                    **FUNDING_ROW,
+                    "time": start_time + index,
+                    "delta": {**FUNDING_ROW["delta"]},
+                }
+                for index in range(count)
+            ]
+
+        page_one = funding_page(500, FUNDING_ROW["time"])
+        page_two = funding_page(500, page_one[-1]["time"] + 1)
+        orchestrator, _ = self.build(
+            [
+                [fill_payload(1, 1_699_000_000_000)],
+                page_one,
+                page_two,
+                clearinghouse_payload(),
+            ]
+        )
+        result = orchestrator.backfill_wallet(WALLET, days=30, max_pages=2)
+        self.assertFalse(result.funding_exhausted)
+        coverage = self.coverage_of(result.run_id)["funding"]
         self.assertFalse(coverage["completed"])
         self.assertTrue(coverage["truncated_at_response_cap"])
 

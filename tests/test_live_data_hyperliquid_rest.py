@@ -6,6 +6,7 @@ import unittest
 from src.live_data.config import LiveDataConfig
 from src.live_data.hyperliquid_rest import (
     DEFAULT_REQUEST_WEIGHT,
+    SIZE_WEIGHT_ROWS_PER_UNIT,
     HttpRequest,
     HttpResponse,
     HyperliquidRestClient,
@@ -14,6 +15,7 @@ from src.live_data.hyperliquid_rest import (
     build_info_body,
     is_retryable,
     request_weight,
+    response_weight,
 )
 from src.live_data.models import PayloadError
 from src.live_data.rate_limit import TokenBucket
@@ -85,6 +87,19 @@ class RequestBodyConstructionTests(unittest.TestCase):
             build_info_body("openOrders", user=WALLET), {"type": "openOrders", "user": WALLET}
         )
 
+    def test_candle_snapshot_nests_its_parameters_under_req(self) -> None:
+        # The venue takes candle parameters under "req", unlike every other
+        # request type here, which take them at the top level.
+        self.assertEqual(
+            build_info_body(
+                "candleSnapshot", coin="BTC", interval="15m", start_time=100, end_time=200
+            ),
+            {
+                "type": "candleSnapshot",
+                "req": {"coin": "BTC", "interval": "15m", "startTime": 100, "endTime": 200},
+            },
+        )
+
     def test_address_is_canonicalized_inside_the_request_body(self) -> None:
         body = build_info_body("userFills", user="0x" + "AB" * 20)
         self.assertEqual(body["user"], WALLET)
@@ -130,6 +145,7 @@ class RequestWeightTests(unittest.TestCase):
         self.assertEqual(request_weight("allMids"), 2)
         self.assertEqual(request_weight("clearinghouseState"), 2)
         self.assertEqual(request_weight("userFillsByTime"), 20)
+        self.assertEqual(request_weight("candleSnapshot"), 20)
         self.assertEqual(request_weight("somethingUndocumented"), DEFAULT_REQUEST_WEIGHT)
 
     def test_weight_is_spent_before_the_request_is_sent(self) -> None:
@@ -138,6 +154,45 @@ class RequestWeightTests(unittest.TestCase):
         client = HyperliquidRestClient(LiveDataConfig(), transport=transport, bucket=bucket)
         client.request("allMids")
         self.assertEqual(bucket.available(), 1198)
+
+    def test_response_weight_adds_the_row_surcharge_to_the_base_weight(self) -> None:
+        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT, 60)
+        self.assertEqual(response_weight("userFills", 2000), 20 + 33)
+        self.assertEqual(response_weight("userFills", 5000), 20 + 83)
+        self.assertEqual(response_weight("userFills", 0), 20)
+
+
+class ResponseSizeWeightTests(unittest.TestCase):
+    def test_a_2000_row_list_response_consumes_base_plus_row_surcharge(self) -> None:
+        client, transport, _ = build_client([ok([{}] * 2000)])
+        client.request("userFills", user=WALLET)
+        self.assertEqual(len(transport.requests), 1)
+        self.assertEqual(client.consumed_weight, 20 + 33)
+
+    def test_a_5000_row_list_response_consumes_base_plus_row_surcharge(self) -> None:
+        client, transport, _ = build_client([ok([{}] * 5000)])
+        client.request("userFills", user=WALLET)
+        self.assertEqual(len(transport.requests), 1)
+        self.assertEqual(client.consumed_weight, 20 + 83)
+
+    def test_a_dict_response_consumes_only_the_base_weight(self) -> None:
+        client, transport, _ = build_client([ok({"BTC": "64000.0"})])
+        client.request("allMids")
+        self.assertEqual(len(transport.requests), 1)
+        self.assertEqual(client.consumed_weight, request_weight("allMids"))
+
+    def test_the_surcharge_is_actually_drawn_from_the_bucket(self) -> None:
+        transport = RecordingTransport([ok([{}] * 2000)])
+        bucket = TokenBucket(1200, 20.0, clock=lambda: 0.0, sleeper=lambda _: None)
+        client = HyperliquidRestClient(
+            LiveDataConfig(),
+            transport=transport,
+            bucket=bucket,
+            sleeper=lambda _: None,
+        )
+        client.request("userFills", user=WALLET)
+        self.assertEqual(bucket.available(), 1200 - (20 + 33))
+        self.assertEqual(client.consumed_weight, 20 + 33)
 
 
 class RetryPolicyTests(unittest.TestCase):
@@ -195,7 +250,7 @@ class RetryPolicyTests(unittest.TestCase):
         )
         self.assertEqual(client.request("allMids"), {"BTC": "64000.0"})
         self.assertEqual(len(transport.requests), 3)
-        self.assertEqual(slept, [0.5, 1.0])
+        self.assertEqual(slept, [5.0, 10.0])
         self.assertEqual(client.retried_requests, 2)
 
     def test_server_errors_are_retried(self) -> None:
@@ -218,7 +273,7 @@ class RetryPolicyTests(unittest.TestCase):
         with self.assertRaises(RestHttpError):
             client.request("allMids")
         self.assertEqual(len(transport.requests), 3)
-        self.assertEqual(slept, [0.5, 1.0])
+        self.assertEqual(slept, [5.0, 10.0])
 
     def test_non_json_success_body_is_rejected(self) -> None:
         client, _, _ = build_client([HttpResponse(200, "<html>maintenance</html>")])

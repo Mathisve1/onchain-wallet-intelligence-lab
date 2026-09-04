@@ -12,6 +12,7 @@ import uuid
 from typing import Any, Callable
 
 from .config import LiveDataConfig, normalize_wallet_address
+from .candles import DEFAULT_MAX_PAGES, CandleFetchMixin
 from .hyperliquid_rest import MAX_FILLS_PER_RESPONSE, HyperliquidRestClient
 from .hyperliquid_ws import HyperliquidWebSocketClient
 from .models import ClearinghouseState, Fill, parse_funding, require_list
@@ -21,12 +22,10 @@ from .storage import (
     RUN_STATUS_FAILED,
     LiveDataStore,
 )
+from .sweep import SweepMixin
 from .watch import IngestError, WatchMixin
 
 MILLISECONDS_PER_DAY = 86_400_000
-
-#: A hard stop so a pagination bug cannot turn into an unbounded request loop.
-DEFAULT_MAX_PAGES = 200
 
 #: The venue returns at most this many rows for one ``userFunding`` call.
 MAX_FUNDING_PER_RESPONSE = 500
@@ -36,7 +35,7 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-class IngestOrchestrator(WatchMixin):
+class IngestOrchestrator(WatchMixin, CandleFetchMixin, SweepMixin):
     """Drives REST and websocket ingest for the configured wallets."""
 
     def __init__(
@@ -130,21 +129,41 @@ class IngestOrchestrator(WatchMixin):
         return pages, seen, written, forced, exhausted, covered_until_ms
 
     def _collect_funding(
-        self, address: str, *, start_time_ms: int | None
-    ) -> tuple[int, int, bool]:
-        """Persist funding payments. Returns (seen, written, exhausted).
+        self, address: str, *, start_time_ms: int | None, max_pages: int = DEFAULT_MAX_PAGES
+    ) -> tuple[int, int, bool, int]:
+        """Page ``userFunding`` past the venue's response cap.
 
-        The venue answers one ``userFunding`` call with at most
-        :data:`MAX_FUNDING_PER_RESPONSE` rows and this path does not page, so
-        a full response means the window may hold more than was returned.
-        That is reported as not exhausted rather than assumed complete.
+        Returns ``(seen, written, exhausted, pages)``. The venue answers one
+        ``userFunding`` call with at most :data:`MAX_FUNDING_PER_RESPONSE`
+        rows, so a full page means the window may hold more than was
+        returned: resume from the last event time and ask again, the same
+        pattern :meth:`_collect_fills` uses for ``userFillsByTime``.
+        ``exhausted`` is False when ``max_pages`` stopped the walk before a
+        short page confirmed the window was read completely.
         """
-        payload = self._rest.request("userFunding", user=address, start_time=start_time_ms)
-        rows = require_list(payload, "userFunding")
-        deltas = parse_funding(payload, address)
-        pairs = list(zip(deltas, rows, strict=True))
-        result = self._store.write_funding(pairs, ingested_at_ms=self._clock_ms())
-        return result.seen, result.written, len(rows) < MAX_FUNDING_PER_RESPONSE
+        cursor = start_time_ms
+        seen = 0
+        written = 0
+        exhausted = False
+        pages = 0
+        while pages < max_pages:
+            payload = self._rest.request("userFunding", user=address, start_time=cursor)
+            rows = require_list(payload, "userFunding")
+            deltas = parse_funding(payload, address)
+            pairs = list(zip(deltas, rows, strict=True))
+            result = self._store.write_funding(pairs, ingested_at_ms=self._clock_ms())
+            pages += 1
+            seen += result.seen
+            written += result.written
+            if len(rows) < MAX_FUNDING_PER_RESPONSE:
+                exhausted = True
+                break
+            # A full page: resume just past the latest event time seen.
+            # Rows sharing that millisecond beyond the page cap would be lost;
+            # funding settles hourly per coin, so that needs more than a page
+            # of coins funded in one instant, more than the venue lists.
+            cursor = max(delta.event_time_ms for delta in deltas) + 1
+        return seen, written, exhausted, pages
 
     def backfill_wallet(
         self, wallet: str, days: int, *, max_pages: int = DEFAULT_MAX_PAGES
@@ -207,8 +226,8 @@ class IngestOrchestrator(WatchMixin):
             }
 
             coverage["funding"] = {"attempted": True, "completed": False}
-            funding_seen, funding_written, funding_exhausted = self._collect_funding(
-                address, start_time_ms=window_start
+            funding_seen, funding_written, funding_exhausted, funding_pages = self._collect_funding(
+                address, start_time_ms=window_start, max_pages=max_pages
             )
             result.funding_seen, result.funding_written = funding_seen, funding_written
             result.funding_exhausted = funding_exhausted
@@ -218,6 +237,7 @@ class IngestOrchestrator(WatchMixin):
                 "truncated_at_response_cap": not funding_exhausted,
                 "seen": funding_seen,
                 "written": funding_written,
+                "pages": funding_pages,
             }
 
             coverage["positions"] = {"attempted": True, "completed": False}
@@ -377,5 +397,5 @@ class IngestOrchestrator(WatchMixin):
     def backfill_wallet_funding(self, wallet: str, *, start_time_ms: int | None = None) -> int:
         """Persist funding payments for one wallet. Returns rows written."""
         address = normalize_wallet_address(wallet)
-        _, written, _ = self._collect_funding(address, start_time_ms=start_time_ms)
+        _, written, _, _ = self._collect_funding(address, start_time_ms=start_time_ms)
         return written

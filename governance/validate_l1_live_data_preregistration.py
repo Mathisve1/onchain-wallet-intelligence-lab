@@ -8,6 +8,13 @@ restriction is re-derived from the source and compared. Drift in either
 direction is a failure, so a widened envelope cannot be slipped past a stale
 document and a tightened document cannot silently misdescribe live code.
 
+One documented widening exists, from the ``additional_rest_request_types=`` line
+of the DEC-043 approval ``APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001.txt``: the
+supported types may exceed the L1 allowlist by exactly the types it names, those
+cost the unlisted default weight, and their storage may exceed the L1 schema by
+exactly :data:`L2_RETAINED_SCHEMA_WIDENING`. The L1 approval's own line still
+binds the L1 allowlist, so a type or table nobody approved fails either way.
+
 The owner approval is checked the same way. Its exact text is hashed and
 every ``key=value`` line in it is compared with the contract and the code, so
 the approval binds what actually runs rather than a paraphrase of it. The
@@ -29,6 +36,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/wallet_copyability/live_data"
 PREREG = BASE / "L1_LIVE_DATA_COLLECTION_PREREGISTRATION.json"
 APPROVAL_TEXT = BASE / "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001.txt"
+#: The L2 approval that widens the request-type scope under DEC-043.
+L2_APPROVAL_TEXT = BASE / "APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001.txt"
+#: The type that approval adds and the storage it implies, enumerated not derived.
+L2_WIDENING_REQUEST_TYPE = "candleSnapshot"
+L2_RETAINED_SCHEMA_WIDENING: dict[str, Any] = {"schema_version": 4, "tables": ("candles",)}
 DECISION = BASE / "L1_OWNER_DECISION_001.json"
 CORE = ROOT / "src/live_data"
 COLLECTOR = ROOT / "research/wallet_copyability/live_data_collector"
@@ -189,7 +201,28 @@ def parse_approval_text() -> tuple[str, dict[str, str]]:
     return sha256_of(APPROVAL_TEXT), values
 
 
-def validate_owner_decision(contract: dict, core_config: Any) -> dict[str, Any]:
+def additional_rest_request_types() -> set[str]:
+    """Request types the L2 approval adds to the L1 allowlist, read from the signed
+    text rather than a constant; a missing file or line means no widening at all."""
+    if not L2_APPROVAL_TEXT.is_file():
+        return set()  # no approval on disk, no widening
+    values = dict((part.strip() for part in line.partition("=")[::2]) for line in L2_APPROVAL_TEXT.read_text(encoding="utf-8").splitlines() if "=" in line)
+    return {name.strip() for name in values.get("additional_rest_request_types", "").split(",") if name.strip()}
+
+
+def retained_schema_widening() -> dict[str, Any]:
+    """The schema widening, tied to the same approval line as the request types."""
+    approved = L2_WIDENING_REQUEST_TYPE in additional_rest_request_types()
+    return dict(L2_RETAINED_SCHEMA_WIDENING) if approved else {}
+
+
+def created_table_names() -> set[str]:
+    """Every table ``schema.py`` creates, read out of the source."""
+    lines = (CORE / "schema.py").read_text(encoding="utf-8").splitlines()
+    return {line.split("CREATE TABLE ", 1)[1].split()[0] for line in lines if "CREATE TABLE " in line}
+
+
+def validate_owner_decision(contract: dict, core_config: Any, core_rest: Any) -> dict[str, Any]:
     text_sha, values = parse_approval_text()
     approval = contract["owner_approval_status"]
     require(approval["approval_id"] == APPROVAL_ID, "approval id drift")
@@ -233,11 +266,11 @@ def validate_owner_decision(contract: dict, core_config: Any) -> dict[str, Any]:
     else:
         require(release["evidence_path"] is None and release["consumed_by"] is None, "unconsumed release carries evidence")
 
-    validate_approval_binds_the_code(values, contract, core_config)
+    validate_approval_binds_the_code(values, contract, core_config, core_rest)
     return decision
 
 
-def validate_approval_binds_the_code(values: dict[str, str], contract: dict, core_config: Any) -> None:
+def validate_approval_binds_the_code(values: dict[str, str], contract: dict, core_config: Any, core_rest: Any) -> None:
     """Every key=value line the owner signed must equal what the code enforces."""
     target = contract["exact_network_target"]
     envelope = contract["proposed_request_envelope"]
@@ -268,6 +301,9 @@ def validate_approval_binds_the_code(values: dict[str, str], contract: dict, cor
         "copyability_claim_authorized": str(contract["downstream_authorizations"]["copyability_claim_authorized"]).lower(),
         "trading_authorizations": "ALL_FALSE" if all(v is False for v in contract["trading_authorizations"].values()) else "OPENED",
     }
+    signed_types = {name for name in values.get("rest_request_types", "").split(",") if name}
+    require(signed_types == set(contract["rest_request_type_allowlist"]), "signed L1 request types do not match the declared allowlist")
+    require(additional_rest_request_types() <= set(core_rest.SUPPORTED_REQUEST_TYPES), "the L2 approval names a request type the code does not support")
     require(set(values) == set(expected) | {"preregistration_commit"}, f"approval key set drift: {sorted(set(values) ^ (set(expected) | {'preregistration_commit'}))}")
     for key, value in expected.items():
         require(values[key] == value, f"approval line {key}={values[key]} does not match enforced {value}")
@@ -310,7 +346,10 @@ def validate_envelope_matches_code(contract: dict, core_config: Any, core_rest: 
     require(envelope["request_timeout_seconds"] == defaults.request_timeout_seconds, "request timeout drift")
     declared_weights = dict(envelope["request_weights"])
     require(declared_weights.pop("unlisted_request_type_default") == core_rest.DEFAULT_REQUEST_WEIGHT, "default request weight drift")
-    require(declared_weights == core_rest.INFO_REQUEST_WEIGHTS, "per-request weight table drift")
+    enforced_weights = dict(core_rest.INFO_REQUEST_WEIGHTS)
+    for name in sorted(additional_rest_request_types()):
+        require(enforced_weights.pop(name, None) == core_rest.DEFAULT_REQUEST_WEIGHT, f"approved addition {name} is not charged the default request weight")
+    require(declared_weights == enforced_weights, "per-request weight table drift")
     snapshot_weight = core_rest.INFO_REQUEST_WEIGHTS["clearinghouseState"]
     expected_worst_case = core_config.MAX_WS_TRACKED_USERS * snapshot_weight
     require(envelope["worst_case_snapshot_weight_per_minute"] == expected_worst_case, "worst-case snapshot weight does not equal wallets x clearinghouseState weight")
@@ -318,7 +357,9 @@ def validate_envelope_matches_code(contract: dict, core_config: Any, core_rest: 
 
 
 def validate_request_type_scope(contract: dict, core_rest: Any, core_ws: Any) -> None:
-    require(sorted(contract["rest_request_type_allowlist"]) == sorted(core_rest.SUPPORTED_REQUEST_TYPES), "declared REST request type allowlist does not match the supported set")
+    # DEC-043 widening, see the module docstring.
+    approved = set(contract["rest_request_type_allowlist"]) | additional_rest_request_types()
+    require(sorted(approved) == sorted(core_rest.SUPPORTED_REQUEST_TYPES), f"supported REST request types {sorted(core_rest.SUPPORTED_REQUEST_TYPES)} are not the L1 allowlist plus the approved additions {sorted(approved)}")
     excluded = set(core_rest.INFO_REQUEST_WEIGHTS) - set(core_rest.SUPPORTED_REQUEST_TYPES)
     require(sorted(contract["rest_request_type_denylist_present_in_code"]) == sorted(excluded), "declared excluded request types do not match the code")
     require(sorted(contract["websocket_subscription_allowlist"]) == sorted(core_ws.SUBSCRIPTION_TYPES), "declared websocket subscription allowlist drift")
@@ -349,11 +390,14 @@ def validate_layering(contract: dict) -> None:
 
 def validate_retained_schema(contract: dict, core_config: Any, core_storage: Any) -> None:
     schema = contract["retained_schema"]
-    require(schema["schema_version"] == core_storage.SCHEMA_VERSION, "storage schema version drift")
+    # Without the widening the code sits at the declared version; with it, at the widening's.
+    widening = retained_schema_widening()
+    declared_version, widened_version = schema["schema_version"], widening.get("schema_version")
+    require(core_storage.SCHEMA_VERSION == declared_version or (widened_version is not None and core_storage.SCHEMA_VERSION == widened_version and declared_version < widened_version), f"storage schema version drift: code {core_storage.SCHEMA_VERSION}, declared {declared_version}, widening {widened_version}")
     require(schema["default_database_path"] == core_config.LiveDataConfig().database_path.as_posix(), "default database path drift")
-    source = (CORE / "schema.py").read_text(encoding="utf-8")
-    actual = {line.split("CREATE TABLE ", 1)[1].split()[0] for line in source.splitlines() if "CREATE TABLE " in line}
-    require(set(schema["tables"]) == actual, f"declared tables {sorted(schema['tables'])} != created tables {sorted(actual)}")
+    declared_tables, actual = set(schema["tables"]), created_table_names()
+    require(declared_tables <= actual, f"declared tables missing from the code: {sorted(declared_tables - actual)}")
+    require(declared_tables | set(widening.get("tables", ())) == actual, f"created tables {sorted(actual)} are not the declared tables plus the approved widening")
     require(schema["idempotent_deduplication_required"] is True, "deduplication requirement dropped")
     require(schema["run_coverage_recorded"] is True, "coverage recording requirement dropped")
     require(schema["raw_response_bodies_retained"] is False, "raw body retention opened")
@@ -428,7 +472,7 @@ def main() -> int:
     validate_required_paths()
     validate_identity(contract)
     validate_preregistration_created_nothing(contract)
-    decision = validate_owner_decision(contract, core_config)
+    decision = validate_owner_decision(contract, core_config, core_rest)
     validate_read_only_boundary(contract, core_config)
     validate_envelope_matches_code(contract, core_config, core_rest, core_cli)
     validate_request_type_scope(contract, core_rest, core_ws)

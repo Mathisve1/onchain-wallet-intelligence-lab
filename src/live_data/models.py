@@ -381,3 +381,70 @@ class OpenOrder:
 def parse_open_orders(payload: object, wallet_address: str) -> tuple[OpenOrder, ...]:
     rows = require_list(payload, "openOrders")
     return tuple(OpenOrder.parse(row, wallet_address) for row in rows)
+
+
+@dataclass(frozen=True, slots=True)
+class Candle:
+    """One OHLCV bar from ``candleSnapshot``.
+
+    Field names follow the venue's single-letter keys, measured in the L2
+    candle probe (2026-09-04): ``t``/``T`` open and close in milliseconds,
+    ``o``/``h``/``l``/``c``/``v`` decimal strings, ``n`` the trade count,
+    ``i`` the interval and ``s`` the coin.
+    """
+
+    coin: str
+    interval: str
+    open_time_ms: int
+    close_time_ms: int
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    trade_count: int
+
+    @classmethod
+    def parse(cls, payload: object) -> Candle:
+        row = require_mapping(payload, "candleSnapshot[]")
+        close_time_ms = require_event_time_ms(row, "T", "candleSnapshot[]")
+        open_time_ms = require_event_time_ms(row, "t", "candleSnapshot[]")
+        if close_time_ms <= open_time_ms:
+            raise PayloadError("candleSnapshot[]: close time must follow open time")
+        trade_count = require_int(row, "n", "candleSnapshot[]")
+        if trade_count < 0:
+            raise PayloadError("candleSnapshot[].n: trade count must be nonnegative")
+        return cls(
+            coin=normalize_coin(require_str(row, "s", "candleSnapshot[]")),
+            interval=require_str(row, "i", "candleSnapshot[]"),
+            open_time_ms=open_time_ms,
+            close_time_ms=close_time_ms,
+            open=require_decimal(row, "o", "candleSnapshot[]"),
+            high=require_decimal(row, "h", "candleSnapshot[]"),
+            low=require_decimal(row, "l", "candleSnapshot[]"),
+            close=require_decimal(row, "c", "candleSnapshot[]"),
+            volume=require_decimal(row, "v", "candleSnapshot[]"),
+            trade_count=trade_count,
+        )
+
+
+def parse_candles(payload: object, coin: str, interval: str) -> tuple[Candle, ...]:
+    """Parse a candle page, refusing any row that answers a different series.
+
+    The request names one coin and one interval, so a row carrying another is
+    either a venue fault or a misrouted response; writing it would silently
+    file another market's prices under the requested one.
+    """
+    rows = require_list(payload, "candleSnapshot")
+    expected_coin = normalize_coin(coin)
+    candles = tuple(Candle.parse(row) for row in rows)
+    for candle in candles:
+        if candle.coin != expected_coin:
+            raise PayloadError(
+                f"candleSnapshot: expected coin {expected_coin!r}, got {candle.coin!r}"
+            )
+        if candle.interval != interval:
+            raise PayloadError(
+                f"candleSnapshot: expected interval {interval!r}, got {candle.interval!r}"
+            )
+    return candles

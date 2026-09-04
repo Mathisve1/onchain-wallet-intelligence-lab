@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from .costs import CostBreakdown, CostModel, require_complete_model
 from .coverage import KnownInterval, UnknownIntervalError
@@ -90,6 +90,10 @@ class FollowerRun:
     traded_notional: Decimal
     #: Copies dropped because no usable price existed at the copy moment.
     skipped_fills: int
+    #: Entries the follower made at the start of the interval to stand in the
+    #: positions the source already held when the window opened. Zero unless
+    #: ``opening_positions`` was given.
+    catch_up_fills: int
     #: Of those, copies dropped because the only price was older than the
     #: allowed age: a hole in the data, not a fault of the wallet.
     stale_price_skips: int
@@ -131,6 +135,7 @@ def simulate_follower(
     config: FollowerConfig,
     decision_cutoff_ms: int | None = None,
     max_price_age_ms: int | None = None,
+    opening_positions: Mapping[str, Decimal] | None = None,
 ) -> FollowerRun:
     """Copy every source fill up to the cutoff after ``latency_ms``, at full cost.
 
@@ -142,6 +147,16 @@ def simulate_follower(
 
     ``max_price_age_ms`` bounds how old a price may be to execute or mark
     against. Older means no price: the copy is skipped and counted as stale.
+
+    ``opening_positions`` is the signed size per coin the source already held
+    when the window opened. The follower catches up to each of them at the
+    first quote at or after the interval start, paying the full taker cost.
+    Without it a source fill that closes a position opened before the window
+    would open an inverted position for the follower instead of closing one,
+    and the copy would be scored on a trade the wallet never made (code-review
+    finding, 2026-09-04). The catch-up entry is priced at its own quote's time,
+    so ``max_price_age_ms`` does not apply to it; a coin whose first quote
+    falls after the interval end is skipped and counted in ``skipped_fills``.
     """
     _require_known(interval)
     if latency_ms < 0:
@@ -167,7 +182,30 @@ def simulate_follower(
     periods_expected = 0
     periods_priced = 0
     peak_deployed = Decimal(0)
+    catch_up = 0
     curve: list[EquityPoint] = [EquityPoint(interval.start_ms, config.capital)]
+
+    for coin in sorted(opening_positions or {}):
+        size = _decimal(opening_positions[coin], "opening position") * config.size_scale
+        if size == 0:
+            continue
+        series, liquidity = market.require_coin(coin)
+        point = series.at_or_after(interval.start_ms)
+        if point is None or point.time_ms > interval.end_ms:
+            skipped += 1
+            continue
+        position = positions.setdefault(coin, _Position())
+        notional = abs(size) * point.price
+        costs += model.taker_execution(notional=notional, liquidity=liquidity)
+        position.apply(size, point.price)
+        traded += notional
+        trades += 1
+        catch_up += 1
+        # Funding on a caught-up position accrues from its entry, not from the
+        # interval start: the follower did not hold it before it bought it.
+        funding_checked[coin] = point.time_ms
+        _, deployed = _mark(config, realized, costs, positions, view, point.time_ms)
+        peak_deployed = max(peak_deployed, deployed)
 
     actions = sorted(
         ((f.time_ms + latency_ms, f) for f in source), key=lambda pair: (pair[0], pair[1].trade_id)
@@ -225,7 +263,8 @@ def simulate_follower(
     )
     return FollowerRun(
         interval=interval, pnl=pnl, equity_curve=tuple(curve), traded_notional=traded,
-        skipped_fills=skipped, stale_price_skips=stale, fills_after_cutoff=fills_after_cutoff,
+        skipped_fills=skipped, catch_up_fills=catch_up, stale_price_skips=stale,
+        fills_after_cutoff=fills_after_cutoff,
         decision_cutoff_ms=decision_cutoff_ms, funding_periods_expected=periods_expected,
         funding_periods_priced=periods_priced, capital=config.capital,
         peak_deployed_notional=peak_deployed,
@@ -242,11 +281,19 @@ def _accrue_funding(
     that saw fewer events than the venue's hourly settlement implies was
     charged nothing for the missing hours; the caller carries that count into
     the outcome so an unpriced funding hour is never mistaken for a free one.
+
+    The watermark only ever moves forward. A catch-up entry sets it to its own
+    quote's time, and a source fill acted on before that time must not drag it
+    back: doing so would charge the hours between as if the position had been
+    held before it was bought. Such a call accrues nothing and leaves the
+    watermark where it was.
     """
     since = checked.get(coin, default_from_ms)
     total = CostBreakdown.zero()
     expected = 0
     priced = 0
+    if until_ms <= since:
+        return total, expected, priced
     if position.size != 0:
         expected = view.market.funding.expected_periods(since, until_ms)
         events = view.funding_between(coin, since, until_ms)

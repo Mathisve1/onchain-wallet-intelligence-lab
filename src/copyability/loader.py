@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from src.live_data.ingest import MAX_FUNDING_PER_RESPONSE
 from src.live_data.storage import LiveDataStore
@@ -139,6 +139,40 @@ def load_fill_prices(
     return series
 
 
+def load_candle_prices(
+    store: LiveDataStore, coins: Iterable[str], *, interval: str = "15m"
+) -> dict[str, PriceSeries]:
+    """Close series per coin from the ``candles`` table, at each candle's close.
+
+    A candle's close is only known once the candle has closed, so the point is
+    stamped at ``close_time_ms``. Stamping it at the open would let a decision
+    inside the candle read a price the market had not yet printed.
+    """
+    series: dict[str, PriceSeries] = {}
+    for coin in sorted(set(coins)):
+        rows = store.connection.execute(
+            "SELECT close_time_ms, close FROM candles WHERE coin = ? AND interval = ? "
+            "ORDER BY open_time_ms",
+            (coin, interval),
+        ).fetchall()
+        series[coin] = PriceSeries(coin, ((r["close_time_ms"], Decimal(r["close"])) for r in rows))
+    return series
+
+
+def replay_positions(fills: Sequence[SourceFill], *, until_ms: int) -> dict[str, Decimal]:
+    """Net signed size per coin the wallet held after every fill up to ``until_ms``.
+
+    This is what a follower has to stand in before it can copy a fill that
+    closes a position opened earlier: without it the close reads as an open in
+    the opposite direction. Coins that net to flat are omitted.
+    """
+    net: dict[str, Decimal] = {}
+    for row in fills:
+        if row.time_ms <= until_ms:
+            net[row.coin] = net.get(row.coin, Decimal(0)) + row.signed_size
+    return {coin: size for coin, size in net.items() if size != 0}
+
+
 def load_funding_rates(store: LiveDataStore, coins: Iterable[str]) -> FundingSchedule:
     """Funding rates per coin, taken from any wallet's funding rows.
 
@@ -212,25 +246,38 @@ def _reconnects(run: Any, coverage: dict) -> int:
     return 0
 
 
-PRICE_SOURCES = {"fills": load_fill_prices, "trades": load_trade_prices, "mids": load_prices}
+PRICE_SOURCES = {
+    "fills": load_fill_prices, "trades": load_trade_prices, "mids": load_prices,
+    "candles": load_candle_prices,
+}
 
 
 def build_market(
     store: LiveDataStore, coins: Iterable[str], liquidity: dict[str, LiquidityProfile], *,
     price_source: str = "fills", exclude_wallet: str | None = None,
+    candle_interval: str = "15m",
 ) -> MarketData:
     """Assemble market data from one price source.
 
     ``fills`` is the default because it is the only source that spans the
     backfill window; ``trades`` and ``mids`` exist only while a session was
-    connected. ``exclude_wallet`` applies to the fills source only and should
-    name the wallet being scored.
+    connected. ``candles`` spans the window too and is independent of every
+    wallet in the sample. ``exclude_wallet`` applies to the fills source only
+    and should name the wallet being scored; it is ignored elsewhere.
+
+    ``candle_interval`` picks which candle series the ``candles`` source reads,
+    and is ignored by every other source. A coarser interval leaves longer
+    stretches with no fresh quote, so a catch-up entry or a copy can land far
+    from the price that actually traded; a finer one only exists if it was
+    ingested.
     """
     if price_source not in PRICE_SOURCES:
         raise ValueError(f"price_source must be one of {sorted(PRICE_SOURCES)}")
     coins = sorted(set(coins))
     if price_source == "fills":
         prices = load_fill_prices(store, coins, exclude_wallet=exclude_wallet)
+    elif price_source == "candles":
+        prices = load_candle_prices(store, coins, interval=candle_interval)
     else:
         prices = PRICE_SOURCES[price_source](store, coins)
     return MarketData(prices=prices, funding=load_funding_rates(store, coins), liquidity=liquidity)

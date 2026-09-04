@@ -7,6 +7,13 @@ authorization, and the only URL it can construct is the ``/info`` path from
 
 The HTTP transport is injected, so the whole request/response/retry path is
 exercised offline in tests.
+
+Base per-request weight alone is not the whole cost: three separate live
+measurements produced HTTP 429 at exactly 1200 base-weight per minute with
+2000-row and 5000-row responses (L1 backfills 2026-09-03; candle probe
+2026-09-04), well under the documented budget once row count is accounted
+for. The venue is metering response size, not just request count, so large
+list responses are charged an additional per-row surcharge here.
 """
 
 from __future__ import annotations
@@ -16,7 +23,14 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
-from .config import INFO_PATH, READ_ONLY_REST_PATHS, LiveDataConfig, normalize_wallet_address
+from .config import (
+    INFO_PATH,
+    READ_ONLY_REST_PATHS,
+    ConfigError,
+    LiveDataConfig,
+    normalize_coin,
+    normalize_wallet_address,
+)
 from .models import (
     ClearinghouseState,
     Fill,
@@ -40,11 +54,26 @@ INFO_REQUEST_WEIGHTS: dict[str, int] = {
     "userFillsByTime": 20,
     "userFunding": 20,
     "openOrders": 20,
+    "candleSnapshot": 20,
 }
 DEFAULT_REQUEST_WEIGHT = 20
 
 #: The venue returns at most this many rows per time-ranged fills response.
 MAX_FILLS_PER_RESPONSE = 500
+
+#: The venue returns at most this many candles for one ``candleSnapshot``
+#: call, taken backwards from ``endTime`` (L2 candle probe, 2026-09-04).
+MAX_CANDLES_PER_RESPONSE = 5000
+
+#: Candle intervals the venue answered with HTTP 200 in that same probe.
+#: Anything outside this tuple is a typo, not a coarser series.
+CANDLE_INTERVALS = ("1m", "5m", "15m", "1h", "4h", "1d")
+
+#: Rows per unit of surcharge weight for list-shaped responses. Derived from
+#: the 2026-09-03/09-04 measurements: a 2000-row response and a 5000-row
+#: response both hit 429 at 1200 base-weight per minute, which only lines up
+#: with the venue's budget once ``row_count // 60`` extra weight is charged.
+SIZE_WEIGHT_ROWS_PER_UNIT = 60
 
 SUPPORTED_REQUEST_TYPES = frozenset(INFO_REQUEST_WEIGHTS) - {"l2Book"}
 
@@ -89,6 +118,15 @@ def is_retryable(status_code: int) -> bool:
 
 def request_weight(request_type: str) -> int:
     return INFO_REQUEST_WEIGHTS.get(request_type, DEFAULT_REQUEST_WEIGHT)
+
+
+def response_weight(request_type: str, row_count: int) -> int:
+    """Total weight for a request whose response carries ``row_count`` rows.
+
+    List-shaped responses are metered by size as well as by request type; see
+    the module docstring for the measurements behind this surcharge.
+    """
+    return request_weight(request_type) + row_count // SIZE_WEIGHT_ROWS_PER_UNIT
 
 
 def _optional_bool(params: Mapping[str, Any], key: str) -> bool | None:
@@ -166,6 +204,33 @@ def build_info_body(request_type: str, **params: Any) -> dict[str, Any]:
         aggregate = _optional_bool(params, "aggregate_by_time")
         if aggregate is not None:
             body["aggregateByTime"] = aggregate
+    elif request_type == "candleSnapshot":
+        # The venue nests every candle parameter under "req"; a flat body is
+        # accepted by the endpoint and silently answers with nothing useful.
+        allowed = {"coin", "interval", "start_time", "end_time"}
+        missing = sorted(allowed - set(params))
+        if missing:
+            raise RestError(f"candleSnapshot requires: {', '.join(missing)}")
+        try:
+            coin = normalize_coin(params["coin"])
+        except ConfigError as exc:
+            raise RestError(str(exc)) from exc
+        interval = params["interval"]
+        if interval not in CANDLE_INTERVALS:
+            raise RestError(
+                f"unsupported candle interval: {interval!r}; "
+                f"expected one of {', '.join(CANDLE_INTERVALS)}"
+            )
+        start_time = _positive_time(params["start_time"], "start_time")
+        end_time = _positive_time(params["end_time"], "end_time")
+        if end_time < start_time:
+            raise RestError("end_time must not precede start_time")
+        body["req"] = {
+            "coin": coin,
+            "interval": interval,
+            "startTime": start_time,
+            "endTime": end_time,
+        }
     elif request_type == "openOrders":
         allowed = {"user", "dex"}
         body["user"] = normalize_wallet_address(params.get("user"))
@@ -241,12 +306,25 @@ class HyperliquidRestClient:
             )
             if 200 <= response.status_code < 300:
                 try:
-                    return json.loads(response.body)
+                    decoded = json.loads(response.body)
                 except json.JSONDecodeError as exc:
                     raise RestError(f"{request_type}: response was not valid JSON") from exc
+                if isinstance(decoded, list):
+                    # List-shaped responses (fills, funding, etc.) can be
+                    # large enough to blow the venue's budget even though the
+                    # base weight alone fits; see SIZE_WEIGHT_ROWS_PER_UNIT.
+                    surcharge = len(decoded) // SIZE_WEIGHT_ROWS_PER_UNIT
+                    if surcharge > 0:
+                        self._bucket.acquire(surcharge)
+                        self.consumed_weight += surcharge
+                return decoded
             if not is_retryable(response.status_code) or attempt >= self._config.max_retries:
                 raise RestHttpError(response.status_code, response.body)
-            self._sleeper(self._backoff_base_seconds * (2**attempt))
+            # The first 429 (attempt == 0) always waits at least 5 seconds,
+            # matching the venue's observed cooldown; later attempts double
+            # from there, same as the base-weight-only backoff before it.
+            delay = max(self._backoff_base_seconds, 5.0) * (2**attempt)
+            self._sleeper(delay)
             self.retried_requests += 1
             attempt += 1
 

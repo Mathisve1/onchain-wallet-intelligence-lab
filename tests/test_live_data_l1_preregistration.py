@@ -7,6 +7,8 @@ import json
 import unittest
 from pathlib import Path
 
+from src.live_data.schema import SCHEMA_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "research/wallet_copyability/live_data"
 PREREG = BASE / "L1_LIVE_DATA_COLLECTION_PREREGISTRATION.json"
@@ -83,8 +85,14 @@ class L1PreregistrationTests(unittest.TestCase):
 
     def test_retained_schema_names_the_tape(self) -> None:
         schema = load()["retained_schema"]
+        # The L1 declaration is historical and stays at its own version; the
+        # code sits one version ahead under the DEC-043 schema widening.
         self.assertEqual(schema["schema_version"], 3)
         self.assertIn("trades", schema["tables"])
+        self.assertLessEqual(set(schema["tables"]), validator.created_table_names())
+        self.assertEqual(SCHEMA_VERSION, 4)
+        self.assertEqual(validator.retained_schema_widening()["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(validator.retained_schema_widening()["tables"], ("candles",))
         self.assertFalse(schema["raw_response_bodies_retained"])
 
     def test_deterministic_core_really_has_no_network_or_process_imports(self) -> None:
@@ -260,6 +268,51 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
 
     def test_rejects_an_undeclared_rest_request_type(self) -> None:
         self._reject(lambda c: c["rest_request_type_allowlist"].append("l2Book"))
+
+    def test_the_widening_only_covers_types_the_l2_approval_names(self) -> None:
+        """``candleSnapshot`` passes because DEC-043's approval names it, nothing else.
+
+        With the parsed additional set emptied, the code supports a type no
+        approval covers and the validator must refuse it. That is what makes
+        the widening a reading of a signed document rather than a hole.
+        """
+        self.assertIn("candleSnapshot", validator.additional_rest_request_types())
+        original = validator.additional_rest_request_types
+        validator.additional_rest_request_types = lambda: set()
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+        finally:
+            validator.additional_rest_request_types = original
+        self.assertEqual(validator.main(), 0)
+
+    def test_a_table_outside_the_enumerated_widening_is_refused(self) -> None:
+        """The widening admits the candles table only, not any table the code grows."""
+        original = validator.created_table_names
+        validator.created_table_names = lambda: original() | {"orders"}
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+        finally:
+            validator.created_table_names = original
+        self.assertEqual(validator.main(), 0)
+
+    def test_the_schema_widening_is_what_admits_version_four(self) -> None:
+        original = validator.L2_RETAINED_SCHEMA_WIDENING
+        validator.L2_RETAINED_SCHEMA_WIDENING = {}
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+        finally:
+            validator.L2_RETAINED_SCHEMA_WIDENING = original
+        self.assertEqual(validator.main(), 0)
+
+    def test_the_widening_reads_the_approval_line_from_the_l2_text(self) -> None:
+        text = validator.L2_APPROVAL_TEXT.read_text(encoding="utf-8")
+        self.assertIn("additional_rest_request_types=candleSnapshot", text)
 
     def test_rejects_a_claimed_executed_request(self) -> None:
         self._reject(lambda c: c["created_by_this_preregistration"].update(rest_requests_executed=1))

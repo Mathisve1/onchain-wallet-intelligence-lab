@@ -7,7 +7,7 @@ the table it changes rather than buried in write logic.
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _TRADES_TABLE = """
     CREATE TABLE trades (
@@ -29,6 +29,24 @@ _TRADES_INDEXES = (
     "CREATE INDEX trades_by_buyer ON trades (buyer)",
     "CREATE INDEX trades_by_seller ON trades (seller)",
 )
+
+_CANDLES_TABLE = """
+    CREATE TABLE candles (
+        coin TEXT NOT NULL,
+        interval TEXT NOT NULL,
+        open_time_ms INTEGER NOT NULL,
+        close_time_ms INTEGER NOT NULL,
+        open TEXT NOT NULL,
+        high TEXT NOT NULL,
+        low TEXT NOT NULL,
+        close TEXT NOT NULL,
+        volume TEXT NOT NULL,
+        trade_count INTEGER NOT NULL,
+        raw_payload TEXT NOT NULL,
+        ingested_at_ms INTEGER NOT NULL,
+        PRIMARY KEY (coin, interval, open_time_ms)
+    )
+    """
 
 _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
@@ -123,6 +141,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     _TRADES_TABLE,
     *_TRADES_INDEXES,
+    _CANDLES_TABLE,
 )
 
 #: Upgrades from one schema version to the next. A version with no entry here
@@ -130,4 +149,5 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
 _MIGRATIONS: dict[int, tuple[str, ...]] = {
     2: ("ALTER TABLE ingest_runs ADD COLUMN coverage TEXT",),
     3: (_TRADES_TABLE, *_TRADES_INDEXES),
+    4: (_CANDLES_TABLE,),
 }

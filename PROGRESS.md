@@ -62,6 +62,8 @@ closed it.
 | L1 instrument revision 2 | 2026-09-04 | `RESCORED` | common decision cutoff, 15-min price age bound, own fills excluded from prices, funding coverage as a share, liquidity labelled assumed; 1734 to 16710 copies per wallet now unpriceable, which is the honest state of a fills-derived price source; 95 copyability tests |
 | L2 two-arm approval | 2026-09-04 | `APPROVED_BUILD_HELD` | DEC-043; `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` SHA-256 `3ac5e20a…a8b4` bound to `3edfbf3`; 600 candidates, arm A historical (90 d backfill, 30 d characterisation, 7 d buffer, 53 d evaluation), arm B forward 56 d as out-of-sample test; target 0.5 pt / 14 d |
 | Candle probe | 2026-09-04 | `MEASURED` | `evidence/L2_CANDLE_PROBE_001.json`: candleSnapshot exists (1m…1d), ~5000 candles per interval rolling — 15 m reaches 52 d, 5 m 17.5 d, 1 m 3.6 d, 1 h 208 d; 110 of 113 cohort coins complete at 15 m with max gap 15 min; the approved 53-day arm A window is not coverable at 15 m, 45 days are |
+| Arm A window decision | 2026-09-04 | `DECIDED_A45` | DEC-044; `APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `df082701…ecc96` bound to `3311338`; arm A = T0-52 to T0-7 on 15-minute candles, 15-minute freshness, no mixed resolution; B decisive, A is the early read and the survivorship measurement; `L2_ANALYSIS_PLAN.md` frozen at `1833f34` |
+| L2 pipeline build | 2026-09-04 | `BUILT_VERIFIED` | DEC-045; phases 1 to 8 of `L2_BUILD_PLAN.md`: size-weighted rate limiting, paged funding, `candleSnapshot` with schema v4, arm B `sweep` and `mids`, cohort discover/characterise/freeze with the 200-wallet hard stop, arm A candle fetch, opening positions in the simulator, arm B health script; every phase blind-verified; 1522 tests pass locally (two Windows-only `st_blocks` failures remain) |
 
 ## Open gates
 
@@ -71,17 +73,15 @@ Ordered by what unblocks the most.
    evidence, discovery, the coverage fixes and `src/copyability` are on the
    branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
    fail only on Windows.
-2. **Arm A window decision** — DEC-043 replaced the 14-day window with two
-   arms. The candle probe shows an independent 15-minute price series exists
-   only for the last 52 days (rolling), so the approved 53-day historical
-   evaluation cannot be covered at the 15-minute age bound. The owner chooses
-   A-45 (45 days at 15 m), A-53 (oldest 8 days on 1-hour candles, flagged), or
-   arm B alone. Retention rolls daily, so T0 and the candle fetch follow the
-   decision immediately. No L2 code is written until then; the analysis plan
-   (`L2_ANALYSIS_PLAN.md`) is drafted for all three.
-3. **Fixes that precede any collection** — response-size weight charged
-   locally, `userFunding` paged past 500 rows, the public tape kept connected
-   for evaluation prices, one common window for every wallet.
+2. **L2 collection run** — the pipeline is built and verified; the next
+   step is `code-review` on every new collection module, then discovery
+   sessions, a 90-day characterisation backfill, the freeze with its
+   200-wallet hard stop, the arm A candle fetch and the arm A runner, all
+   from the frozen plan at `1833f34`. Arm B then runs 56 days of
+   operator-started sweeps with health checks only.
+3. **Validator hardening** — the L1 validator honours the DEC-043 widening
+   from the approval file's key line without checking that file's SHA-256
+   against DEC-043; add the comparison before the arm A report.
 3. **R11A implementation merge** — review and merge the fully inert R11A
    implementation and workflow candidate, kept outside `.github/workflows`.
 4. **R11A owner approval** — one hash-bound approval of the diagnostic scope,
