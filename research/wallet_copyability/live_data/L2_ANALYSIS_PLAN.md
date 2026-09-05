@@ -1,7 +1,9 @@
 # L2 analysis plan (preregistered before T0)
 
 Status: `FROZEN`. Frozen on 2026-09-04 under DEC-043 and DEC-044, before any
-evaluation request. The commit that contains this frozen text is cited in the T0
+evaluation request; amended once on 2026-09-05 under DEC-046, still before T0 and
+before any collection request, to add the owner's pre-registered reading of arm A
+(the section "How arm A is read, fixed before it is seen"). The commit that contains this frozen text is cited in the T0
 evidence together with the cohort hash. Nothing in it changes after T0. It carries no
 validator and no tamper tests by owner instruction; its authority is that hash.
 
@@ -108,6 +110,48 @@ hard stop above applies.
   itself, but obliges a written diagnosis of where it comes from before any GO is
   acted on. The case "A negative, B positive" is named explicitly in the report,
   never handled silently.
+
+## How arm A is read, fixed before it is seen
+
+The owner recorded, before T0 and before any result exists, how each possible
+outcome of arm A is read. The bar does not move afterwards; a later reading that
+differs from this one is a change of mind, not an insight.
+
+1. **Fewer than 200 evaluable wallets after filtering.** The run stops before
+   any evaluation and returns to the owner, who widens the pool. The report
+   states the clock price of the delay: how many evaluation days the candle
+   retention (about 52 days at 15 minutes, rolling) loses per day of delay. No
+   underpowered study is run "to have something".
+2. **Arm A negative** (upper 95 percent bound below 0.5 points per 14 days).
+   A strong signal, not a disappointment: survivorship biases this arm upward,
+   so a negative outcome in the arm that should read too high is harder to
+   explain away than a negative in the clean arm. Arm B continues and decides.
+   No search for a variant that works.
+3. **Arm A positive** (lower 95 percent bound above 0.5). Interesting, not
+   actionable. B decides, weeks later. The survivorship measurement is
+   reported beside it and matters more than the point estimate. Nothing is
+   built on one contaminated arm.
+4. **Arm A inconclusive** (the interval contains 0.5). Reported as
+   inconclusive, without reinterpretation.
+5. **Something breaks in the build or the collection.** Stop and report.
+
+### Excluded in advance
+
+- **No subgroup hunting.** If the primary measure at 30 s misses the target,
+  no latency, coin, wallet class or time window is searched for one that
+  meets it. Such cuts may be computed and shown, but every one of them carries
+  the label `EXPLORATORY`, can never carry a GO, and is at most a hypothesis
+  for a next, separately preregistered study.
+- **No lowering of the target afterwards.** 0.5 points per 14 days stands. If
+  the data show that 0.35 would have been detectable with more wallets, that
+  is a lesson for the next study, not a reinterpretation of this one.
+
+### Report order for arm A
+
+Delivered only when arm A is complete, in this order: the answer in one
+sentence; the confidence interval; the survivorship measurement (both
+measures declared above); n after every filter stage; what broke; only then
+the tables.
 
 ## Stop rule and what is not allowed
 

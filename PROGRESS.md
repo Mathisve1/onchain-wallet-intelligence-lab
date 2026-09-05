@@ -64,6 +64,7 @@ closed it.
 | Candle probe | 2026-09-04 | `MEASURED` | `evidence/L2_CANDLE_PROBE_001.json`: candleSnapshot exists (1m…1d), ~5000 candles per interval rolling — 15 m reaches 52 d, 5 m 17.5 d, 1 m 3.6 d, 1 h 208 d; 110 of 113 cohort coins complete at 15 m with max gap 15 min; the approved 53-day arm A window is not coverable at 15 m, 45 days are |
 | Arm A window decision | 2026-09-04 | `DECIDED_A45` | DEC-044; `APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `df082701…ecc96` bound to `3311338`; arm A = T0-52 to T0-7 on 15-minute candles, 15-minute freshness, no mixed resolution; B decisive, A is the early read and the survivorship measurement; `L2_ANALYSIS_PLAN.md` frozen at `1833f34` |
 | L2 pipeline build | 2026-09-04 | `BUILT_VERIFIED` | DEC-045; phases 1 to 8 of `L2_BUILD_PLAN.md`: size-weighted rate limiting, paged funding, `candleSnapshot` with schema v4, arm B `sweep` and `mids`, cohort discover/characterise/freeze with the 200-wallet hard stop, arm A candle fetch, opening positions in the simulator, arm B health script; every phase blind-verified; 1522 tests pass locally (two Windows-only `st_blocks` failures remain) |
+| Plan amendment (reading rules) | 2026-09-05 | `FROZEN_AMENDED_PRE_T0` | DEC-046; owner's reading of arm A, the `EXPLORATORY` rule and the report order written into `L2_ANALYSIS_PLAN.md` before T0 |
 
 ## Open gates
 
