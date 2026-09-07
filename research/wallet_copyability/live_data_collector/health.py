@@ -49,7 +49,11 @@ from src.live_data.storage import LiveDataStore
 #: milliseconds. A gap wider than this in either series is flagged stale.
 FIFTEEN_MINUTE_MS = 900_000
 
-_COVERAGE_MODES = ("backfill_wallet", "sweep")
+#: Modes that write one run per wallet, with ``wallet_address`` filled in
+#: and a ``window``/``fills`` coverage block. ``sweep_wallet`` is the
+#: per-wallet row a sweep writes alongside its cohort-level ``sweep`` run.
+_WALLET_ADDRESSED_MODES = ("backfill_wallet", "sweep_wallet")
+_WALLET_MODE_PLACEHOLDERS = ", ".join("?" * len(_WALLET_ADDRESSED_MODES))
 
 #: ``sweep.py`` marks a wallet it swept without incident with this exact
 #: status; any other string in that slot is that wallet's failure.
@@ -94,6 +98,22 @@ def _sweep_runs(store: LiveDataStore) -> list[dict]:
     return runs
 
 
+def _writes_per_wallet_rows(store: LiveDataStore) -> bool:
+    """Does this database record each swept wallet as its own run row?
+
+    A sweep can record a wallet twice: once as a ``sweep_wallet`` row naming it
+    in ``wallet_address``, and again inside the cohort-level ``sweep`` run's
+    ``coverage["per_wallet"]``. Counting both would double every failure. Where
+    the per-wallet rows exist they are the record of truth -- they carry their
+    own status, timing and coverage -- so the embedded statuses are read only
+    when no such rows are written.
+    """
+    row = store.connection.execute(
+        "SELECT 1 FROM ingest_runs WHERE mode = 'sweep_wallet' LIMIT 1"
+    ).fetchone()
+    return row is not None
+
+
 def _sweep_entry(run: dict, wallet_address: str) -> dict | None:
     """This wallet's entry in one sweep run, or ``None`` if it has none."""
     entry = run["per_wallet"].get(wallet_address)
@@ -133,8 +153,9 @@ def _coverage_windows(
     windows: list[tuple[int, int]] = []
     for run in store.connection.execute(
         "SELECT coverage FROM ingest_runs "
-        "WHERE wallet_address = ? AND status = 'completed' AND mode = 'backfill_wallet'",
-        (wallet_address,),
+        "WHERE wallet_address = ? AND status = 'completed' "
+        f"AND mode IN ({_WALLET_MODE_PLACEHOLDERS})",
+        (wallet_address, *_WALLET_ADDRESSED_MODES),
     ):
         if not run["coverage"]:
             continue
@@ -188,6 +209,7 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
     """Per-wallet operational counts and timestamps. No price, no P&L."""
     rows: list[dict] = []
     sweep_runs = _sweep_runs(store)
+    per_wallet_rows = _writes_per_wallet_rows(store)
     for wallet in wallets:
         last_fill = store.connection.execute(
             "SELECT MAX(event_time_ms) AS t FROM fills WHERE wallet_address = ?", (wallet,)
@@ -203,12 +225,14 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
             "SELECT COUNT(*) AS n FROM funding WHERE wallet_address = ? AND event_time_ms > ?",
             (wallet, t0_ms),
         ).fetchone()
-        # Two sources, because the two modes record a wallet differently: a
-        # backfill names it in the column, a sweep only inside its coverage.
-        last_backfill = store.connection.execute(
+        # Two sources, because the modes record a wallet differently: a
+        # backfill (and a per-wallet sweep row) names it in the column, while a
+        # cohort-level sweep run names it only inside its coverage.
+        last_wallet_run = store.connection.execute(
             "SELECT MAX(finished_at_ms) AS t FROM ingest_runs "
-            "WHERE wallet_address = ? AND status = 'completed' AND mode = 'backfill_wallet'",
-            (wallet,),
+            "WHERE wallet_address = ? AND status = 'completed' "
+            f"AND mode IN ({_WALLET_MODE_PLACEHOLDERS})",
+            (wallet, *_WALLET_ADDRESSED_MODES),
         ).fetchone()
         wallet_run_failures = store.connection.execute(
             "SELECT COUNT(*) AS n FROM ingest_runs WHERE wallet_address = ? AND status = 'failed'",
@@ -221,11 +245,15 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
             for run, outcome in zip(sweep_runs, outcomes)
             if outcome == _SWEEP_OK and run["finished_at_ms"] is not None
         ]
-        candidates = [t for t in (last_backfill["t"], max(swept_ms, default=None)) if t is not None]
+        candidates = [
+            t for t in (last_wallet_run["t"], max(swept_ms, default=None)) if t is not None
+        ]
         last_sweep_ms = max(int(t) for t in candidates) if candidates else None
-        sweep_failures = int(wallet_run_failures["n"]) + sum(
-            1 for outcome in outcomes if outcome is not None and outcome != _SWEEP_OK
-        )
+        sweep_failures = int(wallet_run_failures["n"])
+        if not per_wallet_rows:
+            sweep_failures += sum(
+                1 for outcome in outcomes if outcome is not None and outcome != _SWEEP_OK
+            )
 
         rows.append(
             {

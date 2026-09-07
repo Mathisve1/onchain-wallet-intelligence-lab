@@ -187,7 +187,10 @@ def load_coverage(store: LiveDataStore) -> CoverageLedger:
         if run["status"] != "completed" or not run["coverage"]:
             continue
         coverage = json.loads(run["coverage"])
-        if run["mode"] == "backfill_wallet":
+        # ``sweep_wallet`` is the per-wallet row a sweep writes for each wallet
+        # it touches. It carries the same window/fills coverage block a
+        # backfill does, so it certifies by exactly the same rules.
+        if run["mode"] in ("backfill_wallet", "sweep_wallet"):
             fills = coverage.get("fills", {})
             window = coverage.get("window", {})
             if not fills.get("attempted") or "start_time_ms" not in window:
@@ -213,7 +216,7 @@ def load_coverage(store: LiveDataStore) -> CoverageLedger:
             observed.append(ObservedInterval(
                 wallet=run["wallet_address"], start_ms=start,
                 end_ms=end if end is not None else start,
-                complete=end is not None, source=f"backfill:{run['run_id']}",
+                complete=end is not None, source=f"{run['mode']}:{run['run_id']}",
             ))
         elif run["mode"] == "watch" and run["finished_at_ms"]:
             # A session that reconnected has unobserved gaps it did not time;
