@@ -22,7 +22,12 @@ from typing import Mapping, Sequence
 
 from .costs import CostModel
 from .coverage import KnownInterval
-from .execution import FollowerConfig, FollowerRun, simulate_follower
+from .execution import (
+    FollowerConfig,
+    FollowerRun,
+    opening_positions_for,
+    simulate_follower,
+)
 from .inputs import SIDE_BUY, SIDE_SELL, InputError, MarketData, SourceFill
 from .pit import PointInTimeView
 
@@ -140,9 +145,14 @@ def matched_random(
     for wallet in chosen:
         peer_interval = certify(wallet, interval.start_ms, interval.end_ms)
         try:
+            # The peer is copied under the same convention as the target,
+            # opening positions included: comparing a target scored with
+            # pre-window inventory against peers scored without it would put
+            # the two sides of the baseline in different units.
             run = simulate_follower(
                 peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
                 cost_model=cost_model, config=config,
+                opening_positions=opening_positions_for(peer_interval, pool[wallet]),
             )
         except InputError:
             # A peer the market cannot price (a coin with no series or no

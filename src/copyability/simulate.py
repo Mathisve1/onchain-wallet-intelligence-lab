@@ -22,7 +22,14 @@ from . import baselines
 from .classify import DEFAULT_THRESHOLDS, ClassifierThresholds, WalletProfile, profile_wallet
 from .costs import CostModel
 from .coverage import CoverageLedger, KnownInterval, UnknownIntervalError
-from .execution import LATENCY_GRID_MS, FollowerConfig, FollowerRun, simulate_follower, source_pnl
+from .execution import (
+    LATENCY_GRID_MS,
+    FollowerConfig,
+    FollowerRun,
+    opening_positions_for,
+    simulate_follower,
+    source_pnl,
+)
 from .inputs import InputError, MarketData, SourceFill
 from .metrics import Outcome, outcome_for
 
@@ -119,10 +126,13 @@ def run_study(
             if cutoff < interval.start_ms:
                 raise InputError("interval shorter than the largest latency on the grid")
             assumed = any(p.assumed for p in wallet_market.liquidity.values())
+            opening = opening_positions_for(interval, fills)
             outcomes: list[Outcome] = []
             peers_seen: tuple[str, ...] = ()
             for latency in config.latencies_ms:
-                run = _follower_on_deployed_capital(interval, latency, fills, wallet_market, config, cutoff)
+                run = _follower_on_deployed_capital(
+                    interval, latency, fills, wallet_market, config, cutoff, opening
+                )
                 returns, peers = _baseline_returns(
                     interval, latency, run, source.fill_count, fills_by_wallet, wallet_market,
                     ledger, config, cutoff,
@@ -141,7 +151,7 @@ def run_study(
 
 def _follower_on_deployed_capital(
     interval: KnownInterval, latency_ms: int, fills: Sequence[SourceFill], market: MarketData,
-    config: StudyConfig, cutoff_ms: int,
+    config: StudyConfig, cutoff_ms: int, opening: Mapping[str, Decimal],
 ) -> FollowerRun:
     """Run once to measure deployed capital, then again with that as the base.
 
@@ -149,10 +159,16 @@ def _follower_on_deployed_capital(
     copy's positions determine how much notional it actually holds. The
     second pass restarts the equity curve from that amount so drawdown is a
     fraction of capital that was really at work, not of an arbitrary number.
+
+    ``opening`` is what the source already held when the interval opened. It
+    has to reach the simulator on both passes: without it a source fill that
+    closes a pre-window position opens an inverted one for the follower, and
+    the copy is scored on a trade the wallet never made.
     """
     first = simulate_follower(
         interval, latency_ms=latency_ms, fills=fills, market=market, cost_model=config.cost_model,
         config=config.follower, decision_cutoff_ms=cutoff_ms, max_price_age_ms=config.max_price_age_ms,
+        opening_positions=opening,
     )
     deployed = first.peak_deployed_notional
     if deployed <= 0:
@@ -161,6 +177,7 @@ def _follower_on_deployed_capital(
     return simulate_follower(
         interval, latency_ms=latency_ms, fills=fills, market=market, cost_model=config.cost_model,
         config=sized, decision_cutoff_ms=cutoff_ms, max_price_age_ms=config.max_price_age_ms,
+        opening_positions=opening,
     )
 
 

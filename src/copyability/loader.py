@@ -23,6 +23,9 @@ from src.live_data.ingest import MAX_FUNDING_PER_RESPONSE
 from src.live_data.storage import LiveDataStore
 
 from .coverage import CoverageLedger, ObservedInterval
+# Re-exported: it moved next to the simulator that consumes it, but the
+# loader is where callers building study inputs expect to find it.
+from .execution import replay_positions  # noqa: F401
 from .inputs import (
     FundingEvent,
     FundingSchedule,
@@ -157,20 +160,6 @@ def load_candle_prices(
         ).fetchall()
         series[coin] = PriceSeries(coin, ((r["close_time_ms"], Decimal(r["close"])) for r in rows))
     return series
-
-
-def replay_positions(fills: Sequence[SourceFill], *, until_ms: int) -> dict[str, Decimal]:
-    """Net signed size per coin the wallet held after every fill up to ``until_ms``.
-
-    This is what a follower has to stand in before it can copy a fill that
-    closes a position opened earlier: without it the close reads as an open in
-    the opposite direction. Coins that net to flat are omitted.
-    """
-    net: dict[str, Decimal] = {}
-    for row in fills:
-        if row.time_ms <= until_ms:
-            net[row.coin] = net.get(row.coin, Decimal(0)) + row.signed_size
-    return {coin: size for coin, size in net.items() if size != 0}
 
 
 def load_funding_rates(store: LiveDataStore, coins: Iterable[str]) -> FundingSchedule:

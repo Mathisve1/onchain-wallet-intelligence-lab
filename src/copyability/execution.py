@@ -339,6 +339,33 @@ def _require_known(interval: object) -> None:
         )
 
 
+def replay_positions(fills: Sequence[SourceFill], *, until_ms: int) -> dict[str, Decimal]:
+    """Net signed size per coin the wallet held after every fill up to ``until_ms``.
+
+    This is what a follower has to stand in before it can copy a fill that
+    closes a position opened earlier: without it the close reads as an open in
+    the opposite direction. Coins that net to flat are omitted.
+    """
+    net: dict[str, Decimal] = {}
+    for row in fills:
+        if row.time_ms <= until_ms:
+            net[row.coin] = net.get(row.coin, Decimal(0)) + row.signed_size
+    return {coin: size for coin, size in net.items() if size != 0}
+
+
+def opening_positions_for(
+    interval: KnownInterval, fills: Sequence[SourceFill]
+) -> dict[str, Decimal]:
+    """What ``interval.wallet`` already held when the interval opened.
+
+    Strictly before the interval: :func:`_fills_in` treats a fill exactly at
+    ``start_ms`` as inside the window, so counting it here as well would both
+    open the position and copy the fill that opened it.
+    """
+    own = [f for f in fills if f.wallet == interval.wallet]
+    return replay_positions(own, until_ms=interval.start_ms - 1)
+
+
 def _fills_in(interval: KnownInterval, fills: Sequence[SourceFill]) -> list[SourceFill]:
     rows = [
         f for f in fills

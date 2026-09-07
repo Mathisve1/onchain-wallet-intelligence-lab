@@ -17,7 +17,13 @@ from pathlib import Path
 
 from src.copyability.costs import CostModel, FeeSchedule
 from src.copyability.coverage import CoverageLedger, ObservedInterval
-from src.copyability.execution import FollowerConfig, simulate_follower, source_pnl
+from src.copyability.execution import (
+    FollowerConfig,
+    opening_positions_for,
+    simulate_follower,
+    source_pnl,
+)
+from src.copyability.simulate import StudyConfig, run_study
 from src.copyability.classify import profile_wallet
 from src.copyability.inputs import (
     FundingEvent,
@@ -53,6 +59,67 @@ def market(points, funding=()) -> MarketData:
 
 def certified(start=1_000, end=100_000, wallet=W):
     return CoverageLedger([ObservedInterval(wallet, start, end, True, "t")]).certify(wallet, start, end)
+
+
+class RunStudyOpeningPositionTests(unittest.TestCase):
+    """The orchestration path must supply opening positions, not just accept them.
+
+    Regression: ``simulate_follower`` grew ``opening_positions`` and
+    ``replay_positions`` was written to build the map, but ``run_study`` never
+    passed either, so the only path a study actually runs still scored a
+    pre-window close as an inverted open. The unit tests above passed
+    throughout, because they call the simulator directly.
+    """
+
+    def _study(self):
+        # Long 1 BTC opened before the window, sold inside it at 109.
+        rows = [
+            fill(W, 500, 0, "B", price="99"),
+            fill(W, 10_000, 1, "A", price="109"),
+        ]
+        ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "t")])
+        config = StudyConfig(
+            follower=CONFIG,
+            cost_model=MODEL,
+            benchmark_coin="BTC",
+            momentum_lookback_ms=5_000,
+            momentum_step_ms=1_000,
+            random_seed=1,
+            random_sample_size=1,
+            latencies_ms=(0,),
+        )
+        return run_study(
+            fills_by_wallet={W: rows},
+            market=market(RISING),
+            ledger=ledger,
+            config=config,
+            funding_truncated={W: False},
+            window=(1_000, 100_000),
+        )
+
+    def test_run_study_scores_a_pre_window_close_as_a_close(self) -> None:
+        studies = self._study()
+        self.assertEqual(len(studies), 1)
+        study = studies[0]
+        self.assertIsNone(study.refusal)
+        outcome = study.outcomes[0]
+        # Catch-up long at the first quote (100), closed at 109: +9.
+        # Before the fix this was -90, a short the wallet never opened.
+        self.assertEqual(outcome.gross, D("9"))
+
+    def test_the_opening_map_excludes_a_fill_exactly_at_the_interval_start(self) -> None:
+        """A fill at ``start_ms`` is inside the window, so it must not also
+        count as inventory carried into it."""
+        interval = certified()
+        rows = [fill(W, 1_000, 1, "B", price="100")]
+        self.assertEqual(opening_positions_for(interval, rows), {})
+        earlier = [fill(W, 999, 1, "B", price="100")]
+        self.assertEqual(opening_positions_for(interval, earlier), {"BTC": D("1")})
+
+    def test_the_opening_map_ignores_another_wallets_fills(self) -> None:
+        other = "0x" + "cd" * 20
+        rows = [fill(other, 500, 1, "B", price="100")]
+        self.assertEqual(opening_positions_for(certified(), rows), {})
 
 
 class OpeningPositionTests(unittest.TestCase):
