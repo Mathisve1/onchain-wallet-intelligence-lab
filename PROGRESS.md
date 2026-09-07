@@ -135,6 +135,46 @@ What the review found, on the tip:
 Not merged. Merging a recorded human approval, and resolving the gate-text
 conflict, are both owner decisions rather than review outcomes.
 
+## Live-data review (2026-09-06)
+
+A code review of the `feature/live-data-pipeline` branch found fifteen defects
+across `src/live_data`, `src/copyability` and the L2 collector. All fifteen
+were reproduced before being fixed, and each carries a regression test. They
+are committed one per concern so any single one can be reverted alone.
+
+The four that would have changed a reported number or hidden a real outage:
+
+- `run_study` never passed `opening_positions`, so the only orchestration path
+  a study runs still scored a fill closing a pre-window position as an inverted
+  open — the defect the 2026-09-04 round documented as fixed. `replay_positions`
+  existed for exactly this and had no caller outside its own test. On the new
+  regression scenario the scored gross moves from `-90` to `+9`.
+- Arm B health filtered sweeps by `wallet_address`, which a sweep run never
+  sets, so every wallet reported a permanently stale sweep once `--stale-hours`
+  elapsed regardless of sweep health, and per-wallet failures inside a completed
+  run counted as zero. The tests built rows in a shape the collector never
+  writes, so they confirmed the bug rather than catching it.
+- The candle probe scored a `~5000`-row-capped response against 90 days of
+  candles, so a perfect series scored `0.579` and every cohort coin landed in
+  `uncovered`; it also charged a flat 20 weight where a full response costs
+  103, which is the recorded cause of its own three HTTP 429s. The committed
+  code could not have produced `L2_CANDLE_PROBE_001.json`; it now can. The
+  retained evidence was not touched and the probe was not re-run.
+- The fills walk recorded coverage past a millisecond it had knowingly skipped,
+  so the ledger certified intervals containing a gap the collector had itself
+  written down.
+
+Two governance notes from the same round:
+
+- `governance/regenerate_manifest.py` and `seal_r11a_v2_preregistration.py`
+  wrote their artifacts in text mode, which rewrites every line as CRLF on
+  Windows. No `--check` catches it, because `read_text` normalises newlines on
+  the way back in. Both now pass an explicit newline.
+- `governance/seal_r11a_implementation.py` has the same defect and was left
+  alone on purpose: its contract records a hash of the seal script itself, so
+  editing it invalidates the seal it maintains. Re-sealing a governance
+  contract is an owner decision.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
@@ -142,7 +182,7 @@ conflict, are both owner decisions rather than review outcomes.
   `research/archive_inventory/r11a_implementation/storage.py` reads
   `stat.st_blocks`, which CPython only populates on POSIX. Pre-existing,
   unrelated to the live-data work, and green in Linux CI. Everything else
-  passes: 1217 of 1219 local, 199 of 199 live-data.
+  passes: 1545 of 1547 local after the 2026-09-06 review round.
 - `C:\Users\mathi\Desktop\onchain-wallet-intelligence-lab-main` is an unpacked
   zip with no `.git`. Its contents match `origin/main`, so it looks current,
   but it can never produce a branch, commit or PR and it lacks everything on
