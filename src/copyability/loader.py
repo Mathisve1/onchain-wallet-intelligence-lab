@@ -62,10 +62,15 @@ def load_fills(store: LiveDataStore, wallets: Iterable[str] | None = None) -> di
 def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
     """Per wallet: did any completed backfill hit the venue's funding cap?
 
-    Older run records predate the ``truncated_at_response_cap`` flag and say
-    ``completed`` even when they received exactly the cap, so a full response
-    is treated as truncated whichever way the record phrases it. A truncated
-    wallet's funding cost is a lower bound and every result for it must say so.
+    Records that carry ``truncated_at_response_cap`` are believed: since
+    ``_collect_funding`` gained pagination, ``seen`` is the sum across every
+    page, so a wallet with 500 or more funding rows collected *completely*
+    would otherwise be disclosed as truncated in every result it appears in.
+
+    Only records predating that flag fall back to the size test, where a
+    response at exactly the cap was the only evidence of truncation there was.
+    A truncated wallet's funding cost is a lower bound and every result for it
+    must say so.
     """
     truncated: dict[str, bool] = {}
     for run in store.connection.execute(
@@ -74,10 +79,10 @@ def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
         if not run["coverage"]:
             continue
         funding = json.loads(run["coverage"]).get("funding", {})
-        hit_cap = (
-            bool(funding.get("truncated_at_response_cap"))
-            or funding.get("seen", 0) >= MAX_FUNDING_PER_RESPONSE
-        )
+        if "truncated_at_response_cap" in funding:
+            hit_cap = bool(funding["truncated_at_response_cap"])
+        else:
+            hit_cap = funding.get("seen", 0) >= MAX_FUNDING_PER_RESPONSE
         wallet = run["wallet_address"]
         truncated[wallet] = truncated.get(wallet, False) or hit_cap
     return truncated

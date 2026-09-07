@@ -155,6 +155,26 @@ class LoaderTests(unittest.TestCase):
         self.assertFalse(truncated[W])  # setUp's backfill_coverage says funding completed, no count
         self.assertNotIn(FAILED, truncated)  # failed runs say nothing either way
 
+    def test_a_fully_paged_wallet_is_not_reported_as_funding_truncated(self) -> None:
+        """Regression: ``seen`` is the sum across pages now that funding pages.
+
+        Before pagination, a ``seen`` at the response cap was the only sign of
+        truncation. Afterwards any wallet with 500 or more funding rows
+        collected *completely* tripped the same test, so every result it
+        appeared in carried a truncation caveat it had not earned.
+        """
+        from src.copyability.loader import load_funding_truncation
+
+        paged = "0x" + "78" * 20
+        finish(self.store, "bf-paged", mode="backfill_wallet", wallet=paged, start=1, end=2,
+               coverage={"window": {"start_time_ms": 1, "end_time_ms": 2},
+                         "fills": {"attempted": True, "completed": True, "covered_until_ms": 2},
+                         "funding": {"attempted": True, "completed": True,
+                                     "truncated_at_response_cap": False,
+                                     "seen": 1500, "pages": 3},
+                         "positions": {"attempted": True}})
+        self.assertFalse(load_funding_truncation(self.store)[paged])
+
     def test_fills_carry_the_crossed_flag(self) -> None:
         fills = load_fills(self.store, [W])
         self.assertTrue(all(f.crossed is True for f in fills[W]))
