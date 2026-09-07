@@ -172,8 +172,15 @@ Two governance notes from the same round:
   the way back in. Both now pass an explicit newline.
 - `governance/seal_r11a_implementation.py` has the same defect and was left
   alone on purpose: its contract records a hash of the seal script itself, so
-  editing it invalidates the seal it maintains. Re-sealing a governance
-  contract is an owner decision.
+  editing it invalidates the seal it maintains. The same applies to the
+  Windows `st_blocks` failure in the sealed `storage.py`. Neither belongs on
+  this branch: both files diverge on the open R11A stack (`#148`–`#152`), so a
+  fix here would only manufacture a merge conflict. They should be fixed on
+  that stack and re-sealed there.
+- `validate_l1_live_data_preregistration.py` accepted a watch command that
+  omitted `max_iterations` (the default of 0 satisfied the cap) and raised
+  `TypeError` on a non-integer cap. Every watch step must now record an
+  integer cap in `(0, 1000]`.
 
 ## Known issues
 
