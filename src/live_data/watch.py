@@ -56,6 +56,10 @@ class WatchMixin:
         # One tape handler shared by every coin subscription: the ``trades``
         # channel routes on the channel alone, so a per-coin handler would see
         # every coin's frames anyway and discovery must count each wallet once.
+        # Sharing the callable is not itself what stops the fan-out --
+        # ``dispatch`` deduplicates handlers by identity across the
+        # subscriptions that share a route key, which is what makes one frame
+        # arrive here exactly once rather than once per tracked coin.
         trades_handler = self._make_trades_handler(result)
         handlers = {
             "userFills": lambda: self._make_user_fills_handler(result),

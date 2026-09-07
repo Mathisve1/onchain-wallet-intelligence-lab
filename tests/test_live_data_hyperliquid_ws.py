@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 from typing import Any
 
 from src.live_data.config import LiveDataConfig
@@ -487,6 +488,74 @@ class RunLoopTests(unittest.TestCase):
         with self.assertRaises(WebSocketError):
             client.run(max_iterations=-1)
 
+
+
+class ChannelRoutedFanOutTests(unittest.TestCase):
+    """One frame on a channel-routed feed must reach a handler exactly once."""
+
+    def _client(self, coins):
+        config = LiveDataConfig(database_path=Path("x.sqlite3"), tracked_coins=tuple(coins))
+        return HyperliquidWebSocketClient(config, connection_factory=lambda url: None)
+
+    def test_a_shared_handler_runs_once_however_many_coins_are_subscribed(self) -> None:
+        """Regression: ``trades/BTC``, ``trades/ETH`` and ``trades/SOL`` all key
+        to ``("trades", None)``, and ``watch.py`` registers one shared handler
+        under each. Collecting handlers per matching subscription therefore ran
+        it three times for one frame, tripling ``trades_seen``, the
+        ``ingest_runs`` coverage counts and the discovery evidence, and running
+        the write path three times on the hot tape path.
+        """
+        client = self._client(("BTC", "ETH", "SOL"))
+        seen = []
+
+        def handler(message):
+            seen.append(message["channel"])
+
+        for coin in ("BTC", "ETH", "SOL"):
+            client.subscribe(Subscription(type="trades", coin=coin), handler)
+
+        client.dispatch(json.dumps({"channel": "trades", "data": [{"coin": "BTC"}]}))
+        self.assertEqual(len(seen), 1)
+
+    def test_two_distinct_handlers_on_one_route_both_still_run(self) -> None:
+        client = self._client(("BTC", "ETH"))
+        seen = []
+        client.subscribe(Subscription(type="trades", coin="BTC"), lambda m: seen.append("a"))
+        client.subscribe(Subscription(type="trades", coin="ETH"), lambda m: seen.append("b"))
+        client.dispatch(json.dumps({"channel": "trades", "data": []}))
+        self.assertEqual(sorted(seen), ["a", "b"])
+
+    def test_the_same_handler_registered_twice_on_one_subscription_runs_once(self) -> None:
+        client = self._client(("BTC",))
+        seen = []
+
+        def handler(message):
+            seen.append(1)
+
+        subscription = Subscription(type="trades", coin="BTC")
+        client.subscribe(subscription, handler)
+        client.subscribe(subscription, handler)
+        client.dispatch(json.dumps({"channel": "trades", "data": []}))
+        self.assertEqual(len(seen), 1)
+
+
+class MalformedWalletFrameTests(unittest.TestCase):
+    def test_an_unusable_wallet_is_dropped_instead_of_ending_the_session(self) -> None:
+        """Regression: ``normalize_wallet_address`` raises ``ConfigError``, a
+        ``ValueError``, which ``dispatch``'s ``except WebSocketError`` did not
+        catch -- so one malformed ``userFills`` frame escaped ``poll_once`` and
+        aborted the whole watch session instead of being counted and dropped.
+        """
+        config = LiveDataConfig(database_path=Path("x.sqlite3"), tracked_coins=("BTC",))
+        client = HyperliquidWebSocketClient(config, connection_factory=lambda url: None)
+        client.subscribe(
+            Subscription(type="userFills", user="0x" + "ab" * 20), lambda m: None
+        )
+        channel = client.dispatch(
+            json.dumps({"channel": "userFills", "data": {"user": "nonsense", "fills": []}})
+        )
+        self.assertEqual(channel, "userFills")
+        self.assertEqual(client.ambiguous_messages, 1)
 
 if __name__ == "__main__":
     unittest.main()

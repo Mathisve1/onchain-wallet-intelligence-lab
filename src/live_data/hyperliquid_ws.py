@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
-from .config import LiveDataConfig, normalize_coin, normalize_wallet_address
+from .config import ConfigError, LiveDataConfig, normalize_coin, normalize_wallet_address
 
 #: Subscription types this client is allowed to open, and the fields each needs.
 SUBSCRIPTION_TYPES: dict[str, frozenset[str]] = {
@@ -250,7 +250,14 @@ class HyperliquidWebSocketClient:
             user = data.get("user")
             if not isinstance(user, str):
                 raise WebSocketError(f"{channel} frame does not name its wallet")
-            return (channel, normalize_wallet_address(user))
+            try:
+                return (channel, normalize_wallet_address(user))
+            except ConfigError as exc:
+                # A wallet the venue sent that we cannot normalise is an
+                # unattributable frame like any other, not a reason to end the
+                # session: ConfigError is a ValueError, so without this it
+                # escapes dispatch's handler and aborts the watch.
+                raise WebSocketError(f"{channel} frame names an unusable wallet: {exc}") from exc
         candidates = {
             subscription.route_key
             for subscription in self._subscriptions
@@ -288,12 +295,23 @@ class HyperliquidWebSocketClient:
             # it to every wallet would corrupt per-wallet provenance.
             self.ambiguous_messages += 1
             return channel
-        handlers = [
-            handler
-            for subscription, registered in self._subscriptions.items()
-            if subscription.route_key == route
-            for handler in registered
-        ]
+        # Several subscriptions can share one route key: a channel-routed feed
+        # like ``trades`` keys every coin to ("trades", None), and watch.py
+        # registers the *same* handler object under each of them. Delivering
+        # once per matching subscription would call that handler once per coin
+        # for a single frame, multiplying every tape count by the coin count
+        # and re-running the write path N times. Identity is the right test --
+        # two genuinely different handlers on one route both still run.
+        handlers: list[Handler] = []
+        seen_handlers: set[int] = set()
+        for subscription, registered in self._subscriptions.items():
+            if subscription.route_key != route:
+                continue
+            for handler in registered:
+                if id(handler) in seen_handlers:
+                    continue
+                seen_handlers.add(id(handler))
+                handlers.append(handler)
         if not handlers:
             self.unrouted_messages += 1
             return channel
