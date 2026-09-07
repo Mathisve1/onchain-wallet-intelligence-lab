@@ -252,6 +252,37 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
     def test_rejects_a_committed_database_claim(self) -> None:
         self._reject_decision(lambda d: d["execution_release"].update(database_committed=True))
 
+    # -- session evidence ------------------------------------------------------------
+
+    EVIDENCE = BASE / "evidence/L1_SESSION_001.json"
+
+    def _reject_evidence(self, mutate) -> None:
+        self._reject_mutated(self.EVIDENCE, mutate)
+
+    def _watch_steps(self, evidence: dict) -> list[dict]:
+        steps = [c for c in evidence["commands"] if c["command"].startswith("watch")]
+        self.assertTrue(steps, "fixture has no watch command to mutate")
+        return steps
+
+    def test_rejects_a_watch_that_omits_its_iteration_cap(self) -> None:
+        """`command.get("max_iterations", 0) <= 1000` let a watch with no
+        recorded cap through: the default of 0 satisfied the bound."""
+        self._reject_evidence(lambda e: self._watch_steps(e)[0].pop("max_iterations"))
+
+    def test_rejects_a_watch_over_the_iteration_cap(self) -> None:
+        self._reject_evidence(lambda e: self._watch_steps(e)[0].update(max_iterations=1001))
+
+    def test_rejects_a_non_integer_iteration_cap_as_a_validation_error(self) -> None:
+        """A string cap used to raise TypeError from the comparison instead of
+        the validator's own exit; a boolean is not an integer either."""
+        self._reject_evidence(lambda e: self._watch_steps(e)[0].update(max_iterations="1000"))
+        self._reject_evidence(lambda e: self._watch_steps(e)[0].update(max_iterations=True))
+
+    def test_a_non_watch_command_may_omit_the_iteration_cap(self) -> None:
+        evidence = load(self.EVIDENCE)
+        self.assertTrue(any("max_iterations" not in c for c in evidence["commands"]))
+        self.assertEqual(validator.main(), 0)
+
     # -- envelope versus code -------------------------------------------------------
 
     def test_rejects_an_opened_trading_authorization(self) -> None:

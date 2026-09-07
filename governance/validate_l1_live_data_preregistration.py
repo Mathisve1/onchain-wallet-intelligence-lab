@@ -438,7 +438,16 @@ def validate_session_evidence(decision: dict) -> dict[str, Any] | None:
     require(isinstance(evidence["request_weight"]["total"], int) and evidence["request_weight"]["total"] >= 0, "weight malformed")
     require(evidence["counts"]["wallets_backfilled"] <= 10, "more wallets backfilled than the envelope allows")
     for command in evidence["commands"]:
-        require(command.get("max_iterations", 0) <= 1000, "watch exceeded the approved iteration cap")
+        # The cap binds every watch. A watch that simply omits the field must
+        # not pass by default, and a non-integer must fail as a validation
+        # error rather than a TypeError from the comparison.
+        cap = command.get("max_iterations")
+        is_watch = isinstance(command.get("command"), str) and command["command"].split()[:1] == ["watch"]
+        if is_watch:
+            require(cap is not None, "watch command does not record its iteration cap")
+        if cap is not None:
+            require(isinstance(cap, int) and not isinstance(cap, bool), "iteration cap is not an integer")
+            require(0 < cap <= 1000, "watch exceeded the approved iteration cap")
     require(evidence["empirical_result"] is None, "evidence claims an empirical result")
     require(evidence["wallet_ranking_produced"] is False, "evidence claims a wallet ranking")
     return evidence
