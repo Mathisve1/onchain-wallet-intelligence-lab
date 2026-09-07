@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable
 
 from src.live_data.ingest import MAX_FUNDING_PER_RESPONSE
 from src.live_data.storage import LiveDataStore
@@ -207,7 +207,8 @@ def load_coverage(store: LiveDataStore) -> CoverageLedger:
             # that fix carry the over-claiming bound, and certifying them
             # would hand the simulator an interval with a known gap in it --
             # precisely what this ledger exists to prevent.
-            if end is not None and fills.get("forced_cursor_advances", 0) and fills.get("completed"):
+            forced = fills.get("forced_cursor_advances", 0)
+            if end is not None and forced and fills.get("completed"):
                 end = None
             if end is not None and end < start:
                 # The bound falls before the window even opened: nothing here
