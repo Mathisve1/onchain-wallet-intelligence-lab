@@ -57,7 +57,13 @@ def main() -> int:
 
     expected = render_manifest()
     if args.write:
-        MANIFEST.write_text(expected, encoding="utf-8")
+        # An explicit newline keeps the artifact byte-identical across
+        # platforms. Text mode otherwise translates the line separator to the
+        # platform default, so on Windows every line is rewritten as CRLF.
+        # No --check catches it (read_text normalises newlines on the way in),
+        # yet it turns a handful of changed hashes into a whole-file diff and
+        # changes the bytes of the file every consumer digests.
+        MANIFEST.write_text(expected, encoding="utf-8", newline="\n")
         print(
             "MANIFEST_WRITTEN:"
             f"{MANIFEST.relative_to(ROOT).as_posix()}"
