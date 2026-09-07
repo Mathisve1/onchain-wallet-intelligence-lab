@@ -191,10 +191,23 @@ def load_coverage(store: LiveDataStore) -> CoverageLedger:
             # covered_until_ms, so that prefix is fully observed and certifiable;
             # only the tail beyond it is unknown. A record with neither a
             # completion flag nor a covered-until bound proves nothing.
+            start = window["start_time_ms"]
             end = fills.get("covered_until_ms", window.get("end_time_ms") if fills.get("completed") else None)
+            # A forced cursor advance skipped fills at one exact millisecond,
+            # so the walk has a hole it can name. Newer records already bound
+            # covered_until_ms before the first one; records written before
+            # that fix carry the over-claiming bound, and certifying them
+            # would hand the simulator an interval with a known gap in it --
+            # precisely what this ledger exists to prevent.
+            if end is not None and fills.get("forced_cursor_advances", 0) and fills.get("completed"):
+                end = None
+            if end is not None and end < start:
+                # The bound falls before the window even opened: nothing here
+                # was observed contiguously, so record no interval at all.
+                continue
             observed.append(ObservedInterval(
-                wallet=run["wallet_address"], start_ms=window["start_time_ms"],
-                end_ms=end if end is not None else window["start_time_ms"],
+                wallet=run["wallet_address"], start_ms=start,
+                end_ms=end if end is not None else start,
                 complete=end is not None, source=f"backfill:{run['run_id']}",
             ))
         elif run["mode"] == "watch" and run["finished_at_ms"]:

@@ -90,12 +90,27 @@ class IngestOrchestrator(WatchMixin, CandleFetchMixin, SweepMixin):
         venue ran out of fills; the window is then only covered up to
         ``covered_until_ms``, and a caller that records it as complete would be
         confusing "the wallet did nothing after that" with "we stopped looking".
+
+        ``covered_until_ms`` is a bound the ledger certifies as fully observed,
+        so it is set to the last millisecond actually proven complete, never to
+        the last one merely reached:
+
+        * a forced cursor advance knowingly skips fills sharing one timestamp,
+          so nothing at or after that millisecond is contiguous and the bound
+          stops just before the first one;
+        * a walk cut by the page cap ends on a *full* page, so fills sharing
+          that page's last timestamp may never have been returned and that
+          millisecond is not fully observed either.
+
+        Both bounds can fall before ``start_time_ms``, which means the window
+        proves nothing at all; the loader treats that as no observation.
         """
         cursor = start_time_ms
         pages = 0
         seen = 0
         written = 0
         forced = 0
+        first_forced_ms: int | None = None
         exhausted = False
         while pages < max_pages:
             payload = self._rest.request(
@@ -121,11 +136,18 @@ class IngestOrchestrator(WatchMixin, CandleFetchMixin, SweepMixin):
                 # time. Step past it rather than loop, and record the gap.
                 next_cursor = cursor + 1
                 forced += 1
+                if first_forced_ms is None:
+                    first_forced_ms = cursor
             cursor = next_cursor
             if end_time_ms is not None and cursor > end_time_ms:
                 exhausted = True
                 break
-        covered_until_ms = end_time_ms if exhausted and end_time_ms is not None else cursor
+        if first_forced_ms is not None:
+            covered_until_ms = first_forced_ms - 1
+        elif exhausted:
+            covered_until_ms = end_time_ms if end_time_ms is not None else cursor
+        else:
+            covered_until_ms = cursor - 1
         return pages, seen, written, forced, exhausted, covered_until_ms
 
     def _collect_funding(

@@ -198,11 +198,35 @@ class BackfillTests(IngestTestCase):
         # recorded as complete. Otherwise "we stopped looking" would read as
         # "the wallet stopped trading".
         self.assertFalse(result.window_exhausted)
-        self.assertEqual(result.covered_until_ms, 1_699_000_001_000 + MAX_FILLS_PER_RESPONSE - 1)
+        # One millisecond short of the last timestamp returned: the final page
+        # was *full*, so fills sharing its last event time may never have been
+        # returned. Claiming that millisecond would hand the ledger a bound it
+        # cannot stand behind.
+        last_returned = 1_699_000_001_000 + MAX_FILLS_PER_RESPONSE - 1
+        self.assertEqual(result.covered_until_ms, last_returned - 1)
         coverage = json.loads(self.store.recent_runs(1)[0]["coverage"])["fills"]
         self.assertFalse(coverage["completed"])
         self.assertTrue(coverage["truncated_at_page_cap"])
         self.assertEqual(coverage["covered_until_ms"], result.covered_until_ms)
+
+    def test_a_forced_cursor_advance_bounds_coverage_before_the_skipped_ms(self) -> None:
+        """A forced advance knowingly drops fills; coverage must stop before it.
+
+        Regression: ``covered_until_ms`` ran past the millisecond the walk
+        stepped over, so ``load_coverage`` certified an interval containing a
+        gap the collector had itself recorded.
+        """
+        # A whole page inside one millisecond: the cursor cannot advance by
+        # time, so the walk is forced past it and fills there are lost.
+        stuck = [fill_payload(index, 1_699_000_000_500) for index in range(MAX_FILLS_PER_RESPONSE)]
+        tail = [fill_payload(9_000, 1_699_000_002_000)]
+        orchestrator, _ = self.build([stuck, tail])
+        result = orchestrator.backfill_wallet_fills(WALLET, start_time_ms=1_699_000_000_500, max_pages=3)
+        self.assertEqual(result.forced_cursor_advances, 1)
+        self.assertEqual(result.covered_until_ms, 1_699_000_000_499)
+        coverage = json.loads(self.store.recent_runs(1)[0]["coverage"])["fills"]
+        self.assertEqual(coverage["forced_cursor_advances"], 1)
+        self.assertEqual(coverage["covered_until_ms"], 1_699_000_000_499)
 
     def test_the_end_of_the_window_stops_pagination(self) -> None:
         page = [fill_payload(index, 1_699_000_000_000 + index) for index in range(MAX_FILLS_PER_RESPONSE)]
