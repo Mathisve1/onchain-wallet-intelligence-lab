@@ -362,6 +362,11 @@ def _default_session_runner(db: Path, snapshot_interval: float) -> SessionRunner
 
 def _default_candidate_reader(db: Path) -> CandidateReader:
     def read(limit: int) -> list[str]:
+        if not db.exists():
+            # discover() reads candidates once before its first session, and on
+            # a first-ever run the session runner has not created the database
+            # yet. No file means no candidates, not a crash before any work.
+            return []
         with LiveDataStore(db, create=False) as store:
             return [row["address"] for row in store.most_active_wallets(limit)]
 

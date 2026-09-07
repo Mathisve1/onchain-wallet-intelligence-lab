@@ -61,12 +61,29 @@ def funding_coins_in_db(store: LiveDataStore) -> frozenset[str]:
     return frozenset(row["coin"] for row in rows)
 
 
+class FreezeInputError(ValueError):
+    """A freeze input file is not the shape this module knows how to read."""
+
+
 def candle_complete_coins(payload: Mapping[str, Any]) -> frozenset[str]:
-    """Coins the phase 6 post-check marked complete."""
+    """Coins the phase 6 post-check marked complete.
+
+    Raises :class:`FreezeInputError` when the payload carries no ``per_coin``
+    list. Defaulting to an empty set here would hand ``build_scope`` an empty
+    candle set, and the freeze would then report ``HARD_STOP: 0 evaluable
+    wallets`` -- a sentence that reads as a finding about the cohort when it is
+    really a wrong file passed on the command line.
+    """
+    per_coin = payload.get("per_coin")
+    if not isinstance(per_coin, list):
+        raise FreezeInputError(
+            "candle post-check has no 'per_coin' list; got keys "
+            f"{sorted(payload)!r}. Pass the file phase 6 (arm_a_candles) wrote."
+        )
     return frozenset(
         entry["coin"]
-        for entry in payload.get("per_coin", ())
-        if entry.get("complete") and entry.get("coin")
+        for entry in per_coin
+        if isinstance(entry, Mapping) and entry.get("complete") and entry.get("coin")
     )
 
 
