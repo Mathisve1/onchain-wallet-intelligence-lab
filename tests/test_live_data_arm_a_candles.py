@@ -44,15 +44,30 @@ class RecordingSleep:
         self.calls.append(seconds)
 
 
-def _coverage(coin: str, rows: int, max_gap_ms: int, *, exhausted: bool = True) -> dict:
+def _coverage(
+    coin: str,
+    rows: int,
+    max_gap_ms: int,
+    *,
+    exhausted: bool = True,
+    window: tuple[int, int] | None = None,
+) -> dict:
+    """One ``fetch_candles`` coverage block.
+
+    ``window`` makes the series span that window exactly, which is what a coin
+    priced across the whole request looks like. Omitting it leaves the series
+    anchored at 0, which is what a coin listed partway through looks like.
+    """
+    first_open_ms = 0 if window is None else window[0]
+    last_open_ms = rows * FIFTEEN_MINUTE_MS if window is None else window[1]
     return {
         "coin": coin,
         "interval": "15m",
         "pages": 1,
         "rows": rows,
         "written": rows,
-        "first_open_ms": 0,
-        "last_open_ms": rows * FIFTEEN_MINUTE_MS,
+        "first_open_ms": first_open_ms,
+        "last_open_ms": last_open_ms,
         "max_gap_ms": max_gap_ms,
         "exhausted": exhausted,
     }
@@ -185,16 +200,56 @@ class PostCheckTests(unittest.TestCase):
         self.assertEqual(checked["totals"]["out_of_scope"], 1)
 
 
+class WindowSpanTests(unittest.TestCase):
+    """A coin must be priced across the whole window, not merely densely."""
+
+    def test_a_recently_listed_coin_is_out_of_scope_despite_no_internal_gap(self) -> None:
+        t0_ms = 500 * 86_400_000
+        start_ms, end_ms = plan_window(t0_ms, 52)
+        # Listed five days ago: ~480 dense candles, max_gap_ms of exactly one
+        # interval, and no hole anywhere -- flawless by gap alone.
+        recent = {
+            "coin": "NEW",
+            "rows": 480,
+            "max_gap_ms": FIFTEEN_MINUTE_MS,
+            "first_open_ms": t0_ms - 5 * 86_400_000,
+            "last_open_ms": t0_ms,
+            "exhausted": True,
+        }
+        full = _coverage("BTC", 4992, FIFTEEN_MINUTE_MS, window=(start_ms, end_ms))
+
+        checked = post_check([recent, full], window=(start_ms, end_ms))
+        self.assertEqual(checked["out_of_scope"], ["NEW"])
+        by_coin = {entry["coin"]: entry for entry in checked["per_coin"]}
+        self.assertFalse(by_coin["NEW"]["spans_window"])
+        self.assertTrue(by_coin["BTC"]["spans_window"])
+
+    def test_a_single_row_series_reports_no_gap_but_still_leaves_scope(self) -> None:
+        t0_ms = 500 * 86_400_000
+        start_ms, end_ms = plan_window(t0_ms, 52)
+        one_row = {
+            "coin": "THIN",
+            "rows": 1,
+            "max_gap_ms": 0,
+            "first_open_ms": t0_ms,
+            "last_open_ms": t0_ms,
+            "exhausted": True,
+        }
+        checked = post_check([one_row], window=(start_ms, end_ms))
+        self.assertEqual(checked["out_of_scope"], ["THIN"])
+
+
 class MainTests(unittest.TestCase):
     def test_writes_the_expected_json_file_with_a_fake_orchestrator(self) -> None:
         with TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "live_data.sqlite3"
             out_path = Path(tmp) / "evidence.json"
             t0_ms = 500 * 86_400_000
+            window = plan_window(t0_ms, 52)
             orchestrator = FakeOrchestrator(
                 {
-                    "BTC": _coverage("BTC", 4992, FIFTEEN_MINUTE_MS),
-                    "ETH": _coverage("ETH", 4000, FIFTEEN_MINUTE_MS + 1),
+                    "BTC": _coverage("BTC", 4992, FIFTEEN_MINUTE_MS, window=window),
+                    "ETH": _coverage("ETH", 4000, FIFTEEN_MINUTE_MS + 1, window=window),
                 }
             )
             sleep = RecordingSleep()

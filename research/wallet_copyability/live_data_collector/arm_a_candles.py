@@ -39,7 +39,27 @@ MILLISECONDS_PER_DAY = 86_400_000
 #: enough for a 15-minute price-age bound, so the coin leaves scope.
 FIFTEEN_MINUTE_MS = 900_000
 
+#: Milliseconds per candle interval, for the scope gate. ``--interval``
+#: accepts every interval the venue supports, so the gate must measure against
+#: the one actually requested rather than assuming 15 minutes.
+INTERVAL_MS = {
+    "1m": 60_000,
+    "5m": 300_000,
+    "15m": FIFTEEN_MINUTE_MS,
+    "1h": 3_600_000,
+    "4h": 14_400_000,
+    "1d": 86_400_000,
+}
+
 OrchestratorFactory = Callable[[LiveDataConfig, LiveDataStore], Any]
+
+
+def _interval_ms(interval: str) -> int:
+    """Spacing of one ``interval``, in milliseconds."""
+    try:
+        return INTERVAL_MS[interval]
+    except KeyError:  # pragma: no cover - argparse restricts this to CANDLE_INTERVALS
+        raise ValueError(f"unknown candle interval {interval!r}") from None
 
 
 def plan_window(t0_ms: int, days: int = DEFAULT_DAYS) -> tuple[int, int]:
@@ -85,13 +105,23 @@ def post_check(
     *,
     interval_ms: int = FIFTEEN_MINUTE_MS,
     expected_rows: int | None = None,
+    window: tuple[int, int] | None = None,
 ) -> dict:
     """Classify each coin's fetch result. Pure: no I/O, no ordering side effects.
 
-    A coin is ``complete`` when it fetched without error, has at least one row
-    and its maximum gap between consecutive open times does not exceed
-    ``interval_ms``. Everything else is ``out_of_scope``: the cohort file is
-    where that exclusion gets recorded, not this function.
+    A coin is ``complete`` when it fetched without error, has at least one row,
+    its maximum gap between consecutive open times does not exceed
+    ``interval_ms``, and -- when ``window`` is given -- its series actually
+    spans that window from end to end. Everything else is ``out_of_scope``:
+    the cohort file is where that exclusion gets recorded, not this function.
+
+    The window check is not optional in practice and :func:`main` always
+    passes it. ``max_gap_ms`` is measured *between returned rows* only, and is
+    0 for a single row, so a coin listed five days ago returns a few hundred
+    dense candles for a 52-day request and looks flawless by gap alone. Without
+    comparing ``first_open_ms``/``last_open_ms`` against the window,
+    ``cohort_pipeline_freeze.candle_complete_coins`` would admit it to
+    ``InstrumentScope`` as though its whole history were priced.
     """
     per_coin: list[dict] = []
     out_of_scope: list[str] = []
@@ -104,17 +134,38 @@ def post_check(
         rows = int(result.get("rows", 0) or 0)
         max_gap_ms = result.get("max_gap_ms")
         exhausted = bool(result.get("exhausted", False))
+        first_open_ms = result.get("first_open_ms")
+        last_open_ms = result.get("last_open_ms")
         complete = error is None and rows > 0 and max_gap_ms is not None and max_gap_ms <= interval_ms
         if expected_rows is not None:
             complete = complete and rows >= expected_rows
+
+        spans_window: bool | None = None
+        if window is not None:
+            start_ms, end_ms = window
+            # Candle opens are interval-aligned, so the first open may sit up
+            # to one interval after the requested start and the last up to one
+            # interval before the requested end. Anything further is history
+            # the venue does not have.
+            spans_window = (
+                isinstance(first_open_ms, int)
+                and isinstance(last_open_ms, int)
+                and first_open_ms - start_ms <= interval_ms
+                and end_ms - last_open_ms <= interval_ms
+            )
+            complete = complete and spans_window
 
         entry: dict = {
             "coin": coin,
             "rows": rows,
             "max_gap_ms": max_gap_ms,
+            "first_open_ms": first_open_ms,
+            "last_open_ms": last_open_ms,
             "exhausted": exhausted,
             "complete": complete,
         }
+        if spans_window is not None:
+            entry["spans_window"] = spans_window
         if error is not None:
             entry["error"] = error
         per_coin.append(entry)
@@ -199,7 +250,8 @@ def main(
         return 2
 
     start_ms, end_ms = plan_window(args.t0_ms, args.days)
-    checked = post_check(results)
+    interval_ms = _interval_ms(args.interval)
+    checked = post_check(results, interval_ms=interval_ms, window=(start_ms, end_ms))
     report = {
         "t0_ms": args.t0_ms,
         "interval": args.interval,
