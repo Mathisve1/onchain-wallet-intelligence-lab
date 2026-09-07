@@ -16,12 +16,22 @@ Coverage-gap computation deliberately does not reuse
 ``src.copyability.loader.load_coverage``: that function merges backfill *and*
 watch-session intervals into one ledger per wallet, which would fold a websocket
 session's coverage into a number this ticket calls "backfill/sweep coverage
-windows." It also does not understand a ``sweep`` mode, which does not exist
-in ``ingest_runs`` yet (arm B's sweep command is a later phase). This module
-therefore does its own minimal parse of the same ``coverage`` JSON shape
-(``coverage["window"]["start_time_ms"/"end_time_ms"]``) restricted to
-``mode IN ("backfill_wallet", "sweep")`` and completed status, which is exactly
-the loader's own precondition for trusting a backfill window.
+windows." This module therefore does its own parse of the ``coverage`` JSON,
+but it applies the same truncation rule the loader does: a backfill window is
+trusted only as far as ``coverage["fills"]["covered_until_ms"]``, falling back
+to the window end only when ``fills["completed"]`` is set. Trusting
+``window["end_time_ms"]`` alone would report a walk stopped at the page cap as
+having covered its whole window.
+
+The two modes are stored differently and must be read differently.
+``backfill_wallet`` writes one run per wallet and fills in ``wallet_address``.
+``sweep`` writes one run for the whole cohort with ``wallet_address`` left
+NULL, and records what happened to each wallet in
+``coverage["per_wallet"][address]``; a per-wallet ``status`` of ``"ok"`` means
+that wallet was swept, anything else is that wallet's failure inside an
+otherwise completed run. Filtering sweeps by ``wallet_address`` therefore
+matches nothing at all, and reading only the run-level ``status`` hides every
+per-wallet failure.
 """
 
 from __future__ import annotations
@@ -41,6 +51,10 @@ FIFTEEN_MINUTE_MS = 900_000
 
 _COVERAGE_MODES = ("backfill_wallet", "sweep")
 
+#: ``sweep.py`` marks a wallet it swept without incident with this exact
+#: status; any other string in that slot is that wallet's failure.
+_SWEEP_OK = "ok"
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -53,28 +67,100 @@ def _max_gap(sorted_times: Sequence[int]) -> int | None:
     return max(b - a for a, b in zip(sorted_times, sorted_times[1:]))
 
 
-def _coverage_windows(store: LiveDataStore, wallet_address: str) -> list[tuple[int, int]]:
-    """Completed backfill/sweep coverage windows for one wallet, oldest first.
+def _sweep_runs(store: LiveDataStore) -> list[dict]:
+    """Every sweep run with its per-wallet coverage parsed, oldest first.
 
-    Mirrors the shape ``loader.load_coverage`` reads for ``backfill_wallet``
-    (``coverage["window"]["start_time_ms"/"end_time_ms"]``) but does not merge
-    in watch-session coverage and additionally recognises the not-yet-existing
-    ``sweep`` mode under the same shape, per the ticket's instruction.
+    Fetched once per report rather than once per wallet: a single sweep run
+    carries the whole cohort, so the per-wallet lookup is a dict hit.
+    """
+    runs: list[dict] = []
+    for run in store.connection.execute(
+        "SELECT finished_at_ms, status, coverage FROM ingest_runs "
+        "WHERE mode = 'sweep' ORDER BY started_at_ms"
+    ):
+        per_wallet: dict[str, Any] = {}
+        if run["coverage"]:
+            parsed = json.loads(run["coverage"])
+            candidate = parsed.get("per_wallet")
+            if isinstance(candidate, dict):
+                per_wallet = candidate
+        runs.append(
+            {
+                "finished_at_ms": run["finished_at_ms"],
+                "status": run["status"],
+                "per_wallet": per_wallet,
+            }
+        )
+    return runs
+
+
+def _sweep_entry(run: dict, wallet_address: str) -> dict | None:
+    """This wallet's entry in one sweep run, or ``None`` if it has none."""
+    entry = run["per_wallet"].get(wallet_address)
+    return entry if isinstance(entry, dict) else None
+
+
+def _sweep_outcome(run: dict, wallet_address: str) -> str | None:
+    """``"ok"``, a failure string, or ``None`` if the run never reached the wallet.
+
+    A run that failed outright died before or during its wallet loop -- a
+    failed mids poll aborts the sweep before any wallet is touched -- so a
+    wallet with no entry in a failed run went unswept by it. That is a failure
+    for the wallet, not merely an absence.
+    """
+    entry = _sweep_entry(run, wallet_address)
+    if entry is not None:
+        status = entry.get("status")
+        return status if isinstance(status, str) else None
+    if run["status"] == "failed":
+        return "sweep run failed before this wallet"
+    return None
+
+
+def _coverage_windows(
+    store: LiveDataStore, wallet_address: str, sweep_runs: Sequence[dict]
+) -> list[tuple[int, int]]:
+    """Trusted backfill/sweep coverage windows for one wallet, oldest first.
+
+    A window is admitted only as far as the collector proved it read. For a
+    backfill that is ``fills["covered_until_ms"]``, or the window end when
+    ``fills["completed"]`` is set -- the same precondition
+    ``loader.load_coverage`` applies. For a sweep it is the run's finish time,
+    and only when that wallet's fill walk ran to exhaustion: a sweep cut short
+    by the page cap records no bound worth trusting, so it contributes no
+    window and the gap it left stays visible.
     """
     windows: list[tuple[int, int]] = []
     for run in store.connection.execute(
         "SELECT coverage FROM ingest_runs "
-        "WHERE wallet_address = ? AND status = 'completed' AND mode IN (?, ?)",
-        (wallet_address, *_COVERAGE_MODES),
+        "WHERE wallet_address = ? AND status = 'completed' AND mode = 'backfill_wallet'",
+        (wallet_address,),
     ):
         if not run["coverage"]:
             continue
         coverage = json.loads(run["coverage"])
         window = coverage.get("window", {})
+        fills = coverage.get("fills", {})
         start_ms = window.get("start_time_ms")
-        end_ms = window.get("end_time_ms")
+        if not isinstance(start_ms, int) or not fills.get("attempted"):
+            continue
+        end_ms = fills.get("covered_until_ms")
+        if not isinstance(end_ms, int):
+            end_ms = window.get("end_time_ms") if fills.get("completed") else None
+        if isinstance(end_ms, int) and end_ms >= start_ms:
+            windows.append((start_ms, end_ms))
+
+    for run in sweep_runs:
+        entry = _sweep_entry(run, wallet_address)
+        if entry is None or entry.get("status") != _SWEEP_OK:
+            continue
+        if not entry.get("fills_exhausted"):
+            continue
+        start_ms = entry.get("fills_from_ms")
+        end_ms = run["finished_at_ms"]
         if isinstance(start_ms, int) and isinstance(end_ms, int) and end_ms >= start_ms:
             windows.append((start_ms, end_ms))
+
     windows.sort()
     return windows
 
@@ -101,6 +187,7 @@ def _coverage_gap_ms(windows: Sequence[tuple[int, int]]) -> int:
 def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -> list[dict]:
     """Per-wallet operational counts and timestamps. No price, no P&L."""
     rows: list[dict] = []
+    sweep_runs = _sweep_runs(store)
     for wallet in wallets:
         last_fill = store.connection.execute(
             "SELECT MAX(event_time_ms) AS t FROM fills WHERE wallet_address = ?", (wallet,)
@@ -116,15 +203,29 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
             "SELECT COUNT(*) AS n FROM funding WHERE wallet_address = ? AND event_time_ms > ?",
             (wallet, t0_ms),
         ).fetchone()
-        last_sweep = store.connection.execute(
+        # Two sources, because the two modes record a wallet differently: a
+        # backfill names it in the column, a sweep only inside its coverage.
+        last_backfill = store.connection.execute(
             "SELECT MAX(finished_at_ms) AS t FROM ingest_runs "
-            "WHERE wallet_address = ? AND status = 'completed' AND mode IN (?, ?)",
-            (wallet, *_COVERAGE_MODES),
+            "WHERE wallet_address = ? AND status = 'completed' AND mode = 'backfill_wallet'",
+            (wallet,),
         ).fetchone()
-        sweep_failures = store.connection.execute(
+        wallet_run_failures = store.connection.execute(
             "SELECT COUNT(*) AS n FROM ingest_runs WHERE wallet_address = ? AND status = 'failed'",
             (wallet,),
         ).fetchone()
+
+        outcomes = [_sweep_outcome(run, wallet) for run in sweep_runs]
+        swept_ms = [
+            int(run["finished_at_ms"])
+            for run, outcome in zip(sweep_runs, outcomes)
+            if outcome == _SWEEP_OK and run["finished_at_ms"] is not None
+        ]
+        candidates = [t for t in (last_backfill["t"], max(swept_ms, default=None)) if t is not None]
+        last_sweep_ms = max(int(t) for t in candidates) if candidates else None
+        sweep_failures = int(wallet_run_failures["n"]) + sum(
+            1 for outcome in outcomes if outcome is not None and outcome != _SWEEP_OK
+        )
 
         rows.append(
             {
@@ -133,9 +234,11 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
                 "fills_since_t0": int(fills_since_t0["n"]),
                 "last_funding_ms": None if last_funding["t"] is None else int(last_funding["t"]),
                 "funding_rows_since_t0": int(funding_since_t0["n"]),
-                "last_sweep_ms": None if last_sweep["t"] is None else int(last_sweep["t"]),
-                "sweep_failures": int(sweep_failures["n"]),
-                "coverage_gap_ms": _coverage_gap_ms(_coverage_windows(store, wallet)),
+                "last_sweep_ms": last_sweep_ms,
+                "sweep_failures": sweep_failures,
+                "coverage_gap_ms": _coverage_gap_ms(
+                    _coverage_windows(store, wallet, sweep_runs)
+                ),
             }
         )
     return rows
@@ -220,6 +323,20 @@ def summary(
         if row["candle_max_gap_ms"] is not None and row["candle_max_gap_ms"] > FIFTEEN_MINUTE_MS
     )
     coins_no_mids = sum(1 for row in coin_rows if row["mids_rows"] == 0)
+    # A gap measured between samples cannot see a feed that simply stopped:
+    # one sample, or a thousand samples that all predate the outage, yield no
+    # gap at all. Freshness against the clock is what catches a dead feed.
+    coins_stale_mids = sum(
+        1
+        for row in coin_rows
+        if row["mids_last_ms"] is None or now_ms - row["mids_last_ms"] > stale_after_ms
+    )
+    coins_stale_candles = sum(
+        1
+        for row in coin_rows
+        if row["candle_last_open_ms"] is None
+        or now_ms - row["candle_last_open_ms"] > stale_after_ms
+    )
     return {
         "wallets_total": len(wallet_rows),
         "wallets_no_fill_since_t0": wallets_no_fill_since_t0,
@@ -228,6 +345,8 @@ def summary(
         "coins_mids_gap_over_15m": coins_mids_gap,
         "coins_candle_gap_over_15m": coins_candle_gap,
         "coins_no_mids": coins_no_mids,
+        "coins_stale_mids": coins_stale_mids,
+        "coins_stale_candles": coins_stale_candles,
     }
 
 

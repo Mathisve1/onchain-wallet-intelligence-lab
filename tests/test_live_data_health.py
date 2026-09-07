@@ -127,6 +127,38 @@ class WalletHealthTests(HealthTestCase):
         self.assertEqual(rows[0]["funding_rows_since_t0"], 1)
         self.assertEqual(rows[0]["last_funding_ms"], T0_MS + 500)
 
+    def _write_sweep(
+        self, run_id, *, finished_at_ms, per_wallet, status="completed", started_at_ms=1
+    ):
+        """Write a sweep run in the shape ``sweep.py`` produces.
+
+        A sweep covers the whole cohort in one run, so the row carries no
+        ``wallet_address``; each wallet's outcome lives in
+        ``coverage["per_wallet"][address]``. Building the row any other way
+        tests a shape the collector never writes.
+        """
+        self.store.start_run(run_id, mode="sweep", started_at_ms=started_at_ms)
+        self.store.finish_run(
+            run_id,
+            finished_at_ms=finished_at_ms,
+            status=status,
+            records_seen=1,
+            records_written=1,
+            coverage={"sweep": {"wallets": len(per_wallet)}, "per_wallet": per_wallet},
+        )
+
+    @staticmethod
+    def _swept(*, fills_from_ms=0, exhausted=True):
+        return {
+            "fills_from_ms": fills_from_ms,
+            "fills_seen": 1,
+            "fills_exhausted": exhausted,
+            "funding_from_ms": fills_from_ms,
+            "funding_seen": 0,
+            "funding_exhausted": True,
+            "status": "ok",
+        }
+
     def test_a_failed_run_is_counted_as_a_sweep_failure(self) -> None:
         self.store.start_run(
             "run-failed", mode="backfill_wallet", started_at_ms=1, wallet_address=WALLET_A
@@ -143,47 +175,133 @@ class WalletHealthTests(HealthTestCase):
         self.assertEqual(rows[0]["sweep_failures"], 1)
 
     def test_last_sweep_ms_ignores_incomplete_and_other_wallets_runs(self) -> None:
-        self.store.start_run(
-            "run-a", mode="sweep", started_at_ms=1, wallet_address=WALLET_A
-        )
-        self.store.finish_run(
-            "run-a", finished_at_ms=1_000, status="completed",
-            records_seen=1, records_written=1,
-        )
-        self.store.start_run(
-            "run-b", mode="sweep", started_at_ms=1, wallet_address=WALLET_A
-        )
-        self.store.finish_run(
-            "run-b", finished_at_ms=5_000, status="completed",
-            records_seen=1, records_written=1,
-        )
-        self.store.start_run(
-            "run-other", mode="sweep", started_at_ms=1, wallet_address=WALLET_B
-        )
-        self.store.finish_run(
-            "run-other", finished_at_ms=999_999, status="completed",
-            records_seen=1, records_written=1,
+        self._write_sweep("run-a", finished_at_ms=1_000, per_wallet={WALLET_A: self._swept()})
+        self._write_sweep("run-b", finished_at_ms=5_000, per_wallet={WALLET_A: self._swept()})
+        self._write_sweep(
+            "run-other", finished_at_ms=999_999, per_wallet={WALLET_B: self._swept()}
         )
         rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
         self.assertEqual(rows[0]["last_sweep_ms"], 5_000)
 
+    def test_last_sweep_ms_finds_a_sweep_that_names_no_wallet_on_the_row(self) -> None:
+        """A sweep row has a NULL ``wallet_address``; it must still be found.
+
+        Regression: filtering ``ingest_runs`` by ``wallet_address`` matched no
+        sweep at all, so every wallet fell back to its months-old backfill and
+        reported a permanently stale sweep once ``--stale-hours`` elapsed.
+        """
+        self.store.start_run(
+            "backfill", mode="backfill_wallet", started_at_ms=1, wallet_address=WALLET_A
+        )
+        self.store.finish_run(
+            "backfill", finished_at_ms=1_000, status="completed",
+            records_seen=1, records_written=1,
+        )
+        self._write_sweep(
+            "sweep-recent", finished_at_ms=900_000, per_wallet={WALLET_A: self._swept()}
+        )
+        rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
+        self.assertEqual(rows[0]["last_sweep_ms"], 900_000)
+        totals = health.summary(rows, [], stale_after_ms=6 * 3_600_000, now_ms=1_000_000)
+        self.assertEqual(totals["wallets_stale_sweep"], 0)
+
+    def test_a_per_wallet_sweep_failure_inside_a_completed_run_is_counted(self) -> None:
+        """Regression: per-wallet failures hid inside an otherwise completed run.
+
+        ``sweep.py`` records a wallet that raised as a non-``ok`` status in
+        ``coverage["per_wallet"]`` and still finishes the run as ``completed``,
+        so counting only run-level ``status = 'failed'`` reported zero.
+        """
+        for index in range(3):
+            self._write_sweep(
+                "sweep-%d" % index,
+                finished_at_ms=1_000 + index,
+                per_wallet={
+                    WALLET_A: {"status": "HyperliquidError: 503 from venue"},
+                    WALLET_B: self._swept(),
+                },
+            )
+        rows = health.wallet_health(self.store, [WALLET_A, WALLET_B], t0_ms=T0_MS)
+        by_wallet = {row["wallet_address"]: row for row in rows}
+        self.assertEqual(by_wallet[WALLET_A]["sweep_failures"], 3)
+        self.assertEqual(by_wallet[WALLET_A]["last_sweep_ms"], None)
+        self.assertEqual(by_wallet[WALLET_B]["sweep_failures"], 0)
+
+    def test_a_sweep_run_that_failed_outright_counts_for_every_wallet(self) -> None:
+        """A failed mids poll aborts the sweep before any wallet is reached."""
+        self._write_sweep(
+            "sweep-dead", finished_at_ms=1_000, per_wallet={}, status="failed"
+        )
+        rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
+        self.assertEqual(rows[0]["sweep_failures"], 1)
+
+    def _write_backfill(self, run_id, *, window, fills, finished_at_ms=2):
+        self.store.start_run(
+            run_id, mode="backfill_wallet", started_at_ms=1, wallet_address=WALLET_A
+        )
+        self.store.finish_run(
+            run_id, finished_at_ms=finished_at_ms, status="completed",
+            records_seen=1, records_written=1,
+            coverage={"window": window, "fills": fills},
+        )
+
     def test_coverage_gap_ms_is_the_largest_gap_between_completed_windows(self) -> None:
-        self.store.start_run(
-            "run-1", mode="backfill_wallet", started_at_ms=1, wallet_address=WALLET_A
+        self._write_backfill(
+            "run-1",
+            window={"start_time_ms": 0, "end_time_ms": 1_000},
+            fills={"attempted": True, "completed": True},
         )
-        self.store.finish_run(
-            "run-1", finished_at_ms=2, status="completed", records_seen=1, records_written=1,
-            coverage={"window": {"start_time_ms": 0, "end_time_ms": 1_000}},
-        )
-        self.store.start_run(
-            "run-2", mode="sweep", started_at_ms=1, wallet_address=WALLET_A
-        )
-        self.store.finish_run(
-            "run-2", finished_at_ms=2, status="completed", records_seen=1, records_written=1,
-            coverage={"window": {"start_time_ms": 4_000, "end_time_ms": 5_000}},
+        # The sweep's window is [fills_from_ms, run finish], read out of the
+        # per-wallet coverage entry, not from a "window" block it never writes.
+        self._write_sweep(
+            "run-2",
+            finished_at_ms=5_000,
+            per_wallet={WALLET_A: self._swept(fills_from_ms=4_000)},
         )
         rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
         self.assertEqual(rows[0]["coverage_gap_ms"], 3_000)
+
+    def test_a_backfill_truncated_at_the_page_cap_does_not_claim_its_window(self) -> None:
+        """Regression: ``window["end_time_ms"]`` was trusted over ``covered_until_ms``.
+
+        A walk stopped by the page cap read only as far as ``covered_until_ms``;
+        reporting the requested window end as covered hid the whole unread tail
+        and disagreed with ``loader.load_coverage``, which refuses the same row.
+        """
+        self._write_backfill(
+            "run-truncated",
+            window={"start_time_ms": 0, "end_time_ms": 100_000},
+            fills={
+                "attempted": True,
+                "completed": False,
+                "truncated_at_page_cap": True,
+                "covered_until_ms": 10_000,
+            },
+        )
+        self._write_sweep(
+            "run-later",
+            finished_at_ms=100_000,
+            per_wallet={WALLET_A: self._swept(fills_from_ms=90_000)},
+        )
+        rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
+        # 10_000 (all the backfill proved) to 90_000 (the sweep's start).
+        self.assertEqual(rows[0]["coverage_gap_ms"], 80_000)
+
+    def test_a_sweep_cut_short_by_the_page_cap_contributes_no_window(self) -> None:
+        self._write_backfill(
+            "run-1",
+            window={"start_time_ms": 0, "end_time_ms": 1_000},
+            fills={"attempted": True, "completed": True},
+        )
+        self._write_sweep(
+            "run-truncated",
+            finished_at_ms=9_000,
+            per_wallet={WALLET_A: self._swept(fills_from_ms=4_000, exhausted=False)},
+        )
+        rows = health.wallet_health(self.store, [WALLET_A], t0_ms=T0_MS)
+        # Only the backfill window survives, so there is no second window to
+        # measure a gap against and the unbounded sweep claims nothing.
+        self.assertEqual(rows[0]["coverage_gap_ms"], 0)
 
 
 class CoinHealthTests(HealthTestCase):
@@ -245,20 +363,16 @@ class CoinHealthTests(HealthTestCase):
 
 class SummaryTests(HealthTestCase):
     def test_a_stale_sweep_is_flagged_and_a_fresh_one_is_not(self) -> None:
-        self.store.start_run(
-            "run-stale", mode="sweep", started_at_ms=1, wallet_address=WALLET_A
-        )
-        self.store.finish_run(
-            "run-stale", finished_at_ms=T0_MS - 30 * FIFTEEN_MIN_MS, status="completed",
-            records_seen=1, records_written=1,
-        )
-        self.store.start_run(
-            "run-fresh", mode="sweep", started_at_ms=1, wallet_address=WALLET_B
-        )
-        self.store.finish_run(
-            "run-fresh", finished_at_ms=T0_MS - 1, status="completed",
-            records_seen=1, records_written=1,
-        )
+        def sweep(run_id, *, finished_at_ms, wallet):
+            self.store.start_run(run_id, mode="sweep", started_at_ms=1)
+            self.store.finish_run(
+                run_id, finished_at_ms=finished_at_ms, status="completed",
+                records_seen=1, records_written=1,
+                coverage={"per_wallet": {wallet: {"status": "ok"}}},
+            )
+
+        sweep("run-stale", finished_at_ms=T0_MS - 30 * FIFTEEN_MIN_MS, wallet=WALLET_A)
+        sweep("run-fresh", finished_at_ms=T0_MS - 1, wallet=WALLET_B)
         rows = health.wallet_health(self.store, [WALLET_A, WALLET_B], t0_ms=T0_MS)
         totals = health.summary(
             rows, [], stale_after_ms=6 * 3_600_000, now_ms=T0_MS
