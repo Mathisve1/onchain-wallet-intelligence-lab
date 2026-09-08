@@ -186,6 +186,26 @@ Completed on 2026-09-08 from concurrent work left uncommitted in the clone:
   backwards progress, instead of spending the page cap re-fetching the same
   candles and reporting a clean stop.
 
+Second pass over `src/copyability` (2026-09-08; the dedicated reviewer for
+that package never ran in the first round):
+
+- A copy the simulator could not price left the follower's position behind
+  the source's, so the source's later exit was copied as an *opening* trade
+  on the opposite side — the inverted-position defect of 2026-09-04 again,
+  triggered mid-window rather than at its edge, and the L1 evidence records
+  thousands of unpriceable copies per wallet. The follower now mirrors the
+  source's position at every priced action: a missed round trip is not
+  traded at all, and a missed entry is caught up at the next priced action in
+  that coin (counted in `catch_up_fills`). Fully priced copies are unchanged.
+  `L1_INSTRUMENT_VALIDATION_001` predates this and is not re-run.
+- `cohort.characterise` certified the characterisation window by assertion,
+  and the freeze pipeline never consulted the coverage ledger, so a wallet
+  whose backfill stopped inside the window was classified on the fragment
+  that was collected — an active wallet reading as idle, and idle reading as
+  `INSUFFICIENT_FILLS`. `select_cohort` now takes the ledger's `certify`;
+  the freeze passes it, and such a wallet is excluded first as
+  `WINDOW_UNOBSERVED`, a new stage counter.
+
 Two governance notes from the same round:
 
 - `governance/regenerate_manifest.py` and `seal_r11a_v2_preregistration.py`
