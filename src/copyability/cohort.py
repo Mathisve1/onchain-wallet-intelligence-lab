@@ -29,7 +29,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from .classify import (
     DEFAULT_THRESHOLDS,
@@ -40,7 +40,7 @@ from .classify import (
     WalletProfile,
     profile_wallet,
 )
-from .coverage import CoverageLedger, ObservedInterval
+from .coverage import CoverageLedger, KnownInterval, ObservedInterval, UnknownIntervalError
 from .inputs import SourceFill
 
 #: Prefixes the venue uses for instruments this study does not model.
@@ -50,10 +50,12 @@ BUILDER_PREFIX = "xyz:"
 EVALUABLE = "EVALUABLE"
 REASON_REBATE = "REBATE_DEPENDENT"
 REASON_SCOPE = "OUT_OF_SCOPE"
+REASON_UNOBSERVED = "WINDOW_UNOBSERVED"
 
 #: The stage counters, in the order a wallet meets them.
 STAGE_NAMES = (
     "discovered",
+    "window_unobserved",
     "prefiltered_directional",
     "probable_market_maker",
     "rebate_excluded",
@@ -63,6 +65,12 @@ STAGE_NAMES = (
 )
 
 
+#: ``certify(wallet, start_ms, end_ms)`` returns a :class:`~.coverage.KnownInterval`
+#: or raises :class:`~.coverage.UnknownIntervalError`; a ledger's ``certify``
+#: bound method is one.
+Certify = Callable[[str, int, int], KnownInterval]
+
+
 def characterise(
     wallet: str,
     fills: Sequence[SourceFill],
@@ -70,16 +78,25 @@ def characterise(
     start_ms: int,
     end_ms: int,
     thresholds: ClassifierThresholds = DEFAULT_THRESHOLDS,
+    certify: Certify | None = None,
 ) -> WalletProfile:
-    """Label one wallet over a window the caller states it observed in full.
+    """Label one wallet over a window that was observed in full.
 
-    The window is certified through a ledger rather than asserted, because
-    :class:`~.coverage.KnownInterval` cannot be built by hand: the classifier
-    refuses to characterise a period nobody claims to have watched.
+    With ``certify`` the window is certified by a real coverage ledger, and a
+    wallet whose fills were not collected across the whole window raises
+    :class:`~.coverage.UnknownIntervalError` rather than being labelled on
+    the part that happened to be collected: a truncated backfill would make
+    an active wallet look idle, and idle reads as ``INSUFFICIENT_FILLS``.
+
+    Without ``certify`` the caller asserts full observation, which is only
+    honest for fixtures and for callers that checked coverage themselves.
     """
-    interval = CoverageLedger(
-        [ObservedInterval(wallet, start_ms, end_ms, True, "characterisation")]
-    ).certify(wallet, start_ms, end_ms)
+    if certify is None:
+        interval = CoverageLedger(
+            [ObservedInterval(wallet, start_ms, end_ms, True, "characterisation")]
+        ).certify(wallet, start_ms, end_ms)
+    else:
+        interval = certify(wallet, start_ms, end_ms)
     return profile_wallet(interval, fills, thresholds)
 
 
@@ -158,8 +175,16 @@ def select_cohort(
     rebate_max: Decimal = Decimal("0.25"),
     scope_min: Decimal = Decimal("0.5"),
     thresholds: ClassifierThresholds = DEFAULT_THRESHOLDS,
+    certify: Certify | None = None,
 ) -> CohortSelection:
-    """Apply the three filters in order and record why each wallet fell out."""
+    """Apply the filters in order and record why each wallet fell out.
+
+    With ``certify`` a wallet whose characterisation window the ledger cannot
+    certify is excluded first, as ``WINDOW_UNOBSERVED``: every later filter
+    reads the fills inside that window, and a wallet judged on a window that
+    was only partly collected would be selected or rejected on data it never
+    had. Without ``certify`` every candidate's window is taken as observed.
+    """
     start_ms, end_ms = characterisation_window
     counts = {name: 0 for name in STAGE_NAMES}
     counts["discovered"] = len(candidates)
@@ -168,9 +193,15 @@ def select_cohort(
 
     for wallet in sorted(candidates):
         fills = candidates[wallet]
-        profile = characterise(
-            wallet, fills, start_ms=start_ms, end_ms=end_ms, thresholds=thresholds
-        )
+        try:
+            profile = characterise(
+                wallet, fills, start_ms=start_ms, end_ms=end_ms, thresholds=thresholds,
+                certify=certify,
+            )
+        except UnknownIntervalError:
+            reasons[wallet] = REASON_UNOBSERVED
+            counts["window_unobserved"] += 1
+            continue
         if profile.classification != DIRECTIONAL:
             reasons[wallet] = profile.classification
             if profile.classification == INSUFFICIENT_FILLS:

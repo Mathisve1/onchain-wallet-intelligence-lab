@@ -25,7 +25,7 @@ from src.copyability.cohort import (
     freeze_record,
     select_cohort,
 )
-from src.copyability.loader import load_fills
+from src.copyability.loader import load_coverage, load_fills
 from src.live_data.config import normalize_coin, normalize_wallet_address
 from src.live_data.storage import LiveDataStore
 
@@ -143,8 +143,14 @@ def freeze(
     minimum: int = MINIMUM_EVALUABLE,
 ) -> tuple[dict, CohortSelection]:
     """Select, freeze and describe. Pure apart from reading the store."""
+    # The ledger, not an assertion, decides whether a candidate's window was
+    # observed in full: a wallet whose backfill stopped inside the window is
+    # excluded as WINDOW_UNOBSERVED rather than characterised on a fragment.
     selection = select_cohort(
-        _candidate_fills(store, candidates), scope=scope, characterisation_window=window
+        _candidate_fills(store, candidates),
+        scope=scope,
+        characterisation_window=window,
+        certify=load_coverage(store).certify,
     )
     record = dict(
         freeze_record(

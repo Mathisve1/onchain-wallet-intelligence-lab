@@ -211,6 +211,12 @@ class FreezeStoreTestCase(unittest.TestCase):
                 [_funding(EVAL_WALLET, start, "BTC"), _funding(EVAL_WALLET, start + 1, "DOGE")],
                 ingested_at_ms=T0,
             )
+            # What a real store holds beside the fills: one completed backfill
+            # per candidate covering the whole characterisation window. The
+            # freeze reads the coverage ledger, and a candidate with no
+            # certified window is excluded before it is characterised.
+            for index, wallet in enumerate((EVAL_WALLET, MAKER_WALLET, QUIET_WALLET)):
+                self._record_backfill(store, f"backfill-{index}", wallet, covered_until_ms=T0)
 
         self.candles_json = self.root / "L2_ARM_A_CANDLES_001.json"
         self.candles_json.write_text(json.dumps(CANDLE_POST_CHECK), encoding="utf-8")
@@ -219,6 +225,24 @@ class FreezeStoreTestCase(unittest.TestCase):
         self.candidates_json.write_text(
             json.dumps({"candidates": [EVAL_WALLET, MAKER_WALLET, QUIET_WALLET]}),
             encoding="utf-8",
+        )
+
+    def _record_backfill(
+        self, store: LiveDataStore, run_id: str, wallet: str, *, covered_until_ms: int
+    ) -> None:
+        """A completed backfill_wallet run in the shape the collector writes."""
+        start_ms = self.window[0] - DAY
+        complete = covered_until_ms >= T0
+        store.start_run(run_id, mode="backfill_wallet", started_at_ms=T0, wallet_address=wallet)
+        store.finish_run(
+            run_id, finished_at_ms=T0, status=RUN_STATUS_COMPLETED,
+            records_seen=1, records_written=1,
+            coverage={
+                "window": {"start_time_ms": start_ms, "end_time_ms": T0},
+                "fills": {"attempted": True, "completed": complete,
+                          "truncated_at_page_cap": not complete,
+                          "covered_until_ms": covered_until_ms},
+            },
         )
 
     def freeze_argv(self, out: Path, *, minimum: int | None = None) -> list[str]:
@@ -304,6 +328,33 @@ class FreezeSelectionTests(FreezeStoreTestCase):
         self.assertTrue(record["hard_stop"])
         self.assertEqual(record["cohort"], [])
         self.assertEqual(record["evaluable_count"], 1)
+
+
+class FreezeCoverageTests(FreezeStoreTestCase):
+    """The freeze reads the coverage ledger before it characterises anyone."""
+
+    def test_a_backfill_that_stopped_inside_the_window_excludes_the_wallet(self) -> None:
+        """Regression: the freeze never consulted the ledger, so a wallet whose
+        backfill was cut by the page cap partway through the characterisation
+        window was classified on the fragment that had been collected."""
+        halfway = (self.window[0] + self.window[1]) // 2
+        with LiveDataStore(self.db) as store:
+            store.connection.execute(
+                "DELETE FROM ingest_runs WHERE wallet_address = ?", (EVAL_WALLET,)
+            )
+            store.connection.commit()
+            self._record_backfill(store, "truncated", EVAL_WALLET, covered_until_ms=halfway)
+
+        out = self.root / "freeze.json"
+        code = main(self.freeze_argv(out, minimum=1), log=_silent)
+        record = json.loads(out.read_text(encoding="utf-8"))
+        # The only evaluable wallet is now unobserved, so the freeze hard-stops
+        # - and says why in the counts rather than reporting it as idle.
+        self.assertEqual(code, 2)
+        self.assertTrue(record["hard_stop"])
+        self.assertEqual(record["stage_counts"]["window_unobserved"], 1)
+        self.assertEqual(record["stage_counts"]["insufficient_fills"], 1)  # QUIET_WALLET, as before
+        self.assertEqual(record["evaluable_count"], 0)
 
 
 class FreezeCommandTests(FreezeStoreTestCase):

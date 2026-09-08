@@ -14,6 +14,7 @@ from src.copyability.cohort import (
     EVALUABLE,
     REASON_REBATE,
     REASON_SCOPE,
+    REASON_UNOBSERVED,
     InstrumentScope,
     characterise,
     cohort_hash,
@@ -197,6 +198,7 @@ class SelectCohortTests(unittest.TestCase):
             selection.stage_counts,
             {
                 "discovered": 6,
+                "window_unobserved": 0,
                 "prefiltered_directional": 4,
                 "probable_market_maker": 1,
                 "rebate_excluded": 1,
@@ -223,11 +225,42 @@ class SelectCohortTests(unittest.TestCase):
         self.assertEqual(
             counts["discovered"],
             counts["evaluable"]
+            + counts["window_unobserved"]
             + counts["rebate_excluded"]
             + counts["scope_excluded"]
             + counts["insufficient_fills"]
             + counts["probable_market_maker"],
         )
+
+    def test_a_wallet_whose_window_the_ledger_cannot_certify_is_excluded_first(self) -> None:
+        """Regression: characterisation asserted full observation of the window.
+
+        The freeze pipeline never consulted the coverage ledger, so a wallet
+        whose backfill stopped partway through the characterisation window was
+        classified on the part that happened to be collected - an active
+        wallet reading as idle, and idle reading as INSUFFICIENT_FILLS.
+        """
+        from src.copyability.coverage import CoverageLedger, ObservedInterval
+
+        start_ms, end_ms = WINDOW
+        candidates = self.candidates()
+        observed = []
+        for wallet in candidates:
+            # Every wallet is fully observed except one, whose collection
+            # stopped halfway through the window.
+            end = (start_ms + end_ms) // 2 if wallet == "0xdirectional" else end_ms
+            observed.append(ObservedInterval(wallet, start_ms, end, True, "backfill"))
+        ledger = CoverageLedger(observed)
+
+        selection = select_cohort(
+            candidates, scope=SCOPE, characterisation_window=WINDOW, certify=ledger.certify
+        )
+        self.assertEqual(selection.per_wallet["0xdirectional"], REASON_UNOBSERVED)
+        self.assertEqual(selection.stage_counts["window_unobserved"], 1)
+        self.assertEqual(selection.evaluable, ("0xalsofine",))
+        # The other outcomes are untouched by the new filter.
+        self.assertEqual(selection.per_wallet["0xmaker"], PROBABLE_MARKET_MAKER)
+        self.assertEqual(selection.per_wallet["0xthin"], INSUFFICIENT_FILLS)
 
     def test_classification_is_decided_before_rebate_or_scope(self) -> None:
         # A market maker that is also rebate driven and off scope is counted once.
