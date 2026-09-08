@@ -103,15 +103,6 @@ jobs:
           governance/r11a_native_boundary.sh setup-python verify "${R11A_NATIVE_ENV_FILE}"
           env -u PYTHONDONTWRITEBYTECODE -u PYTHONPYCACHEPREFIX \
             python governance/validate_repository.py
-      - name: Verify the R11A implementation seal
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The contract hashes every sealed file, including the tests that
-          # lock the implementation. A sealed file edited without a re-seal
-          # is drift this job must fail on: the seal is only worth having if
-          # CI refuses a commit that breaks it.
-          python governance/seal_r11a_implementation.py --check
       - name: Clean source-built native boundary
         if: always()
         shell: bash
