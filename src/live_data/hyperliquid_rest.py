@@ -1,0 +1,393 @@
+"""Read-only client for the Hyperliquid ``POST /info`` endpoint.
+
+The client builds request bodies for a fixed allowlist of informational
+request types. It has no notion of an order, a credential or a cryptographic
+authorization, and the only URL it can construct is the ``/info`` path from
+:mod:`.config`.
+
+The HTTP transport is injected, so the whole request/response/retry path is
+exercised offline in tests.
+
+Base per-request weight alone is not the whole cost. The venue's rate-limits
+documentation states that ``recentTrades``, ``historicalOrders``, ``userFills``,
+``userFillsByTime``, ``fundingHistory`` and ``userFunding`` carry "an additional
+rate limit weight per 20 items returned in the response", and that
+``candleSnapshot`` carries one "per 60 items returned in the response". Those
+documented divisors are what :data:`SIZE_WEIGHT_ROWS_PER_UNIT` holds.
+
+The live measurements agree with them but could not, on their own, tell 20 apart
+from 60: HTTP 429 arrived at one request per second with 5000-row candle pages
+(candle probe 2026-09-04) and on back-to-back 2000-row fill pages (L1 backfills
+2026-09-03). An earlier revision guessed a single divisor of 60 for every list
+response from those observations; the documented per-type values are used now.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping
+
+from .config import (
+    INFO_PATH,
+    READ_ONLY_REST_PATHS,
+    ConfigError,
+    LiveDataConfig,
+    normalize_coin,
+    normalize_wallet_address,
+)
+from .models import (
+    ClearinghouseState,
+    Fill,
+    Meta,
+    OpenOrder,
+    parse_all_mids,
+    parse_fills,
+    parse_funding,
+    parse_open_orders,
+    FundingDelta,
+)
+from .rate_limit import Sleeper, TokenBucket
+
+#: Documented per-request weights. Anything not listed here costs 20.
+INFO_REQUEST_WEIGHTS: dict[str, int] = {
+    "allMids": 2,
+    "clearinghouseState": 2,
+    "l2Book": 2,
+    "meta": 20,
+    "userFills": 20,
+    "userFillsByTime": 20,
+    "userFunding": 20,
+    "openOrders": 20,
+    "candleSnapshot": 20,
+}
+DEFAULT_REQUEST_WEIGHT = 20
+
+#: The venue returns at most this many rows per time-ranged fills response.
+MAX_FILLS_PER_RESPONSE = 500
+
+#: The venue returns at most this many candles for one ``candleSnapshot``
+#: call, taken backwards from ``endTime`` (L2 candle probe, 2026-09-04).
+MAX_CANDLES_PER_RESPONSE = 5000
+
+#: Candle intervals the venue answered with HTTP 200 in that same probe.
+#: Anything outside this tuple is a typo, not a coarser series.
+CANDLE_INTERVALS = ("1m", "5m", "15m", "1h", "4h", "1d")
+
+#: Rows per unit of surcharge weight, per request type, as documented on the
+#: venue's rate-limits page: one extra unit per 20 items for the fill and
+#: funding endpoints, one per 60 items for ``candleSnapshot``. A request type
+#: absent from this table carries no surcharge, and neither does a dict-shaped
+#: response, which has no items to count.
+SIZE_WEIGHT_ROWS_PER_UNIT: dict[str, int] = {
+    "userFills": 20,
+    "userFillsByTime": 20,
+    "userFunding": 20,
+    "candleSnapshot": 60,
+}
+
+SUPPORTED_REQUEST_TYPES = frozenset(INFO_REQUEST_WEIGHTS) - {"l2Book"}
+
+RETRYABLE_STATUSES = frozenset({429})
+
+
+class RestError(RuntimeError):
+    """Raised when a request is malformed or the venue answers with an error."""
+
+
+class RestHttpError(RestError):
+    """Raised when the venue returns a non-2xx status after all retries."""
+
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f"HTTP {status_code}: {body[:200]}")
+        self.status_code = status_code
+        self.body = body
+
+
+@dataclass(frozen=True, slots=True)
+class HttpRequest:
+    url: str
+    body: str
+    headers: Mapping[str, str] = field(default_factory=lambda: {"Content-Type": "application/json"})
+    method: str = "POST"
+    timeout_seconds: float = 10.0
+
+
+@dataclass(frozen=True, slots=True)
+class HttpResponse:
+    status_code: int
+    body: str
+
+
+Transport = Callable[[HttpRequest], HttpResponse]
+
+
+def is_retryable(status_code: int) -> bool:
+    """Only rate limiting and server-side faults justify a retry."""
+    return status_code in RETRYABLE_STATUSES or 500 <= status_code <= 599
+
+
+def request_weight(request_type: str) -> int:
+    return INFO_REQUEST_WEIGHTS.get(request_type, DEFAULT_REQUEST_WEIGHT)
+
+
+def response_size_surcharge(request_type: str, row_count: int) -> int:
+    """Extra weight the venue charges for ``row_count`` items of this type.
+
+    Zero for a request type the documentation lists no per-item surcharge for.
+    """
+    rows_per_unit = SIZE_WEIGHT_ROWS_PER_UNIT.get(request_type)
+    if rows_per_unit is None:
+        return 0
+    return row_count // rows_per_unit
+
+
+def response_weight(request_type: str, row_count: int) -> int:
+    """Total weight for a request whose response carries ``row_count`` rows.
+
+    List-shaped responses are metered by size as well as by request type, at
+    the per-type divisor the module docstring quotes.
+    """
+    return request_weight(request_type) + response_size_surcharge(request_type, row_count)
+
+
+def _optional_bool(params: Mapping[str, Any], key: str) -> bool | None:
+    value = params.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise RestError(f"{key} must be a boolean")
+    return value
+
+
+def _optional_dex(params: Mapping[str, Any]) -> str | None:
+    value = params.get("dex")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RestError("dex must be a string")
+    return value
+
+
+def _positive_time(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise RestError(f"{name} must be an integer millisecond timestamp")
+    if value < 0:
+        raise RestError(f"{name} must be nonnegative")
+    return value
+
+
+def build_info_body(request_type: str, **params: Any) -> dict[str, Any]:
+    """Build a validated ``/info`` request body.
+
+    Unknown request types and unknown parameters are rejected rather than
+    forwarded, so a typo cannot silently become a different query.
+    """
+    if request_type not in SUPPORTED_REQUEST_TYPES:
+        raise RestError(f"unsupported info request type: {request_type!r}")
+
+    body: dict[str, Any] = {"type": request_type}
+    allowed: set[str]
+
+    if request_type == "meta":
+        allowed = set()
+    elif request_type == "allMids":
+        allowed = {"dex"}
+        dex = _optional_dex(params)
+        if dex is not None:
+            body["dex"] = dex
+    elif request_type in {"clearinghouseState", "userFunding"}:
+        allowed = {"user", "start_time", "end_time"} if request_type == "userFunding" else {"user"}
+        body["user"] = normalize_wallet_address(params.get("user"))
+        if request_type == "userFunding":
+            if "start_time" in params and params["start_time"] is not None:
+                body["startTime"] = _positive_time(params["start_time"], "start_time")
+            if "end_time" in params and params["end_time"] is not None:
+                body["endTime"] = _positive_time(params["end_time"], "end_time")
+    elif request_type == "userFills":
+        allowed = {"user", "aggregate_by_time"}
+        body["user"] = normalize_wallet_address(params.get("user"))
+        aggregate = _optional_bool(params, "aggregate_by_time")
+        if aggregate is not None:
+            body["aggregateByTime"] = aggregate
+    elif request_type == "userFillsByTime":
+        allowed = {"user", "start_time", "end_time", "aggregate_by_time"}
+        body["user"] = normalize_wallet_address(params.get("user"))
+        if "start_time" not in params:
+            raise RestError("userFillsByTime requires start_time")
+        start_time = _positive_time(params["start_time"], "start_time")
+        body["startTime"] = start_time
+        end_time = params.get("end_time")
+        if end_time is not None:
+            end_value = _positive_time(end_time, "end_time")
+            if end_value < start_time:
+                raise RestError("end_time must not precede start_time")
+            body["endTime"] = end_value
+        aggregate = _optional_bool(params, "aggregate_by_time")
+        if aggregate is not None:
+            body["aggregateByTime"] = aggregate
+    elif request_type == "candleSnapshot":
+        # The venue nests every candle parameter under "req"; a flat body is
+        # accepted by the endpoint and silently answers with nothing useful.
+        allowed = {"coin", "interval", "start_time", "end_time"}
+        missing = sorted(allowed - set(params))
+        if missing:
+            raise RestError(f"candleSnapshot requires: {', '.join(missing)}")
+        try:
+            coin = normalize_coin(params["coin"])
+        except ConfigError as exc:
+            raise RestError(str(exc)) from exc
+        interval = params["interval"]
+        if interval not in CANDLE_INTERVALS:
+            raise RestError(
+                f"unsupported candle interval: {interval!r}; "
+                f"expected one of {', '.join(CANDLE_INTERVALS)}"
+            )
+        start_time = _positive_time(params["start_time"], "start_time")
+        end_time = _positive_time(params["end_time"], "end_time")
+        if end_time < start_time:
+            raise RestError("end_time must not precede start_time")
+        body["req"] = {
+            "coin": coin,
+            "interval": interval,
+            "startTime": start_time,
+            "endTime": end_time,
+        }
+    elif request_type == "openOrders":
+        allowed = {"user", "dex"}
+        body["user"] = normalize_wallet_address(params.get("user"))
+        dex = _optional_dex(params)
+        if dex is not None:
+            body["dex"] = dex
+    else:  # pragma: no cover - guarded by SUPPORTED_REQUEST_TYPES
+        raise RestError(f"unhandled request type: {request_type!r}")
+
+    unexpected = sorted(set(params) - allowed)
+    if unexpected:
+        raise RestError(f"unexpected parameters for {request_type}: {', '.join(unexpected)}")
+    return body
+
+
+class HyperliquidRestClient:
+    """Weight-budgeted, retrying, read-only ``/info`` client.
+
+    The transport is supplied by the caller and this module builds none: no
+    concrete HTTP implementation lives under ``src/``. The outer collector
+    layer under ``research/`` owns that, so this package stays deterministic
+    and provably free of network machinery.
+    """
+
+    def __init__(
+        self,
+        config: LiveDataConfig,
+        *,
+        transport: Transport,
+        bucket: TokenBucket | None = None,
+        sleeper: Sleeper = time.sleep,
+        backoff_base_seconds: float = 0.5,
+    ) -> None:
+        config.authorizations.assert_read_only()
+        if INFO_PATH not in READ_ONLY_REST_PATHS:  # pragma: no cover - constant guard
+            raise RestError("read-only path allowlist drift")
+        self._config = config
+        self._transport = transport
+        self._bucket = bucket or TokenBucket.from_config(config, sleeper=sleeper)
+        self._sleeper = sleeper
+        self._backoff_base_seconds = backoff_base_seconds
+        self.attempted_requests = 0
+        self.retried_requests = 0
+        #: Total request weight spent against the venue's IP budget, counting
+        #: every attempt. This is the number to compare with the envelope.
+        self.consumed_weight = 0
+
+    @property
+    def config(self) -> LiveDataConfig:
+        return self._config
+
+    def request(self, request_type: str, **params: Any) -> Any:
+        """Issue one validated ``/info`` request and return the decoded JSON."""
+        body = build_info_body(request_type, **params)
+        payload = json.dumps(body, separators=(",", ":"), sort_keys=True)
+        weight = request_weight(request_type)
+
+        attempt = 0
+        while True:
+            # Charged per attempt, not per logical request: a retry is a real
+            # request against the venue's IP budget and costs the same weight.
+            # Spending it only once would under-report our own consumption by
+            # up to max_retries + 1 times, exactly while we are being throttled.
+            self._bucket.acquire(weight)
+            self.attempted_requests += 1
+            self.consumed_weight += weight
+            response = self._transport(
+                HttpRequest(
+                    url=self._config.info_url,
+                    body=payload,
+                    timeout_seconds=self._config.request_timeout_seconds,
+                )
+            )
+            if 200 <= response.status_code < 300:
+                try:
+                    decoded = json.loads(response.body)
+                except json.JSONDecodeError as exc:
+                    raise RestError(f"{request_type}: response was not valid JSON") from exc
+                if isinstance(decoded, list):
+                    # List-shaped responses (fills, funding, candles) can be
+                    # large enough to blow the venue's budget even though the
+                    # base weight alone fits; see SIZE_WEIGHT_ROWS_PER_UNIT.
+                    surcharge = response_size_surcharge(request_type, len(decoded))
+                    if surcharge > 0:
+                        self._bucket.acquire(surcharge)
+                        self.consumed_weight += surcharge
+                return decoded
+            if not is_retryable(response.status_code) or attempt >= self._config.max_retries:
+                raise RestHttpError(response.status_code, response.body)
+            # The first 429 (attempt == 0) always waits at least 5 seconds,
+            # matching the venue's observed cooldown; later attempts double
+            # from there, same as the base-weight-only backoff before it.
+            delay = max(self._backoff_base_seconds, 5.0) * (2**attempt)
+            self._sleeper(delay)
+            self.retried_requests += 1
+            attempt += 1
+
+    # -- typed convenience wrappers -------------------------------------------------
+
+    def meta(self) -> Meta:
+        return Meta.parse(self.request("meta"))
+
+    def all_mids(self) -> dict[str, Any]:
+        return parse_all_mids(self.request("allMids"))
+
+    def clearinghouse_state(self, user: str) -> ClearinghouseState:
+        return ClearinghouseState.parse(self.request("clearinghouseState", user=user), user)
+
+    def user_fills(self, user: str, *, aggregate_by_time: bool | None = None) -> tuple[Fill, ...]:
+        payload = self.request("userFills", user=user, aggregate_by_time=aggregate_by_time)
+        return parse_fills(payload, user)
+
+    def user_fills_by_time(
+        self,
+        user: str,
+        *,
+        start_time: int,
+        end_time: int | None = None,
+        aggregate_by_time: bool | None = None,
+    ) -> tuple[Fill, ...]:
+        payload = self.request(
+            "userFillsByTime",
+            user=user,
+            start_time=start_time,
+            end_time=end_time,
+            aggregate_by_time=aggregate_by_time,
+        )
+        return parse_fills(payload, user)
+
+    def user_funding(
+        self, user: str, *, start_time: int | None = None, end_time: int | None = None
+    ) -> tuple[FundingDelta, ...]:
+        payload = self.request("userFunding", user=user, start_time=start_time, end_time=end_time)
+        return parse_funding(payload, user)
+
+    def open_orders(self, user: str) -> tuple[OpenOrder, ...]:
+        return parse_open_orders(self.request("openOrders", user=user), user)

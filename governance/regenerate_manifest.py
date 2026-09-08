@@ -8,6 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
 EXCLUDED_DIRECTORY_NAMES = {
+    # Tool-local telemetry the ruflo post-edit hook writes into the project
+    # (.claude-flow/data/pending-insights.jsonl): edit paths and timestamps,
+    # regenerated on every edit, never part of the repository's file set.
+    ".claude-flow",
     ".git",
     ".mypy_cache",
     ".pytest_cache",
@@ -15,6 +19,14 @@ EXCLUDED_DIRECTORY_NAMES = {
     ".venv",
     "__pycache__",
     "venv",
+}
+
+#: Per-developer files that live inside the checkout but are not repository
+#: content. Claude Code's local settings override is one: git ignores it by
+#: convention (and this repository's .gitignore says so), yet a manifest that
+#: hashed it would differ on every machine that has one.
+EXCLUDED_RELATIVE_PATHS = {
+    ".claude/settings.local.json",
 }
 
 
@@ -25,6 +37,8 @@ def included_files(root: Path = ROOT) -> list[Path]:
             continue
         relative = path.relative_to(root)
         if path == MANIFEST:
+            continue
+        if relative.as_posix() in EXCLUDED_RELATIVE_PATHS:
             continue
         if any(
             part in EXCLUDED_DIRECTORY_NAMES
@@ -57,7 +71,13 @@ def main() -> int:
 
     expected = render_manifest()
     if args.write:
-        MANIFEST.write_text(expected, encoding="utf-8")
+        # An explicit newline keeps the artifact byte-identical across
+        # platforms. Text mode otherwise translates the line separator to the
+        # platform default, so on Windows every line is rewritten as CRLF.
+        # No --check catches it (read_text normalises newlines on the way in),
+        # yet it turns a handful of changed hashes into a whole-file diff and
+        # changes the bytes of the file every consumer digests.
+        MANIFEST.write_text(expected, encoding="utf-8", newline="\n")
         print(
             "MANIFEST_WRITTEN:"
             f"{MANIFEST.relative_to(ROOT).as_posix()}"

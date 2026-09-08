@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "L1-OWNER-DECISION-001",
+  "pilot_id": "HL-LIVE-DATA-COLLECTION-L1-001",
+  "approval_id": "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001",
+  "repository": "Mathisve1/onchain-wallet-intelligence-lab",
+  "owner_identity": "Mathis Van Eeckhout",
+  "approval_source": "EXPLICIT_CHAT_APPROVAL_EXACT_BLOCK",
+  "approval_received_date_utc": "2026-09-03",
+  "canonical_text": {
+    "path": "research/wallet_copyability/live_data/APPROVE_HL_LIVE_DATA_COLLECTION_L1_001.txt",
+    "sha256": "d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b",
+    "line_count": 27,
+    "normalization": "EXACT_OWNER_LINES_WITH_SINGLE_TERMINAL_LF"
+  },
+  "bound_preregistration_commit": "e3610cd494211f6a399caffd7741a2f526b3287a",
+  "bound_preregistration_path": "research/wallet_copyability/live_data/L1_LIVE_DATA_COLLECTION_PREREGISTRATION.json",
+  "gates_granted_in_this_decision": [
+    "OWNER_APPROVAL",
+    "IMPLEMENTATION_REVIEW",
+    "SINGLE_USE_EXECUTION_RELEASE"
+  ],
+  "single_gate_rationale": "The envelope is EUR 0, unauthenticated and read-only. Three separate gates for one public HTTP request would be ceremony rather than protection, so the owner grants all three in one explicit decision.",
+  "precedent": {
+    "applies_only_to_this_envelope": true,
+    "precedent_for_archive_track": false,
+    "precedent_for_any_scope_that_costs_money": false,
+    "precedent_for_any_scope_that_requires_authentication": false,
+    "precedent_for_any_scope_that_trades": false
+  },
+  "risk_policy": {
+    "integration_remains_false": true,
+    "rationale": "Reading a public API is not integration in the sense RISK_POLICY.md uses the word; that authorization is about coupling to trading. This session falls under historical/public research, which is already true. Every trading authorization is unchanged and false."
+  },
+  "post_approval_changes_not_bound_by_the_approval_text": {
+    "retained_schema_version": {"from": 2, "to": 3},
+    "tables_added": ["trades"],
+    "rationale": "Wallet discovery needs the public tape, and counting a wallet's activity needs the trades retained. The approval text binds the request envelope, the endpoints and the authorizations; it does not bind the local storage layout. The `trades` websocket subscription was already on the preregistered allowlist and adds no REST weight."
+  },
+  "execution_release": {
+    "release_id": "RELEASE_HL_LIVE_DATA_COLLECTION_L1_001",
+    "single_use": true,
+    "status": "CONSUMED",
+    "session_definition": "One operator-initiated observation session: one discovery watch over the tracked coins, at most 10 wallet backfills, and one tracking watch over at most 10 wallets, each command inside the approved per-command bounds and the aggregate inside the 1200 weight-per-minute budget.",
+    "database_location": "OUTSIDE_THE_REPOSITORY",
+    "database_committed": false,
+    "evidence_path": "research/wallet_copyability/live_data/evidence/L1_SESSION_001.json",
+    "consumed_by": "L1-SESSION-001",
+    "consumed_at_utc": "2026-09-03T18:35:31Z",
+    "rerun_authorized": false
+  },
+  "created_by_this_decision": {
+    "network_requests_executed": 0,
+    "empirical_result": null,
+    "wallet_ranking_produced": false,
+    "copyability_claim_produced": false
+  },
+  "trading_authorizations": {
+    "capital_allocation_authorized": false,
+    "integration_authorized": false,
+    "leverage_authorized": false,
+    "live_authorized": false,
+    "paper_authorized": false,
+    "shadow_authorized": false
+  }
+}

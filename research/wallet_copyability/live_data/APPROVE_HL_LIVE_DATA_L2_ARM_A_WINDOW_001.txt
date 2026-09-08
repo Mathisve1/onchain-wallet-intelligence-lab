@@ -1,0 +1,12 @@
+APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001
+bound_commit=3311338
+amends=APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001
+arm_a_variant=A-45
+arm_a_evaluation_window=T0-52..T0-7
+arm_a_price_interval=15m
+arm_a_freshness_limit_minutes=15
+mixed_resolution_price_series_authorized=false
+arm_b_unchanged=true
+decisive_arm=B
+arm_a_role=EARLY_READ_AND_SURVIVORSHIP_MEASUREMENT
+start_immediately=true

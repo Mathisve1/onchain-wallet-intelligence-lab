@@ -33,6 +33,30 @@
 
 R11 remains unresolved and R12 remains blocked throughout Phase 1B. No step above authorizes wallet ranking, alpha/copyability interpretation or trading.
 
+## Phase 1L — live-data collection track
+
+Forward-only public observation, independent of the archive track. R11 does not
+gate it and progress here does not unblock R11.
+
+- [x] Build a read-only observation pipeline whose deterministic core carries no
+  network dependency and whose transports are injected from the outer layer.
+- [x] Prove the read-only boundary structurally: a single-element REST path
+  allowlist, no venue write path in the codebase and no signing routine.
+- [x] Preregister `HL-LIVE-DATA-COLLECTION-L1-001` as a frozen, non-executing
+  collection contract with an EUR 0 request envelope.
+- [x] Bind the contract to the code with a validator that re-derives every
+  declared bound and fails closed on drift in either direction.
+- [ ] Merge the L1 preregistration and reviewed implementation after exact-head
+  CI. Merging is not an execution release.
+- [ ] Obtain one hash-bound owner approval of the exact L1 envelope.
+- [ ] Build a separate single-use execution release bound to the canonical
+  implementation commit.
+- [ ] Run one operator-initiated observation session inside the approved
+  envelope and report its coverage.
+
+No step above authorizes workflow installation, scheduled or unattended
+execution, wallet ranking, alpha/copyability interpretation or trading.
+
 ## Phase 2 — deterministic wallet ledger
 
 - [ ] Parse fills, funding, deposits, withdrawals, internal transfers,

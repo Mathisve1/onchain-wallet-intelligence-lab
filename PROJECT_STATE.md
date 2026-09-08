@@ -92,6 +92,30 @@ Verified: 2026-08-11 against the canonical R0–R11 lineage, including consumed 
 | R11A workflow / release / activation | absent / absent / absent |
 | R11A empirical root cause | `UNKNOWN_PENDING_DIAGNOSTIC` |
 | R11A repair selected / R11B authorized | `false` / `false` |
+| live-data pilot | `HL-LIVE-DATA-COLLECTION-L1-001` |
+| L1 status | `PREREGISTERED_NO_EXECUTION` |
+| L1 track | forward-only public observation; independent of the archive track |
+| L1 venue / endpoints | `HYPERLIQUID_PUBLIC_MAINNET`; `POST /info` and `wss://api.hyperliquid.xyz/ws` only |
+| L1 authentication / credentials / signing | `false` / `false` / `false` |
+| L1 owner approval | `PRESENT`; exact text SHA-256 `d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b`; bound to `e3610cd494211f6a399caffd7741a2f526b3287a` |
+| L1 owner decision | `L1-OWNER-DECISION-001`: approval, implementation review and single-use release granted in one owner decision; no precedent beyond this envelope |
+| L1 execution release / workflow | `RELEASE_HL_LIVE_DATA_COLLECTION_L1_001` single-use, `CONSUMED` by `L1-SESSION-001` / absent |
+| L1 session window | `2026-09-03T18:20:42Z` to `2026-09-03T18:35:31Z`; evidence `research/wallet_copyability/live_data/evidence/L1_SESSION_001.json` |
+| L1 session commands | 1 discovery watch (1000 frames), 10 backfill attempts (7 completed, 3 failed HTTP 429), 1 tracking watch (1000 frames) |
+| L1 session counts | wallets discovered `839`; backfilled `7`; fills `130457` (`129787` REST / `670` live); funding `3004`; snapshots `35`; trades `3358`; mids `273`; coins in fills `113` |
+| L1 session request weight | `2012` total; `133` attempts; `16` retries; budget `1200`/min never exceeded locally |
+| L1 envelope pinch | `OBSERVED_NOT_WIDENED`: venue weights large responses above the documented base weight; three backfills failed after the approved 3 retries and were not retried |
+| L1 database | outside the repository; SHA-256 `b5da970da812907e19cc760b1583df007b2bfb87129541fdbde791e2961777c9`; `114339840` bytes; schema v3; not committed |
+| L1 maximum one-time / monthly budget | `EUR 0` / `EUR 0` |
+| L1 enforced weight budget | `1200` per minute; retries charged against it |
+| L1 maximum tracked wallets | `10`; venue cap on distinct user-scoped subscriptions |
+| L1 worst-case snapshot cost | `20` weight per minute at the 60 s cadence |
+| L1 REST request types | `7` informational; `l2Book` excluded from the supported set |
+| L1 wallet discovery | public `trades` websocket tape (allowlisted); retained as schema v3 `trades` table |
+| L1 `integration` in RISK_POLICY | unchanged `false`; public reads are not trading integration |
+| L1 REST / websocket executed | `133` requests / `2` connections |
+| L1 implementation | `src/live_data` deterministic core; transports injected from `research/` |
+| L1 tests | `199` pass |
 | R2 current scoped paid request / Requester Pays / LIST | `false` / `false` / `false` after consumption |
 | R2 aggregate S3 requests / metadata entries observed | `5` / `125` |
 | larger 300-request inventory | `false` |
@@ -295,14 +319,60 @@ shadow_authorized = false
 live_authorized = false
 leverage_authorized = false
 capital_allocation_authorized = false
+l1_pilot_id = HL-LIVE-DATA-COLLECTION-L1-001
+l1_status = PREREGISTERED_NO_EXECUTION
+l1_owner_approval_present = true
+l1_approval_text_sha256 = d87df45cd8b0afa597f8ee0848b6f75baf4ca79b0dcd59c2bb4b9fd3b5dede1b
+l1_bound_preregistration_commit = e3610cd494211f6a399caffd7741a2f526b3287a
+l1_owner_decision_id = L1-OWNER-DECISION-001
+l1_execution_release_present = true
+l1_execution_release_id = RELEASE_HL_LIVE_DATA_COLLECTION_L1_001
+l1_execution_release_single_use = true
+l1_execution_release_consumed = true
+l1_consumed_by = L1-SESSION-001
+l1_envelope_breached = false
+l1_envelope_pinch_observed = true
+l1_database_sha256 = b5da970da812907e19cc760b1583df007b2bfb87129541fdbde791e2961777c9
+l1_rerun_authorized = false
+l1_database_committed = false
+l1_workflow_installed = false
+l1_scheduled_execution_authorized = false
+l1_manual_operator_run_authorized = false
+l1_authentication_authorized = false
+l1_signed_action_authorized = false
+l1_order_endpoint_authorized = false
+l1_paid_request_authorized = false
+l1_maximum_one_time_budget_eur = 0
+l1_maximum_monthly_budget_eur = 0
+l1_rest_requests_executed = 133
+l1_request_weight_consumed = 2012
+l1_websocket_connections_opened = 2
+l1_database_rows_written = 137809
+l1_wallets_discovered = 839
+l1_wallets_backfilled = 7
+l1_observations_retained_locally = true
+l1_empirical_result = null
+l1_wallet_ranking_authorized = false
+l1_copyability_claim_authorized = false
 ```
 
-All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well.
+All release-scoped R2 execution flags are false after consumption of release 002. The broader global archive flags remain false as well. The L1 single-use release is consumed by `L1-SESSION-001` and cannot be rerun. The study-level `market_data_ingested` gate stays false: it gates a market release and an empirical result, and this session produced neither. Observations exist locally, uncommitted, with their hash and counts recorded. Every L1 trading, ranking, copyability and precedent flag stays false.
 
 ## Exact next gate
+
+Two tracks are open. They share no release, role or budget, and neither gates the other.
+
+### Archive track
 
 1. Preserve the canonical R11 evidence closure at merge `f7aa612d2a5638cce0fd197f57efea4b787f87f1`; never rerun or rewrite its immutable release snapshot.
 2. Review and merge a fully inert R11A implementation and frozen workflow candidate. No `.github/workflows` installation, OIDC, S3 request or release may appear at this stage.
 3. After exact-head CI and clean-context review of the inert implementation, request one new hash-bound owner approval for the diagnostic scope, unchanged role reuse, 72-request / zero-retry envelope, byte/runtime/disk/artifact caps and EUR 0.50 one-time / EUR 0 monthly ceiling.
 4. After approval, preserve separate workflow-installation, inert release-candidate and canonical single-use activation stages before one diagnostic run.
 5. Root-cause-driven replay suppression or canonicalization, repaired wallet aggregation, repaired 72-hour validation, R11 closure and R12 readiness remain later evidence-gated stages. Wallet ranking, alpha/copyability claims and every trading/capital action remain unauthorized.
+
+### Live-data track
+
+1. The owner approval, implementation review and single-use release `RELEASE_HL_LIVE_DATA_COLLECTION_L1_001` are granted in `L1-OWNER-DECISION-001` (DEC-040), bound to preregistration commit `e3610cd494211f6a399caffd7741a2f526b3287a`. No workflow installation and no scheduled or unattended execution is authorized at any point.
+2. `L1-SESSION-001` ran on 2026-09-03 inside the envelope and consumed the release; evidence is retained with counts, request weight and the database SHA-256. The release cannot be rerun. The envelope pinched on three backfills (HTTP 429 after the approved retries); nothing was widened. Any successor session needs a new owner decision and should charge response-size weight locally first.
+3. Merge the preregistration, decision, implementation, evidence and the deterministic `src/copyability` simulator after exact-head CI.
+4. Score wallets only over intervals the coverage ledger certifies, and only once a wallet-ranking authorization exists. Point-in-time eligibility, wallet ranking, alpha/copyability interpretation, entity clustering and every trading/capital action remain unauthorized and stay gated behind Phase 3.

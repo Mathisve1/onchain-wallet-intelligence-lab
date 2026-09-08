@@ -1,0 +1,383 @@
+"""Read-only Hyperliquid websocket client.
+
+Subscribes to public and per-wallet observation channels, keeps the socket
+alive with the documented ``{"method": "ping"}`` heartbeat, and reconnects
+with exponential backoff while automatically restoring every subscription.
+
+The connection factory is injected, so subscription, heartbeat, dispatch and
+reconnect sequences are all testable without a socket.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass
+from typing import Any, Callable, Protocol
+
+from .config import ConfigError, LiveDataConfig, normalize_coin, normalize_wallet_address
+
+#: Subscription types this client is allowed to open, and the fields each needs.
+SUBSCRIPTION_TYPES: dict[str, frozenset[str]] = {
+    "allMids": frozenset(),
+    "trades": frozenset({"coin"}),
+    "l2Book": frozenset({"coin"}),
+    "userFills": frozenset({"user"}),
+    "userEvents": frozenset({"user"}),
+}
+
+#: Inbound channel name per subscription type. ``userEvents`` is the documented
+#: exception: its messages arrive on channel ``user``.
+CHANNEL_BY_SUBSCRIPTION: dict[str, str] = {
+    "allMids": "allMids",
+    "trades": "trades",
+    "l2Book": "l2Book",
+    "userFills": "userFills",
+    "userEvents": "user",
+}
+
+#: Channels whose frames belong to exactly one wallet. Several wallets share a
+#: channel name, so the wallet is part of the routing key and a frame for one
+#: must never reach another wallet's handler.
+USER_SCOPED_CHANNELS = frozenset({"userFills", "user"})
+
+#: Channels whose payload identifies its own wallet. ``WsUserFills`` carries a
+#: ``user`` field; ``WsUserEvent`` (channel ``user``) does not, so a userEvents
+#: frame can only be attributed when a single such subscription is open.
+SELF_IDENTIFYING_CHANNELS = frozenset({"userFills"})
+
+PING_MESSAGE = {"method": "ping"}
+PONG_CHANNEL = "pong"
+SUBSCRIPTION_RESPONSE_CHANNEL = "subscriptionResponse"
+ERROR_CHANNEL = "error"
+
+
+class WebSocketError(RuntimeError):
+    """Raised on malformed subscriptions or malformed inbound frames."""
+
+
+class Connection(Protocol):
+    """Minimal duck type of a text websocket connection."""
+
+    def send(self, message: str) -> None: ...
+
+    def recv(self) -> str: ...
+
+    def close(self) -> None: ...
+
+
+ConnectionFactory = Callable[[str], Connection]
+Handler = Callable[[dict[str, Any]], None]
+
+
+@dataclass(frozen=True, slots=True)
+class Subscription:
+    """One validated subscription request."""
+
+    type: str
+    coin: str | None = None
+    user: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.type not in SUBSCRIPTION_TYPES:
+            raise WebSocketError(f"unsupported subscription type: {self.type!r}")
+        required = SUBSCRIPTION_TYPES[self.type]
+        if "coin" in required:
+            if self.coin is None:
+                raise WebSocketError(f"{self.type} requires a coin")
+            object.__setattr__(self, "coin", normalize_coin(self.coin))
+        elif self.coin is not None:
+            raise WebSocketError(f"{self.type} does not take a coin")
+        if "user" in required:
+            if self.user is None:
+                raise WebSocketError(f"{self.type} requires a user")
+            object.__setattr__(self, "user", normalize_wallet_address(self.user))
+        elif self.user is not None:
+            raise WebSocketError(f"{self.type} does not take a user")
+
+    @property
+    def channel(self) -> str:
+        return CHANNEL_BY_SUBSCRIPTION[self.type]
+
+    @property
+    def route_key(self) -> tuple[str, str | None]:
+        """Key that inbound frames are routed on.
+
+        Including the wallet for user-scoped channels is what makes a
+        misdelivery impossible rather than merely unlikely: routing on the
+        channel alone would hand every wallet's frames to every wallet's
+        handler, and correctness would depend on each handler remembering to
+        filter.
+        """
+        if self.channel in USER_SCOPED_CHANNELS:
+            return (self.channel, self.user)
+        return (self.channel, None)
+
+    def as_payload(self) -> dict[str, str]:
+        payload: dict[str, str] = {"type": self.type}
+        if self.coin is not None:
+            payload["coin"] = self.coin
+        if self.user is not None:
+            payload["user"] = self.user
+        return payload
+
+
+def build_subscribe_message(subscription: Subscription) -> dict[str, Any]:
+    return {"method": "subscribe", "subscription": subscription.as_payload()}
+
+
+def build_unsubscribe_message(subscription: Subscription) -> dict[str, Any]:
+    return {"method": "unsubscribe", "subscription": subscription.as_payload()}
+
+
+class HyperliquidWebSocketClient:
+    """Subscription registry, heartbeat and reconnect loop over one connection.
+
+    The connection factory is supplied by the caller and this module builds
+    none: no concrete socket implementation lives under ``src/``. The outer
+    collector layer under ``research/`` owns that.
+    """
+
+    def __init__(
+        self,
+        config: LiveDataConfig,
+        *,
+        connection_factory: ConnectionFactory,
+        clock: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], None] = time.sleep,
+        backoff_base_seconds: float = 1.0,
+        max_backoff_seconds: float = 60.0,
+        max_reconnects: int | None = None,
+    ) -> None:
+        config.authorizations.assert_read_only()
+        self._config = config
+        self._factory = connection_factory
+        self._clock = clock
+        self._sleeper = sleeper
+        self._backoff_base_seconds = backoff_base_seconds
+        self._max_backoff_seconds = max_backoff_seconds
+        self._max_reconnects = max_reconnects
+        self._connection: Connection | None = None
+        self._subscriptions: dict[Subscription, list[Handler]] = {}
+        self._last_send_at: float = 0.0
+        self.sent_messages: list[dict[str, Any]] = []
+        self.pings_sent = 0
+        self.pongs_received = 0
+        self.acknowledged_subscriptions = 0
+        self.unrouted_messages = 0
+        self.ambiguous_messages = 0
+        self.handler_errors: list[str] = []
+        self.connect_attempts = 0
+        self.reconnects = 0
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connection is not None
+
+    @property
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        return tuple(self._subscriptions)
+
+    # -- connection lifecycle -------------------------------------------------------
+
+    def connect(self) -> None:
+        """Open the socket and (re)send every registered subscription."""
+        if self._connection is not None:
+            return
+        self.connect_attempts += 1
+        self._connection = self._factory(self._config.ws_url)
+        self._last_send_at = self._clock()
+        for subscription in self._subscriptions:
+            self._send(build_subscribe_message(subscription))
+
+    def close(self) -> None:
+        connection, self._connection = self._connection, None
+        if connection is not None:
+            connection.close()
+
+    def _send(self, message: dict[str, Any]) -> None:
+        if self._connection is None:
+            raise WebSocketError("cannot send on a closed connection")
+        self._connection.send(json.dumps(message, separators=(",", ":"), sort_keys=True))
+        self.sent_messages.append(message)
+        self._last_send_at = self._clock()
+
+    # -- subscriptions --------------------------------------------------------------
+
+    def subscribe(self, subscription: Subscription, handler: Handler) -> None:
+        """Register a handler and, if connected, send the subscribe frame."""
+        is_new = subscription not in self._subscriptions
+        self._subscriptions.setdefault(subscription, []).append(handler)
+        if is_new and self._connection is not None:
+            self._send(build_subscribe_message(subscription))
+
+    def unsubscribe(self, subscription: Subscription) -> None:
+        """Drop a subscription and its handlers, sending the unsubscribe frame."""
+        if subscription not in self._subscriptions:
+            raise WebSocketError(f"not subscribed: {subscription.as_payload()}")
+        del self._subscriptions[subscription]
+        if self._connection is not None:
+            self._send(build_unsubscribe_message(subscription))
+
+    # -- heartbeat ------------------------------------------------------------------
+
+    def heartbeat_if_due(self) -> bool:
+        """Send a ping when the socket has been silent for the heartbeat window."""
+        if self._connection is None:
+            return False
+        if self._clock() - self._last_send_at < self._config.ws_heartbeat_seconds:
+            return False
+        self._send(dict(PING_MESSAGE))
+        self.pings_sent += 1
+        return True
+
+    # -- inbound ---------------------------------------------------------------------
+
+    def _route_key_for(self, channel: str, message: dict[str, Any]) -> tuple[str, str | None]:
+        """Resolve the routing key of one inbound frame.
+
+        ``userFills`` payloads name their own wallet. ``userEvents`` frames
+        (channel ``user``) do not, so they can only be attributed when exactly
+        one such subscription is open; otherwise this fails closed rather than
+        guessing which wallet the events belong to.
+        """
+        if channel not in USER_SCOPED_CHANNELS:
+            return (channel, None)
+        if channel in SELF_IDENTIFYING_CHANNELS:
+            data = message.get("data")
+            if not isinstance(data, dict):
+                raise WebSocketError(f"{channel} frame has no object 'data'")
+            user = data.get("user")
+            if not isinstance(user, str):
+                raise WebSocketError(f"{channel} frame does not name its wallet")
+            try:
+                return (channel, normalize_wallet_address(user))
+            except ConfigError as exc:
+                # A wallet the venue sent that we cannot normalise is an
+                # unattributable frame like any other, not a reason to end the
+                # session: ConfigError is a ValueError, so without this it
+                # escapes dispatch's handler and aborts the watch.
+                raise WebSocketError(f"{channel} frame names an unusable wallet: {exc}") from exc
+        candidates = {
+            subscription.route_key
+            for subscription in self._subscriptions
+            if subscription.channel == channel
+        }
+        if len(candidates) != 1:
+            raise WebSocketError(
+                f"{channel} frame carries no wallet and {len(candidates)} subscriptions are open"
+            )
+        return candidates.pop()
+
+    def dispatch(self, raw: str) -> str:
+        """Validate one inbound frame and route it. Returns the channel name."""
+        try:
+            message = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise WebSocketError("inbound frame was not valid JSON") from exc
+        if not isinstance(message, dict):
+            raise WebSocketError(f"inbound frame must be an object, got {type(message).__name__}")
+        channel = message.get("channel")
+        if not isinstance(channel, str) or not channel:
+            raise WebSocketError("inbound frame is missing a string 'channel'")
+        if channel == PONG_CHANNEL:
+            self.pongs_received += 1
+            return channel
+        if channel == SUBSCRIPTION_RESPONSE_CHANNEL:
+            self.acknowledged_subscriptions += 1
+            return channel
+        if channel == ERROR_CHANNEL:
+            raise WebSocketError(f"venue error frame: {message.get('data')!r}")
+        try:
+            route = self._route_key_for(channel, message)
+        except WebSocketError:
+            # An unattributable user frame is dropped, never fanned out: giving
+            # it to every wallet would corrupt per-wallet provenance.
+            self.ambiguous_messages += 1
+            return channel
+        # Several subscriptions can share one route key: a channel-routed feed
+        # like ``trades`` keys every coin to ("trades", None), and watch.py
+        # registers the *same* handler object under each of them. Delivering
+        # once per matching subscription would call that handler once per coin
+        # for a single frame, multiplying every tape count by the coin count
+        # and re-running the write path N times. Identity is the right test --
+        # two genuinely different handlers on one route both still run.
+        handlers: list[Handler] = []
+        seen_handlers: set[int] = set()
+        for subscription, registered in self._subscriptions.items():
+            if subscription.route_key != route:
+                continue
+            for handler in registered:
+                if id(handler) in seen_handlers:
+                    continue
+                seen_handlers.add(id(handler))
+                handlers.append(handler)
+        if not handlers:
+            self.unrouted_messages += 1
+            return channel
+        for handler in handlers:
+            try:
+                handler(message)
+            except Exception as exc:  # a bad handler must not silently drop the feed
+                self.handler_errors.append(f"{channel}: {exc}")
+        return channel
+
+    def poll_once(self) -> bool:
+        """Read and dispatch one frame, reconnecting if the socket dropped."""
+        if self._connection is None:
+            self.connect()
+        assert self._connection is not None
+        try:
+            raw = self._connection.recv()
+        except Exception:
+            self._reconnect()
+            return False
+        self.dispatch(raw)
+        return True
+
+    def _reconnect(self) -> None:
+        self.close()
+        attempt = 0
+        while True:
+            if self._max_reconnects is not None and self.reconnects >= self._max_reconnects:
+                raise WebSocketError("reconnect budget exhausted")
+            delay = min(
+                self._max_backoff_seconds, self._backoff_base_seconds * (2**attempt)
+            )
+            self._sleeper(delay)
+            self.reconnects += 1
+            try:
+                self.connect()
+            except Exception:
+                self.close()
+                attempt += 1
+                continue
+            return
+
+    def run(
+        self,
+        *,
+        max_iterations: int,
+        stop: Callable[[], bool] | None = None,
+        on_iteration: Callable[[], None] | None = None,
+    ) -> int:
+        """Pump the socket for a bounded number of iterations.
+
+        Bounded on purpose: an unbounded loop is untestable and, in a research
+        lab, an unattended process that nobody can reason about.
+        """
+        if max_iterations < 0:
+            raise WebSocketError("max_iterations must be nonnegative")
+        dispatched = 0
+        for _ in range(max_iterations):
+            if stop is not None and stop():
+                break
+            self.heartbeat_if_due()
+            if self.poll_once():
+                dispatched += 1
+            if on_iteration is not None:
+                # Time-driven work the caller wants interleaved with the feed.
+                # It runs per loop iteration, so it advances only while frames
+                # are arriving -- see the cadence note in ingest.watch().
+                on_iteration()
+        return dispatched

@@ -71,7 +71,9 @@ def main() -> int:
     rendered = render()
     if args.write:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(rendered, encoding="utf-8")
+        # Explicit newline: see regenerate_manifest.py. Text mode would write
+        # CRLF on Windows and silently change every byte of a sealed artifact.
+        OUTPUT.write_text(rendered, encoding="utf-8", newline="\n")
         print("R11A_V2_PREREGISTRATION_BINDINGS_WRITTEN")
         return 0
     if not OUTPUT.is_file() or OUTPUT.read_text(encoding="utf-8") != rendered:
