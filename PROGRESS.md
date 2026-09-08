@@ -212,13 +212,20 @@ Two governance notes from the same round:
   wrote their artifacts in text mode, which rewrites every line as CRLF on
   Windows. No `--check` catches it, because `read_text` normalises newlines on
   the way back in. Both now pass an explicit newline.
-- `governance/seal_r11a_implementation.py` has the same defect and was left
-  alone on purpose: its contract records a hash of the seal script itself, so
-  editing it invalidates the seal it maintains. The same applies to the
-  Windows `st_blocks` failure in the sealed `storage.py`. Neither belongs on
-  this branch: both files diverge on the open R11A stack (`#148`–`#152`), so a
-  fix here would only manufacture a merge conflict. They should be fixed on
-  that stack and re-sealed there.
+- `governance/seal_r11a_implementation.py` has the same defect on this
+  branch, and the sealed `storage.py` has the Windows `st_blocks` failure;
+  both are already fixed on the open R11A stack (`#148`–`#152`, tip
+  `c03fcad`), whose snapshot this branch predates. Nothing to do here.
+- Corrected on 2026-09-08 after a wrong turn: `seal_r11a_implementation.py
+  --check` reports `OUT_OF_DATE` against the live tree **by design**. The
+  contract is an immutable seal of the then-current implementation test;
+  `governance/r11a_repository_provenance.py` pins that historical hash and
+  projects the old bytes back into an authenticated copy before
+  `validate_r11a_implementation.py` runs there, which is the governing check
+  (ubuntu CI on the stack). A re-seal to the live bytes (PR `#154`) was
+  rejected by that check and withdrawn. Also: the G2 owner-approval record
+  pins the combined digest of every file under `.github/workflows`, so no
+  workflow file on that stack changes outside the approval process.
 - `validate_l1_live_data_preregistration.py` accepted a watch command that
   omitted `max_iterations` (the default of 0 satisfied the cap) and raised
   `TypeError` on a non-integer cap. Every watch step must now record an
