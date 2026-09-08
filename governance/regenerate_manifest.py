@@ -8,6 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
 EXCLUDED_DIRECTORY_NAMES = {
+    # Tool-local telemetry the ruflo post-edit hook writes into the project
+    # (.claude-flow/data/pending-insights.jsonl): edit paths and timestamps,
+    # regenerated on every edit, never part of the repository's file set.
+    ".claude-flow",
     ".git",
     ".mypy_cache",
     ".pytest_cache",
