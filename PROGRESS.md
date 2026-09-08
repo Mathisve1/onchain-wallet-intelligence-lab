@@ -28,8 +28,11 @@ four-layer identity diagnostic over exactly those same 72 objects and awaits
 implementation merge, then one hash-bound owner approval.
 
 **Live-data track** — observing the public venue in real time over the
-read-only `/info` endpoint and public websocket. The pipeline is built and
-tested but has no governance record, so it cannot merge yet. L1 is that record.
+read-only `/info` endpoint and public websocket. Merged to `main` on
+2026-09-08 (PR #153): the L1 preregistration, owner decision and consumed
+release, the `src/copyability` simulator, the L2 two-arm collector and two
+review rounds. What remains is the L2 collection run under the approved
+envelope, which nothing on `main` schedules or starts on its own.
 
 ## Stage log
 
@@ -65,22 +68,21 @@ closed it.
 | Arm A window decision | 2026-09-04 | `DECIDED_A45` | DEC-044; `APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `df082701…ecc96` bound to `3311338`; arm A = T0-52 to T0-7 on 15-minute candles, 15-minute freshness, no mixed resolution; B decisive, A is the early read and the survivorship measurement; `L2_ANALYSIS_PLAN.md` frozen at `1833f34` |
 | L2 pipeline build | 2026-09-04 | `BUILT_VERIFIED` | DEC-045; phases 1 to 8 of `L2_BUILD_PLAN.md`: size-weighted rate limiting, paged funding, `candleSnapshot` with schema v4, arm B `sweep` and `mids`, cohort discover/characterise/freeze with the 200-wallet hard stop, arm A candle fetch, opening positions in the simulator, arm B health script; every phase blind-verified; 1522 tests pass locally (two Windows-only `st_blocks` failures remain) |
 | Plan amendment (reading rules) | 2026-09-05 | `FROZEN_AMENDED_PRE_T0` | DEC-046; owner's reading of arm A, the `EXPLORATORY` rule and the report order written into `L2_ANALYSIS_PLAN.md` before T0 |
+| Live-data review rounds | 2026-09-06…08 | `SEVENTEEN_FINDINGS_ALL_ADDRESSED` | `20af38f..eb3f30a`, 30 commits, one concern each; fifteen findings on the collector and simulator plus two from a second `src/copyability` pass (skipped copies desynchronising the follower; freeze characterising on an uncertified window); concurrent `sweep_wallet` work landed with the venue's documented surcharge divisors; ruflo hook and manifest-hygiene fixes; every commit verified alone, `1555` tests pass in a clean checkout, `REPOSITORY_VALIDATION_PASS` |
+| Live-data merge | 2026-09-08 | `MERGED` | PR #153, merge `2f427c72128a2df15395163ca553ad889596ed01` (`1d21875` + `eb3f30a`), after exact-head ubuntu CI on `eb3f30a` |
 
 ## Open gates
 
 Ordered by what unblocks the most.
 
-1. **Merge `feature/live-data-pipeline`** — preregistration, decision,
-   evidence, discovery, the coverage fixes and `src/copyability` are on the
-   branch (draft PR #153). Needs exact-head Linux CI; two `st_blocks` tests
-   fail only on Windows.
-2. **L2 collection run** — the pipeline is built and verified; the next
-   step is `code-review` on every new collection module, then discovery
-   sessions, a 90-day characterisation backfill, the freeze with its
-   200-wallet hard stop, the arm A candle fetch and the arm A runner, all
-   from the frozen plan at `1833f34`. Arm B then runs 56 days of
-   operator-started sweeps with health checks only.
-3. **Validator hardening** — the L1 validator honours the DEC-043 widening
+1. **L2 collection run** — the pipeline is built, reviewed twice and merged
+   (`2f427c7`); the collection modules have had their `code-review`. Next:
+   discovery sessions, a 90-day characterisation backfill, the freeze with
+   its 200-wallet hard stop, the arm A candle fetch and the arm A runner,
+   all from the frozen plan at `1833f34`. Arm B then runs 56 days of
+   operator-started sweeps with health checks only. Every step is started
+   by the operator; nothing on `main` schedules it.
+2. **Validator hardening** — the L1 validator honours the DEC-043 widening
    from the approval file's key line without checking that file's SHA-256
    against DEC-043; add the comparison before the arm A report.
 3. **R11A implementation merge** — review and merge the fully inert R11A
