@@ -21,6 +21,14 @@ EXCLUDED_DIRECTORY_NAMES = {
     "venv",
 }
 
+#: Per-developer files that live inside the checkout but are not repository
+#: content. Claude Code's local settings override is one: git ignores it by
+#: convention (and this repository's .gitignore says so), yet a manifest that
+#: hashed it would differ on every machine that has one.
+EXCLUDED_RELATIVE_PATHS = {
+    ".claude/settings.local.json",
+}
+
 
 def included_files(root: Path = ROOT) -> list[Path]:
     files: list[Path] = []
@@ -29,6 +37,8 @@ def included_files(root: Path = ROOT) -> list[Path]:
             continue
         relative = path.relative_to(root)
         if path == MANIFEST:
+            continue
+        if relative.as_posix() in EXCLUDED_RELATIVE_PATHS:
             continue
         if any(
             part in EXCLUDED_DIRECTORY_NAMES
