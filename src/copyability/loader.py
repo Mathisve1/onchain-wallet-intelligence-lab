@@ -74,7 +74,11 @@ def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
     """
     truncated: dict[str, bool] = {}
     for run in store.connection.execute(
-        "SELECT wallet_address, coverage FROM ingest_runs WHERE mode = 'backfill_wallet' AND status = 'completed'"
+        # A sweep_wallet row pages funding for the same wallet with the same
+        # cap, so a sweep that hit it truncates the wallet just as a backfill
+        # would; reading only backfills would leave that undisclosed.
+        "SELECT wallet_address, coverage FROM ingest_runs "
+        "WHERE mode IN ('backfill_wallet', 'sweep_wallet') AND status = 'completed'"
     ):
         if not run["coverage"]:
             continue

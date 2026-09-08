@@ -138,7 +138,11 @@ def _sweep_outcome(run: dict, wallet_address: str) -> str | None:
 
 
 def _coverage_windows(
-    store: LiveDataStore, wallet_address: str, sweep_runs: Sequence[dict]
+    store: LiveDataStore,
+    wallet_address: str,
+    sweep_runs: Sequence[dict],
+    *,
+    per_wallet_rows: bool = False,
 ) -> list[tuple[int, int]]:
     """Trusted backfill/sweep coverage windows for one wallet, oldest first.
 
@@ -171,7 +175,10 @@ def _coverage_windows(
         if isinstance(end_ms, int) and end_ms >= start_ms:
             windows.append((start_ms, end_ms))
 
-    for run in sweep_runs:
+    # With per-wallet sweep rows on file the query above already returned each
+    # sweep's window in its authoritative form; the digest embedded in the
+    # cohort run would only repeat it. Same rule as the failure count.
+    for run in () if per_wallet_rows else sweep_runs:
         entry = _sweep_entry(run, wallet_address)
         if entry is None or entry.get("status") != _SWEEP_OK:
             continue
@@ -265,7 +272,9 @@ def wallet_health(store: LiveDataStore, wallets: Sequence[str], *, t0_ms: int) -
                 "last_sweep_ms": last_sweep_ms,
                 "sweep_failures": sweep_failures,
                 "coverage_gap_ms": _coverage_gap_ms(
-                    _coverage_windows(store, wallet, sweep_runs)
+                    _coverage_windows(
+                        store, wallet, sweep_runs, per_wallet_rows=per_wallet_rows
+                    )
                 ),
             }
         )

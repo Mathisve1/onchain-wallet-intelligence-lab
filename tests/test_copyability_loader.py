@@ -175,6 +175,18 @@ class LoaderTests(unittest.TestCase):
                          "positions": {"attempted": True}})
         self.assertFalse(load_funding_truncation(self.store)[paged])
 
+    def test_a_sweep_that_hit_the_funding_cap_truncates_the_wallet(self) -> None:
+        """A sweep_wallet row is read like a backfill: its funding cap counts."""
+        from src.copyability.loader import load_funding_truncation
+
+        swept = "0x" + "9a" * 20
+        finish(self.store, "sw-1", mode="sweep_wallet", wallet=swept, start=1, end=2,
+               coverage={"window": {"start_time_ms": 1, "end_time_ms": 2},
+                         "fills": {"attempted": True, "completed": True, "covered_until_ms": 2},
+                         "funding": {"attempted": True, "completed": False,
+                                     "truncated_at_response_cap": True, "seen": 500, "pages": 1}})
+        self.assertTrue(load_funding_truncation(self.store)[swept])
+
     def test_fills_carry_the_crossed_flag(self) -> None:
         fills = load_fills(self.store, [W])
         self.assertTrue(all(f.crossed is True for f in fills[W]))
