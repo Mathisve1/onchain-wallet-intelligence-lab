@@ -122,6 +122,57 @@ class RunStudyOpeningPositionTests(unittest.TestCase):
         self.assertEqual(opening_positions_for(certified(), rows), {})
 
 
+class SkippedFillReconciliationTests(unittest.TestCase):
+    """A copy that could not be priced must not desynchronise the follower.
+
+    Regression: a skipped entry left the follower flat while the source was
+    long, so the source's later exit was copied as an *opening* short - the
+    same inverted-position defect as at the window edge, triggered mid-window.
+    The follower now mirrors the source's position at every priced action.
+    """
+
+    @staticmethod
+    def _late_market():
+        # No price before 50_000: the source's early entry cannot be copied.
+        return market([(t, "100") for t in range(50_000, 100_001, 1_000)])
+
+    def test_a_missed_round_trip_is_not_copied_as_an_opening_short(self) -> None:
+        rows = [fill(W, 10_000, 1, "B"), fill(W, 60_000, 2, "A")]
+        run = simulate_follower(
+            certified(), latency_ms=0, fills=rows, market=self._late_market(), cost_model=MODEL,
+            config=CONFIG,
+        )
+        self.assertEqual(run.skipped_fills, 1)
+        self.assertEqual(run.pnl.trade_count, 0)
+        self.assertEqual(run.traded_notional, D("0"))
+        self.assertEqual(run.pnl.costs.total, D("0"))
+        self.assertEqual(run.pnl.gross, D("0"))
+
+    def test_a_missed_entry_is_caught_up_at_the_next_priced_action(self) -> None:
+        # Source: buy 1 (unpriceable), buy 1 more (priced). Follower should end
+        # long 2, bought in one trade at the priced moment.
+        rows = [fill(W, 10_000, 1, "B"), fill(W, 60_000, 2, "B")]
+        run = simulate_follower(
+            certified(), latency_ms=0, fills=rows, market=self._late_market(), cost_model=MODEL,
+            config=CONFIG,
+        )
+        self.assertEqual(run.skipped_fills, 1)
+        self.assertEqual(run.pnl.trade_count, 1)
+        self.assertEqual(run.catch_up_fills, 1)
+        self.assertEqual(run.traded_notional, D("200"))
+        self.assertEqual(run.peak_deployed_notional, D("200"))
+
+    def test_a_fully_priced_copy_is_unchanged_by_mirroring(self) -> None:
+        rows = [fill(W, 10_000, 1, "B", price="100"), fill(W, 20_000, 2, "A", price="110")]
+        run = simulate_follower(
+            certified(), latency_ms=0, fills=rows, market=market(RISING), cost_model=MODEL,
+            config=CONFIG,
+        )
+        self.assertEqual(run.skipped_fills, 0)
+        self.assertEqual(run.catch_up_fills, 0)
+        self.assertEqual(run.pnl.trade_count, 2)
+
+
 class OpeningPositionTests(unittest.TestCase):
     def test_a_close_of_a_position_opened_before_the_window_is_copied_as_a_close(self) -> None:
         # The source is long 1 BTC from before the window and sells it inside.

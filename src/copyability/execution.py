@@ -172,6 +172,14 @@ def simulate_follower(
     fills_after_cutoff = len(all_source) - len(source)
 
     positions: dict[str, _Position] = {}
+    # The source's own position per coin, in source units, as its fills
+    # reveal it. The follower's target is always ``size_scale`` times this. A
+    # copy that could not be priced leaves the follower behind the source; the
+    # next priced action in that coin trades the whole difference, so a missed
+    # entry is never followed by a copied exit that opens the opposite side.
+    source_position: dict[str, Decimal] = {
+        coin: _decimal(size, "opening position") for coin, size in (opening_positions or {}).items()
+    }
     funding_checked: dict[str, int] = {}
     costs = CostBreakdown.zero()
     realized = Decimal(0)
@@ -219,17 +227,27 @@ def simulate_follower(
         costs += charge
         periods_expected += expected
         periods_priced += priced
+        source_position[fill.coin] = source_position.get(fill.coin, Decimal(0)) + fill.signed_size
         point = view.price_at(fill.coin, action_time, max_age_ms=max_price_age_ms)
         if point is None:
             skipped += 1
             if view.price_at(fill.coin, action_time) is not None:
                 stale += 1
             continue
+        target = source_position[fill.coin] * config.size_scale
+        delta = target - position.size
+        if delta == 0:
+            # Already aligned: the source's round trip was missed entirely, so
+            # there is nothing to copy and nothing to charge.
+            continue
+        if delta != fill.signed_size * config.size_scale:
+            # Part of this trade stands in for copies that could not be priced
+            # earlier; it is a catch-up, not a copy of this fill alone.
+            catch_up += 1
         _, liquidity = market.require_coin(fill.coin)
-        size = fill.size * config.size_scale
-        notional = point.price * size
+        notional = point.price * abs(delta)
         costs += model.taker_execution(notional=notional, liquidity=liquidity)
-        realized += position.apply(fill.signed_size * config.size_scale, point.price)
+        realized += position.apply(delta, point.price)
         traded += notional
         trades += 1
         equity, deployed = _mark(config, realized, costs, positions, view, action_time)
