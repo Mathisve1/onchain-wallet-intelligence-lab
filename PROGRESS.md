@@ -164,6 +164,28 @@ The four that would have changed a reported number or hidden a real outage:
   so the ledger certified intervals containing a gap the collector had itself
   written down.
 
+Completed on 2026-09-08 from concurrent work left uncommitted in the clone:
+
+- A sweep now writes one `sweep_wallet` run row per wallet in the exact shape
+  `backfill_wallet` uses, beside the cohort-level `sweep` summary. The summary
+  alone was unreadable downstream: the coverage ledger and the health check
+  key on `wallet_address` and `coverage["window"]`. Both consumers read the
+  new rows, and where they exist the digest embedded in the summary is not
+  read a second time, so nothing is counted twice. `load_funding_truncation`
+  reads them too: a sweep that hits the funding cap truncates the wallet just
+  as a backfill would.
+- The response-size surcharge in `hyperliquid_rest.py` moves from one guessed
+  divisor (60 rows per unit for every list response, recorded in DEC-045) to
+  the venue's documented per-type values: one unit per 20 items for
+  `userFills`, `userFillsByTime` and `userFunding`, one per 60 for
+  `candleSnapshot`. Verified against the venue's rate-limits page on
+  2026-09-08. A 500-row fills page therefore costs 45 weight, not 28; the
+  budget itself (1200 per minute) and every base weight are unchanged, and the
+  L1 validator still passes.
+- The candle walk stops, and says so in the run's notes, when a page makes no
+  backwards progress, instead of spending the page cap re-fetching the same
+  candles and reporting a clean stop.
+
 Two governance notes from the same round:
 
 - `governance/regenerate_manifest.py` and `seal_r11a_v2_preregistration.py`
