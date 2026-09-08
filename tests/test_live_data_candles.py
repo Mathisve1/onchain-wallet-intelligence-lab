@@ -296,6 +296,28 @@ class FetchCandlesTests(IngestTestCase):
         self.assertFalse(report["exhausted"])
         self.assertEqual(len(transport.bodies), 2)
 
+    def test_a_repeated_page_stops_the_walk_instead_of_looping(self) -> None:
+        # A venue that answers every request with the same full page would
+        # otherwise be paged until the page cap, re-fetching the same candles.
+        page = candle_page(MAX_CANDLES_PER_RESPONSE)
+        orchestrator, transport = self.build([page, page, page, page])
+        report = orchestrator.fetch_candles(
+            "BTC", "15m", 1, FIRST_OPEN_MS + 10**9, max_pages=4
+        )
+        self.assertEqual(len(transport.bodies), 2)
+        self.assertEqual(report["pages"], 2)
+        self.assertFalse(report["exhausted"])
+        self.assertIn("no backwards progress", report["note"])
+        run = self.store.recent_runs(1)[0]
+        self.assertEqual(run["status"], RUN_STATUS_COMPLETED)
+        self.assertIn("no backwards progress", run["notes"])
+
+    def test_a_walk_that_made_progress_records_no_note(self) -> None:
+        orchestrator, _ = self.build([candle_page(3)])
+        report = orchestrator.fetch_candles("BTC", "15m", FIRST_OPEN_MS, FIRST_OPEN_MS + 10**7)
+        self.assertNotIn("note", report)
+        self.assertIsNone(self.store.recent_runs(1)[0]["notes"])
+
     def test_the_largest_gap_between_consecutive_opens_is_recorded(self) -> None:
         page = candle_page(2) + [candle_payload(FIRST_OPEN_MS + 10 * FIFTEEN_MINUTES_MS)]
         orchestrator, _ = self.build([page])

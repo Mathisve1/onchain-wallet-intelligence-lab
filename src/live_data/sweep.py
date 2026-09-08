@@ -23,12 +23,14 @@ Cadence, from ``L2_ANALYSIS_PLAN.md`` arm B and phase 4 of the build plan:
   process that keeps reaching the venue with nobody watching it, which is what
   the owner's constraint forbids.
 
-Coverage shape: the per-wallet detail is written inline in the single ``sweep``
-run row rather than as one row per wallet. At roughly 180 bytes of JSON per
-wallet a 600-wallet cohort is about 110 KB in one TEXT column, far inside
-SQLite's limit and inside what one ``json.loads`` can return; splitting it
-would cost 600 extra ``ingest_runs`` rows per sweep and would make the run
-record no longer readable as one object.
+Coverage shape: a sweep writes one summary ``sweep`` run row carrying the
+totals and the per-wallet digest, plus one ``sweep_wallet`` row per wallet in
+the shape ``backfill_wallet`` uses. The summary alone would be unreadable to
+everything downstream: the coverage ledger
+(:func:`src.copyability.loader.load_coverage`) and the health script both key
+on ``wallet_address`` and on ``coverage["window"]``, so a sweep that wrote only
+the summary would certify no interval at all and would look, to the ledger,
+like a window nobody ever observed.
 """
 
 from __future__ import annotations
@@ -132,18 +134,26 @@ class SweepMixin:
 
     def _sweep_wallet(
         self, address: str, *, t0_ms: int, end_time_ms: int, max_pages: int
-    ) -> tuple[dict[str, Any], tuple[int, int], tuple[int, int, int]]:
+    ) -> tuple[dict[str, Any], dict[str, Any], tuple[int, int], tuple[int, int, int]]:
         """Collect one wallet's new fills and funding.
 
         Both walks resume from what is already stored and fall back to the
         cohort's T0 for a wallet with nothing stored yet, so a sweep asks only
-        for the window it does not already hold. Returns the wallet's coverage
-        entry, its ``(fills_seen, fills_written)`` and its
+        for the window it does not already hold. Returns the wallet's summary
+        entry, the coverage block for its own ``sweep_wallet`` run row, its
+        ``(fills_seen, fills_written)`` and its
         ``(funding_seen, funding_written, funding_pages)``.
         """
         latest_fill = self._store.latest_fill_time_ms(address)
         fills_from = t0_ms if latest_fill is None else latest_fill + 1
-        _, fills_seen, fills_written, _, fills_exhausted, _ = self._collect_fills(
+        (
+            fills_pages,
+            fills_seen,
+            fills_written,
+            _,
+            fills_exhausted,
+            covered_until_ms,
+        ) = self._collect_fills(
             address, start_time_ms=fills_from, end_time_ms=end_time_ms, max_pages=max_pages
         )
 
@@ -162,7 +172,85 @@ class SweepMixin:
             "funding_exhausted": funding_exhausted,
             "status": "ok",
         }
-        return entry, (fills_seen, fills_written), (funding_seen, funding_written, funding_pages)
+        # The same shape ``backfill_wallet`` writes, so the coverage ledger and
+        # the health script can read a sweep without knowing it was one. In
+        # particular ``covered_until_ms`` is kept rather than discarded: a walk
+        # the page cap stopped covers only its prefix, and dropping the bound
+        # would let the uncovered tail read as a period with no trading.
+        coverage = {
+            "window": {"start_time_ms": fills_from, "end_time_ms": end_time_ms},
+            "fills": {
+                "attempted": True,
+                "completed": fills_exhausted,
+                "truncated_at_page_cap": not fills_exhausted,
+                "covered_until_ms": covered_until_ms,
+                "pages": fills_pages,
+                "seen": fills_seen,
+                "written": fills_written,
+            },
+            "funding": {
+                "attempted": True,
+                "completed": funding_exhausted,
+                "truncated_at_response_cap": not funding_exhausted,
+                "pages": funding_pages,
+                "seen": funding_seen,
+                "written": funding_written,
+                "start_time_ms": funding_from,
+            },
+        }
+        return (
+            entry,
+            coverage,
+            (fills_seen, fills_written),
+            (funding_seen, funding_written, funding_pages),
+        )
+
+    def _run_sweep_wallet(
+        self, address: str, *, t0_ms: int, end_time_ms: int, max_pages: int
+    ) -> tuple[dict[str, Any], tuple[int, int], tuple[int, int, int]]:
+        """Sweep one wallet under its own ``sweep_wallet`` run row.
+
+        The row is closed either way: completed with the coverage block, or
+        failed with the error in its notes, and the exception is re-raised for
+        the caller to count. A wallet whose failure left no row at all would be
+        indistinguishable downstream from a wallet nobody swept.
+        """
+        run_id = self._run_id_factory()
+        started_ms = self._clock_ms()
+        self._store.start_run(
+            run_id, mode="sweep_wallet", started_at_ms=started_ms, wallet_address=address
+        )
+        try:
+            entry, coverage, fills, funding = self._sweep_wallet(
+                address, t0_ms=t0_ms, end_time_ms=end_time_ms, max_pages=max_pages
+            )
+        except Exception as exc:
+            self._store.finish_run(
+                run_id,
+                finished_at_ms=self._clock_ms(),
+                status=RUN_STATUS_FAILED,
+                records_seen=0,
+                records_written=0,
+                error_count=1,
+                notes=f"{type(exc).__name__}: {exc}",
+                coverage={
+                    "window": {"start_time_ms": t0_ms, "end_time_ms": end_time_ms},
+                    "fills": {"attempted": True, "completed": False},
+                    "requests": self._requests_coverage(),
+                },
+            )
+            raise
+        coverage["requests"] = self._requests_coverage()
+        self._store.finish_run(
+            run_id,
+            finished_at_ms=self._clock_ms(),
+            status=RUN_STATUS_COMPLETED,
+            records_seen=fills[0] + funding[0],
+            records_written=fills[1] + funding[1],
+            coverage=coverage,
+        )
+        entry["run_id"] = run_id
+        return entry, fills, funding
 
     def sweep(
         self,
@@ -240,7 +328,7 @@ class SweepMixin:
         for address in addresses:
             self._store.upsert_wallet(address, observed_at_ms=self._clock_ms())
             try:
-                entry, fills, funding = self._sweep_wallet(
+                entry, fills, funding = self._run_sweep_wallet(
                     address, t0_ms=t0_ms, end_time_ms=started_ms, max_pages=max_pages
                 )
             except Exception as exc:

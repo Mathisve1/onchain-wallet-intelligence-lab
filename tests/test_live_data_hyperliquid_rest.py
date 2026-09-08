@@ -155,23 +155,35 @@ class RequestWeightTests(unittest.TestCase):
         client.request("allMids")
         self.assertEqual(bucket.available(), 1198)
 
-    def test_response_weight_adds_the_row_surcharge_to_the_base_weight(self) -> None:
-        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT, 60)
-        self.assertEqual(response_weight("userFills", 2000), 20 + 33)
-        self.assertEqual(response_weight("userFills", 5000), 20 + 83)
+    def test_response_weight_uses_the_documented_divisor_for_each_type(self) -> None:
+        # The venue documents one extra unit per 20 items for the fill and
+        # funding endpoints and one per 60 items for candleSnapshot.
+        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT["userFills"], 20)
+        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT["userFillsByTime"], 20)
+        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT["userFunding"], 20)
+        self.assertEqual(SIZE_WEIGHT_ROWS_PER_UNIT["candleSnapshot"], 60)
+        self.assertEqual(response_weight("userFills", 2000), 20 + 100)
+        self.assertEqual(response_weight("candleSnapshot", 5000), 20 + 83)
+        self.assertEqual(response_weight("userFunding", 60), 20 + 3)
         self.assertEqual(response_weight("userFills", 0), 20)
+
+    def test_a_type_with_no_documented_surcharge_pays_only_its_base_weight(self) -> None:
+        self.assertNotIn("allMids", SIZE_WEIGHT_ROWS_PER_UNIT)
+        self.assertEqual(response_weight("allMids", 5000), request_weight("allMids"))
 
 
 class ResponseSizeWeightTests(unittest.TestCase):
-    def test_a_2000_row_list_response_consumes_base_plus_row_surcharge(self) -> None:
+    def test_a_2000_row_fill_response_consumes_base_plus_row_surcharge(self) -> None:
         client, transport, _ = build_client([ok([{}] * 2000)])
         client.request("userFills", user=WALLET)
         self.assertEqual(len(transport.requests), 1)
-        self.assertEqual(client.consumed_weight, 20 + 33)
+        self.assertEqual(client.consumed_weight, 20 + 100)
 
-    def test_a_5000_row_list_response_consumes_base_plus_row_surcharge(self) -> None:
+    def test_a_5000_row_candle_response_uses_the_sixty_row_divisor(self) -> None:
         client, transport, _ = build_client([ok([{}] * 5000)])
-        client.request("userFills", user=WALLET)
+        client.request(
+            "candleSnapshot", coin="BTC", interval="15m", start_time=1, end_time=2
+        )
         self.assertEqual(len(transport.requests), 1)
         self.assertEqual(client.consumed_weight, 20 + 83)
 
@@ -191,8 +203,8 @@ class ResponseSizeWeightTests(unittest.TestCase):
             sleeper=lambda _: None,
         )
         client.request("userFills", user=WALLET)
-        self.assertEqual(bucket.available(), 1200 - (20 + 33))
-        self.assertEqual(client.consumed_weight, 20 + 33)
+        self.assertEqual(bucket.available(), 1200 - (20 + 100))
+        self.assertEqual(client.consumed_weight, 20 + 100)
 
 
 class RetryPolicyTests(unittest.TestCase):

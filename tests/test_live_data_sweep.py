@@ -175,6 +175,70 @@ class FailureIsolationTests(SweepTestCase):
         self.assertEqual(modes["mids"], "failed")
 
 
+class SweepWalletRowTests(SweepTestCase):
+    """The per-wallet rows a sweep writes, and what reads them downstream."""
+
+    def sweep_two_wallets(self) -> None:
+        """One good wallet and one whose fills response is malformed."""
+        orchestrator, _ = self.build(
+            [
+                ALL_MIDS,
+                [fill_payload(7, T0_MS + 1_000)],  # WALLET fills
+                [],  # WALLET funding
+                {"unexpected": "shape"},  # OTHER_WALLET fills: not a list
+            ]
+        )
+        orchestrator.sweep([WALLET, OTHER_WALLET], ["BTC"], t0_ms=T0_MS, snapshot_top=0)
+
+    def test_a_sweep_writes_one_row_per_wallet_beside_the_summary_row(self) -> None:
+        self.sweep_two_wallets()
+        runs = self.store.recent_runs(20)
+        per_wallet = [r for r in runs if r["mode"] == "sweep_wallet"]
+        self.assertEqual(len([r for r in runs if r["mode"] == "sweep"]), 1)
+        self.assertEqual(
+            sorted((r["wallet_address"], r["status"]) for r in per_wallet),
+            sorted([(WALLET, "completed"), (OTHER_WALLET, "failed")]),
+        )
+        good = next(r for r in per_wallet if r["wallet_address"] == WALLET)
+        coverage = json.loads(good["coverage"])
+        self.assertEqual(coverage["window"], {"start_time_ms": T0_MS, "end_time_ms": self.now_ms})
+        self.assertTrue(coverage["fills"]["attempted"])
+        self.assertTrue(coverage["fills"]["completed"])
+        self.assertEqual(coverage["fills"]["covered_until_ms"], self.now_ms)
+        self.assertEqual((coverage["fills"]["seen"], coverage["fills"]["written"]), (1, 1))
+        self.assertEqual(coverage["fills"]["pages"], 1)
+        self.assertEqual(coverage["funding"]["start_time_ms"], T0_MS)
+        self.assertFalse(coverage["funding"]["truncated_at_response_cap"])
+        self.assertIn("weight", coverage["requests"])
+        bad = next(r for r in per_wallet if r["wallet_address"] == OTHER_WALLET)
+        self.assertIn("PayloadError", bad["notes"])
+
+    def test_the_coverage_ledger_certifies_the_swept_window(self) -> None:
+        from src.copyability.coverage import UnknownIntervalError
+        from src.copyability.loader import load_coverage
+
+        self.sweep_two_wallets()
+        ledger = load_coverage(self.store)
+        self.assertEqual(ledger.covered(WALLET), [(T0_MS, self.now_ms)])
+        self.assertTrue(ledger.is_fully_known(WALLET, T0_MS, self.now_ms))
+        self.assertEqual(ledger.covered(OTHER_WALLET), [])
+        with self.assertRaises(UnknownIntervalError):
+            ledger.certify(OTHER_WALLET, T0_MS, self.now_ms)
+
+    def test_health_reads_the_sweep_rows_it_wrote(self) -> None:
+        from research.wallet_copyability.live_data_collector import health
+
+        self.sweep_two_wallets()
+        rows = {
+            row["wallet_address"]: row
+            for row in health.wallet_health(self.store, [WALLET, OTHER_WALLET], t0_ms=T0_MS)
+        }
+        self.assertEqual(rows[WALLET]["last_sweep_ms"], self.now_ms)
+        self.assertEqual(rows[WALLET]["sweep_failures"], 0)
+        self.assertIsNone(rows[OTHER_WALLET]["last_sweep_ms"])
+        self.assertEqual(rows[OTHER_WALLET]["sweep_failures"], 1)
+
+
 class FundingPagingTests(SweepTestCase):
     def test_a_full_funding_page_is_paged(self) -> None:
         first = funding_page(500, first_time_ms=T0_MS)
@@ -224,17 +288,18 @@ class WeightAccountingTests(SweepTestCase):
         orchestrator, transport = self.build(
             [
                 ALL_MIDS,  # dict: base 2, no row surcharge
-                [fill_payload(index, T0_MS + index) for index in range(120)],  # 20 + 2
-                funding_page(60, first_time_ms=T0_MS),  # 20 + 1
+                # 120 fill rows at the documented 20 rows per unit: 20 + 6
+                [fill_payload(index, T0_MS + index) for index in range(120)],
+                funding_page(60, first_time_ms=T0_MS),  # 60 rows: 20 + 3
                 clearinghouse_payload(),  # dict: 2
             ]
         )
         orchestrator.sweep([WALLET], ["BTC"], t0_ms=T0_MS, snapshot_top=1)
 
         self.assertEqual(len(transport.bodies), 4)
-        self.assertEqual(orchestrator.consumed_weight, 2 + 22 + 21 + 2)
+        self.assertEqual(orchestrator.consumed_weight, 2 + 26 + 23 + 2)
         run = next(r for r in self.store.recent_runs(10) if r["mode"] == "sweep")
-        self.assertEqual(json.loads(run["coverage"])["requests"]["weight"], 47)
+        self.assertEqual(json.loads(run["coverage"])["requests"]["weight"], 53)
 
 
 class SweepArgumentTests(SweepTestCase):

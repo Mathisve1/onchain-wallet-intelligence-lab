@@ -8,12 +8,18 @@ authorization, and the only URL it can construct is the ``/info`` path from
 The HTTP transport is injected, so the whole request/response/retry path is
 exercised offline in tests.
 
-Base per-request weight alone is not the whole cost: three separate live
-measurements produced HTTP 429 at exactly 1200 base-weight per minute with
-2000-row and 5000-row responses (L1 backfills 2026-09-03; candle probe
-2026-09-04), well under the documented budget once row count is accounted
-for. The venue is metering response size, not just request count, so large
-list responses are charged an additional per-row surcharge here.
+Base per-request weight alone is not the whole cost. The venue's rate-limits
+documentation states that ``recentTrades``, ``historicalOrders``, ``userFills``,
+``userFillsByTime``, ``fundingHistory`` and ``userFunding`` carry "an additional
+rate limit weight per 20 items returned in the response", and that
+``candleSnapshot`` carries one "per 60 items returned in the response". Those
+documented divisors are what :data:`SIZE_WEIGHT_ROWS_PER_UNIT` holds.
+
+The live measurements agree with them but could not, on their own, tell 20 apart
+from 60: HTTP 429 arrived at one request per second with 5000-row candle pages
+(candle probe 2026-09-04) and on back-to-back 2000-row fill pages (L1 backfills
+2026-09-03). An earlier revision guessed a single divisor of 60 for every list
+response from those observations; the documented per-type values are used now.
 """
 
 from __future__ import annotations
@@ -69,11 +75,17 @@ MAX_CANDLES_PER_RESPONSE = 5000
 #: Anything outside this tuple is a typo, not a coarser series.
 CANDLE_INTERVALS = ("1m", "5m", "15m", "1h", "4h", "1d")
 
-#: Rows per unit of surcharge weight for list-shaped responses. Derived from
-#: the 2026-09-03/09-04 measurements: a 2000-row response and a 5000-row
-#: response both hit 429 at 1200 base-weight per minute, which only lines up
-#: with the venue's budget once ``row_count // 60`` extra weight is charged.
-SIZE_WEIGHT_ROWS_PER_UNIT = 60
+#: Rows per unit of surcharge weight, per request type, as documented on the
+#: venue's rate-limits page: one extra unit per 20 items for the fill and
+#: funding endpoints, one per 60 items for ``candleSnapshot``. A request type
+#: absent from this table carries no surcharge, and neither does a dict-shaped
+#: response, which has no items to count.
+SIZE_WEIGHT_ROWS_PER_UNIT: dict[str, int] = {
+    "userFills": 20,
+    "userFillsByTime": 20,
+    "userFunding": 20,
+    "candleSnapshot": 60,
+}
 
 SUPPORTED_REQUEST_TYPES = frozenset(INFO_REQUEST_WEIGHTS) - {"l2Book"}
 
@@ -120,13 +132,24 @@ def request_weight(request_type: str) -> int:
     return INFO_REQUEST_WEIGHTS.get(request_type, DEFAULT_REQUEST_WEIGHT)
 
 
+def response_size_surcharge(request_type: str, row_count: int) -> int:
+    """Extra weight the venue charges for ``row_count`` items of this type.
+
+    Zero for a request type the documentation lists no per-item surcharge for.
+    """
+    rows_per_unit = SIZE_WEIGHT_ROWS_PER_UNIT.get(request_type)
+    if rows_per_unit is None:
+        return 0
+    return row_count // rows_per_unit
+
+
 def response_weight(request_type: str, row_count: int) -> int:
     """Total weight for a request whose response carries ``row_count`` rows.
 
-    List-shaped responses are metered by size as well as by request type; see
-    the module docstring for the measurements behind this surcharge.
+    List-shaped responses are metered by size as well as by request type, at
+    the per-type divisor the module docstring quotes.
     """
-    return request_weight(request_type) + row_count // SIZE_WEIGHT_ROWS_PER_UNIT
+    return request_weight(request_type) + response_size_surcharge(request_type, row_count)
 
 
 def _optional_bool(params: Mapping[str, Any], key: str) -> bool | None:
@@ -310,10 +333,10 @@ class HyperliquidRestClient:
                 except json.JSONDecodeError as exc:
                     raise RestError(f"{request_type}: response was not valid JSON") from exc
                 if isinstance(decoded, list):
-                    # List-shaped responses (fills, funding, etc.) can be
+                    # List-shaped responses (fills, funding, candles) can be
                     # large enough to blow the venue's budget even though the
                     # base weight alone fits; see SIZE_WEIGHT_ROWS_PER_UNIT.
-                    surcharge = len(decoded) // SIZE_WEIGHT_ROWS_PER_UNIT
+                    surcharge = response_size_surcharge(request_type, len(decoded))
                     if surcharge > 0:
                         self._bucket.acquire(surcharge)
                         self.consumed_weight += surcharge

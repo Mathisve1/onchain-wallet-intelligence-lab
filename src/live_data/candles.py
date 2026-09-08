@@ -45,16 +45,18 @@ class CandleFetchMixin:
 
     def _collect_candles(
         self, coin: str, interval: str, *, start_ms: int, end_ms: int, max_pages: int
-    ) -> tuple[int, int, int, list[int], bool]:
+    ) -> tuple[int, int, int, list[int], bool, str | None]:
         """Walk ``candleSnapshot`` backwards from ``end_ms``.
 
-        Returns ``(pages, rows, written, open_times, exhausted)``. The venue
-        answers at most :data:`MAX_CANDLES_PER_RESPONSE` candles counting back
-        from ``endTime``, so a full page means the window reaches further back
-        than the answer does: ask again ending one millisecond before the
-        earliest candle returned. ``exhausted`` is False only when the page cap
-        stopped a walk that was still returning full pages, which is the one
-        case where the window is not covered to ``start_ms``.
+        Returns ``(pages, rows, written, open_times, exhausted, note)``. The
+        venue answers at most :data:`MAX_CANDLES_PER_RESPONSE` candles counting
+        back from ``endTime``, so a full page means the window reaches further
+        back than the answer does: ask again ending one millisecond before the
+        earliest candle returned. ``exhausted`` is False when the page cap
+        stopped a walk that was still returning full pages, or when a page made
+        no backwards progress; in both cases the window is not covered to
+        ``start_ms``. ``note`` names the second case, which is otherwise
+        indistinguishable from a clean stop.
         """
         cursor_end = end_ms
         pages = 0
@@ -62,6 +64,7 @@ class CandleFetchMixin:
         written = 0
         open_times: list[int] = []
         exhausted = False
+        note: str | None = None
         while pages < max_pages:
             payload = self._rest.request(
                 "candleSnapshot",
@@ -86,8 +89,15 @@ class CandleFetchMixin:
             if earliest <= start_ms:
                 exhausted = True
                 break
+            if earliest >= cursor_end:
+                # The page did not reach further back than the one before it,
+                # so asking again would repeat it forever. Stop and say so:
+                # without this the walk would spend the page cap re-fetching
+                # the same candles and still report a clean stop.
+                note = f"no backwards progress at open_time {earliest} ms"
+                break
             cursor_end = earliest - 1
-        return pages, rows, written, open_times, exhausted
+        return pages, rows, written, open_times, exhausted, note
 
     def fetch_candles(
         self,
@@ -117,7 +127,7 @@ class CandleFetchMixin:
         self._store.start_run(run_id, mode="fetch_candles", started_at_ms=started_at)
         candles: dict[str, Any] = {"coin": coin, "interval": interval, "pages": 0, "rows": 0}
         try:
-            pages, rows, written, open_times, exhausted = self._collect_candles(
+            pages, rows, written, open_times, exhausted, note = self._collect_candles(
                 coin, interval, start_ms=start_ms, end_ms=end_ms, max_pages=max_pages
             )
         except Exception as exc:
@@ -146,12 +156,15 @@ class CandleFetchMixin:
             "max_gap_ms": max(gaps) if gaps else 0,
             "exhausted": exhausted,
         }
+        if note is not None:
+            candles["note"] = note
         self._store.finish_run(
             run_id,
             finished_at_ms=self._clock_ms(),
             status=RUN_STATUS_COMPLETED,
             records_seen=rows,
             records_written=written,
+            notes=note,
             coverage={"candles": candles, "requests": self._requests_coverage()},
         )
         return {"run_id": run_id, **candles}
