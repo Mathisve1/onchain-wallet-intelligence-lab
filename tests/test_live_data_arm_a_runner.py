@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 from research.wallet_copyability.live_data_collector import l2_arm_report as report
 from research.wallet_copyability.live_data_collector import arm_a_runner as runner
+from research.wallet_copyability.live_data_collector import l2_arm_runner as core
 from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
 from src.copyability.inputs import SourceFill
@@ -155,6 +156,25 @@ class ArmARunnerStoreTestCase(unittest.TestCase):
         code = runner.main(argv or self.argv(), log=logged.append)
         return code, logged
 
+    def run_ok(self, argv=None) -> dict:
+        code, logged = self.run_main(argv)
+        self.assertEqual(code, 0, logged)
+        return json.loads(self.out.read_text(encoding="utf-8"))
+
+    def add_second_coin(self, *, candles_until: int = T0, pool_peer_trades_it: bool = False) -> None:
+        """ETH in scope: funding before T0, a candle table, the post-check and the freeze counting it."""
+        with LiveDataStore(self.db) as store:
+            store.write_candles(_candles(START - DAY, candles_until, coin="ETH"), ingested_at_ms=T0)
+            store.write_funding([_funding(COHORT[0], START + HOUR, coin="ETH")], ingested_at_ms=T0)
+            if pool_peer_trades_it:
+                store.write_fills([_fill(POOL_ONLY[0], 9_501, START + 5 * DAY, coin="ETH"),
+                                   _fill(POOL_ONLY[0], 9_502, START + 5 * DAY + HOUR, coin="ETH", side="A")],
+                                  source="test", ingested_at_ms=T0)
+        self.candles_json.write_text(json.dumps({"per_coin": [
+            {"coin": "BTC", "complete": True}, {"coin": "ETH", "complete": True},
+        ]}), encoding="utf-8")
+        self.cohort_json.write_text(json.dumps(self.record(COHORT, funding_coins=2, candle_complete=2)), encoding="utf-8")
+
 
 class ArmARunnerTests(ArmARunnerStoreTestCase):
     def test_it_scores_the_cohort_against_a_wider_pool_and_decides_nothing(self) -> None:
@@ -163,12 +183,21 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         r = json.loads(self.out.read_text(encoding="utf-8"))
         self.assertEqual(r["run_id"], "L2-ARM-A-001")
         self.assertEqual(r["counts"], {"wallets": 3, "scored": 3, "refused": 0, "in_primary": 3})
-        # The pool is every certified wallet, not the cohort; its hash is recorded.
+        # The pool is every certified wallet, not the cohort; its hash and its
+        # composition are recorded, and every eligible peer actually served.
         self.assertEqual(r["pool"]["size"], 5)
         self.assertEqual(r["pool"]["sha256"], cohort_hash(COHORT + POOL_ONLY))
+        self.assertEqual((r["pool"]["cohort_wallets_in_pool"], r["pool"]["non_cohort_wallets_in_pool"]), (3, 2))
+        self.assertEqual(r["pool"]["mean_cohort_share_of_peers"], 0.5)
+        self.assertEqual(r["pool"]["ledger_modes"], ["backfill_wallet"])
+        self.assertEqual(set(r["matched_peers_by_wallet"]), set(COHORT))
         for wallet, peers in r["matched_peers_by_wallet"].items():
-            self.assertNotIn(wallet, peers)
-            self.assertTrue(set(peers) <= set(COHORT + POOL_ONLY))
+            self.assertEqual(set(peers["contributed"]), set(COHORT + POOL_ONLY) - {wallet})
+            self.assertEqual((peers["count"], peers["dropped"], peers["cohort_share"]), (4, {}, 0.5))
+        self.assertEqual(r["ledger_snapshot"]["modes"], ["backfill_wallet"])
+        self.assertEqual((r["ledger_snapshot"]["runs_consulted"], r["ledger_snapshot"]["max_finished_at_ms"]), (5, T0))
+        self.assertRegex(r["ledger_snapshot"]["run_ids_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(r["price_series_span_rule"]["tolerance_ms"], 2 * FIFTEEN_MIN)
         p = r["primary"]
         self.assertEqual(p["latency_ms"], 30_000)
         self.assertEqual(p["n"], 3, p["excluded"])
@@ -179,7 +208,9 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertIsNone(r["decision"])
         self.assertEqual(r["decisive_arm"], "B")
         self.assertFalse(r["copyability_claim_produced"])
-        self.assertEqual(r["evaluation_window"], {"start_ms": START, "end_ms": END, "days": "45"})
+        # The approval fixes the window's edges, not only its length.
+        self.assertEqual(r["evaluation_window"], {"start_ms": T0 - 52 * DAY, "end_ms": T0 - 7 * DAY, "days": "45"})
+        self.assertEqual(runner.characterisation_window(T0), (T0 - 90 * DAY, T0 - 60 * DAY))
         self.assertEqual(r["scope"]["coins_evaluated"], ["BTC"])
         self.assertEqual(r["price_series_span_by_coin"]["BTC"]["spans_window"], True)
         self.assertEqual(r["price_provenance"]["fetch_runs"][0]["run_id"], "candles-btc")
@@ -188,7 +219,11 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["primary"]["disclosures"]["liquidity_assumed"], 3)
         self.assertEqual(len(r["rows"]), 3 * len(runner.LATENCY_GRID_MS))
         self.assertEqual(r["survivorship"]["cohort"], 3)
+        self.assertEqual(r["survivorship"]["stopped"], 1)  # COHORT[2]'s last fill is 8.4 days before the end
         self.assertEqual(r["what_broke"], [])
+        for latency in runner.LATENCY_GRID_MS:
+            self.assertEqual(r["secondary"]["mean_d_by_latency"][str(latency)]["n"], 3)
+        self.assertEqual(float(r["secondary"]["mean_d_by_latency"]["30000"]["mean"]), round(r["primary"]["mean"], 4))
         self.assertTrue(any("Survivorship" in s for s in r["sample_limitations_disclosure"]))
         self.assertFalse(self.out.with_name(self.out.name + ".partial.json").exists())
         self.assertNotIn("_runtime_seconds_by_wallet", r)
@@ -262,6 +297,9 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
             store.write_fills(rows, source="test", ingested_at_ms=T0)
             store.write_funding([_funding(w, START + HOUR, coin="SOL"), _funding(w, START + HOUR, coin="LINK")],
                                 ingested_at_ms=T0)
+            # Priceable, so only the scope split can take them out.
+            for coin in ("SOL", "LINK"):
+                store.write_candles(_candles(START - DAY, T0, coin=coin), ingested_at_ms=T0)
         self.candles_json.write_text(json.dumps({"per_coin": [
             {"coin": "BTC", "complete": True}, {"coin": "SOL", "complete": False}, {"coin": "LINK", "complete": True},
         ]}), encoding="utf-8")
@@ -273,17 +311,185 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["scope"]["coins_evaluated"], ["BTC"])
         self.assertEqual(r["scope"]["funding_coins"], ["BTC", "LINK", "SOL"])
 
-    def test_a_candle_table_that_does_not_span_the_window_takes_the_coin_out_of_scope(self) -> None:
+    def test_an_unspanned_benchmark_is_missing_data_not_a_result(self) -> None:
         with LiveDataStore(self.db) as store:
             store.connection.execute("DELETE FROM candles WHERE close_time_ms > ?", (END - 20 * DAY,))
             store.connection.commit()
         code, logged = self.run_main()
-        self.assertEqual(code, 3, logged)
-        r = json.loads(self.out.read_text(encoding="utf-8"))
-        self.assertFalse(r["price_series_span_by_coin"]["BTC"]["spans_window"])
-        self.assertEqual(r["counts"]["in_primary"], 0)
-        self.assertEqual(len(r["what_broke"]), 2)  # benchmark unspanned, nothing in the primary
-        self.assertEqual(r["diagnostics_rollup"]["coins_without_a_spanning_price_series"], ["BTC"])
+        self.assertEqual(code, 2, logged)
+        self.assertFalse(self.out.exists())
+        self.assertIn("benchmark coin BTC has no price series spanning the window", logged[0])
+
+    def test_a_coin_whose_series_does_not_span_the_window_leaves_scope_and_is_counted(self) -> None:
+        self.add_second_coin(candles_until=END - 20 * DAY, pool_peer_trades_it=True)
+        with LiveDataStore(self.db) as store:
+            store.write_fills([_fill(COHORT[0], 9_601, START + 6 * DAY, coin="ETH"),
+                               _fill(COHORT[0], 9_602, START + 6 * DAY + HOUR, coin="ETH", side="A"),
+                               _fill(COHORT[0], 9_603, START - 3 * DAY, coin="ETH")],  # before the window: not counted
+                              source="test", ingested_at_ms=T0)
+        r = self.run_ok()
+        self.assertFalse(r["price_series_span_by_coin"]["ETH"]["spans_window"])
+        self.assertEqual(r["scope"]["coins_evaluated"], ["BTC"])
+        self.assertEqual(r["diagnostics_rollup"]["coins_without_a_spanning_price_series"], ["ETH"])
+        self.assertEqual(r["scope"]["out_of_scope_fills_by_wallet"], {COHORT[0]: 2})
+        self.assertEqual(r["what_broke"], [])
+        # The peer that also traded ETH stays a peer on its BTC fills.
+        self.assertIn(POOL_ONLY[0], r["matched_peers_by_wallet"][COHORT[1]]["contributed"])
+
+    def test_a_pool_peer_trading_a_coin_the_cohort_does_not_still_enters_the_baseline(self) -> None:
+        # Round two's blocker: the market was built over the cohort's coins
+        # only, so a peer with a fill on any other in-scope coin threw inside
+        # the baseline, dropped out of M_i, and was still listed as averaged.
+        self.add_second_coin(pool_peer_trades_it=True)
+        r = self.run_ok()
+        self.assertEqual(r["scope"]["coins_evaluated"], ["BTC", "ETH"])
+        for peers in r["matched_peers_by_wallet"].values():
+            self.assertIn(POOL_ONLY[0], peers["contributed"])
+            self.assertEqual(peers["dropped"], {})
+
+    def test_the_first_edge_of_the_span_rule_admits_what_the_freeze_post_check_admits(self) -> None:
+        self.add_second_coin(pool_peer_trades_it=True)  # someone must trade ETH for it to be priced
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM candles WHERE coin = 'ETH' AND open_time_ms < ?", (START + FIFTEEN_MIN,))
+            store.connection.commit()
+        self.assertTrue(self.run_ok()["price_series_span_by_coin"]["ETH"]["spans_window"])
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM candles WHERE coin = 'ETH' AND open_time_ms < ?", (START + 2 * FIFTEEN_MIN,))
+            store.connection.commit()
+        self.assertFalse(self.run_ok()["price_series_span_by_coin"]["ETH"]["spans_window"])
+
+    def test_a_gap_in_the_price_series_produces_stale_skips_under_the_freshness_bound(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM candles WHERE close_time_ms BETWEEN ? AND ?",
+                                     (START + 5 * DAY - 30 * 60_000, START + 5 * DAY + 3 * HOUR))
+            store.connection.commit()
+        r = self.run_ok()
+        self.assertGreater(r["diagnostics_rollup"]["stale_price_skips"], 0)
+        self.assertGreaterEqual(r["primary"]["disclosures"]["stale_price_skips_present"], 1)
+
+    def test_the_disclosed_study_parameters_are_the_frozen_ones(self) -> None:
+        r = self.run_ok()
+        self.assertEqual(r["assumptions"], {
+            "benchmark_coin": "BTC", "fees_bps": {"maker": "1.5", "taker": "4.5"}, "impact_bps_per_full_depth": "10",
+            "latencies_ms": [1000, 5000, 30000, 120000, 300000, 900000], "liquidity_source": "ASSUMED",
+            "liquidity_tiers": {"tier1": {"depth_notional_usd": "2000000", "half_spread_bps": "0.5"},
+                                "tier2": {"depth_notional_usd": "300000", "half_spread_bps": "1.5"},
+                                "tier3": {"depth_notional_usd": "50000", "half_spread_bps": "5"}},
+            "matched_random_eligibility": "another pool wallet whose in-window fill count is within the tolerance "
+                                          "of the target's and whose coverage certifies the same window",
+            "matched_random_peer_tolerance": "0.5", "matched_random_sample_size": 20, "max_price_age_ms": 900000,
+            "momentum": {"lookback_ms": 3600000, "step_ms": 600000}, "nominal_capital": "10000",
+            "seed": 2605216799, "seed_derivation": "int(cohort_sha256[:8], 16)", "size_scale": "1",
+        })
+        self.assertEqual(r["assumptions"]["seed"], runner.seed_from(cohort_hash(sorted(COHORT))))
+        # Disclosed values are the ones the simulator is handed, not constants beside it.
+        config = core.study_config(r["assumptions"]["seed"])
+        self.assertEqual(config.max_price_age_ms, r["price_source"]["max_age_ms"])
+        self.assertEqual(str(config.random_tolerance), r["assumptions"]["matched_random_peer_tolerance"])
+        self.assertEqual(config.random_sample_size, r["assumptions"]["matched_random_sample_size"])
+        self.assertEqual(config.random_seed, r["assumptions"]["seed"])
+        self.assertEqual(list(config.latencies_ms), r["assumptions"]["latencies_ms"])
+        self.assertEqual(str(config.follower.capital), r["assumptions"]["nominal_capital"])
+        self.assertEqual(str(config.follower.size_scale), r["assumptions"]["size_scale"])
+
+    def test_the_record_cannot_lower_the_plans_minimum(self) -> None:
+        rec = {**self.record(COHORT), "minimum_evaluable": 3}
+        code, logged = self.run_main(self.argv(cohort=self.write_record(rec), dry_run=False))
+        self.assertEqual(code, 2)
+        self.assertFalse(self.out.exists())
+        self.assertIn("minimum_evaluable=3", logged[0])
+
+    def test_a_record_whose_characterisation_window_is_not_the_plans_is_refused(self) -> None:
+        rec = self.record(COHORT)
+        rec["characterisation_window"]["start_ms"] -= DAY
+        code, logged = self.run_main(self.argv(cohort=self.write_record(rec)))
+        self.assertEqual(code, 2)
+        self.assertIn("characterisation window", logged[0])
+
+    def test_a_sweep_written_after_t0_cannot_move_the_arm_a_pool(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM ingest_runs WHERE wallet_address = ?", (POOL_ONLY[1],))
+            store.connection.commit()
+            _coverage(store, "short-4", POOL_ONLY[1], covered_until_ms=END - 3 * DAY)
+        before = self.run_ok()
+        self.assertEqual(before["pool"]["size"], 4)
+        with LiveDataStore(self.db) as store:
+            # The shape sweep.py writes: resumed at latest_fill + 1, certifying past T0.
+            store.start_run("sweep-late", mode="sweep_wallet", started_at_ms=T0 + DAY, wallet_address=POOL_ONLY[1])
+            store.finish_run(
+                "sweep-late", finished_at_ms=T0 + DAY, status=RUN_STATUS_COMPLETED, records_seen=1, records_written=1,
+                coverage={"window": {"start_time_ms": END - 3 * DAY, "end_time_ms": T0 + DAY},
+                          "fills": {"attempted": True, "completed": True, "truncated_at_page_cap": False,
+                                    "covered_until_ms": T0 + DAY},
+                          "funding": {"attempted": True, "completed": True, "truncated_at_response_cap": True}},
+            )
+        after = self.run_ok()
+        self.assertEqual(after["pool"], before["pool"])
+        self.assertEqual(after["ledger_snapshot"], before["ledger_snapshot"])
+        self.assertEqual(after["primary"]["d_by_wallet"], before["primary"]["d_by_wallet"])
+        self.assertEqual(after["primary"]["disclosures"]["source_funding_truncated"], 0)
+
+    def test_nothing_written_after_t0_reaches_the_arm_a_file(self) -> None:
+        before = self.run_ok()
+        with LiveDataStore(self.db) as store:
+            store.write_funding([_funding(COHORT[0], T0 + HOUR, coin="DOGE")], ingested_at_ms=T0 + HOUR)
+            store.write_fills([_fill(COHORT[0], 9_701, T0 + DAY, coin="ETH")], source="test", ingested_at_ms=T0 + DAY)
+        after = self.run_ok()
+        self.assertEqual(after["scope"]["funding_coins"], ["BTC"])
+        self.assertEqual(after["scope"]["out_of_scope_fills_by_wallet"], {})
+        self.assertEqual(after, before)
+
+    def test_survivorship_is_measured_on_every_fill_in_or_out_of_scope(self) -> None:
+        before = self.run_ok()
+        self.assertTrue(before["survivorship"]["per_wallet"][COHORT[2]]["stopped"])
+        self.assertEqual(before["survivorship"]["per_wallet"][COHORT[0]], {
+            "characterisation_fills": 60, "expected_tail_fills": "28.0000", "faded": False,
+            "fills_in_window": 40, "last_fill_ms": 1_998_880_400_000, "stopped": False, "tail_fills": 10,
+        })
+        with LiveDataStore(self.db) as store:  # LINK has no funding row: out of scope, still activity
+            store.write_fills([_fill(COHORT[2], 9_801, END - DAY, coin="LINK")], source="test", ingested_at_ms=T0)
+        after = self.run_ok()
+        self.assertFalse(after["survivorship"]["per_wallet"][COHORT[2]]["stopped"])
+        self.assertEqual(after["survivorship"]["stopped"], 0)
+        self.assertEqual(after["scope"]["out_of_scope_fills_by_wallet"], {COHORT[2]: 1})
+
+    def test_the_checkpoint_is_written_before_progress_is_reported(self) -> None:
+        partial = self.out.with_name(self.out.name + ".partial.json")
+        seen: dict = {}
+
+        def spy(line: str) -> None:
+            if " 2/3 " in line:
+                seen.update(json.loads(partial.read_text(encoding="utf-8")))
+
+        self.assertEqual(runner.main(self.argv(), log=spy), 0)
+        self.assertEqual((seen["completed"], seen["of"], seen["arm"]), (2, 3, "A"))
+        self.assertEqual((seen["empirical_result_status"], seen["decision"], seen["copyability_claim_produced"]),
+                         ("PARTIAL_CHECKPOINT", None, False))
+        self.assertEqual(len(seen["rows"]), 2 * len(runner.LATENCY_GRID_MS))
+        self.assertFalse(partial.exists())
+
+    def test_a_stop_mid_run_keeps_the_partial_under_an_aborted_name_and_writes_no_evidence(self) -> None:
+        original = core.run_study
+        calls: list = []
+
+        def failing(**kwargs):
+            calls.append(kwargs["wallets"])
+            if len(calls) == 2:
+                raise RuntimeError("synthetic stop on the second wallet")
+            return original(**kwargs)
+
+        core.run_study = failing
+        try:
+            code, logged = self.run_main()
+        finally:
+            core.run_study = original
+        self.assertEqual(code, 2)
+        self.assertFalse(self.out.exists())
+        self.assertIn("stopped: RuntimeError: synthetic stop", logged[-1])
+        aborted = json.loads(self.out.with_name(self.out.name + ".aborted.json").read_text(encoding="utf-8"))
+        self.assertEqual((aborted["completed"], aborted["empirical_result_status"], aborted["decision"]),
+                         (1, "PARTIAL_CHECKPOINT", None))
+        self.assertFalse(self.out.with_name(self.out.name + ".partial.json").exists())
 
     def test_coverage_that_stops_before_the_window_end_refuses_every_wallet(self) -> None:
         with LiveDataStore(self.db) as store:
@@ -297,6 +503,9 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["counts"]["refused"], 3)
         self.assertEqual(r["pool"]["size"], 0)
         self.assertEqual(r["diagnostics_rollup"]["refusal_reasons"], {"UnknownIntervalError": 3})
+        self.assertEqual(r["empirical_result_status"], "BROKE_SEE_WHAT_BROKE")
+        self.assertIsNone(r["decision"])
+        self.assertTrue(logged[-1].endswith(" broke=1"), logged[-1])
 
 
 class SurvivorshipTests(unittest.TestCase):

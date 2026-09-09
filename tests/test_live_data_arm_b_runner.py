@@ -173,6 +173,10 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         self.assertTrue(r["price_series_span_by_coin"]["BTC"]["spans_window"])
         self.assertEqual(r["counts"], {"wallets": 3, "scored": 3, "refused": 0, "in_primary": 3})
         self.assertEqual(r["pool"]["size"], 5)
+        self.assertEqual(r["pool"]["ledger_modes"], "all")
+        self.assertEqual(r["ledger_snapshot"]["max_finished_at_ms"], END + HOUR)
+        for wallet, peers in r["matched_peers_by_wallet"].items():
+            self.assertEqual(set(peers["contributed"]), set(COHORT + POOL_ONLY) - {wallet})
         self.assertNotEqual(r["primary"]["sd"], 0.0)
         # Under the minimum the arm is a case study: it decides nothing even
         # though it is the decisive arm.

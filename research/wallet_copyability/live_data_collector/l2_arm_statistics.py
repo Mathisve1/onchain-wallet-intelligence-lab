@@ -18,9 +18,11 @@ depends on should not depend on a library that is not pinned.
 
 from __future__ import annotations
 
+import json
 import math
 import statistics
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 #: ``L2_ANALYSIS_PLAN.md`` "Primary measure": the primary latency and target.
@@ -242,6 +244,23 @@ def disclosure_rollup(studies: Sequence[Any], *, wallets: Sequence[str], latency
         counts["catch_up_fills_present"] += outcome.catch_up_fills > 0
     return {"of_n": len(wanted), **counts}
 
+
+def survivorship_inflation(arm_a_path: Path | None, primary_b: dict) -> dict | None:
+    """``mean d_A - mean d_B``: a number in arm B's report, never a gate."""
+    if arm_a_path is None:
+        return None
+    arm_a = json.loads(arm_a_path.read_text(encoding="utf-8"))
+    if arm_a.get("arm") != "A" or arm_a.get("primary", {}).get("mean") is None or primary_b.get("mean") is None:
+        return {"available": False, "arm_a_file": arm_a_path.name}
+    mean_a, mean_b = float(arm_a["primary"]["mean"]), float(primary_b["mean"])
+    reading_a = arm_a["primary"].get("reading")
+    return {
+        "available": True, "arm_a_file": arm_a_path.name, "arm_a_cohort_sha256": arm_a.get("cohort_sha256"),
+        "mean_d_a": mean_a, "mean_d_b": mean_b, "inflation_points_per_14d": round(mean_a - mean_b, 4),
+        "arm_a_reading": reading_a,
+        "a_negative_b_positive": reading_a == "ARM_A_NEGATIVE" and decision_for(primary_b) == "GO_TO_ENTITY_CLUSTER_RESEARCH",
+        "note": "a large gap in either direction obliges a written diagnosis before any GO is acted on",
+    }
 
 def secondary_summary(studies: Sequence[Any], *, window_days: Decimal) -> dict:
     """Mean ``d`` per latency and mean return versus each baseline: reported, not deciding."""

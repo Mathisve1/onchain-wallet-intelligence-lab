@@ -48,14 +48,13 @@ from src.copyability.cohort import cohort_hash
 from src.copyability.costs import CostModel, FeeSchedule
 from src.copyability.coverage import CoverageLedger
 from src.copyability.execution import LATENCY_GRID_MS, FollowerConfig
-from src.copyability.inputs import InputError, LiquidityProfile
+from src.copyability.inputs import LiquidityProfile
 from src.copyability.loader import build_market, load_coverage, load_fills, load_funding_truncation
 from src.copyability.metrics import as_row
 from src.copyability.simulate import StudyConfig, run_study
-from src.live_data.storage import LiveDataStore, StorageError
+from src.live_data.storage import LiveDataStore
 
 from . import l2_arm_report as report
-from .cohort_pipeline_freeze import FreezeInputError
 from .l2_arm_statistics import (
     ARM_A_NOT_MEASURABLE,
     MINIMUM_EVALUATED,
@@ -64,6 +63,7 @@ from .l2_arm_statistics import (
     disclosure_rollup,
     primary_statistic,
     secondary_summary,
+    survivorship_inflation,
 )
 
 MILLISECONDS_PER_DAY = 86_400_000
@@ -103,6 +103,12 @@ STATUS_DECIDED = "ARM_B_DECIDED"
 STATUS_CASE_STUDY = "CASE_STUDY_UNDER_MINIMUM"
 STATUS_NOT_MEASURABLE = "NOT_MEASURABLE"
 STATUS_DRY_RUN = "DRY_RUN_UNDERPOWERED"
+#: Something broke (rule 5 of the reading): the file says what, and decides nothing.
+STATUS_BROKE = "BROKE_SEE_WHAT_BROKE"
+#: Arm A's window closed before the first sweep, so only the backfills could
+#: have observed it; reading sweep rows too would let a rerun after weeks of
+#: arm B collection certify wallets the T0 run refused and move the pool.
+ARM_A_LEDGER_MODES = ("backfill_wallet",)
 EXIT_REFUSED = 2
 EXIT_BROKE = 3
 
@@ -157,7 +163,15 @@ def load_cohort(path: Path, *, plan_commit: str, allow_underpowered: bool = Fals
         )
     if cohort_hash(record["cohort"]) != record["cohort_sha256"]:
         raise ArmRunnerError("the cohort list does not hash to the recorded cohort_sha256; the record was altered")
-    minimum = int(record.get("minimum_evaluable", MINIMUM_EVALUATED))
+    recorded_minimum = int(record.get("minimum_evaluable", MINIMUM_EVALUATED))
+    if recorded_minimum < MINIMUM_EVALUATED and not allow_underpowered:
+        # The plan's minimum is not the record's to lower: a freeze made with
+        # --minimum N below it is refused, not evaluated at N.
+        raise ArmRunnerError(
+            f"the freeze was made with minimum_evaluable={recorded_minimum}, under the plan's {MINIMUM_EVALUATED} "
+            "(pass --allow-underpowered-dry-run for a synthetic dry run)"
+        )
+    minimum = max(recorded_minimum, MINIMUM_EVALUATED)
     if not record["hard_stop"] and len(record["cohort"]) < minimum and not allow_underpowered:
         raise ArmRunnerError(
             f"{len(record['cohort'])} wallets is under the minimum of {minimum}; an underpowered study "
@@ -184,6 +198,7 @@ def study_config(seed: int) -> StudyConfig:
         momentum_lookback_ms=MOMENTUM_LOOKBACK_MS, momentum_step_ms=MOMENTUM_STEP_MS,
         random_seed=seed, random_sample_size=MATCHED_RANDOM_SAMPLE_SIZE, latencies_ms=LATENCY_GRID_MS,
         thresholds=ClassifierThresholds(), max_price_age_ms=MAX_PRICE_AGE_MS,
+        random_tolerance=MATCHED_RANDOM_TOLERANCE,
     )
 
 
@@ -219,24 +234,6 @@ def assumptions(seed: int) -> dict:
     }
 
 
-def survivorship_inflation(arm_a_path: Path | None, primary_b: dict) -> dict | None:
-    """``mean d_A - mean d_B``: a number in arm B's report, never a gate."""
-    if arm_a_path is None:
-        return None
-    arm_a = json.loads(arm_a_path.read_text(encoding="utf-8"))
-    if arm_a.get("arm") != "A" or arm_a.get("primary", {}).get("mean") is None or primary_b.get("mean") is None:
-        return {"available": False, "arm_a_file": arm_a_path.name}
-    mean_a, mean_b = float(arm_a["primary"]["mean"]), float(primary_b["mean"])
-    reading_a = arm_a["primary"].get("reading")
-    return {
-        "available": True, "arm_a_file": arm_a_path.name, "arm_a_cohort_sha256": arm_a.get("cohort_sha256"),
-        "mean_d_a": mean_a, "mean_d_b": mean_b, "inflation_points_per_14d": round(mean_a - mean_b, 4),
-        "arm_a_reading": reading_a,
-        "a_negative_b_positive": reading_a == "ARM_A_NEGATIVE" and decision_for(primary_b) == "GO_TO_ENTITY_CLUSTER_RESEARCH",
-        "note": "a large gap in either direction obliges a written diagnosis before any GO is acted on",
-    }
-
-
 # -- the run -----------------------------------------------------------------------------
 
 
@@ -250,11 +247,21 @@ def run(
     window_days = Decimal(window[1] - window[0]) / Decimal(MILLISECONDS_PER_DAY)
     what_broke: list[str] = []
 
-    ledger = load_coverage(store)
-    if spec.arm == "B" and not any(ledger.is_fully_known(w, *window) for w in wallets):
+    modes = ARM_A_LEDGER_MODES if spec.arm == "A" else None
+    ledger = load_coverage(store, modes=modes)
+    snapshot = report.ledger_snapshot(store, modes=modes)
+    if spec.arm == "B":
         # The approval forbids interim result inspection: nothing is computed
-        # until the sweeps have certified the whole forward window.
-        raise ArmRunnerError("arm B's window is not closed in this database: no cohort wallet is certified over it")
+        # until collection has run past the window end and the sweeps have
+        # certified the whole forward window for the cohort.
+        latest = snapshot["max_finished_at_ms"]
+        if latest is None or latest < window[1]:
+            raise ArmRunnerError(
+                "arm B's window is not closed in this database: the latest completed collection run "
+                f"finished at {latest}, before the window end {window[1]}"
+            )
+        if not any(ledger.is_fully_known(w, *window) for w in wallets):
+            raise ArmRunnerError("arm B's window is not closed in this database: no cohort wallet is certified over it")
 
     scope, scope_lists = report.build_scope(
         store, candles_json, excluded=cohort.get("scope", {}).get("excluded", ()), until_ms=t0_ms
@@ -267,24 +274,37 @@ def run(
         w: [f for f in fills if f.time_ms <= bound_ms]
         for w, fills in load_fills(store, sorted(set(pool) | set(wallets))).items()
     }
-    pool_fills, out_of_scope = report.split_by_scope(raw_pool_fills, scope)
+    pool_fills, _ = report.split_by_scope(raw_pool_fills, scope)
+    # Counted per wallet over the evaluation window only: the fills before it
+    # are read for opening positions and characterisation, not evaluated.
+    in_window = {w: [f for f in fills if window[0] <= f.time_ms <= window[1]] for w, fills in raw_pool_fills.items()}
+    _, out_of_scope = report.split_by_scope(in_window, scope)
 
-    coins = sorted({f.coin for w in wallets for f in pool_fills.get(w, ())} | {BENCHMARK_COIN})
+    # Every coin any pool wallet traded in scope, not the cohort's alone: a
+    # peer whose coin the market cannot price drops out of M_i, and a pool
+    # priced only on the cohort's coins would drop exactly the broad-book
+    # peers the cohort does not resemble.
+    coins = sorted({f.coin for fills in pool_fills.values() for f in fills} | {BENCHMARK_COIN})
     liquidity = {coin: liquidity_for(coin) for coin in coins}
     market = build_market(store, coins, liquidity, price_source=spec.price_source, candle_interval=CANDLE_INTERVAL)
     spanning, span_detail = report.series_span(market, coins, window=window, tolerance_ms=spec.span_tolerance_ms)
     unspanned = sorted(set(coins) - spanning)
     if unspanned:
         for w, fills in pool_fills.items():
-            kept = [f for f in fills if f.coin in spanning]
-            out_of_scope[w] = out_of_scope.get(w, 0) + (len(fills) - len(kept))
-            pool_fills[w] = kept
+            pool_fills[w] = [f for f in fills if f.coin in spanning]
+            dropped_in_window = sum(1 for f in in_window.get(w, ()) if f.coin in unspanned)
+            out_of_scope[w] = out_of_scope.get(w, 0) + dropped_in_window
     if BENCHMARK_COIN not in spanning:
-        what_broke.append(f"benchmark coin {BENCHMARK_COIN} has no price series spanning the window")
+        # Buy-and-hold and momentum apply no age bound at their exit mark, so
+        # an unspanned benchmark would be scored on a stale price and the
+        # figures would sit in every row. That is missing data, not a result.
+        raise ArmRunnerError(
+            f"benchmark coin {BENCHMARK_COIN} has no price series spanning the window; collect it before running"
+        )
 
     seed = seed_from(cohort["cohort_sha256"])
     config = study_config(seed)
-    truncated = load_funding_truncation(store)
+    truncated = load_funding_truncation(store, modes=modes)
     studies: list[Any] = []
     runtime: dict[str, float] = {}
     for index, wallet in enumerate(wallets, start=1):
@@ -295,11 +315,13 @@ def run(
         )
         runtime[wallet] = round(time.perf_counter() - started, 1)
         studies.append(study)
+        # Checkpoint first, then say so: a stop between the two can leave a
+        # checkpoint the log understates, never a log the checkpoint belies.
+        if checkpoint is not None:
+            _write_checkpoint(checkpoint, spec, studies, runtime, total=len(wallets))
         refused = sum(1 for s in studies if s.refusal is not None)
         log(f"{spec.run_id}: {index}/{len(wallets)} {'refused' if study.refusal else 'scored'} "
             f"refused_so_far={refused} elapsed_s={runtime[wallet]}")
-        if checkpoint is not None:
-            _write_checkpoint(checkpoint, spec, studies, runtime, total=len(wallets))
 
     primary = primary_statistic(studies, window_days=window_days)
     disclosures = disclosure_rollup(studies, wallets=list(primary["d_by_wallet"]))
@@ -311,8 +333,10 @@ def run(
     elif primary["n"] == 0:
         what_broke.append("no scored wallet entered the primary; see primary.excluded and the scope counts")
 
-    decision = decision_for(primary) if spec.decides else None
-    if dry_run:
+    decision = decision_for(primary) if spec.decides and not what_broke else None
+    if what_broke:
+        status = STATUS_BROKE
+    elif dry_run and len(wallets) < MINIMUM_EVALUATED:
         status = STATUS_DRY_RUN
     elif primary["reading"] == ARM_A_NOT_MEASURABLE:
         status = STATUS_NOT_MEASURABLE
@@ -322,6 +346,21 @@ def run(
         status = STATUS_DECIDED if spec.decides else STATUS_EARLY_READ
     provenance = (report.candle_provenance(store, coins, interval=CANDLE_INTERVAL) if spec.price_source == "candles"
                   else report.mids_provenance(store, coins, window=window))
+    cohort_set = set(wallets)
+    peers_by_wallet: dict[str, dict] = {}
+    shares: list[float] = []
+    for s in studies:
+        if not s.matched_peers and not s.matched_peers_dropped:
+            continue
+        count = len(s.matched_peers)
+        share = round(sum(1 for p in s.matched_peers if p in cohort_set) / count, 4) if count else None
+        if share is not None:
+            shares.append(share)
+        peers_by_wallet[s.wallet] = {
+            "contributed": list(s.matched_peers), "count": count,
+            "dropped": dict(sorted(s.matched_peers_dropped.items())), "cohort_share": share,
+        }
+    pool_cohort = len(cohort_set & set(pool))
     evidence = {
         "schema_version": "1.0",
         "run_id": spec.run_id, "arm": spec.arm, "variant": spec.variant, "approvals": list(spec.approvals),
@@ -335,24 +374,35 @@ def run(
         "price_source": spec.price_kind,
         "price_provenance": provenance,
         "price_series_span_by_coin": span_detail,
+        "price_series_span_rule": {
+            "tolerance_ms": spec.span_tolerance_ms,
+            "rule": "first quote at most tolerance_ms after the window start, last quote at or after the window end",
+        },
+        "ledger_snapshot": snapshot,
         "assumptions": assumptions(seed),
         "pool": {"definition": "every wallet the coverage ledger certifies over the evaluation window",
+                 "ledger_modes": list(modes) if modes is not None else "all",
                  "size": len(pool), "sha256": cohort_hash(pool),
+                 "cohort_wallets_in_pool": pool_cohort, "non_cohort_wallets_in_pool": len(pool) - pool_cohort,
+                 "mean_cohort_share_of_peers": round(sum(shares) / len(shares), 4) if shares else None,
                  "cohort_wallets_not_in_pool": sorted(set(wallets) - set(pool))},
         "scope": {**scope_lists, "record": cohort.get("scope"), "coins_evaluated": sorted(spanning & set(coins)),
-                  "out_of_scope_fills_by_wallet": {w: n for w, n in sorted(out_of_scope.items()) if w in wallets and n}},
+                  "out_of_scope_fills_by_wallet": {w: n for w, n in sorted(out_of_scope.items()) if w in wallets and n},
+                  "out_of_scope_definition": "cohort fills inside the evaluation window whose coin is out of scope "
+                                             "or has no price series spanning the window"},
         "counts": {"wallets": len(wallets), "scored": scored, "refused": len(refusals), "in_primary": primary["n"]},
         "refusals": refusals,
         "primary": {**primary, "disclosures": disclosures},
         "secondary": secondary_summary(studies, window_days=window_days),
         "survivorship": surviv,
         "survivorship_inflation": survivorship_inflation(arm_a_json, primary) if spec.decides else None,
-        "matched_peers_by_wallet": {s.wallet: list(s.matched_peers) for s in studies if s.matched_peers},
+        "matched_peers_by_wallet": peers_by_wallet,
         "diagnostics_rollup": report.diagnostics_rollup(studies, latency_ms=PRIMARY_LATENCY_MS, coins_without_span=unspanned),
         "rows": [as_row(o) for s in studies for o in s.outcomes],
         "_runtime_seconds_by_wallet": runtime,
         "sample_limitations_disclosure": report.limitations(
-            arm=spec.arm, survivorship_block=surviv, disclosures=disclosures, pool_size=len(pool), cohort_size=len(wallets)
+            arm=spec.arm, survivorship_block=surviv, disclosures=disclosures, pool_size=len(pool),
+            pool_cohort=pool_cohort, cohort_size=len(wallets),
         ),
         "what_broke": what_broke,
         "reading_rule": "L2_ANALYSIS_PLAN.md, 'How arm A is read, fixed before it is seen'" if spec.arm == "A"
@@ -368,8 +418,10 @@ def run(
 
 
 def _write_checkpoint(path: Path, spec: ArmSpec, studies: Sequence[Any], runtime: dict[str, float], *, total: int) -> None:
+    # Stamped like the evidence file so a partial can never be read as one.
     partial = {
-        "run_id": spec.run_id, "checkpoint": True, "completed": len(studies), "of": total,
+        "run_id": spec.run_id, "arm": spec.arm, "checkpoint": True, "completed": len(studies), "of": total,
+        "decision": None, "empirical_result_status": "PARTIAL_CHECKPOINT", "copyability_claim_produced": False,
         "refusals": {s.wallet: s.refusal for s in studies if s.refusal is not None},
         "runtime_seconds_by_wallet": runtime,
         "rows": [as_row(o) for s in studies for o in s.outcomes],
@@ -413,8 +465,14 @@ def main(spec: ArmSpec, argv: Sequence[str] | None = None, *, log=print) -> int:
                 store, cohort, spec, candles_json=args.candles_json, plan_commit=args.plan_commit,
                 dry_run=args.dry_run, checkpoint=checkpoint, arm_a_json=getattr(args, "arm_a_json", None), log=log,
             )
-    except (ArmRunnerError, report.ScopeMismatchError, FreezeInputError, StorageError, InputError, OSError) as exc:
+    except Exception as exc:  # rule 5: stop and report; nothing escapes without the line
         log(f"{spec.run_id}: stopped: {type(exc).__name__}: {exc}")
+        if checkpoint.exists():
+            # Whatever was scored before the stop is kept under a name no
+            # later run treats as its checkpoint, and never as evidence.
+            aborted = args.out.with_name(args.out.name + ".aborted.json")
+            aborted.unlink(missing_ok=True)
+            checkpoint.rename(aborted)
         return EXIT_REFUSED
     runtime = evidence.pop("_runtime_seconds_by_wallet")
     text = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
@@ -430,5 +488,6 @@ def main(spec: ArmSpec, argv: Sequence[str] | None = None, *, log=print) -> int:
         f"{spec.run_id}: wallets={counts['wallets']} scored={counts['scored']} refused={counts['refused']} "
         f"in_primary={counts['in_primary']} status={evidence['empirical_result_status']} "
         f"file_sha256={hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+        + (f" broke={len(evidence['what_broke'])}" if evidence["what_broke"] else "")
     )
     return code

@@ -43,7 +43,10 @@ ARM_A = ArmSpec(
     window_start_days=-52,
     window_end_days=-7,
     price_source="candles",
-    span_tolerance_ms=CANDLE_INTERVAL_MS,
+    # The freeze's post-check admits a first open up to one interval after the
+    # window start; closes are stamped one interval later, so the same rule on
+    # closes is two intervals. Stricter here would evict coins the freeze passed.
+    span_tolerance_ms=2 * CANDLE_INTERVAL_MS,
     decides=False,
 )
 

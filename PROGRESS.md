@@ -309,6 +309,60 @@ refuse forever. The merge rule now treats one-millisecond adjacency as
 touching; a two-millisecond gap is still a gap, and the tests say which is
 which.
 
+### Second adversarial pass (2026-09-09)
+
+Three of four lenses ran (the completeness critic hit the account's session
+limit twice; a third round is owed). One blocker and a set of should-fixes, all
+applied in the shared core:
+
+- **Peers were priced only on the cohort's coins.** The market was built over
+  the coins the cohort traded, so a pool wallet with a fill on any other
+  in-scope coin threw inside the baseline, was swallowed, dropped out of
+  `M_i`, and was still listed under `matched_peers_by_wallet`. On real data
+  that is the broad-book peers, systematically. The market is now built over
+  every pool wallet's in-scope coins; `baselines.matched_random` returns the
+  peers that entered the mean and the sampled peers that dropped, with the
+  reason; the file writes per wallet the contributing peers, the drops, their
+  count and the cohort share of the peers, and for the pool its cohort and
+  non-cohort counts and the mean cohort share.
+- **Arm A's ledger was not bounded.** A `sweep_wallet` row written weeks after
+  T0 could certify a wallet the T0 run refused and move the pool, the
+  refusals and every `d_i`. Arm A now builds its ledger and its
+  funding-truncation map from backfill rows only, and each file carries a
+  `ledger_snapshot` (runs consulted, latest finish, hash of the run ids);
+  a test writes a post-T0 sweep and asserts the pool hash and every `d_i`
+  are unchanged.
+- The plan's minimum of 200 is not the freeze record's to lower: a record
+  frozen with a smaller `minimum_evaluable` is refused, not evaluated at it.
+- An unspanned benchmark is missing data, not a result: refusal, no file
+  (buy-and-hold and momentum apply no age bound at their exit mark). What
+  still breaks after that carries `BROKE_SEE_WHAT_BROKE`, no decision, and
+  `broke=n` on the log line. The checkpoint is stamped `PARTIAL_CHECKPOINT`
+  with `decision: null`, is written before progress is reported, and on any
+  stop is kept as `.aborted.json`; no exception escapes without the stopped
+  line.
+- The span rule now admits what the freeze's post-check admits (two intervals
+  on close-stamped candles), the matched-random tolerance is threaded through
+  `StudyConfig` instead of being disclosed beside it, the out-of-scope count is
+  bounded to the evaluation window, and `DRY_RUN_UNDERPOWERED` is stamped
+  only when the cohort really is under the minimum. Arm B's closure guard also
+  requires the latest completed collection run to have finished at or after
+  the window end.
+- The tests lens ran mutation testing and found the suite pinned length, not
+  edges, and subsets, not sets. Added: strict peer sets, the literal window,
+  the frozen parameter block compared against the `StudyConfig` actually
+  built, T0 bounding (funding and fills written after T0 leave the file
+  byte-identical), survivorship on out-of-scope fills through the runner,
+  the first edge of the span rule, stale skips under the freshness bound,
+  checkpoint ordering, the abort path, the record-supplied minimum, the
+  characterisation-window check, and the scope split with priceable coins.
+
+Still open from that pass, for the owner with the pool decision: the pool
+contains wallets the selection kept out of the cohort (market makers,
+rebate-dependent, under-characterised), whose taker copies are bad a priori
+and pull `M_i` down; the file now discloses the composition, the plan
+amendment (PR #157) fixes the rule, and neither corrects for it.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and

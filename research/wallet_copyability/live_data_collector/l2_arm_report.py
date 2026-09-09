@@ -9,6 +9,7 @@ limitations. Nothing here scores, prices or decides.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from decimal import Decimal
@@ -96,6 +97,32 @@ def split_by_scope(
         kept[wallet] = inside
         dropped[wallet] = len(fills) - len(inside)
     return kept, dropped
+
+
+# -- the ledger ------------------------------------------------------------------------
+
+
+def ledger_snapshot(store: LiveDataStore, *, modes: Iterable[str] | None) -> dict:
+    """Which completed collection runs the ledger was built from, as a record.
+
+    The pool and every refusal follow from the ledger, and the ledger from the
+    rows in ``ingest_runs``; a rerun that consulted different rows says so
+    here before it says anything else.
+    """
+    sql = "SELECT run_id, finished_at_ms FROM ingest_runs WHERE status = 'completed'"
+    params: tuple = ()
+    mode_list = None if modes is None else sorted(set(modes))
+    if mode_list is not None:
+        sql += " AND mode IN (%s)" % ",".join("?" * len(mode_list))
+        params = tuple(mode_list)
+    rows = store.connection.execute(sql + " ORDER BY run_id", params).fetchall()
+    finished = [row["finished_at_ms"] for row in rows if row["finished_at_ms"] is not None]
+    return {
+        "modes": mode_list if mode_list is not None else "all",
+        "runs_consulted": len(rows),
+        "max_finished_at_ms": max(finished) if finished else None,
+        "run_ids_sha256": hashlib.sha256("\n".join(row["run_id"] for row in rows).encode("utf-8")).hexdigest(),
+    }
 
 
 # -- price series ---------------------------------------------------------------------
@@ -288,7 +315,8 @@ def diagnostics_rollup(studies: Sequence[Any], *, latency_ms: int, coins_without
 
 
 def limitations(
-    *, arm: str, survivorship_block: Mapping[str, Any], disclosures: Mapping[str, Any], pool_size: int, cohort_size: int
+    *, arm: str, survivorship_block: Mapping[str, Any], disclosures: Mapping[str, Any],
+    pool_size: int, pool_cohort: int, cohort_size: int,
 ) -> list[str]:
     """The plain-language caveats the approval requires beside the result."""
     notes = []
@@ -317,9 +345,11 @@ def limitations(
         f"Funding hours the rate schedule could not price were charged as zero, in either direction, for "
         f"{disclosures['funding_incomplete']} of {disclosures['of_n']} wallets in the primary; the net is "
         "uncertain, not bounded, by that much.",
-        f"Matched-random peers are drawn from the {pool_size} characterised wallets the ledger certifies "
-        f"over the window, of which the frozen cohort is {cohort_size}. A d_i measured against peers drawn "
-        "from the cohort alone would cancel any return the cohort earns in common; the pool is therefore "
-        "wider than the cohort and its hash is recorded.",
+        f"Matched-random peers are drawn from the {pool_size} wallets the coverage ledger certifies over the "
+        f"window ({pool_cohort} of them cohort wallets, {pool_size - pool_cohort} not), not from the frozen "
+        f"cohort of {cohort_size} alone: a d_i measured against peers drawn from the cohort alone would cancel "
+        "any return the cohort earns in common. Wallets the selection kept out of the cohort (market makers, "
+        "rebate-dependent and under-characterised wallets among them) are in the pool; the pool's hash, each "
+        "wallet's contributing peers and the cohort share of those peers are recorded.",
     ]
     return notes
