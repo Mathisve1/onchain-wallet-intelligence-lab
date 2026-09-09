@@ -14,7 +14,7 @@ refusal rather than a zero or an aborted study.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Mapping, Sequence
 
@@ -52,11 +52,16 @@ class StudyConfig:
     latencies_ms: tuple[int, ...] = LATENCY_GRID_MS
     thresholds: ClassifierThresholds = DEFAULT_THRESHOLDS
     max_price_age_ms: int | None = DEFAULT_MAX_PRICE_AGE_MS
+    #: Activity band for matched-random peers: a peer's fill count over the
+    #: window must lie within this fraction either side of the target's.
+    random_tolerance: Decimal = Decimal("0.5")
 
     def __post_init__(self) -> None:
         if not self.benchmark_coin:
             raise InputError("a benchmark coin is required for buy-and-hold and momentum")
-        if not self.latencies_ms or any(l < 0 for l in self.latencies_ms):
+        if not (0 <= self.random_tolerance < 1):
+            raise InputError("random_tolerance must lie in [0, 1)")
+        if not self.latencies_ms or any(latency < 0 for latency in self.latencies_ms):
             raise InputError("latencies must be nonnegative and nonempty")
         if self.max_price_age_ms is not None and self.max_price_age_ms <= 0:
             raise InputError("max_price_age_ms must be positive or None")
@@ -72,7 +77,10 @@ class WalletStudy:
     funding_truncated: bool
     outcomes: tuple[Outcome, ...]
     refusal: str | None
+    #: The peers that actually entered the matched-random mean (at the last
+    #: latency with a sample), and the sampled peers that dropped out, by reason.
     matched_peers: tuple[str, ...]
+    matched_peers_dropped: dict[str, str] = field(default_factory=dict)
 
 
 MarketFor = Callable[[str], MarketData]
@@ -129,15 +137,17 @@ def run_study(
             opening = opening_positions_for(interval, fills)
             outcomes: list[Outcome] = []
             peers_seen: tuple[str, ...] = ()
+            dropped_seen: dict[str, str] = {}
             for latency in config.latencies_ms:
                 run = _follower_on_deployed_capital(
                     interval, latency, fills, wallet_market, config, cutoff, opening
                 )
-                returns, peers = _baseline_returns(
+                returns, matched = _baseline_returns(
                     interval, latency, run, source.fill_count, fills_by_wallet, wallet_market,
                     ledger, config, cutoff,
                 )
-                peers_seen = peers or peers_seen
+                if matched is not None and matched.chosen:
+                    peers_seen, dropped_seen = matched.contributed, dict(matched.dropped)
                 outcomes.append(outcome_for(
                     run, source, returns, profile=profile, funding_truncated=truncated,
                     liquidity_assumed=assumed,
@@ -145,7 +155,7 @@ def run_study(
         except (UnknownIntervalError, InputError) as exc:
             results.append(WalletStudy(wallet, None, None, truncated, (), f"{type(exc).__name__}: {exc}", ()))
             continue
-        results.append(WalletStudy(wallet, interval, profile, truncated, tuple(outcomes), None, peers_seen))
+        results.append(WalletStudy(wallet, interval, profile, truncated, tuple(outcomes), None, peers_seen, dropped_seen))
     return tuple(results)
 
 
@@ -194,7 +204,7 @@ def _baseline_returns(
     interval: KnownInterval, latency_ms: int, run: FollowerRun, target_fill_count: int,
     fills_by_wallet: Mapping[str, Sequence[SourceFill]], market: MarketData,
     ledger: CoverageLedger, config: StudyConfig, cutoff_ms: int,
-) -> tuple[dict[str, Decimal], tuple[str, ...]]:
+) -> tuple[dict[str, Decimal], baselines.MatchedRandom | None]:
     """Every baseline's return on exactly the capital the follower deployed."""
     capital = run.peak_deployed_notional
     if capital <= 0:
@@ -215,12 +225,12 @@ def _baseline_returns(
     # after the cutoff, or a peer priced on a quote the target would have
     # refused as stale, enters M_i while R_i excludes it, and "the same
     # measure" the plan promises is not what gets subtracted.
-    matched, peers = baselines.matched_random(
+    matched = baselines.matched_random(
         interval, latency_ms=latency_ms, target_fill_count=target_fill_count, pool=fills_by_wallet,
         market=market, cost_model=config.cost_model, config=config.follower, certify=ledger.certify,
-        seed=config.random_seed, sample_size=config.random_sample_size,
+        seed=config.random_seed, sample_size=config.random_sample_size, tolerance=config.random_tolerance,
         decision_cutoff_ms=cutoff_ms, max_price_age_ms=config.max_price_age_ms,
     )
-    if matched is not None:
-        returns["matched_random"] = matched
-    return returns, peers
+    if matched.mean is not None:
+        returns["matched_random"] = matched.mean
+    return returns, matched

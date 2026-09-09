@@ -237,22 +237,36 @@ class BaselineTests(unittest.TestCase):
             "0x" + "ef" * 20: [fill("0x" + "ef" * 20, 30_000, 1, "B", "100"), fill("0x" + "ef" * 20, 40_000, 2, "A", "100")],
         }
         interval = ledger.certify(W, 1_000, 100_000)
-        mean, chosen = baselines.matched_random(
+        result = baselines.matched_random(
             interval, latency_ms=0, target_fill_count=2, pool=pool, market=market(FLAT), cost_model=MODEL,
             config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
         )
-        self.assertEqual(chosen, (PEER,))
-        self.assertLess(mean, 0)  # flat market: a peer round trip costs money too
+        self.assertEqual((result.chosen, result.contributed, result.dropped), ((PEER,), (PEER,), {}))
+        self.assertLess(result.mean, 0)  # flat market: a peer round trip costs money too
 
     def test_matched_random_reports_none_rather_than_zero_when_no_peer_exists(self) -> None:
         ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
         interval = ledger.certify(W, 1_000, 100_000)
-        mean, chosen = baselines.matched_random(
+        result = baselines.matched_random(
             interval, latency_ms=0, target_fill_count=2, pool={W: []}, market=market(FLAT), cost_model=MODEL,
             config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
         )
-        self.assertIsNone(mean)
-        self.assertEqual(chosen, ())
+        self.assertIsNone(result.mean)
+        self.assertEqual(result.chosen, ())
+
+    def test_matched_random_names_a_peer_it_could_not_price_instead_of_listing_it_as_averaged(self) -> None:
+        ledger = CoverageLedger([ObservedInterval(w, 1_000, 100_000, True, "a") for w in (W, PEER)])
+        interval = ledger.certify(W, 1_000, 100_000)
+        eth = lambda t, tid, side: SourceFill(PEER, "ETH", t, side, D("100"), D("1"), D("0.05"), D("0"), tid)  # noqa: E731
+        pool = {W: [], PEER: [eth(30_000, 1, "B"), eth(40_000, 2, "A")]}
+        result = baselines.matched_random(  # the market prices BTC only
+            interval, latency_ms=0, target_fill_count=2, pool=pool, market=market(FLAT), cost_model=MODEL,
+            config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
+        )
+        self.assertIsNone(result.mean)
+        self.assertEqual((result.chosen, result.contributed), ((PEER,), ()))
+        self.assertEqual(list(result.dropped), [PEER])
+        self.assertTrue(result.dropped[PEER].startswith("unpriceable:"), result.dropped)
 
 
 class MetricsTests(unittest.TestCase):

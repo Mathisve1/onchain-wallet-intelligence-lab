@@ -59,8 +59,12 @@ def load_fills(store: LiveDataStore, wallets: Iterable[str] | None = None) -> di
     return result
 
 
-def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
+def load_funding_truncation(store: LiveDataStore, *, modes: Iterable[str] | None = None) -> dict[str, bool]:
     """Per wallet: did any completed backfill hit the venue's funding cap?
+
+    ``modes`` restricts the rows consulted to those collection modes (a
+    caller that must not see rows written after its window closed passes the
+    modes that could only have run before it); ``None`` reads every mode.
 
     Records that carry ``truncated_at_response_cap`` are believed: since
     ``_collect_funding`` gained pagination, ``seen`` is the sum across every
@@ -73,14 +77,15 @@ def load_funding_truncation(store: LiveDataStore) -> dict[str, bool]:
     must say so.
     """
     truncated: dict[str, bool] = {}
+    allowed = None if modes is None else frozenset(modes)
     for run in store.connection.execute(
         # A sweep_wallet row pages funding for the same wallet with the same
         # cap, so a sweep that hit it truncates the wallet just as a backfill
         # would; reading only backfills would leave that undisclosed.
-        "SELECT wallet_address, coverage FROM ingest_runs "
+        "SELECT wallet_address, mode, coverage FROM ingest_runs "
         "WHERE mode IN ('backfill_wallet', 'sweep_wallet') AND status = 'completed'"
     ):
-        if not run["coverage"]:
+        if not run["coverage"] or (allowed is not None and run["mode"] not in allowed):
             continue
         funding = json.loads(run["coverage"]).get("funding", {})
         if "truncated_at_response_cap" in funding:
@@ -185,10 +190,20 @@ def load_funding_rates(store: LiveDataStore, coins: Iterable[str]) -> FundingSch
     return FundingSchedule(FundingEvent(coin, t, rate) for (coin, t), rate in seen.items())
 
 
-def load_coverage(store: LiveDataStore) -> CoverageLedger:
+def load_coverage(store: LiveDataStore, *, modes: Iterable[str] | None = None) -> CoverageLedger:
+    """The ledger from every completed run, or from ``modes`` only.
+
+    An arm whose window closed before another collection mode started (arm
+    A: backfills before T0, sweeps after) passes the modes that could have
+    observed its window, so a rerun after later collection reads the same
+    ledger and reaches the same pool.
+    """
+    allowed = None if modes is None else frozenset(modes)
     observed: list[ObservedInterval] = []
     for run in store.connection.execute("SELECT * FROM ingest_runs"):
         if run["status"] != "completed" or not run["coverage"]:
+            continue
+        if allowed is not None and run["mode"] not in allowed:
             continue
         coverage = json.loads(run["coverage"])
         # ``sweep_wallet`` is the per-wallet row a sweep writes for each wallet
