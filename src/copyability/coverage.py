@@ -100,7 +100,9 @@ class CoverageLedger:
 
         Two adjacent runs that merge into one interval count. Two runs with a
         gap between them, however small, do not: the gap is exactly the period
-        nobody observed.
+        nobody observed. Timestamps are integer milliseconds, so ``[a, b]``
+        and ``[b + 1, c]`` leave no millisecond unobserved and are adjacent,
+        which is how a resumed walk lines up behind a page-cap cut.
         """
         if end_ms < start_ms:
             raise UnknownIntervalError("query interval ends before it starts")
@@ -129,10 +131,14 @@ class CoverageLedger:
 
 
 def _merge(rows: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Merge overlapping or touching intervals; leave gaps as gaps."""
+    """Merge overlapping or touching intervals; leave gaps as gaps.
+
+    Closed integer-millisecond ranges touch when the next starts at most one
+    millisecond after the previous ends: ``[a, b]`` then ``[b + 1, c]``.
+    """
     merged: list[tuple[int, int]] = []
     for lo, hi in sorted(rows):
-        if merged and lo <= merged[-1][1]:
+        if merged and lo <= merged[-1][1] + 1:
             merged[-1] = (merged[-1][0], max(merged[-1][1], hi))
         else:
             merged.append((lo, hi))

@@ -64,7 +64,7 @@ class SimulatorRefusesUnknownIntervalsTests(unittest.TestCase):
     def test_the_study_refuses_a_wallet_with_a_gap_instead_of_scoring_zero(self) -> None:
         ledger = CoverageLedger([
             ObservedInterval(W, 1_000, 50_000, True, "a"),
-            ObservedInterval(W, 50_001, 100_000, True, "b"),
+            ObservedInterval(W, 50_002, 100_000, True, "b"),  # ms 50_001 nobody observed
         ])
         fills = {W: [fill(W, 60_000, 1, "B", "100")]}
         config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
