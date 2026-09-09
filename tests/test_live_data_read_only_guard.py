@@ -94,7 +94,7 @@ class PackageSurfaceTests(unittest.TestCase):
         # socket cannot appear without this guard being updated to cover it.
         self.assertEqual(
             {path.name for path in collector_sources()},
-            {"__init__.py", "__main__.py", "transports.py", "candle_probe.py", "arm_a_candles.py", "health.py", "cohort_pipeline.py", "cohort_pipeline_freeze.py"},
+            {"__init__.py", "__main__.py", "transports.py", "candle_probe.py", "arm_a_candles.py", "arm_a_report.py", "arm_a_runner.py", "arm_a_statistics.py", "health.py", "cohort_pipeline.py", "cohort_pipeline_freeze.py"},
         )
 
     def test_both_layers_are_actually_being_scanned(self) -> None:
