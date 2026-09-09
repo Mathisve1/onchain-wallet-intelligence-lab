@@ -20,9 +20,9 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
-from research.wallet_copyability.live_data_collector import arm_a_report as report
+from research.wallet_copyability.live_data_collector import l2_arm_report as report
 from research.wallet_copyability.live_data_collector import arm_a_runner as runner
-from research.wallet_copyability.live_data_collector import arm_a_statistics as stats
+from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
 from src.copyability.inputs import SourceFill
 from src.live_data.models import Candle, Fill, parse_funding
@@ -181,8 +181,8 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertFalse(r["copyability_claim_produced"])
         self.assertEqual(r["evaluation_window"], {"start_ms": START, "end_ms": END, "days": "45"})
         self.assertEqual(r["scope"]["coins_evaluated"], ["BTC"])
-        self.assertEqual(r["candle_series_span_by_coin"]["BTC"]["spans_window"], True)
-        self.assertEqual(r["candle_provenance"]["fetch_runs"][0]["run_id"], "candles-btc")
+        self.assertEqual(r["price_series_span_by_coin"]["BTC"]["spans_window"], True)
+        self.assertEqual(r["price_provenance"]["fetch_runs"][0]["run_id"], "candles-btc")
         self.assertEqual(r["stage_counts"]["discovered"], 5)
         self.assertEqual(r["primary"]["disclosures"]["of_n"], 3)
         self.assertEqual(r["primary"]["disclosures"]["liquidity_assumed"], 3)
@@ -210,10 +210,10 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         _, logged = self.run_main()
         self.assertEqual(len(logged), 4)  # one line per wallet, one summary
         for line in logged[:3]:
-            self.assertRegex(line, r"^arm_a_runner: [123]/3 (scored|refused) refused_so_far=\d elapsed_s=[\d.]+$")
+            self.assertRegex(line, r"^L2-ARM-A-001: [123]/3 (scored|refused) refused_so_far=\d elapsed_s=[\d.]+$")
         self.assertRegex(
             logged[3],
-            r"^arm_a_runner: wallets=3 scored=3 refused=0 in_primary=3 status=DRY_RUN_UNDERPOWERED file_sha256=[0-9a-f]{64}$",
+            r"^L2-ARM-A-001: wallets=3 scored=3 refused=0 in_primary=3 status=DRY_RUN_UNDERPOWERED file_sha256=[0-9a-f]{64}$",
         )
 
     def test_two_runs_on_the_same_inputs_are_byte_identical(self) -> None:
@@ -280,10 +280,10 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         code, logged = self.run_main()
         self.assertEqual(code, 3, logged)
         r = json.loads(self.out.read_text(encoding="utf-8"))
-        self.assertFalse(r["candle_series_span_by_coin"]["BTC"]["spans_window"])
+        self.assertFalse(r["price_series_span_by_coin"]["BTC"]["spans_window"])
         self.assertEqual(r["counts"]["in_primary"], 0)
         self.assertEqual(len(r["what_broke"]), 2)  # benchmark unspanned, nothing in the primary
-        self.assertEqual(r["diagnostics_rollup"]["coins_without_a_spanning_candle_series"], ["BTC"])
+        self.assertEqual(r["diagnostics_rollup"]["coins_without_a_spanning_price_series"], ["BTC"])
 
     def test_coverage_that_stops_before_the_window_end_refuses_every_wallet(self) -> None:
         with LiveDataStore(self.db) as store:

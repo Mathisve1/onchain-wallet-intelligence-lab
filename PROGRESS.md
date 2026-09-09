@@ -271,6 +271,44 @@ everything it reads to T0, checkpoints after every wallet, and keeps wall-clock
 out of the evidence so identical inputs give a byte-identical file. Expect
 hours of single-threaded runtime on a 300-wallet cohort.
 
+## Arm B runner and the shared arm core (2026-09-09)
+
+Arm B's runner was built by generalising arm A's rather than copying it. The
+run is now one module, `live_data_collector/l2_arm_runner.py`, driven by an
+`ArmSpec` that each arm declares in its own thin file (`arm_a_runner.py`,
+`arm_b_runner.py`); the report and statistics helpers were renamed to
+`l2_arm_report.py` and `l2_arm_statistics.py` and the evidence keys that named
+candles now name the price source (`price_source`, `price_provenance`,
+`price_series_span_by_coin`). Both arms are computed by the same code, so a
+difference between their files is a difference in the data.
+
+What arm B adds, in order of what the plan requires of it:
+
+- **A closure guard.** The approval forbids interim result inspection, so the
+  runner raises before reading a fill unless the coverage ledger certifies at
+  least one cohort wallet over the whole of `[T0, T0+56d]`. Exit 2, no file.
+- **Mids as the price series**, with the same 15-minute freshness bound as arm
+  A, and a provenance block that counts the polled rows per coin and their mean
+  spacing instead of candle fetch runs.
+- **The decision rule.** B decides: `GO_TO_ENTITY_CLUSTER_RESEARCH` if the
+  rounded lower bound of the 95 percent interval is at or above 0.5 points per
+  14 days, `NO_GO_NO_COPYABLE_ALPHA` if the rounded upper bound is below it,
+  `REPAIR_AND_RERUN` otherwise, and `null` for a case study or an unmeasurable
+  primary. Arm A's file keeps `decision: null` by construction.
+- **Survivorship inflation** against arm A's file when `--arm-a-json` is given:
+  `mean d_A - mean d_B` as a number, plus a flag for the A-negative, B-GO
+  pattern that obliges a written diagnosis. Never a gate.
+
+Building the closure guard exposed a defect in the coverage ledger.
+`sweep.py` resumes a wallet at `latest_fill + 1`, and a walk cut at the page
+cap is covered until the last fill's own millisecond, so consecutive sweep rows
+meet as `[a, b]` and `[b+1, c]`. `CoverageLedger._merge` treated that as a gap.
+On integer-millisecond timestamps no millisecond is unobserved there, and on
+real data a single page-cap cut anywhere in the 56 days would have made arm B
+refuse forever. The merge rule now treats one-millisecond adjacency as
+touching; a two-millisecond gap is still a gap, and the tests say which is
+which.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
