@@ -233,6 +233,44 @@ Two governance notes from the same round:
   `TypeError` on a non-integer cap. Every watch step must now record an
   integer cap in `(0, 1000]`.
 
+## Arm A runner (2026-09-09)
+
+Phase 7's runner did not exist. DEC-045 and the stage log record phases 1 to 8
+as built and blind-verified; the opening-position and candle-price pieces of
+phase 7 were, but the script that runs arm A over the frozen cohort and writes
+`evidence/L2_ARM_A_001.json` was never written. Built on 2026-09-09 as
+`live_data_collector/arm_a_runner.py`, `arm_a_report.py` and
+`arm_a_statistics.py`, with an offline synthetic-store test suite, and put
+through an adversarial verification round before it was accepted. Two blockers
+came out of that round:
+
+- **Matched-random peers were not scored under the target's convention.**
+  `simulate._baseline_returns` never forwarded the common decision cutoff or
+  the 15-minute price-age bound to `baselines.matched_random`, so a peer fill
+  after the cutoff, or a peer copy priced on a quote the target would have
+  refused as stale, moved `M_i` while `R_i` excluded it. A pre-existing
+  `src/copyability` defect, reproduced and fixed with regression tests; every
+  study that reported `matched_random` before this date carried it.
+- **The peer pool cannot be the cohort itself.** With peers drawn from the
+  cohort, `mean(d_i)` is algebraically blind to any return the cohort earns in
+  common (a Monte Carlo at three times the target effect read as zero). The
+  plan says peers are "wallets of similar activity" and does not fix the pool;
+  the runner now draws them from every characterised wallet the ledger
+  certifies over the window, records the pool's size and hash, and says so in
+  the file's limitations. **Owner decision before T0:** confirm that pool
+  definition, ideally as a pre-T0 amendment to `L2_ANALYSIS_PLAN.md` in the
+  manner of DEC-046, so the primary measure's contrast is fixed before any
+  number exists.
+
+The runner also verifies the freeze record's own hash, refuses a cohort under
+the plan's minimum unless told in so many words that it is an underpowered dry
+run, labels a sub-minimum primary a case study rather than a read, measures
+survivorship on every fill with the cohort as denominator, carries the four
+never-drop disclosures and the candle provenance beside the primary, bounds
+everything it reads to T0, checkpoints after every wallet, and keeps wall-clock
+out of the evidence so identical inputs give a byte-identical file. Expect
+hours of single-threaded runtime on a 300-wallet cohort.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
