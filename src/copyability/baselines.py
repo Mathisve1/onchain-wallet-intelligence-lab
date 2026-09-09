@@ -110,6 +110,7 @@ def matched_random(
     interval: KnownInterval, *, latency_ms: int, target_fill_count: int,
     pool: Mapping[str, Sequence[SourceFill]], market: MarketData, cost_model: CostModel,
     config: FollowerConfig, certify, seed: int, sample_size: int, tolerance: Decimal = Decimal("0.5"),
+    decision_cutoff_ms: int | None = None, max_price_age_ms: int | None = None,
 ) -> tuple[Decimal | None, tuple[str, ...]]:
     """Mean follower return on deployed capital over similar-activity peers.
 
@@ -121,6 +122,11 @@ def matched_random(
     eligible, since scoring them would be scoring a gap. Returns ``None`` and
     an empty tuple when no eligible peer exists (or none deployed capital),
     which the caller must report rather than treat as zero.
+
+    ``decision_cutoff_ms`` and ``max_price_age_ms`` are the target's own and
+    must be passed through so a peer is scored under the same convention: a
+    study fixes one cutoff for every latency and one price-age bound, and a
+    peer copied without them is not "the same measure".
     """
     if sample_size <= 0:
         raise InputError("sample_size must be positive")
@@ -152,6 +158,7 @@ def matched_random(
             run = simulate_follower(
                 peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
                 cost_model=cost_model, config=config,
+                decision_cutoff_ms=decision_cutoff_ms, max_price_age_ms=max_price_age_ms,
                 opening_positions=opening_positions_for(peer_interval, pool[wallet]),
             )
         except InputError:

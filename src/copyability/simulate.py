@@ -210,10 +210,16 @@ def _baseline_returns(
         config=equal, lookback_ms=config.momentum_lookback_ms, step_ms=config.momentum_step_ms,
     )
     returns["momentum"] = mom.pnl.net / capital
+    # Peers are copied under exactly the target's convention: the same common
+    # decision cutoff and the same price-age bound. Without both, a peer fill
+    # after the cutoff, or a peer priced on a quote the target would have
+    # refused as stale, enters M_i while R_i excludes it, and "the same
+    # measure" the plan promises is not what gets subtracted.
     matched, peers = baselines.matched_random(
         interval, latency_ms=latency_ms, target_fill_count=target_fill_count, pool=fills_by_wallet,
         market=market, cost_model=config.cost_model, config=config.follower, certify=ledger.certify,
         seed=config.random_seed, sample_size=config.random_sample_size,
+        decision_cutoff_ms=cutoff_ms, max_price_age_ms=config.max_price_age_ms,
     )
     if matched is not None:
         returns["matched_random"] = matched
