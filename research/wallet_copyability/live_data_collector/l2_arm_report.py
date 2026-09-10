@@ -9,7 +9,6 @@ limitations. Nothing here scores, prices or decides.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from decimal import Decimal
@@ -20,7 +19,7 @@ from src.copyability.cohort import InstrumentScope
 from src.copyability.inputs import MarketData, SourceFill
 from src.live_data.storage import LiveDataStore
 
-from .cohort_pipeline_freeze import candle_complete_coins
+from .cohort_pipeline_freeze import candle_complete_coins, coin_list_sha256
 
 MILLISECONDS_PER_DAY = 86_400_000
 FOUR_PLACES = Decimal("0.0001")
@@ -84,6 +83,12 @@ def check_scope_against_record(lists: Mapping[str, Any], record_scope: Mapping[s
                 f"{key}: the freeze recorded {recorded} coins, this database yields {len(lists[key])}; "
                 "the scope is not the one the cohort was frozen under"
             )
+        recorded_hash = record_scope.get(f"{key}_sha256")
+        if recorded_hash is not None and recorded_hash != coin_list_sha256(lists[key]):
+            raise ScopeMismatchError(
+                f"{key}: the same number of coins, but not the same coins the freeze recorded; "
+                "the scope is not the one the cohort was frozen under"
+            )
 
 
 def split_by_scope(
@@ -102,40 +107,50 @@ def split_by_scope(
 # -- the ledger ------------------------------------------------------------------------
 
 
-def ledger_snapshot(store: LiveDataStore, *, modes: Iterable[str] | None) -> dict:
-    """Which completed collection runs the ledger was built from, as a record.
+def sweep_closure(store: LiveDataStore, wallets: Sequence[str], *, window_end_ms: int, finished_by_ms: int) -> dict:
+    """Has the closing sweep touched every cohort wallet?
 
-    The pool and every refusal follow from the ledger, and the ledger from the
-    rows in ``ingest_runs``; a rerun that consulted different rows says so
-    here before it says anything else.
+    A completed ``sweep_wallet`` row that finished at or after the window end
+    (and within the closing grace) says the collection for that wallet ran
+    to the end, whatever it found. A wallet without one has not been closed,
+    and reading the arm before it is would be the interim look the approval
+    forbids.
     """
-    sql = "SELECT run_id, finished_at_ms FROM ingest_runs WHERE status = 'completed'"
-    params: tuple = ()
-    mode_list = None if modes is None else sorted(set(modes))
-    if mode_list is not None:
-        sql += " AND mode IN (%s)" % ",".join("?" * len(mode_list))
-        params = tuple(mode_list)
-    rows = store.connection.execute(sql + " ORDER BY run_id", params).fetchall()
-    finished = [row["finished_at_ms"] for row in rows if row["finished_at_ms"] is not None]
+    rows = store.connection.execute(
+        "SELECT wallet_address, MAX(finished_at_ms) AS finished FROM ingest_runs "
+        "WHERE mode = 'sweep_wallet' AND status = 'completed' AND finished_at_ms >= ? AND finished_at_ms <= ? "
+        "GROUP BY wallet_address",
+        (window_end_ms, finished_by_ms),
+    ).fetchall()
+    finished = {row["wallet_address"]: int(row["finished"]) for row in rows}
+    per_wallet = {w: finished.get(w) for w in wallets}
+    present = [t for t in per_wallet.values() if t is not None]
     return {
-        "modes": mode_list if mode_list is not None else "all",
-        "runs_consulted": len(rows),
-        "max_finished_at_ms": max(finished) if finished else None,
-        "run_ids_sha256": hashlib.sha256("\n".join(row["run_id"] for row in rows).encode("utf-8")).hexdigest(),
+        "rule": "every cohort wallet carries a completed sweep_wallet row that finished at or after the "
+                "window end and within the closing grace",
+        "closed": all(t is not None for t in per_wallet.values()),
+        "wallets_without_closing_sweep": sorted(w for w, t in per_wallet.items() if t is None),
+        "earliest_closing_sweep_ms": min(present) if present else None,
+        "latest_closing_sweep_ms": max(present) if present else None,
     }
 
 
 # -- price series ---------------------------------------------------------------------
 
 
-def series_span(market: MarketData, coins: Iterable[str], *, window: tuple[int, int], tolerance_ms: int) -> tuple[frozenset[str], dict]:
+def series_span(
+    market: MarketData, coins: Iterable[str], *, window: tuple[int, int], tolerance_ms: int, end_tolerance_ms: int = 0,
+) -> tuple[frozenset[str], dict]:
     """Which coins' price series really span the window, and each series' edges.
 
-    The first usable quote may sit up to ``tolerance_ms`` after the window
-    start (one candle interval for closes stamped at close time, one poll
-    interval for mids); the last must reach the window end. A coin whose
-    table cannot price the whole window is scored on skipped copies unless
-    it is taken out of scope, which is what the caller does with the result.
+    The tolerances are the caller's: the first usable quote must sit less
+    than ``tolerance_ms`` after the window start (two candle intervals for
+    closes, which is what the freeze's post-check admits on opens; the
+    freshness bound for mids) and the last at most ``end_tolerance_ms``
+    before the window end (zero for candles fetched after the window closed,
+    the freshness bound for mids). A coin whose table cannot price the whole
+    window is scored on skipped copies unless it is taken out of scope,
+    which is what the caller does with the result.
     """
     start_ms, end_ms = window
     spanning: set[str] = set()
@@ -144,7 +159,8 @@ def series_span(market: MarketData, coins: Iterable[str], *, window: tuple[int, 
         series = market.prices.get(coin)
         first, last = (series.first_time_ms, series.last_time_ms) if series is not None else (None, None)
         rows = len(series) if series is not None else 0
-        ok = first is not None and last is not None and first <= start_ms + tolerance_ms and last >= end_ms
+        ok = (first is not None and last is not None
+              and first < start_ms + tolerance_ms and last >= end_ms - end_tolerance_ms)
         detail[coin] = {"rows": rows, "first_ms": first, "last_ms": last, "spans_window": ok}
         if ok:
             spanning.add(coin)
@@ -165,29 +181,35 @@ def candle_provenance(store: LiveDataStore, coins: Iterable[str], *, interval: s
     return {"kind": "candles", "interval": interval, "ingested_by_coin": per_coin, "fetch_runs": runs}
 
 
-def mids_provenance(store: LiveDataStore, coins: Iterable[str], *, window: tuple[int, int]) -> dict:
-    """How densely each coin's mid was sampled over the window, and by how many sweeps."""
+def mids_provenance(store: LiveDataStore, coins: Iterable[str], *, window: tuple[int, int], max_age_ms: int) -> dict:
+    """How densely each coin's mid was sampled over the window, where the
+    series has holes wider than the freshness bound, and by how many polls
+    and sweeps."""
     start_ms, end_ms = window
     per_coin: dict[str, dict] = {}
     for coin in sorted(coins):
-        row = store.connection.execute(
-            "SELECT COUNT(*) AS n, MIN(observed_at_ms) AS first, MAX(observed_at_ms) AS last "
-            "FROM mids WHERE coin = ? AND observed_at_ms BETWEEN ? AND ?",
+        times = [int(r["observed_at_ms"]) for r in store.connection.execute(
+            "SELECT observed_at_ms FROM mids WHERE coin = ? AND observed_at_ms BETWEEN ? AND ? ORDER BY observed_at_ms",
             (coin, start_ms, end_ms),
-        ).fetchone()
-        n = int(row["n"])
+        )]
+        gaps = [later - earlier for earlier, later in zip(times, times[1:])]
         per_coin[coin] = {
-            "rows_in_window": n, "first_observed_ms": row["first"], "last_observed_ms": row["last"],
-            "mean_spacing_ms": None if n < 2 else int((row["last"] - row["first"]) / (n - 1)),
+            "rows_in_window": len(times),
+            "first_observed_ms": times[0] if times else None, "last_observed_ms": times[-1] if times else None,
+            "mean_spacing_ms": None if len(times) < 2 else int((times[-1] - times[0]) / (len(times) - 1)),
+            "max_gap_ms": max(gaps) if gaps else None,
+            "gaps_over_max_age": sum(1 for gap in gaps if gap > max_age_ms),
         }
-    sweeps = store.connection.execute(
-        "SELECT COUNT(*) AS n, MIN(started_at_ms) AS first, MAX(finished_at_ms) AS last "
-        "FROM ingest_runs WHERE mode = 'sweep' AND status = 'completed'"
-    ).fetchone()
-    return {
-        "kind": "mids", "sampled_by_coin": per_coin,
-        "sweeps": {"completed": int(sweeps["n"]), "first_started_ms": sweeps["first"], "last_finished_ms": sweeps["last"]},
-    }
+
+    def runs(mode: str) -> dict:
+        row = store.connection.execute(
+            "SELECT COUNT(*) AS n, MIN(started_at_ms) AS first, MAX(finished_at_ms) AS last "
+            "FROM ingest_runs WHERE mode = ? AND status = 'completed'", (mode,)
+        ).fetchone()
+        return {"completed": int(row["n"]), "first_started_ms": row["first"], "last_finished_ms": row["last"]}
+
+    return {"kind": "mids", "max_age_ms": max_age_ms, "sampled_by_coin": per_coin,
+            "polls": runs("mids"), "sweeps": runs("sweep")}
 
 
 def _runs(store: LiveDataStore, mode: str, *, detail_key: str, fields: Sequence[str]) -> list[dict]:

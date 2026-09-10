@@ -14,6 +14,7 @@ pass fell without a cohort list existing to be run against.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -25,9 +26,11 @@ from src.copyability.cohort import (
     freeze_record,
     select_cohort,
 )
-from src.copyability.loader import load_coverage, load_fills
+from src.copyability.loader import coverage_snapshot, load_coverage, load_fills
 from src.live_data.config import normalize_coin, normalize_wallet_address
 from src.live_data.storage import LiveDataStore
+
+from .l2_arm_inputs import L2_LEDGER_MODES
 
 MILLISECONDS_PER_DAY = 86_400_000
 
@@ -63,6 +66,11 @@ def funding_coins_in_db(store: LiveDataStore) -> frozenset[str]:
 
 class FreezeInputError(ValueError):
     """A freeze input file is not the shape this module knows how to read."""
+
+
+def coin_list_sha256(coins: Iterable[str]) -> str:
+    """A digest of a sorted coin list, so a scope can be compared as a set."""
+    return hashlib.sha256("\n".join(sorted(set(coins))).encode("utf-8")).hexdigest()
 
 
 def candle_complete_coins(payload: Mapping[str, Any]) -> frozenset[str]:
@@ -110,6 +118,8 @@ def build_scope(
     record = {
         "funding_coins": len(scope.funding_coins),
         "candle_complete_coins": len(scope.candle_complete_coins),
+        "funding_coins_sha256": coin_list_sha256(scope.funding_coins),
+        "candle_complete_coins_sha256": coin_list_sha256(scope.candle_complete_coins),
         "excluded": sorted(scope.excluded_coins),
         "sources": {"funding": funding_source, "candles": candle_source},
     }
@@ -143,6 +153,15 @@ def freeze(
     minimum: int = MINIMUM_EVALUABLE,
 ) -> tuple[dict, CohortSelection]:
     """Select, freeze and describe. Pure apart from reading the store."""
+    # T0 is the freeze instant, taken after the last backfill: the ledger the
+    # freeze reads is the rows that had finished by T0, and the record carries
+    # a snapshot of them so arm A can refuse to run on any other ledger. A row
+    # that finished after T0 means T0 was typed too early.
+    snapshot = coverage_snapshot(store, modes=L2_LEDGER_MODES, finished_by_ms=t0_ms)
+    if snapshot["run_ids_sha256"] != coverage_snapshot(store, modes=L2_LEDGER_MODES)["run_ids_sha256"]:
+        raise FreezeInputError(
+            "collection rows finished after T0; T0 is the freeze instant and must not precede the last backfill"
+        )
     # The ledger, not an assertion, decides whether a candidate's window was
     # observed in full: a wallet whose backfill stopped inside the window is
     # excluded as WINDOW_UNOBSERVED rather than characterised on a fragment.
@@ -150,7 +169,7 @@ def freeze(
         _candidate_fills(store, candidates),
         scope=scope,
         characterisation_window=window,
-        certify=load_coverage(store).certify,
+        certify=load_coverage(store, modes=L2_LEDGER_MODES, finished_by_ms=t0_ms).certify,
     )
     record = dict(
         freeze_record(
@@ -170,6 +189,7 @@ def freeze(
     record["scope"] = dict(scope_record)
     record["per_wallet_reason"] = dict(Counter(selection.per_wallet.values()))
     record["minimum_evaluable"] = minimum
+    record["ledger_snapshot"] = snapshot
     return record, selection
 
 

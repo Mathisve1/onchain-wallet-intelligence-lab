@@ -11,6 +11,8 @@ decide nothing, and print counts only.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import math
 import statistics
@@ -25,6 +27,7 @@ from research.wallet_copyability.live_data_collector import arm_a_runner as runn
 from research.wallet_copyability.live_data_collector import l2_arm_runner as core
 from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
+from src.copyability.loader import coverage_snapshot
 from src.copyability.inputs import SourceFill
 from src.live_data.models import Candle, Fill, parse_funding
 from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
@@ -93,6 +96,18 @@ def _coverage(store: LiveDataStore, run_id: str, wallet: str, *, covered_until_m
     )
 
 
+@contextlib.contextmanager
+def patched_minimum(minimum: int):
+    """Run as if the plan's minimum were ``minimum``, to reach the labels an
+    adequately powered arm carries; the plan's own 200 is asserted elsewhere."""
+    original = core.MINIMUM_EVALUATED
+    core.MINIMUM_EVALUATED = minimum
+    try:
+        yield
+    finally:
+        core.MINIMUM_EVALUATED = original
+
+
 class ArmARunnerStoreTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -127,11 +142,20 @@ class ArmARunnerStoreTestCase(unittest.TestCase):
         self.cohort_json.write_text(json.dumps(self.record(COHORT)), encoding="utf-8")
         self.out = self.root / "L2_ARM_A_001.json"
 
-    @staticmethod
-    def record(wallets, *, hard_stop: bool = False, plan: str = PLAN, funding_coins: int = 1,
+    def snapshot(self) -> dict:
+        """The ledger the freeze would record: rows finished by T0."""
+        with LiveDataStore(self.db) as store:
+            return coverage_snapshot(store, modes=core.L2_LEDGER_MODES, finished_by_ms=T0)
+
+    def refreeze(self) -> None:
+        """Rewrite the record after a test changed the pre-T0 collection rows."""
+        self.cohort_json.write_text(json.dumps(self.record(COHORT)), encoding="utf-8")
+
+    def record(self, wallets, *, hard_stop: bool = False, plan: str = PLAN, funding_coins: int = 1,
                candle_complete: int = 1, excluded=()) -> dict:
         cohort = [] if hard_stop else sorted(w.lower() for w in wallets)
         return {
+            "ledger_snapshot": self.snapshot(),
             "t0_ms": T0, "cohort": cohort, "cohort_sha256": cohort_hash(cohort), "plan_commit": plan,
             "hard_stop": hard_stop, "minimum_evaluable": 200,
             "stage_counts": {"discovered": 5, "evaluable": len(cohort)},
@@ -146,9 +170,11 @@ class ArmARunnerStoreTestCase(unittest.TestCase):
         path.write_text(json.dumps(rec), encoding="utf-8")
         return path
 
-    def argv(self, cohort: Path | None = None, plan: str = PLAN, dry_run: bool = True) -> list[str]:
+    def argv(self, cohort: Path | None = None, plan: str = PLAN, dry_run: bool = True,
+             overwrite: bool = True) -> list[str]:
         argv = ["--db", str(self.db), "--cohort", str(cohort or self.cohort_json),
                 "--candles-json", str(self.candles_json), "--plan-commit", plan, "--out", str(self.out)]
+        argv += ["--overwrite"] if overwrite else []
         return argv + (["--allow-underpowered-dry-run"] if dry_run else [])
 
     def run_main(self, argv=None):
@@ -189,14 +215,23 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["pool"]["sha256"], cohort_hash(COHORT + POOL_ONLY))
         self.assertEqual((r["pool"]["cohort_wallets_in_pool"], r["pool"]["non_cohort_wallets_in_pool"]), (3, 2))
         self.assertEqual(r["pool"]["mean_cohort_share_of_peers"], 0.5)
-        self.assertEqual(r["pool"]["ledger_modes"], ["backfill_wallet"])
+        # Arm A is bounded by time, not by collection mode: every row that had
+        # finished by T0 counts, and nothing written after it does.
+        self.assertEqual((r["pool"]["ledger_modes"], r["pool"]["ledger_finished_by_ms"]),
+                         (["backfill_wallet", "sweep_wallet"], T0))
         self.assertEqual(set(r["matched_peers_by_wallet"]), set(COHORT))
         for wallet, peers in r["matched_peers_by_wallet"].items():
             self.assertEqual(set(peers["contributed"]), set(COHORT + POOL_ONLY) - {wallet})
             self.assertEqual((peers["count"], peers["dropped"], peers["cohort_share"]), (4, {}, 0.5))
-        self.assertEqual(r["ledger_snapshot"]["modes"], ["backfill_wallet"])
+            self.assertEqual(peers["latency_ms"], 30_000)  # the peers behind M_i, not behind the last latency
+        self.assertEqual(r["ledger_snapshot"]["modes"], ["backfill_wallet", "sweep_wallet"])
         self.assertEqual((r["ledger_snapshot"]["runs_consulted"], r["ledger_snapshot"]["max_finished_at_ms"]), (5, T0))
-        self.assertRegex(r["ledger_snapshot"]["run_ids_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(r["ledger_snapshot"]["finished_by_ms"], T0)
+        self.assertEqual(  # the exact rows, so a snapshot of one row more or fewer cannot pass
+            r["ledger_snapshot"]["run_ids_sha256"],
+            hashlib.sha256("\n".join(sorted(f"backfill_wallet:backfill-{i}" for i in range(5))).encode()).hexdigest(),
+        )
+        self.assertEqual((r["dry_run_flag_passed"], r["record_minimum_evaluable"]), (True, 200))
         self.assertEqual(r["price_series_span_rule"]["tolerance_ms"], 2 * FIFTEEN_MIN)
         p = r["primary"]
         self.assertEqual(p["latency_ms"], 30_000)
@@ -217,6 +252,8 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["stage_counts"]["discovered"], 5)
         self.assertEqual(r["primary"]["disclosures"]["of_n"], 3)
         self.assertEqual(r["primary"]["disclosures"]["liquidity_assumed"], 3)
+        self.assertTrue(r["primary"]["measurable"])
+        self.assertEqual(r["primary"]["verdict_field"], "reading")
         self.assertEqual(len(r["rows"]), 3 * len(runner.LATENCY_GRID_MS))
         self.assertEqual(r["survivorship"]["cohort"], 3)
         self.assertEqual(r["survivorship"]["stopped"], 1)  # COHORT[2]'s last fill is 8.4 days before the end
@@ -321,6 +358,7 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertIn("benchmark coin BTC has no price series spanning the window", logged[0])
 
     def test_a_coin_whose_series_does_not_span_the_window_leaves_scope_and_is_counted(self) -> None:
+        before = self.run_ok()
         self.add_second_coin(candles_until=END - 20 * DAY, pool_peer_trades_it=True)
         with LiveDataStore(self.db) as store:
             store.write_fills([_fill(COHORT[0], 9_601, START + 6 * DAY, coin="ETH"),
@@ -335,6 +373,9 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(r["what_broke"], [])
         # The peer that also traded ETH stays a peer on its BTC fills.
         self.assertIn(POOL_ONLY[0], r["matched_peers_by_wallet"][COHORT[1]]["contributed"])
+        # A coin nobody could price changes what is disclosed, never a number.
+        self.assertEqual(r["primary"]["d_by_wallet"], before["primary"]["d_by_wallet"])
+        self.assertEqual(r["rows"], before["rows"])
 
     def test_a_pool_peer_trading_a_coin_the_cohort_does_not_still_enters_the_baseline(self) -> None:
         # Round two's blocker: the market was built over the cohort's coins
@@ -399,6 +440,41 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertFalse(self.out.exists())
         self.assertIn("minimum_evaluable=3", logged[0])
 
+    def test_a_ledger_that_is_not_the_one_the_freeze_recorded_is_refused(self) -> None:
+        # A wallet re-backfilled before T0 after the freeze changes the ledger
+        # arm A would read, so the pool and every d_i would differ from the
+        # frozen one. That is a refusal, not a silently different number.
+        with LiveDataStore(self.db) as store:
+            _coverage(store, "backfill-late", POOL_ONLY[0], covered_until_ms=T0)
+        code, logged = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertFalse(self.out.exists())
+        self.assertIn("is not the ledger the freeze recorded", logged[0])
+        self.refreeze()  # the owner re-freezes; the run then proceeds on the recorded ledger
+        self.assertEqual(self.run_ok()["ledger_snapshot"]["runs_consulted"], 6)
+
+    def test_over_the_minimum_arm_a_is_read_by_the_rule_and_still_decides_nothing(self) -> None:
+        # Every other run in this file is a case study, so the labels an
+        # adequately powered arm A carries are otherwise never exercised.
+        with patched_minimum(3):
+            r = self.run_ok()
+        self.assertFalse(r["primary"]["case_study"])
+        self.assertIn(r["primary"]["reading"], {"ARM_A_NEGATIVE", "ARM_A_POSITIVE", "ARM_A_INCONCLUSIVE"})
+        self.assertEqual(r["primary"]["reading"], stats.reading_for(*r["primary"]["ci95"]))
+        self.assertEqual(r["empirical_result_status"], "ARM_A_EARLY_READ_ONLY")
+        self.assertIsNone(r["decision"])  # arm A decides nothing, however it reads
+
+    def test_the_dry_run_stamp_marks_only_a_run_that_needed_the_flag(self) -> None:
+        with patched_minimum(3):
+            self.assertEqual(self.run_ok()["empirical_result_status"], "ARM_A_EARLY_READ_ONLY")
+        self.assertEqual(self.run_ok()["empirical_result_status"], "DRY_RUN_UNDERPOWERED")
+
+    def test_an_existing_evidence_file_is_not_replaced_without_being_asked(self) -> None:
+        self.run_ok()
+        code, logged = self.run_main(self.argv(overwrite=False))
+        self.assertEqual(code, 2)
+        self.assertIn("exists; pass --overwrite", logged[0])
+
     def test_a_record_whose_characterisation_window_is_not_the_plans_is_refused(self) -> None:
         rec = self.record(COHORT)
         rec["characterisation_window"]["start_ms"] -= DAY
@@ -406,16 +482,17 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(code, 2)
         self.assertIn("characterisation window", logged[0])
 
-    def test_a_sweep_written_after_t0_cannot_move_the_arm_a_pool(self) -> None:
+    def test_collection_written_after_t0_cannot_move_the_arm_a_pool(self) -> None:
         with LiveDataStore(self.db) as store:
             store.connection.execute("DELETE FROM ingest_runs WHERE wallet_address = ?", (POOL_ONLY[1],))
             store.connection.commit()
             _coverage(store, "short-4", POOL_ONLY[1], covered_until_ms=END - 3 * DAY)
+        self.refreeze()
         before = self.run_ok()
         self.assertEqual(before["pool"]["size"], 4)
         with LiveDataStore(self.db) as store:
             # The shape sweep.py writes: resumed at latest_fill + 1, certifying past T0.
-            store.start_run("sweep-late", mode="sweep_wallet", started_at_ms=T0 + DAY, wallet_address=POOL_ONLY[1])
+            store.start_run("sweep-late", mode="sweep_wallet", started_at_ms=T0 + DAY, wallet_address=COHORT[0])
             store.finish_run(
                 "sweep-late", finished_at_ms=T0 + DAY, status=RUN_STATUS_COMPLETED, records_seen=1, records_written=1,
                 coverage={"window": {"start_time_ms": END - 3 * DAY, "end_time_ms": T0 + DAY},
@@ -423,11 +500,25 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
                                     "covered_until_ms": T0 + DAY},
                           "funding": {"attempted": True, "completed": True, "truncated_at_response_cap": True}},
             )
+        with LiveDataStore(self.db) as store:
+            # A backfill finishing after T0 (a re-backfill, a widened pool) is
+            # equally outside the frozen ledger, and equally must not move it.
+            store.start_run("backfill-after-t0", mode="backfill_wallet", started_at_ms=T0 + DAY,
+                            wallet_address=POOL_ONLY[1])
+            store.finish_run(
+                "backfill-after-t0", finished_at_ms=T0 + DAY, status=RUN_STATUS_COMPLETED, records_seen=1,
+                records_written=1,
+                coverage={"window": {"start_time_ms": C_START - DAY, "end_time_ms": T0 + DAY},
+                          "fills": {"attempted": True, "completed": True, "covered_until_ms": T0 + DAY,
+                                    "forced_cursor_advances": 0},
+                          "funding": {"attempted": True, "completed": True, "truncated_at_response_cap": True}},
+            )
         after = self.run_ok()
         self.assertEqual(after["pool"], before["pool"])
         self.assertEqual(after["ledger_snapshot"], before["ledger_snapshot"])
         self.assertEqual(after["primary"]["d_by_wallet"], before["primary"]["d_by_wallet"])
         self.assertEqual(after["primary"]["disclosures"]["source_funding_truncated"], 0)
+        self.assertEqual(after["rows"], before["rows"])
 
     def test_nothing_written_after_t0_reaches_the_arm_a_file(self) -> None:
         before = self.run_ok()
@@ -468,6 +559,28 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(len(seen["rows"]), 2 * len(runner.LATENCY_GRID_MS))
         self.assertFalse(partial.exists())
 
+    def test_an_interrupt_is_reported_and_keeps_the_partial_before_it_propagates(self) -> None:
+        original = core.run_study
+        calls: list = []
+
+        def interrupted(**kwargs):
+            calls.append(kwargs["wallets"])
+            if len(calls) == 2:
+                raise KeyboardInterrupt
+            return original(**kwargs)
+
+        logged: list[str] = []
+        core.run_study = interrupted
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                runner.main(self.argv(), log=logged.append)
+        finally:
+            core.run_study = original
+        self.assertIn("stopped: KeyboardInterrupt", logged[-1])
+        self.assertFalse(self.out.exists())
+        self.assertTrue(self.out.with_name(self.out.name + ".aborted-1.json").exists())
+        self.assertFalse(self.out.with_name(self.out.name + ".partial.json").exists())
+
     def test_a_stop_mid_run_keeps_the_partial_under_an_aborted_name_and_writes_no_evidence(self) -> None:
         original = core.run_study
         calls: list = []
@@ -486,10 +599,54 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         self.assertEqual(code, 2)
         self.assertFalse(self.out.exists())
         self.assertIn("stopped: RuntimeError: synthetic stop", logged[-1])
-        aborted = json.loads(self.out.with_name(self.out.name + ".aborted.json").read_text(encoding="utf-8"))
+        aborted = json.loads(self.out.with_name(self.out.name + ".aborted-1.json").read_text(encoding="utf-8"))
         self.assertEqual((aborted["completed"], aborted["empirical_result_status"], aborted["decision"]),
                          (1, "PARTIAL_CHECKPOINT", None))
         self.assertFalse(self.out.with_name(self.out.name + ".partial.json").exists())
+
+    def test_disclosures_count_only_the_wallets_in_the_primary(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM ingest_runs WHERE wallet_address = ?", (COHORT[2],))
+            store.connection.commit()
+            _coverage(store, "short-2", COHORT[2], covered_until_ms=END - DAY)
+        self.refreeze()
+        r = self.run_ok()
+        self.assertEqual(r["counts"], {"wallets": 3, "scored": 2, "refused": 1, "in_primary": 2})
+        self.assertEqual(r["primary"]["disclosures"]["of_n"], 2)
+        self.assertEqual(r["primary"]["disclosures"]["liquidity_assumed"], 2)
+
+    def test_a_peer_that_deployed_nothing_is_named_as_dropped_not_averaged(self) -> None:
+        # Eligible by fill count, but every fill sits after the common decision
+        # cutoff, so the copy deploys nothing: dropped, never listed as averaged.
+        late = "0x" + "66" * 20
+        with LiveDataStore(self.db) as store:
+            store.upsert_wallet(late, observed_at_ms=T0)
+            base = END - 5 * 60_000
+            store.write_fills(_round_trips(late, base, 20, spacing_ms=1, tid_base=7_000, held_ms=1),
+                              source="test", ingested_at_ms=T0)
+            _coverage(store, "backfill-late-peer", late, covered_until_ms=T0)
+        self.refreeze()
+        r = self.run_ok()
+        self.assertEqual(r["pool"]["size"], 6)
+        for peers in r["matched_peers_by_wallet"].values():
+            self.assertNotIn(late, peers["contributed"])
+            self.assertEqual(peers["dropped"].get(late), "nothing deployed")
+
+    def test_a_cohort_wallet_that_deploys_nothing_is_excluded_and_the_others_still_score(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute(
+                "DELETE FROM fills WHERE wallet_address = ? AND event_time_ms >= ?", (COHORT[2], START)
+            )
+            store.connection.commit()
+        r = self.run_ok()
+        self.assertEqual(r["counts"], {"wallets": 3, "scored": 3, "refused": 0, "in_primary": 2})
+        self.assertEqual(r["primary"]["excluded"][COHORT[2]], "nothing deployed at the primary latency")
+        self.assertEqual(r["what_broke"], [])
+
+    def test_an_out_of_scope_fill_before_the_window_is_not_counted_against_the_wallet(self) -> None:
+        with LiveDataStore(self.db) as store:  # LINK has no funding row: out of scope, before the window
+            store.write_fills([_fill(COHORT[0], 9_901, START - 3 * DAY, coin="LINK")], source="test", ingested_at_ms=T0)
+        self.assertEqual(self.run_ok()["scope"]["out_of_scope_fills_by_wallet"], {})
 
     def test_coverage_that_stops_before_the_window_end_refuses_every_wallet(self) -> None:
         with LiveDataStore(self.db) as store:
@@ -497,11 +654,13 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
             store.connection.commit()
             for index, wallet in enumerate(COHORT + POOL_ONLY):
                 _coverage(store, f"short-{index}", wallet, covered_until_ms=END - DAY)
+        self.refreeze()
         code, logged = self.run_main()
         self.assertEqual(code, 3, logged)
         r = json.loads(self.out.read_text(encoding="utf-8"))
         self.assertEqual(r["counts"]["refused"], 3)
         self.assertEqual(r["pool"]["size"], 0)
+        self.assertEqual(r["primary"]["disclosures"]["of_n"], 0)
         self.assertEqual(r["diagnostics_rollup"]["refusal_reasons"], {"UnknownIntervalError": 3})
         self.assertEqual(r["empirical_result_status"], "BROKE_SEE_WHAT_BROKE")
         self.assertIsNone(r["decision"])
@@ -623,6 +782,11 @@ class PrimaryStatisticTests(unittest.TestCase):
     def test_zero_variance_and_too_few_wallets_are_not_measurable(self) -> None:
         same = [_study(w, outcomes=[_outcome(30_000, "0.02", "0.01")]) for w in "abc"]
         self.assertEqual(stats.primary_statistic(same, window_days=self.DAYS, minimum=3)["reading"], "ARM_A_NOT_MEASURABLE")
+        self.assertFalse(stats.primary_statistic(same, window_days=self.DAYS, minimum=3)["measurable"])
+        arm_b = stats.primary_statistic(same, window_days=self.DAYS, minimum=3, arm="B")
+        self.assertIsNone(arm_b["reading"])  # arm B's verdict is its decision, never an arm A label
+        self.assertEqual(arm_b["verdict_field"], "decision")
+        self.assertIsNone(stats.decision_for(arm_b))
         one = [_study("a", outcomes=[_outcome(30_000, "0.02", "0.01")])]
         p = stats.primary_statistic(one, window_days=self.DAYS, minimum=1)
         self.assertEqual(p["reading"], "ARM_A_NOT_MEASURABLE")

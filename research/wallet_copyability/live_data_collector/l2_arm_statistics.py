@@ -130,7 +130,7 @@ def decision_for(primary: Mapping[str, Any]) -> str | None:
     it, ``REPAIR_AND_RERUN`` for anything else that was measured. A case study
     or an unmeasurable primary decides nothing, so ``None``.
     """
-    if primary.get("case_study") or primary.get("ci95") is None or primary.get("reading") == ARM_A_NOT_MEASURABLE:
+    if primary.get("case_study") or primary.get("ci95") is None or primary.get("measurable") is False:
         return None
     lower, upper = primary["ci95"]
     target = float(TARGET_POINTS_PER_14D)
@@ -155,8 +155,14 @@ def primary_statistic(
     window_days: Decimal,
     latency_ms: int = PRIMARY_LATENCY_MS,
     minimum: int = MINIMUM_EVALUATED,
+    arm: str = "A",
 ) -> dict:
     """Mean ``d_i`` at the primary latency with its 95 percent t interval.
+
+    Only arm A carries a ``reading``: its labels are the owner's pre-registered
+    reading of arm A and nothing else. Arm B's verdict is its ``decision``,
+    written by the runner; its ``reading`` is ``None`` so no reader can take
+    an arm A label for arm B's verdict.
 
     ``d_i`` is the follower's return on deployed capital minus its matched-
     random peers' mean, scaled to points per 14-day equivalent. A wallet with
@@ -195,8 +201,10 @@ def primary_statistic(
         "d_by_wallet": {w: str(v.quantize(FOUR_PLACES)) for w, v in sorted(values.items())},
         "mean": None, "sd": None, "standard_error": None, "ci95": None,
         "t_critical": None, "t_statistic": None,
-        "reading": ARM_A_NOT_MEASURABLE,
-        "reading_taken_on": "ci95 as written, four decimals",
+        "measurable": False,
+        "verdict_field": "reading" if arm == "A" else "decision",
+        "reading": ARM_A_NOT_MEASURABLE if arm == "A" else None,
+        "reading_taken_on": "ci95 as written, four decimals" if arm == "A" else None,
     }
     if n < 2:
         return result
@@ -210,7 +218,10 @@ def primary_statistic(
         mean=round(mean, 4), sd=round(sd, 4), standard_error=round(se, 4),
         ci95=[lower, upper], t_critical=round(t_crit, 4),
         t_statistic=None if se == 0 else round(mean / se, 4),
+        measurable=se != 0,
     )
+    if arm != "A":
+        return result
     if se == 0:
         result["reading"] = ARM_A_NOT_MEASURABLE
     elif n < minimum:
@@ -245,22 +256,60 @@ def disclosure_rollup(studies: Sequence[Any], *, wallets: Sequence[str], latency
     return {"of_n": len(wanted), **counts}
 
 
-def survivorship_inflation(arm_a_path: Path | None, primary_b: dict) -> dict | None:
-    """``mean d_A - mean d_B``: a number in arm B's report, never a gate."""
-    if arm_a_path is None:
-        return None
-    arm_a = json.loads(arm_a_path.read_text(encoding="utf-8"))
-    if arm_a.get("arm") != "A" or arm_a.get("primary", {}).get("mean") is None or primary_b.get("mean") is None:
-        return {"available": False, "arm_a_file": arm_a_path.name}
+#: Arm A files whose mean may be subtracted from arm B's: a real early read,
+#: or a case study of the same cohort. Never a dry run, a broke file, a
+#: checkpoint, or a file from another cohort or plan.
+ACCEPTED_ARM_A_STATUSES = frozenset({"ARM_A_EARLY_READ_ONLY", "CASE_STUDY_UNDER_MINIMUM"})
+
+
+def read_arm_a(path: Path | None, *, cohort_sha256: str, plan_commit: str) -> tuple[dict | None, str | None]:
+    """Arm A's file, or the reason it cannot be subtracted from arm B's mean."""
+    if path is None:
+        return None, "no arm A file given"
+    try:
+        arm_a = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise StatisticsError(f"arm A file cannot be read: {exc}") from exc
+    if not isinstance(arm_a, dict) or arm_a.get("arm") != "A":
+        return None, "not an arm A evidence file"
+    if arm_a.get("checkpoint"):
+        return None, "a checkpoint, not an evidence file"
+    if arm_a.get("cohort_sha256") != cohort_sha256:
+        return None, "cohort_sha256 differs from arm B's"
+    if arm_a.get("plan_commit") != plan_commit:
+        return None, "plan_commit differs from arm B's"
+    status = arm_a.get("empirical_result_status")
+    if status not in ACCEPTED_ARM_A_STATUSES:
+        return None, f"arm A status {status!r} is not an early read of this cohort"
+    mean = arm_a.get("primary", {}).get("mean")
+    if isinstance(mean, bool) or not isinstance(mean, (int, float)):
+        return None, "arm A carries no primary mean"
+    return arm_a, None
+
+
+def inflation_block(
+    arm_a: dict | None, reason: str | None, primary_b: Mapping[str, Any], decision: str | None, *, file_name: str | None,
+) -> dict:
+    """``mean d_A - mean d_B``: a number in arm B's report, never a gate.
+
+    ``a_negative_b_positive`` is read from arm A's written reading and arm
+    B's written decision, never recomputed from the two means.
+    """
+    if arm_a is None:
+        return {"available": False, "arm_a_file": file_name, "reason": reason}
+    if primary_b.get("mean") is None:
+        return {"available": False, "arm_a_file": file_name, "reason": "arm B carries no primary mean"}
     mean_a, mean_b = float(arm_a["primary"]["mean"]), float(primary_b["mean"])
     reading_a = arm_a["primary"].get("reading")
     return {
-        "available": True, "arm_a_file": arm_a_path.name, "arm_a_cohort_sha256": arm_a.get("cohort_sha256"),
+        "available": True, "arm_a_file": file_name,
+        "arm_a_status": arm_a.get("empirical_result_status"), "arm_a_cohort_sha256": arm_a.get("cohort_sha256"),
         "mean_d_a": mean_a, "mean_d_b": mean_b, "inflation_points_per_14d": round(mean_a - mean_b, 4),
         "arm_a_reading": reading_a,
-        "a_negative_b_positive": reading_a == "ARM_A_NEGATIVE" and decision_for(primary_b) == "GO_TO_ENTITY_CLUSTER_RESEARCH",
+        "a_negative_b_positive": reading_a == ARM_A_NEGATIVE and decision == GO_TO_ENTITY_CLUSTER_RESEARCH,
         "note": "a large gap in either direction obliges a written diagnosis before any GO is acted on",
     }
+
 
 def secondary_summary(studies: Sequence[Any], *, window_days: Decimal) -> dict:
     """Mean ``d`` per latency and mean return versus each baseline: reported, not deciding."""

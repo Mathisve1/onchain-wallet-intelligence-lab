@@ -47,6 +47,7 @@ ARM_A = ArmSpec(
     # window start; closes are stamped one interval later, so the same rule on
     # closes is two intervals. Stricter here would evict coins the freeze passed.
     span_tolerance_ms=2 * CANDLE_INTERVAL_MS,
+    end_tolerance_ms=0,
     decides=False,
 )
 

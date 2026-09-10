@@ -9,6 +9,7 @@ inflation against an arm A file.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ from research.wallet_copyability.live_data_collector import arm_b_runner as runn
 from research.wallet_copyability.live_data_collector import l2_arm_runner as core
 from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
+from src.copyability.loader import coverage_snapshot
 from src.live_data.models import Fill, parse_funding
 from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
@@ -137,10 +139,14 @@ class ArmBStoreTestCase(unittest.TestCase):
         _sweep(store, f"sweep-{index}-1", wallet, from_ms=T0, until_ms=mid)
         _sweep(store, f"sweep-{index}-2", wallet, from_ms=mid + 1, until_ms=until_ms)
 
-    @staticmethod
-    def record(wallets, *, hard_stop: bool = False) -> dict:
+    def snapshot(self) -> dict:
+        with LiveDataStore(self.db) as store:
+            return coverage_snapshot(store, modes=core.L2_LEDGER_MODES, finished_by_ms=T0)
+
+    def record(self, wallets, *, hard_stop: bool = False) -> dict:
         cohort = [] if hard_stop else sorted(w.lower() for w in wallets)
         return {
+            "ledger_snapshot": self.snapshot(),
             "t0_ms": T0, "cohort": cohort, "cohort_sha256": cohort_hash(cohort), "plan_commit": PLAN,
             "hard_stop": hard_stop, "minimum_evaluable": 200,
             "stage_counts": {"discovered": 5, "evaluable": len(cohort)}, "per_wallet_reason": {"EVALUABLE": len(cohort)},
@@ -150,12 +156,27 @@ class ArmBStoreTestCase(unittest.TestCase):
 
     def argv(self, *, arm_a: Path | None = None) -> list[str]:
         argv = ["--db", str(self.db), "--cohort", str(self.cohort_json), "--candles-json", str(self.candles_json),
-                "--plan-commit", PLAN, "--out", str(self.out), "--allow-underpowered-dry-run"]
+                "--plan-commit", PLAN, "--out", str(self.out), "--overwrite", "--allow-underpowered-dry-run"]
         return argv + (["--arm-a-json", str(arm_a)] if arm_a else [])
 
     def run_main(self, argv=None):
         logged: list[str] = []
         return runner.main(argv or self.argv(), log=logged.append), logged
+
+    def run_ok(self, argv=None) -> dict:
+        code, logged = self.run_main(argv)
+        self.assertEqual(code, 0, logged)
+        return json.loads(self.out.read_text(encoding="utf-8"))
+
+
+@contextlib.contextmanager
+def patched_minimum(minimum: int):
+    original = core.MINIMUM_EVALUATED
+    core.MINIMUM_EVALUATED = minimum
+    try:
+        yield
+    finally:
+        core.MINIMUM_EVALUATED = original
 
 
 class ArmBRunnerTests(ArmBStoreTestCase):
@@ -165,28 +186,41 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         r = json.loads(self.out.read_text(encoding="utf-8"))
         self.assertEqual((r["run_id"], r["arm"], r["variant"]), ("L2-ARM-B-001", "B", "B-56"))
         self.assertEqual(r["evaluation_window"], {"start_ms": T0, "end_ms": T0 + 56 * DAY, "days": "56"})
-        self.assertEqual(r["price_source"], {"kind": "mids", "interval": None, "max_age_ms": 900_000})
+        self.assertEqual(r["price_source"]["kind"], "mids")
+        self.assertEqual(r["price_source"]["max_age_ms"], 900_000)
+        self.assertIn("polled allMids alone", r["price_source"]["deviation_from_plan_wording"])
         self.assertEqual(r["price_provenance"]["kind"], "mids")
         self.assertEqual(r["price_provenance"]["sweeps"]["completed"], 0)  # cohort sweep summaries, not the per-wallet rows
-        self.assertGreater(r["price_provenance"]["sampled_by_coin"]["BTC"]["rows_in_window"], 16_000)
-        self.assertEqual(r["price_provenance"]["sampled_by_coin"]["BTC"]["mean_spacing_ms"], FIVE_MIN)
+        btc = r["price_provenance"]["sampled_by_coin"]["BTC"]
+        self.assertGreater(btc["rows_in_window"], 16_000)
+        self.assertEqual((btc["mean_spacing_ms"], btc["max_gap_ms"], btc["gaps_over_max_age"]), (FIVE_MIN, FIVE_MIN, 0))
         self.assertTrue(r["price_series_span_by_coin"]["BTC"]["spans_window"])
         self.assertEqual(r["counts"], {"wallets": 3, "scored": 3, "refused": 0, "in_primary": 3})
         self.assertEqual(r["pool"]["size"], 5)
-        self.assertEqual(r["pool"]["ledger_modes"], "all")
+        self.assertEqual(r["pool"]["ledger_modes"], ["backfill_wallet", "sweep_wallet"])
         self.assertEqual(r["ledger_snapshot"]["max_finished_at_ms"], END + HOUR)
+        self.assertTrue(r["closure"]["closed"])
+        self.assertEqual(r["closure"]["wallets_without_closing_sweep"], [])
+        self.assertEqual(r["closure"]["earliest_closing_sweep_ms"], END + HOUR)
         for wallet, peers in r["matched_peers_by_wallet"].items():
             self.assertEqual(set(peers["contributed"]), set(COHORT + POOL_ONLY) - {wallet})
+            self.assertEqual(peers["latency_ms"], 30_000)
         self.assertNotEqual(r["primary"]["sd"], 0.0)
         # Under the minimum the arm is a case study: it decides nothing even
         # though it is the decisive arm.
         self.assertTrue(r["primary"]["case_study"])
+        # The decisive arm's file carries no arm A reading label: its verdict
+        # is the decision, and here there is none.
+        self.assertIsNone(r["primary"]["reading"])
+        self.assertEqual(r["primary"]["verdict_field"], "decision")
         self.assertIsNone(r["decision"])
         self.assertEqual(r["empirical_result_status"], "DRY_RUN_UNDERPOWERED")
         self.assertEqual(r["decisive_arm"], "B")
         self.assertIn("Decision rule", r["reading_rule"])
         self.assertTrue(any("out of sample" in s for s in r["sample_limitations_disclosure"]))
-        self.assertEqual(r["survivorship_inflation"], None)
+        # No arm A file: the block says so rather than going missing.
+        self.assertEqual(r["survivorship_inflation"],
+                         {"available": False, "arm_a_file": None, "reason": "no arm A file given"})
         self.assertRegex(logged[-1], r"^L2-ARM-B-001: wallets=3 scored=3 refused=0 in_primary=3 status=DRY_RUN_UNDERPOWERED file_sha256=[0-9a-f]{64}$")
 
     def test_it_refuses_before_the_window_is_certified_closed(self) -> None:
@@ -200,18 +234,125 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         self.assertFalse(self.out.exists())
         self.assertIn("not closed", logged[0])
 
+    def test_a_cohort_wallet_without_a_closing_sweep_stops_the_read(self) -> None:
+        # The pool-only wallets are closed, one cohort wallet is not: the
+        # collection is still running, so nothing may be computed.
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM ingest_runs WHERE wallet_address = ? AND mode = 'sweep_wallet'",
+                                     (COHORT[1],))
+            store.connection.commit()
+            _sweep(store, "partial-1", COHORT[1], from_ms=T0, until_ms=T0 + 30 * DAY)
+        code, logged = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertFalse(self.out.exists())
+        self.assertIn("1 of 3 cohort wallets have no completed sweep_wallet row", logged[0])
+
+    def test_a_closed_sweep_that_could_not_certify_a_wallet_refuses_that_wallet_only(self) -> None:
+        # Closed for every wallet, but one wallet's coverage has a hole: it is
+        # refused and counted, and the arm is still read on the rest.
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM ingest_runs WHERE wallet_address = ? AND mode = 'sweep_wallet'",
+                                     (COHORT[1],))
+            store.connection.commit()
+            _sweep(store, "holed-1", COHORT[1], from_ms=T0 + 2 * DAY, until_ms=END + HOUR)
+        r = self.run_ok()
+        self.assertEqual(r["counts"], {"wallets": 3, "scored": 2, "refused": 1, "in_primary": 2})
+        self.assertIn("not fully observed", r["refusals"][COHORT[1]])
+        self.assertTrue(r["closure"]["closed"])
+
+    def test_funding_written_inside_the_forward_window_does_not_move_the_frozen_scope(self) -> None:
+        before = self.run_ok()
+        with LiveDataStore(self.db) as store:
+            store.write_funding([_funding(COHORT[0], T0 + HOUR, coin="ETH")], ingested_at_ms=END)
+        after = self.run_ok()
+        self.assertEqual(after["scope"]["funding_coins"], ["BTC"])
+        self.assertEqual(after["primary"]["d_by_wallet"], before["primary"]["d_by_wallet"])
+
+    def test_the_span_rule_admits_the_freshness_bound_at_both_edges(self) -> None:
+        self.assertEqual(self.run_ok()["price_series_span_rule"],
+                         {"tolerance_ms": 900_000, "end_tolerance_ms": 900_000,
+                          "rule": "first quote less than tolerance_ms after the window start, "
+                                  "last quote at most end_tolerance_ms before the window end"})
+        with LiveDataStore(self.db) as store:  # the last poll falls 10 minutes short of the end
+            store.connection.execute("DELETE FROM mids WHERE observed_at_ms > ?", (END - 10 * 60_000,))
+            store.connection.commit()
+        self.assertTrue(self.run_ok()["price_series_span_by_coin"]["BTC"]["spans_window"])
+        with LiveDataStore(self.db) as store:  # ... and 20 minutes short: outside the bound
+            store.connection.execute("DELETE FROM mids WHERE observed_at_ms > ?", (END - 20 * 60_000,))
+            store.connection.commit()
+        code, logged = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertIn("benchmark coin BTC has no price series spanning the window", logged[0])
+
+    def arm_a_file(self, **overrides) -> Path:
+        payload = {"arm": "A", "cohort_sha256": cohort_hash(sorted(w.lower() for w in COHORT)),
+                   "plan_commit": PLAN, "empirical_result_status": "ARM_A_EARLY_READ_ONLY",
+                   "primary": {"mean": 0.9, "reading": "ARM_A_NEGATIVE"}}
+        payload.update(overrides)
+        path = self.root / "L2_ARM_A_001.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
     def test_it_reports_the_survivorship_inflation_against_arm_a(self) -> None:
-        arm_a = self.root / "L2_ARM_A_001.json"
-        arm_a.write_text(json.dumps({"arm": "A", "cohort_sha256": cohort_hash(COHORT),
-                                     "primary": {"mean": 0.9, "reading": "ARM_A_NEGATIVE"}}), encoding="utf-8")
-        code, logged = self.run_main(self.argv(arm_a=arm_a))
+        code, logged = self.run_main(self.argv(arm_a=self.arm_a_file()))
         self.assertEqual(code, 0, logged)
         r = json.loads(self.out.read_text(encoding="utf-8"))
         inflation = r["survivorship_inflation"]
         self.assertTrue(inflation["available"])
         self.assertEqual(inflation["mean_d_a"], 0.9)
+        self.assertEqual(inflation["arm_a_status"], "ARM_A_EARLY_READ_ONLY")
         self.assertAlmostEqual(inflation["inflation_points_per_14d"], round(0.9 - r["primary"]["mean"], 4), places=4)
         self.assertFalse(inflation["a_negative_b_positive"])  # a case study decides nothing
+
+    def test_an_arm_a_file_that_is_not_this_cohorts_early_read_is_not_subtracted(self) -> None:
+        cases = {
+            "cohort_sha256 differs from arm B's": {"cohort_sha256": "0" * 64},
+            "plan_commit differs from arm B's": {"plan_commit": "deadbeef"},
+            "arm A status 'DRY_RUN_UNDERPOWERED' is not an early read of this cohort":
+                {"empirical_result_status": "DRY_RUN_UNDERPOWERED"},
+            "arm A status 'BROKE_SEE_WHAT_BROKE' is not an early read of this cohort":
+                {"empirical_result_status": "BROKE_SEE_WHAT_BROKE"},
+            "a checkpoint, not an evidence file": {"checkpoint": True},
+            "not an arm A evidence file": {"arm": "B"},
+        }
+        for reason, overrides in cases.items():
+            with self.subTest(reason=reason):
+                code, logged = self.run_main(self.argv(arm_a=self.arm_a_file(**overrides)))
+                self.assertEqual(code, 0, logged)
+                inflation = json.loads(self.out.read_text(encoding="utf-8"))["survivorship_inflation"]
+                self.assertFalse(inflation["available"])
+                self.assertEqual(inflation["reason"], reason)
+
+    def test_over_the_minimum_arm_b_writes_the_decision_the_rule_gives(self) -> None:
+        # The decisive path: without this every arm B run in the suite is a
+        # case study, and a wiring regression that never decides would pass.
+        with patched_minimum(3):
+            r = self.run_ok(self.argv(arm_a=self.arm_a_file()))
+        self.assertFalse(r["primary"]["case_study"])
+        self.assertEqual(r["empirical_result_status"], "ARM_B_DECIDED")
+        self.assertIn(r["decision"], {"GO_TO_ENTITY_CLUSTER_RESEARCH", "NO_GO_NO_COPYABLE_ALPHA", "REPAIR_AND_RERUN"})
+        self.assertEqual(r["decision"], stats.decision_for(r["primary"]))
+        self.assertIsNone(r["primary"]["reading"])
+        inflation = r["survivorship_inflation"]
+        self.assertEqual(inflation["a_negative_b_positive"],
+                         r["decision"] == "GO_TO_ENTITY_CLUSTER_RESEARCH")
+
+    def test_a_pool_that_is_only_the_cohort_breaks_the_measure_and_decides_nothing(self) -> None:
+        # What a sweep over the cohort alone would produce: peers drawn from
+        # the cohort, so mean d cancels the cohort's common return.
+        with LiveDataStore(self.db) as store:
+            store.connection.execute(
+                "DELETE FROM ingest_runs WHERE wallet_address IN (?, ?)", (POOL_ONLY[0], POOL_ONLY[1])
+            )
+            store.connection.commit()
+        with patched_minimum(3):
+            code, logged = self.run_main()
+        self.assertEqual(code, 3, logged)
+        r = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual((r["pool"]["size"], r["pool"]["non_cohort_wallets_in_pool"]), (3, 0))
+        self.assertEqual(r["empirical_result_status"], "BROKE_SEE_WHAT_BROKE")
+        self.assertIsNone(r["decision"])
+        self.assertIn("the peer pool is the cohort itself", r["what_broke"][0])
 
     def test_arm_b_has_no_candle_provenance_and_arm_a_has_no_decision(self) -> None:
         self.run_main()
@@ -222,8 +363,8 @@ class ArmBRunnerTests(ArmBStoreTestCase):
 
 class DecisionRuleTests(unittest.TestCase):
     @staticmethod
-    def _primary(lower, upper, *, case_study=False, reading="ARM_A_INCONCLUSIVE"):
-        return {"ci95": [lower, upper], "case_study": case_study, "reading": reading}
+    def _primary(lower, upper, *, case_study=False, measurable=True):
+        return {"ci95": [lower, upper], "case_study": case_study, "measurable": measurable}
 
     def test_b_decides_by_the_frozen_rule(self) -> None:
         self.assertEqual(stats.decision_for(self._primary(0.5, 1.2)), "GO_TO_ENTITY_CLUSTER_RESEARCH")
@@ -234,15 +375,24 @@ class DecisionRuleTests(unittest.TestCase):
 
     def test_a_case_study_or_an_unmeasurable_primary_decides_nothing(self) -> None:
         self.assertIsNone(stats.decision_for(self._primary(0.6, 1.0, case_study=True)))
-        self.assertIsNone(stats.decision_for({"ci95": None, "case_study": False, "reading": "ARM_A_NOT_MEASURABLE"}))
+        self.assertIsNone(stats.decision_for({"ci95": None, "case_study": False, "measurable": False}))
+        # Zero variance: the bounds coincide and the interval means nothing.
+        self.assertIsNone(stats.decision_for(self._primary(0.7, 0.7, measurable=False)))
+        self.assertEqual(stats.MINIMUM_EVALUATED, 200)
 
-    def test_the_inflation_names_a_negative_b_positive(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            arm_a = Path(tmp) / "a.json"
-            arm_a.write_text(json.dumps({"arm": "A", "primary": {"mean": -0.2, "reading": "ARM_A_NEGATIVE"}}), encoding="utf-8")
-            out = core.survivorship_inflation(arm_a, {"mean": 0.8, "ci95": [0.55, 1.05], "case_study": False, "reading": "x"})
+    def test_the_inflation_names_a_negative_b_positive_from_the_reading_and_the_decision(self) -> None:
+        negative = {"arm": "A", "primary": {"mean": -0.2, "reading": "ARM_A_NEGATIVE"}}
+        go = {"mean": 0.8, "ci95": [0.55, 1.05], "case_study": False, "measurable": True}
+        out = stats.inflation_block(negative, None, go, "GO_TO_ENTITY_CLUSTER_RESEARCH", file_name="a.json")
         self.assertTrue(out["a_negative_b_positive"])
         self.assertEqual(out["inflation_points_per_14d"], -1.0)
+        # The flag follows the written reading and the written decision, never
+        # the two point estimates: B positive but not a GO is not the case.
+        repair = stats.inflation_block(negative, None, go, "REPAIR_AND_RERUN", file_name="a.json")
+        self.assertFalse(repair["a_negative_b_positive"])
+        inconclusive = {"arm": "A", "primary": {"mean": 0.1, "reading": "ARM_A_INCONCLUSIVE"}}
+        self.assertFalse(stats.inflation_block(inconclusive, None, go, "GO_TO_ENTITY_CLUSTER_RESEARCH",
+                                               file_name="a.json")["a_negative_b_positive"])
 
 
 if __name__ == "__main__":

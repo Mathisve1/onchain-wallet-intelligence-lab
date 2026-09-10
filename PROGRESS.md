@@ -363,6 +363,71 @@ rebate-dependent, under-characterised), whose taker copies are bad a priori
 and pull `M_i` down; the file now discloses the composition, the plan
 amendment (PR #157) fixes the rule, and neither corrects for it.
 
+### Third adversarial pass (2026-09-09)
+
+Four lenses of five (the completeness critic hit the account limit again, as in
+round two; a critic pass is still owed). Refuted, with four blockers. Two came
+from round two's own fixes, which is the argument for running the round:
+
+- **A wallet that deploys nothing aborted the whole arm.** Round two changed
+  the matched-random return type; the nothing-deployed path still returned the
+  old shape, so the first idle or fully-out-of-scope cohort wallet raised an
+  `AttributeError` that took the run down with exit 2 and no file. The cohort
+  cannot be edited after T0, so one such wallet would have made the arm
+  unrunnable. Arm B expects stopped wallets by design.
+- **The peers named in the file were the wrong latency's.** The study kept the
+  peers of the last latency simulated (15 minutes), and the file wrote them as
+  the peers behind the primary at 30 seconds. A peer inside the primary's mean
+  could be listed as dropped. The simulator now keeps the matched-random
+  result per latency and the file writes the primary's, labelled with it.
+- **A post-T0 backfill still moved arm A's pool.** Round two bounded arm A's
+  ledger by collection mode, which a backfill written after T0 (a re-backfill,
+  a widened pool) passes. The bound is now time: rows finished by T0, and the
+  freeze records a hash of exactly those rows, which arm A refuses to run
+  without matching. The freeze also refuses a T0 that precedes its own last
+  collection row.
+- **The survivorship inflation subtracted any file that said arm A.** A
+  different cohort, another plan commit, a dry run, a broke file and a
+  checkpoint all produced `available: true` and a number. Arm A's file is now
+  read and judged before the hours of scoring, so a wrong file refuses in
+  seconds, and `a_negative_b_positive` follows arm A's written reading and arm
+  B's written decision rather than the two point estimates.
+
+Also applied: arm B's closure guard now requires a completed closing sweep row
+for **every** cohort wallet, not one certified wallet and any completed run, so
+a sweep that died at wallet 250 of 300 can no longer produce a decision that a
+later rerun contradicts; a pool that contains no wallet outside the cohort
+breaks the run rather than labelling it, because the mean cancels exactly the
+common return the study is looking for; arm B's file no longer carries arm A's
+reading vocabulary (its verdict is its decision, and `reading` is null); the
+mids series is disclosed as a deviation from the plan's wording, and its
+provenance counts polls separately from sweeps and reports the widest gap and
+how many exceed the freshness bound; the span rule takes both edges from the
+arm, so arm B tolerates the freshness bound at the end as well as the start;
+`--overwrite` is required to replace an evidence file and an abort is kept as
+`.aborted-<n>.json`; a Ctrl-C is reported and keeps its partial before it
+propagates; the freeze records a hash of each scope coin list, so the same
+number of different coins no longer passes the scope check.
+
+Two collector defects were found underneath all this. The sweep resumed from
+the newest stored fill, which steps over a page-cap cut (proven only to the
+millisecond before that fill) and over anything a websocket session wrote, so
+the skipped range was never requested again; it now resumes from the earlier of
+the newest fill and the last millisecond a walk proved observed. And the
+loader's forced-cursor guard keyed on whether a walk completed rather than on
+which bound rule wrote it; collection now marks its coverage with the rule, and
+the ledger trusts a marked bound and distrusts an unmarked one. The websocket
+mode no longer certifies anything for L2: a watch row claims its interval from
+the run's start rather than from the subscription it was given.
+
+The tests lens mutation-tested the suite again. Pinned since: the peers that
+contributed and those that dropped, the decisive path for both arms (every run
+in the suite was a case study, so a wiring regression that never decided passed),
+a coin leaving scope changing no number, the closure guard's two halves
+separately, the tolerance actually reaching the peer selection, the exact
+ledger-snapshot digest, the disclosure denominators, both span edges, and the
+arm B scope bound.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and

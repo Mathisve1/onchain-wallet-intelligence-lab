@@ -2,8 +2,9 @@
 
 The arm's specification lives here; the run itself is :mod:`.l2_arm_runner`,
 shared with arm A so both arms are computed the same way. Arm B refuses to
-compute anything before the coverage ledger certifies its whole window for
-the cohort - the approval forbids interim result inspection - and it applies
+compute anything until every cohort wallet carries a completed closing sweep
+row and the coverage ledger certifies its whole window for at least one of
+them - the approval forbids interim result inspection - and it applies
 the decision rule the plan fixed before T0: B decides, A measures. Given arm
 A's evidence file it also reports ``mean d_A - mean d_B``, the measured
 survivorship inflation, as a number and never as a gate.
@@ -33,8 +34,14 @@ ARM_B = ArmSpec(
     window_start_days=0,
     window_end_days=56,
     price_source="mids",
+    # Both edges at the freshness bound: the first mid within 15 minutes of
+    # T0, the last within 15 minutes of the end (the exit mark takes the last
+    # quote whatever its age and counts it stale beyond the bound).
     span_tolerance_ms=MAX_PRICE_AGE_MS,
+    end_tolerance_ms=MAX_PRICE_AGE_MS,
     decides=True,
+    price_note="priced on the polled allMids alone; the public tape while a session is connected "
+               "is not used, so the series has one resolution and does not depend on the sample",
 )
 
 

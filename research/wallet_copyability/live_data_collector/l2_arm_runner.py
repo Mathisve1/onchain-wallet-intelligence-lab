@@ -13,18 +13,19 @@ numbers the plan compares are computed the same way. The rules it applies:
   run;
 * the instrument scope is the one the freeze measured, bounded to T0, and a
   coin whose price table does not span the window leaves scope, counted;
-* matched-random peers are drawn from every characterised wallet the ledger
-  certifies over the window, not from the cohort alone, and the pool's hash
-  is recorded (``l2_arm_report.limitations`` says why);
+* matched-random peers are drawn from every wallet the coverage ledger
+  certifies over the window, cohort member or not, and the pool's hash and
+  composition are recorded (``l2_arm_report.limitations`` says why);
 * the primary measure is ``d_i = R_i - M_i`` at 30 seconds, in points per
   14-day equivalent, with a two-sided one-sample t interval at alpha 0.05;
 * **arm A** runs over ``T0-52d`` to ``T0-7d`` on 15-minute candle closes with
   a 15-minute price-age bound, is read by the rule fixed before it was seen,
   and decides nothing: its ``decision`` is always ``null``;
 * **arm B** runs over ``T0`` to ``T0+56d`` on the polled mids, refuses to
-  compute anything before the ledger certifies that window for the cohort
-  (the approval forbids interim result inspection), and applies the decision
-  rule: B decides, A measures.
+  compute anything until every cohort wallet carries a closing sweep row and
+  the ledger certifies that window for at least one of them (the approval
+  forbids interim result inspection), and applies the decision rule: B
+  decides, A measures.
 
 Each runner reads the database and the freeze record and issues no request.
 It writes the evidence file and prints counts only: never a return, never a
@@ -38,200 +39,66 @@ import argparse
 import hashlib
 import json
 import time
-from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Sequence
 
-from src.copyability.classify import ClassifierThresholds
 from src.copyability.cohort import cohort_hash
-from src.copyability.costs import CostModel, FeeSchedule
-from src.copyability.coverage import CoverageLedger
-from src.copyability.execution import LATENCY_GRID_MS, FollowerConfig
-from src.copyability.inputs import LiquidityProfile
-from src.copyability.loader import build_market, load_coverage, load_fills, load_funding_truncation
+from src.copyability.loader import build_market, coverage_snapshot, load_coverage, load_fills, load_funding_truncation
 from src.copyability.metrics import as_row
-from src.copyability.simulate import StudyConfig, run_study
+from src.copyability.simulate import run_study
 from src.live_data.storage import LiveDataStore
 
 from . import l2_arm_report as report
+from .l2_arm_inputs import (  # noqa: F401 - the arm modules and the tests reach these through this namespace
+    ARM_B_CLOSE_GRACE_MS,
+    BENCHMARK_COIN,
+    CANDLE_INTERVAL,
+    CANDLE_INTERVAL_MS,
+    CHARACTERISATION_END_DAYS_BEFORE_T0,
+    CHARACTERISATION_START_DAYS_BEFORE_T0,
+    EXIT_BROKE,
+    EXIT_REFUSED,
+    FEES,
+    IMPACT_BPS_PER_FULL_DEPTH,
+    L2_LEDGER_MODES,
+    LIQUIDITY_TIERS,
+    MATCHED_RANDOM_SAMPLE_SIZE,
+    MATCHED_RANDOM_TOLERANCE,
+    MAX_PRICE_AGE_MS,
+    MILLISECONDS_PER_DAY,
+    MOMENTUM_LOOKBACK_MS,
+    MOMENTUM_STEP_MS,
+    NOMINAL_CAPITAL,
+    SIZE_SCALE,
+    STATUS_BROKE,
+    STATUS_CASE_STUDY,
+    STATUS_DECIDED,
+    STATUS_DRY_RUN,
+    STATUS_EARLY_READ,
+    STATUS_NOT_MEASURABLE,
+    TIER1_COINS,
+    TIER2_COINS,
+    ArmRunnerError,
+    ArmSpec,
+    assumptions,
+    characterisation_window,
+    liquidity_for,
+    load_cohort,
+    pool_wallets,
+    seed_from,
+    study_config,
+)
 from .l2_arm_statistics import (
-    ARM_A_NOT_MEASURABLE,
     MINIMUM_EVALUATED,
     PRIMARY_LATENCY_MS,
     decision_for,
     disclosure_rollup,
+    inflation_block,
     primary_statistic,
+    read_arm_a,
     secondary_summary,
-    survivorship_inflation,
 )
-
-MILLISECONDS_PER_DAY = 86_400_000
-#: Both arms: 15-minute freshness, no mixed-resolution series.
-MAX_PRICE_AGE_MS = 900_000
-CANDLE_INTERVAL = "15m"
-CANDLE_INTERVAL_MS = 900_000
-#: The characterisation window the freeze used; the record must agree.
-CHARACTERISATION_START_DAYS_BEFORE_T0 = 90
-CHARACTERISATION_END_DAYS_BEFORE_T0 = 60
-
-#: Study parameters carried over from ``L1_INSTRUMENT_VALIDATION_001`` so the
-#: instruments agree on every cost, plus the ones this runner fixes and
-#: discloses because neither the plan nor L1 did.
-NOMINAL_CAPITAL = Decimal("10000")
-SIZE_SCALE = Decimal(1)
-FEES = FeeSchedule(taker_bps=Decimal("4.5"), maker_bps=Decimal("1.5"))
-IMPACT_BPS_PER_FULL_DEPTH = Decimal("10")
-BENCHMARK_COIN = "BTC"
-MOMENTUM_LOOKBACK_MS = 3_600_000
-MOMENTUM_STEP_MS = 600_000
-MATCHED_RANDOM_SAMPLE_SIZE = 20
-MATCHED_RANDOM_TOLERANCE = Decimal("0.5")
-TIER1_COINS = frozenset({"BTC", "ETH"})
-TIER2_COINS = frozenset({
-    "AAVE", "ADA", "APT", "ARB", "ATOM", "AVAX", "BNB", "DOGE", "ENA", "HYPE", "LINK",
-    "LTC", "NEAR", "PAXG", "SOL", "SUI", "TAO", "TRX", "UNI", "WLD", "XLM", "XRP", "kPEPE",
-})
-LIQUIDITY_TIERS = {
-    "tier1": (Decimal("0.5"), Decimal("2000000")),
-    "tier2": (Decimal("1.5"), Decimal("300000")),
-    "tier3": (Decimal("5"), Decimal("50000")),
-}
-
-STATUS_EARLY_READ = "ARM_A_EARLY_READ_ONLY"
-STATUS_DECIDED = "ARM_B_DECIDED"
-STATUS_CASE_STUDY = "CASE_STUDY_UNDER_MINIMUM"
-STATUS_NOT_MEASURABLE = "NOT_MEASURABLE"
-STATUS_DRY_RUN = "DRY_RUN_UNDERPOWERED"
-#: Something broke (rule 5 of the reading): the file says what, and decides nothing.
-STATUS_BROKE = "BROKE_SEE_WHAT_BROKE"
-#: Arm A's window closed before the first sweep, so only the backfills could
-#: have observed it; reading sweep rows too would let a rerun after weeks of
-#: arm B collection certify wallets the T0 run refused and move the pool.
-ARM_A_LEDGER_MODES = ("backfill_wallet",)
-EXIT_REFUSED = 2
-EXIT_BROKE = 3
-
-
-class ArmRunnerError(ValueError):
-    """An input the runner refuses to evaluate on."""
-
-
-@dataclass(frozen=True, slots=True)
-class ArmSpec:
-    """What distinguishes one arm from the other; everything else is shared."""
-
-    arm: str
-    run_id: str
-    variant: str
-    approvals: tuple[str, ...]
-    #: Window edges in days relative to T0: arm A is (-52, -7), arm B (0, +56).
-    window_start_days: int
-    window_end_days: int
-    price_source: str
-    #: How far after the window start the first usable quote may sit.
-    span_tolerance_ms: int
-    decides: bool
-
-    def window(self, t0_ms: int) -> tuple[int, int]:
-        return (t0_ms + self.window_start_days * MILLISECONDS_PER_DAY,
-                t0_ms + self.window_end_days * MILLISECONDS_PER_DAY)
-
-    @property
-    def price_kind(self) -> dict:
-        return {"kind": self.price_source, "interval": CANDLE_INTERVAL if self.price_source == "candles" else None,
-                "max_age_ms": MAX_PRICE_AGE_MS}
-
-
-# -- inputs ------------------------------------------------------------------------
-
-
-def characterisation_window(t0_ms: int) -> tuple[int, int]:
-    return (t0_ms - CHARACTERISATION_START_DAYS_BEFORE_T0 * MILLISECONDS_PER_DAY,
-            t0_ms - CHARACTERISATION_END_DAYS_BEFORE_T0 * MILLISECONDS_PER_DAY)
-
-
-def load_cohort(path: Path, *, plan_commit: str, allow_underpowered: bool = False) -> dict:
-    """The freeze record, trusted only after every check a reader would make."""
-    record = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("t0_ms", "cohort", "cohort_sha256", "plan_commit", "hard_stop"):
-        if key not in record:
-            raise ArmRunnerError(f"freeze record lacks {key!r}: {path}")
-    if record["plan_commit"] != plan_commit:
-        raise ArmRunnerError(
-            f"freeze record was made under plan commit {record['plan_commit']!r}, this run names {plan_commit!r}"
-        )
-    if cohort_hash(record["cohort"]) != record["cohort_sha256"]:
-        raise ArmRunnerError("the cohort list does not hash to the recorded cohort_sha256; the record was altered")
-    recorded_minimum = int(record.get("minimum_evaluable", MINIMUM_EVALUATED))
-    if recorded_minimum < MINIMUM_EVALUATED and not allow_underpowered:
-        # The plan's minimum is not the record's to lower: a freeze made with
-        # --minimum N below it is refused, not evaluated at N.
-        raise ArmRunnerError(
-            f"the freeze was made with minimum_evaluable={recorded_minimum}, under the plan's {MINIMUM_EVALUATED} "
-            "(pass --allow-underpowered-dry-run for a synthetic dry run)"
-        )
-    minimum = max(recorded_minimum, MINIMUM_EVALUATED)
-    if not record["hard_stop"] and len(record["cohort"]) < minimum and not allow_underpowered:
-        raise ArmRunnerError(
-            f"{len(record['cohort'])} wallets is under the minimum of {minimum}; an underpowered study "
-            "is not run to have something (pass --allow-underpowered-dry-run for a synthetic dry run)"
-        )
-    recorded = record.get("characterisation_window")
-    if recorded is not None:
-        if (int(recorded["start_ms"]), int(recorded["end_ms"])) != characterisation_window(int(record["t0_ms"])):
-            raise ArmRunnerError("the freeze's characterisation window is not [T0-90d, T0-60d]")
-    return record
-
-
-def liquidity_for(coin: str) -> LiquidityProfile:
-    """The L1 tiered assumption, labelled ASSUMED: no order book is read."""
-    tier = "tier1" if coin in TIER1_COINS else "tier2" if coin in TIER2_COINS else "tier3"
-    half_spread_bps, depth = LIQUIDITY_TIERS[tier]
-    return LiquidityProfile(coin, half_spread_bps, depth, IMPACT_BPS_PER_FULL_DEPTH)
-
-
-def study_config(seed: int) -> StudyConfig:
-    return StudyConfig(
-        follower=FollowerConfig(capital=NOMINAL_CAPITAL, size_scale=SIZE_SCALE),
-        cost_model=CostModel(FEES), benchmark_coin=BENCHMARK_COIN,
-        momentum_lookback_ms=MOMENTUM_LOOKBACK_MS, momentum_step_ms=MOMENTUM_STEP_MS,
-        random_seed=seed, random_sample_size=MATCHED_RANDOM_SAMPLE_SIZE, latencies_ms=LATENCY_GRID_MS,
-        thresholds=ClassifierThresholds(), max_price_age_ms=MAX_PRICE_AGE_MS,
-        random_tolerance=MATCHED_RANDOM_TOLERANCE,
-    )
-
-
-def seed_from(cohort_sha256: str) -> int:
-    """A seed the cohort itself fixes, so a rerun on the same freeze repeats."""
-    return int(cohort_sha256[:8], 16)
-
-
-def pool_wallets(ledger: CoverageLedger, window: tuple[int, int]) -> list[str]:
-    """Every wallet the ledger certifies over the whole window: the peer pool."""
-    start_ms, end_ms = window
-    return sorted(w for w in ledger.wallets() if ledger.is_fully_known(w, start_ms, end_ms))
-
-
-def assumptions(seed: int) -> dict:
-    return {
-        "fees_bps": {"taker": str(FEES.taker_bps), "maker": str(FEES.maker_bps)},
-        "liquidity_tiers": {k: {"half_spread_bps": str(v[0]), "depth_notional_usd": str(v[1])} for k, v in LIQUIDITY_TIERS.items()},
-        "impact_bps_per_full_depth": str(IMPACT_BPS_PER_FULL_DEPTH),
-        "liquidity_source": "ASSUMED",
-        "benchmark_coin": BENCHMARK_COIN,
-        "momentum": {"lookback_ms": MOMENTUM_LOOKBACK_MS, "step_ms": MOMENTUM_STEP_MS},
-        "size_scale": str(SIZE_SCALE),
-        "nominal_capital": str(NOMINAL_CAPITAL),
-        "matched_random_sample_size": MATCHED_RANDOM_SAMPLE_SIZE,
-        "matched_random_peer_tolerance": str(MATCHED_RANDOM_TOLERANCE),
-        "matched_random_eligibility": "another pool wallet whose in-window fill count is within the tolerance "
-                                      "of the target's and whose coverage certifies the same window",
-        "seed": seed,
-        "seed_derivation": "int(cohort_sha256[:8], 16)",
-        "latencies_ms": list(LATENCY_GRID_MS),
-        "max_price_age_ms": MAX_PRICE_AGE_MS,
-    }
 
 
 # -- the run -----------------------------------------------------------------------------
@@ -246,22 +113,43 @@ def run(
     window = spec.window(t0_ms)
     window_days = Decimal(window[1] - window[0]) / Decimal(MILLISECONDS_PER_DAY)
     what_broke: list[str] = []
+    recorded_minimum = int(cohort.get("minimum_evaluable", MINIMUM_EVALUATED))
 
-    modes = ARM_A_LEDGER_MODES if spec.arm == "A" else None
-    ledger = load_coverage(store, modes=modes)
-    snapshot = report.ledger_snapshot(store, modes=modes)
-    if spec.arm == "B":
-        # The approval forbids interim result inspection: nothing is computed
-        # until collection has run past the window end and the sweeps have
-        # certified the whole forward window for the cohort.
-        latest = snapshot["max_finished_at_ms"]
-        if latest is None or latest < window[1]:
+    # Arm A's file must not move whenever it is rerun: its ledger is the rows
+    # that had finished by T0, and it must be the ledger the freeze recorded.
+    # Arm B's is the REST-swept rows finishing within the closing grace.
+    modes = L2_LEDGER_MODES
+    finished_by = t0_ms if spec.arm == "A" else window[1] + ARM_B_CLOSE_GRACE_MS
+    ledger = load_coverage(store, modes=modes, finished_by_ms=finished_by)
+    snapshot = coverage_snapshot(store, modes=modes, finished_by_ms=finished_by)
+    closure: dict | None = None
+    if spec.arm == "A":
+        frozen = cohort["ledger_snapshot"].get("run_ids_sha256")
+        if frozen != snapshot["run_ids_sha256"]:
             raise ArmRunnerError(
-                "arm B's window is not closed in this database: the latest completed collection run "
-                f"finished at {latest}, before the window end {window[1]}"
+                "the ledger in this database (rows finished at or before T0) is not the ledger the freeze "
+                f"recorded: {snapshot['run_ids_sha256'][:12]} here, {str(frozen)[:12]} in the record"
+            )
+    else:
+        # The approval forbids interim result inspection: nothing is computed
+        # until every cohort wallet carries a closing sweep row (collection is
+        # complete, whatever it found) and at least one is certified over the
+        # window. A wallet with a closing row but uncertifiable coverage is
+        # refused and counted, as the plan says; a wallet without one means
+        # the closing sweep has not finished.
+        closure = report.sweep_closure(store, wallets, window_end_ms=window[1], finished_by_ms=finished_by)
+        if not closure["closed"]:
+            missing = closure["wallets_without_closing_sweep"]
+            raise ArmRunnerError(
+                f"arm B's window is not closed in this database: {len(missing)} of {len(wallets)} cohort wallets "
+                f"have no completed sweep_wallet row finishing at or after the window end {window[1]}"
             )
         if not any(ledger.is_fully_known(w, *window) for w in wallets):
             raise ArmRunnerError("arm B's window is not closed in this database: no cohort wallet is certified over it")
+    # Arm A's file is read and judged before the hours of scoring, so a wrong
+    # file refuses in seconds; the number itself is computed at the end.
+    arm_a, arm_a_reason = (read_arm_a(arm_a_json, cohort_sha256=cohort["cohort_sha256"], plan_commit=plan_commit)
+                           if spec.decides else (None, None))
 
     scope, scope_lists = report.build_scope(
         store, candles_json, excluded=cohort.get("scope", {}).get("excluded", ()), until_ms=t0_ms
@@ -269,6 +157,16 @@ def run(
     report.check_scope_against_record(scope_lists, cohort.get("scope", {}))
 
     pool = pool_wallets(ledger, window)
+    pool_cohort = len(set(wallets) & set(pool))
+    if pool and len(pool) == pool_cohort:
+        # Peers drawn from the cohort alone subtract the cohort's own mean
+        # return from itself: whatever the cohort earns in common cancels, and
+        # the primary measure is blind to exactly the part that would be
+        # copyable. That is not a result to be labelled; it is a broken input.
+        what_broke.append(
+            f"the peer pool is the cohort itself ({pool_cohort} wallets): mean d cancels any return the "
+            "cohort earns in common. Collect the non-cohort characterised wallets over this window."
+        )
     bound_ms = t0_ms if spec.arm == "A" else window[1]
     raw_pool_fills = {
         w: [f for f in fills if f.time_ms <= bound_ms]
@@ -287,7 +185,9 @@ def run(
     coins = sorted({f.coin for fills in pool_fills.values() for f in fills} | {BENCHMARK_COIN})
     liquidity = {coin: liquidity_for(coin) for coin in coins}
     market = build_market(store, coins, liquidity, price_source=spec.price_source, candle_interval=CANDLE_INTERVAL)
-    spanning, span_detail = report.series_span(market, coins, window=window, tolerance_ms=spec.span_tolerance_ms)
+    spanning, span_detail = report.series_span(
+        market, coins, window=window, tolerance_ms=spec.span_tolerance_ms, end_tolerance_ms=spec.end_tolerance_ms
+    )
     unspanned = sorted(set(coins) - spanning)
     if unspanned:
         for w, fills in pool_fills.items():
@@ -299,12 +199,13 @@ def run(
         # an unspanned benchmark would be scored on a stale price and the
         # figures would sit in every row. That is missing data, not a result.
         raise ArmRunnerError(
-            f"benchmark coin {BENCHMARK_COIN} has no price series spanning the window; collect it before running"
+            f"benchmark coin {BENCHMARK_COIN} has no price series spanning the window "
+            f"({span_detail.get(BENCHMARK_COIN)}); the series cannot be collected after the fact"
         )
 
     seed = seed_from(cohort["cohort_sha256"])
     config = study_config(seed)
-    truncated = load_funding_truncation(store, modes=modes)
+    truncated = load_funding_truncation(store, modes=modes, finished_by_ms=finished_by)
     studies: list[Any] = []
     runtime: dict[str, float] = {}
     for index, wallet in enumerate(wallets, start=1):
@@ -323,7 +224,7 @@ def run(
         log(f"{spec.run_id}: {index}/{len(wallets)} {'refused' if study.refusal else 'scored'} "
             f"refused_so_far={refused} elapsed_s={runtime[wallet]}")
 
-    primary = primary_statistic(studies, window_days=window_days)
+    primary = primary_statistic(studies, window_days=window_days, minimum=MINIMUM_EVALUATED, arm=spec.arm)
     disclosures = disclosure_rollup(studies, wallets=list(primary["d_by_wallet"]))
     surviv = report.survivorship(raw_pool_fills, wallets, window=window, characterisation=characterisation_window(t0_ms))
     refusals = {s.wallet: s.refusal for s in studies if s.refusal is not None}
@@ -334,33 +235,36 @@ def run(
         what_broke.append("no scored wallet entered the primary; see primary.excluded and the scope counts")
 
     decision = decision_for(primary) if spec.decides and not what_broke else None
+    dry_run_needed = len(wallets) < MINIMUM_EVALUATED or recorded_minimum < MINIMUM_EVALUATED
     if what_broke:
         status = STATUS_BROKE
-    elif dry_run and len(wallets) < MINIMUM_EVALUATED:
+    elif dry_run and dry_run_needed:
         status = STATUS_DRY_RUN
-    elif primary["reading"] == ARM_A_NOT_MEASURABLE:
+    elif not primary["measurable"]:
         status = STATUS_NOT_MEASURABLE
     elif primary["case_study"]:
         status = STATUS_CASE_STUDY
     else:
         status = STATUS_DECIDED if spec.decides else STATUS_EARLY_READ
     provenance = (report.candle_provenance(store, coins, interval=CANDLE_INTERVAL) if spec.price_source == "candles"
-                  else report.mids_provenance(store, coins, window=window))
+                  else report.mids_provenance(store, coins, window=window, max_age_ms=MAX_PRICE_AGE_MS))
+    # The peers behind the primary's M_i: the sample at the primary latency,
+    # not at whichever latency happened to be simulated last.
     cohort_set = set(wallets)
     peers_by_wallet: dict[str, dict] = {}
     shares: list[float] = []
     for s in studies:
-        if not s.matched_peers and not s.matched_peers_dropped:
+        matched = s.matched_by_latency.get(PRIMARY_LATENCY_MS)
+        if matched is None or not matched.chosen:
             continue
-        count = len(s.matched_peers)
-        share = round(sum(1 for p in s.matched_peers if p in cohort_set) / count, 4) if count else None
+        count = len(matched.contributed)
+        share = round(sum(1 for p in matched.contributed if p in cohort_set) / count, 4) if count else None
         if share is not None:
             shares.append(share)
         peers_by_wallet[s.wallet] = {
-            "contributed": list(s.matched_peers), "count": count,
-            "dropped": dict(sorted(s.matched_peers_dropped.items())), "cohort_share": share,
+            "latency_ms": PRIMARY_LATENCY_MS, "contributed": list(matched.contributed), "count": count,
+            "dropped": dict(sorted(matched.dropped.items())), "cohort_share": share,
         }
-    pool_cohort = len(cohort_set & set(pool))
     evidence = {
         "schema_version": "1.0",
         "run_id": spec.run_id, "arm": spec.arm, "variant": spec.variant, "approvals": list(spec.approvals),
@@ -369,19 +273,24 @@ def run(
         "stage_counts": cohort.get("stage_counts"), "per_wallet_reason": cohort.get("per_wallet_reason"),
         "characterisation_window": cohort.get("characterisation_window"),
         "t0_ms": t0_ms,
-        "window_closed_before_run": True,
+        "window_closed_before_run": True if closure is None else bool(closure["closed"]),
+        "closure": closure,
         "evaluation_window": {"start_ms": window[0], "end_ms": window[1], "days": str(window_days)},
         "price_source": spec.price_kind,
         "price_provenance": provenance,
         "price_series_span_by_coin": span_detail,
         "price_series_span_rule": {
-            "tolerance_ms": spec.span_tolerance_ms,
-            "rule": "first quote at most tolerance_ms after the window start, last quote at or after the window end",
+            "tolerance_ms": spec.span_tolerance_ms, "end_tolerance_ms": spec.end_tolerance_ms,
+            "rule": "first quote less than tolerance_ms after the window start, "
+                    "last quote at most end_tolerance_ms before the window end",
         },
         "ledger_snapshot": snapshot,
+        "dry_run_flag_passed": bool(dry_run),
+        "record_minimum_evaluable": recorded_minimum,
         "assumptions": assumptions(seed),
         "pool": {"definition": "every wallet the coverage ledger certifies over the evaluation window",
                  "ledger_modes": list(modes) if modes is not None else "all",
+                 "ledger_finished_by_ms": finished_by,
                  "size": len(pool), "sha256": cohort_hash(pool),
                  "cohort_wallets_in_pool": pool_cohort, "non_cohort_wallets_in_pool": len(pool) - pool_cohort,
                  "mean_cohort_share_of_peers": round(sum(shares) / len(shares), 4) if shares else None,
@@ -395,7 +304,11 @@ def run(
         "primary": {**primary, "disclosures": disclosures},
         "secondary": secondary_summary(studies, window_days=window_days),
         "survivorship": surviv,
-        "survivorship_inflation": survivorship_inflation(arm_a_json, primary) if spec.decides else None,
+        "survivorship_inflation": (
+            inflation_block(arm_a, arm_a_reason, primary, decision,
+                            file_name=arm_a_json.name if arm_a_json is not None else None)
+            if spec.decides else None
+        ),
         "matched_peers_by_wallet": peers_by_wallet,
         "diagnostics_rollup": report.diagnostics_rollup(studies, latency_ms=PRIMARY_LATENCY_MS, coins_without_span=unspanned),
         "rows": [as_row(o) for s in studies for o in s.outcomes],
@@ -405,8 +318,12 @@ def run(
             pool_cohort=pool_cohort, cohort_size=len(wallets),
         ),
         "what_broke": what_broke,
-        "reading_rule": "L2_ANALYSIS_PLAN.md, 'How arm A is read, fixed before it is seen'" if spec.arm == "A"
-                        else "L2_ANALYSIS_PLAN.md, 'Decision rule: B decides, A measures'",
+        "reading_rule": (
+            "L2_ANALYSIS_PLAN.md, 'How arm A is read, fixed before it is seen'" if spec.arm == "A" else
+            "L2_ANALYSIS_PLAN.md, 'Decision rule: B decides, A measures': GO when the written lower bound reaches "
+            "0.5 (inclusive), NO_GO when the written upper bound is below it, REPAIR_AND_RERUN otherwise; arm A's "
+            "positive reading is strict, so one interval can read inconclusive for A and GO for B"
+        ),
         "decisive_arm": "B",
         "decision": decision,
         "empirical_result_status": status,
@@ -439,6 +356,7 @@ def build_parser(spec: ArmSpec) -> argparse.ArgumentParser:
     parser.add_argument("--candles-json", type=Path, required=True, help="the arm A candle post-check the freeze used")
     parser.add_argument("--plan-commit", required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--overwrite", action="store_true", help="replace an existing evidence file under --out")
     parser.add_argument("--allow-underpowered-dry-run", action="store_true", dest="dry_run",
                         help="evaluate a cohort under the plan's minimum; the file is stamped DRY_RUN_UNDERPOWERED")
     if spec.decides:
@@ -447,9 +365,26 @@ def build_parser(spec: ArmSpec) -> argparse.ArgumentParser:
     return parser
 
 
+def _keep_aborted(checkpoint: Path, out: Path) -> None:
+    """Whatever was scored before a stop is kept under a name no later run
+    treats as its checkpoint, and never as evidence."""
+    if not checkpoint.exists():
+        return
+    try:
+        completed = int(json.loads(checkpoint.read_text(encoding="utf-8")).get("completed", 0))
+    except (OSError, ValueError):
+        completed = 0
+    aborted = out.with_name(f"{out.name}.aborted-{completed}.json")
+    aborted.unlink(missing_ok=True)
+    checkpoint.rename(aborted)
+
+
 def main(spec: ArmSpec, argv: Sequence[str] | None = None, *, log=print) -> int:
     """Write the evidence file; print counts only. Exit 2 when refusing, 3 when something broke."""
     args = build_parser(spec).parse_args(argv)
+    if args.out.exists() and not args.overwrite:
+        log(f"{spec.run_id}: refusing to run: {args.out} exists; pass --overwrite to replace it")
+        return EXIT_REFUSED
     try:
         cohort = load_cohort(args.cohort, plan_commit=args.plan_commit, allow_underpowered=args.dry_run)
     except (ArmRunnerError, OSError, ValueError) as exc:
@@ -465,14 +400,11 @@ def main(spec: ArmSpec, argv: Sequence[str] | None = None, *, log=print) -> int:
                 store, cohort, spec, candles_json=args.candles_json, plan_commit=args.plan_commit,
                 dry_run=args.dry_run, checkpoint=checkpoint, arm_a_json=getattr(args, "arm_a_json", None), log=log,
             )
-    except Exception as exc:  # rule 5: stop and report; nothing escapes without the line
+    except BaseException as exc:  # rule 5: stop and report; nothing, Ctrl-C included, escapes without the line
         log(f"{spec.run_id}: stopped: {type(exc).__name__}: {exc}")
-        if checkpoint.exists():
-            # Whatever was scored before the stop is kept under a name no
-            # later run treats as its checkpoint, and never as evidence.
-            aborted = args.out.with_name(args.out.name + ".aborted.json")
-            aborted.unlink(missing_ok=True)
-            checkpoint.rename(aborted)
+        _keep_aborted(checkpoint, args.out)
+        if not isinstance(exc, Exception):
+            raise
         return EXIT_REFUSED
     runtime = evidence.pop("_runtime_seconds_by_wallet")
     text = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
