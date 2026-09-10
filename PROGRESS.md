@@ -502,9 +502,42 @@ was altered. Both patterns are excluded by name and are in `.gitignore`; the
 evidence file and its runtime record are still hashed, because they are
 committed.
 
-Left from the critic's list: the pool-collapse guard is still exact equality,
-so one non-cohort wallet in a large pool silences it instead of reporting the
-cohort share.
+The renderer was then verified adversarially and refuted on every lens, which
+is the point of rendering a result at all: a clean page with a headline answer
+is the most forwardable thing this study produces. What the round found, and
+what the renderer now does:
+
+- It re-applies the plan's reading and decision rules to the interval the file
+  prints and refuses a label those bounds do not give. The module that states a
+  result must not be where a wrong one is laundered into prose.
+- It refuses a target that is not the plan's, an arm carrying the other arm's
+  verdict, a status it does not know, a schema it was not written for, and a
+  file whose disclosures or limitations are empty.
+- A run that broke, a dry run and an unmeasurable primary have their verdict
+  row withheld. The first version printed a live reading label two lines under
+  an answer that said no reading was produced.
+- It adds what the plan requires and the first version dropped: the instrument
+  scope as a filter stage with the fills it removed per wallet, the price
+  provenance, arm B's closure block, the survivorship definitions with the
+  denominator each share uses, the EXPLORATORY label the plan fixes for every
+  non-primary cut, the no-copyability-claim sentence, and the A-negative/B-GO
+  case as prose rather than a boolean in a table.
+- Every report opens with the plan's stop rule, its question and the definition
+  of d, so a reader who has not read the plan cannot mistake what they hold.
+  Table cells are escaped, so a pipe or a newline in a refusal cannot hide it.
+
+The critic also found that outcome 1 of the pre-registered reading, the hard
+stop under 200 evaluable wallets, had no report producer anywhere, and that the
+one figure the plan requires that report to state was computed nowhere. The
+freeze now writes it beside the record: the funnel, and the clock price of the
+delay measured against the probe's 15-minute retention of 52.2 days, so the
+owner can see what a week of widening the pool costs arm A.
+
+Left from the critic's list, and both are the owner's rather than mine: the
+pool-collapse guard is exact equality, so one non-cohort wallet in a large pool
+silences it instead of reporting the cohort share; and DEC-046 fixes a report
+order for arm A only, so extending it to arm B, where the survivorship section
+also carries the inflation against arm A, wants a decision.
 
 ## Known issues
 

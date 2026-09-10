@@ -127,6 +127,75 @@ def build_scope(
     return scope, record
 
 
+#: The venue's rolling 15-minute candle retention, measured by the phase 6
+#: probe (``L2_CANDLE_PROBE_001.json``: ``history_depth_days["15m"] = 52.2``).
+#: Arm A's window opens at T0-52d, so the retention is what a day of delay
+#: costs: the oldest evaluation day falls off the back as T0 moves forward.
+CANDLE_RETENTION_DAYS_15M = 52.2
+ARM_A_WINDOW_OPENS_DAYS_BEFORE_T0 = 52
+
+
+def hard_stop_report(record: Mapping[str, Any], *, minimum: int) -> str:
+    """Outcome 1 of the plan's pre-registered reading, as a report.
+
+    ``L2_ANALYSIS_PLAN.md``: "Fewer than 200 evaluable wallets after
+    filtering. The run stops before any evaluation and returns to the owner,
+    who widens the pool. The report states the clock price of the delay."
+    That clock price is the one figure the owner needs to decide how long
+    they may take, and nothing else in the repository states it.
+
+    Every count here is the freeze record's own. The clock price is the
+    plan's own arithmetic on the probe's measured retention, and it is
+    labelled as what it is.
+    """
+    counts = record.get("stage_counts") or {}
+    reasons = record.get("per_wallet_reason") or {}
+    evaluable = record.get("evaluable_count", 0)
+    lines = [
+        "# L2 cohort freeze: HARD STOP",
+        "",
+        "**No evaluation was run and no cohort was frozen.** The plan's first pre-registered outcome: "
+        f"fewer than {minimum} evaluable wallets after filtering, so the study returns to the owner to "
+        "widen the pool. No underpowered study is run to have something.",
+        "",
+        f"Evaluable wallets: {evaluable}, against a minimum of {minimum}.",
+        "",
+        "## n after every filter stage",
+        "",
+    ]
+    lines += ["| stage | n |", "|---|---|"]
+    lines += [f"| {stage} | {n} |" for stage, n in sorted(counts.items())]
+    lines += ["", "Why each candidate was excluded:", "", "| reason | n |", "|---|---|"]
+    lines += [f"| {reason} | {n} |" for reason, n in sorted(reasons.items())]
+    lines += [
+        "",
+        "## The clock price of the delay",
+        "",
+        f"Arm A's window opens {ARM_A_WINDOW_OPENS_DAYS_BEFORE_T0} days before T0, and the venue keeps "
+        f"{CANDLE_RETENTION_DAYS_15M} days of 15-minute candles on a rolling basis. Every day T0 moves "
+        "forward, the oldest evaluation day falls out of retention and cannot be fetched again.",
+        "",
+        "| days of delay | evaluation days arm A can still cover |",
+        "|---|---|",
+    ]
+    for delay in (0, 1, 7, 14, 30):
+        remaining = CANDLE_RETENTION_DAYS_15M - delay
+        lines.append(f"| {delay} | {round(remaining, 1)} |")
+    lines += [
+        "",
+        "The figure is the probe's measured retention minus the delay; it is arithmetic on a measured "
+        "constant, not an estimate of anything about the wallets.",
+        "",
+        "## What is not allowed here",
+        "",
+        "- Rerunning the freeze with different flags until 200 is reached. The plan calls that a result, "
+        "not a cohort.",
+        "- Lowering the minimum. It is the plan's, and the runner refuses a record that lowers it.",
+        "",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _candidate_fills(
     store: LiveDataStore, candidates: Sequence[str] | None
 ) -> dict[str, list]:
@@ -316,5 +385,12 @@ def run_freeze(args: argparse.Namespace, *, log: Callable[[str], None] = print) 
             f"HARD_STOP: {record['evaluable_count']} evaluable wallets, "
             f"minimum {args.minimum}"
         )
+        # Outcome 1 of the plan's pre-registered reading has a report, and it
+        # states the clock price of the delay the owner is about to take.
+        report_path = args.out.with_name(args.out.stem + "_HARD_STOP.md")
+        report_path.write_text(
+            hard_stop_report(record, minimum=args.minimum), encoding="utf-8", newline="\n"
+        )
+        log(f"hard-stop report: {report_path}")
         return 2
     return 0
