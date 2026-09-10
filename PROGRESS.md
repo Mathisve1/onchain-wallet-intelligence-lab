@@ -476,6 +476,36 @@ OUT_OF_DATE until it finishes; and the pool-collapse guard is exact equality, so
 one non-cohort wallet in a large pool silences it rather than reporting the
 cohort share.
 
+### The report renderer and the transient run files (2026-09-10)
+
+Two of the three items the completeness critic left open are closed.
+
+`live_data_collector/l2_arm_render.py` renders a completed arm's evidence file
+in the order `L2_ANALYSIS_PLAN.md` fixed and DEC-046 recorded as binding: the
+answer in one sentence, the confidence interval, the survivorship measurement,
+n after every filter stage, what broke, and only then the tables. The evidence
+file is sorted alphabetically, which is right for a machine and wrong for that
+rule, so the renderer lays the same values out in the owner's order. It
+computes nothing: every figure is copied as written, and a test asserts that no
+number appears in the report that the evidence does not carry. The answer
+sentence is chosen by the file's own status, reading and decision fields, so a
+case study cannot be rendered as a reading and arm B's answer is its decision
+rather than an arm A label. It refuses a checkpoint, because the plan delivers
+a report only when the arm is complete, and it names what an incomplete file
+lacks.
+
+The manifest no longer hashes the files an arm writes while it runs. A
+checkpoint exists between two wallets and an aborted file until the run is
+repeated; hashing them made the repository read `OUT_OF_DATE` for the hours an
+arm takes, which trains a reader to ignore the one signal that says the tree
+was altered. Both patterns are excluded by name and are in `.gitignore`; the
+evidence file and its runtime record are still hashed, because they are
+committed.
+
+Left from the critic's list: the pool-collapse guard is still exact equality,
+so one non-cohort wallet in a large pool silences it instead of reporting the
+cohort share.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
