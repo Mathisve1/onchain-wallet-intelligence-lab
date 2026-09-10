@@ -428,6 +428,54 @@ separately, the tolerance actually reaching the peer selection, the exact
 ledger-snapshot digest, the disclosure denominators, both span edges, and the
 arm B scope bound.
 
+### Completeness critic (2026-09-10)
+
+The critic that had died on the account limit in rounds two and three finally
+ran. It re-verified every round-three fix against the code (all confirmed
+landed) and found four blockers that no lens had looked for, because they are
+not in the runners at all: they are in the order the study is operated.
+
+- **The build plan made arm B unrunnable by construction.** Phase 9 put the
+  first `mids` run *after* the freeze and after arm A's hours of scoring, while
+  arm B's first quote must sit within the 15-minute freshness bound of T0 and
+  cannot be collected afterwards. The plan's own order guaranteed a dead
+  decisive arm that nobody would notice until day 56. Phase 9 now polls mids
+  before the freeze, and the freeze refuses a T0 with no benchmark mid at or
+  before it, so the order is binding rather than advisory.
+- **The closing grace was a hidden three-day deadline.** A closing sweep that
+  finished later than that made arm B permanently unrunnable, and the refusal
+  named the wrong cause. It is now `--closing-grace-days`, written into the
+  file, and the message says which wallets were not reached and what to do.
+- **One unreachable wallet blocked the whole decisive arm.** The closure guard
+  counted only completed sweep rows, so a wallet whose closing walk kept
+  failing was a wall in front of the other 299. The plan's remedy is that such
+  a wallet is excluded and counted. The guard now asks whether the closing pass
+  *reached* each wallet; one that failed is reached, then refused by the
+  ledger and counted, and the file names it.
+- **The pool arm B needs was never collectable.** The sweep walks the freeze
+  record's cohort and nothing else, so no non-cohort wallet could ever be
+  certified over the forward window: the peer pool would be the cohort, and the
+  run would break on day 56 with the 56 days already spent. The freeze now
+  records the characterised set it read, and `sweep --sweep-pool` walks it.
+  Recording and being able to sweep the set is not the same as deciding that
+  the peers are drawn from it; that is still the owner's amendment (PR #157),
+  and the flag stays opt-in until it is accepted.
+
+Also from the critic: a freeze record without an instrument scope disabled every
+scope check, so `scope` is now required like `ledger_snapshot`; and `health.py`,
+the only inspection the approval permits during collection, now reports arm B's
+three preconditions (the benchmark's first mid against T0, the pool wallets
+never swept, and the wallets whose sweeps keep failing) so none of them is
+discovered on day 56.
+
+Left open deliberately, with the critic's ranking: the arm A report renderer
+that the plan's fixed report order requires has no producer yet (needed before
+arm A is read, which is hours after T0); the runtime and checkpoint sidecars sit
+in the tree the manifest hashes, so a live run makes governance read
+OUT_OF_DATE until it finishes; and the pool-collapse guard is exact equality, so
+one non-cohort wallet in a large pool silences it rather than reporting the
+cohort share.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and

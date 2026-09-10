@@ -66,9 +66,11 @@ STATUS_BROKE = "BROKE_SEE_WHAT_BROKE"
 L2_LEDGER_MODES = ("backfill_wallet", "sweep_wallet")
 #: Arm A reads the rows that had finished by T0, the freeze instant, and
 #: refuses unless they are the rows the freeze recorded. Arm B reads the rows
-#: finishing within this grace after its window end, so a rerun months later
-#: consults the same rows.
-ARM_B_CLOSE_GRACE_MS = 3 * MILLISECONDS_PER_DAY
+#: finishing within a grace after its window end, so a rerun months later
+#: consults the same rows; the grace is an input (``--closing-grace-days``)
+#: because a closing sweep of 300 wallets can be slow or need repeating, and
+#: a deadline nobody chose would end the study by arithmetic.
+DEFAULT_CLOSING_GRACE_DAYS = 3
 EXIT_REFUSED = 2
 EXIT_BROKE = 3
 
@@ -122,10 +124,10 @@ def characterisation_window(t0_ms: int) -> tuple[int, int]:
 def load_cohort(path: Path, *, plan_commit: str, allow_underpowered: bool = False) -> dict:
     """The freeze record, trusted only after every check a reader would make."""
     record = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("t0_ms", "cohort", "cohort_sha256", "plan_commit", "hard_stop", "ledger_snapshot"):
+    for key in ("t0_ms", "cohort", "cohort_sha256", "plan_commit", "hard_stop", "ledger_snapshot", "scope"):
         if key not in record:
             raise ArmRunnerError(f"freeze record lacks {key!r}: {path} (a record without the ledger snapshot "
-                                 "predates the runner; re-freeze)")
+                                 "or the instrument scope predates the runner; re-freeze)")
     if record["plan_commit"] != plan_commit:
         raise ArmRunnerError(
             f"freeze record was made under plan commit {record['plan_commit']!r}, this run names {plan_commit!r}"

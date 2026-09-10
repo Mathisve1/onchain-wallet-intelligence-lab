@@ -160,6 +160,8 @@ class ArmARunnerStoreTestCase(unittest.TestCase):
             "hard_stop": hard_stop, "minimum_evaluable": 200,
             "stage_counts": {"discovered": 5, "evaluable": len(cohort)},
             "per_wallet_reason": {"EVALUABLE": len(cohort)},
+            "pool": sorted(w.lower() for w in COHORT + POOL_ONLY),
+            "pool_sha256": cohort_hash(sorted(w.lower() for w in COHORT + POOL_ONLY)),
             "characterisation_window": {"start_ms": C_START, "end_ms": C_END, "days": 30.0},
             "scope": {"funding_coins": funding_coins, "candle_complete_coins": candle_complete,
                       "excluded": sorted(excluded), "sources": {"funding": "db", "candles": "post-check"}},
@@ -474,6 +476,14 @@ class ArmARunnerTests(ArmARunnerStoreTestCase):
         code, logged = self.run_main(self.argv(overwrite=False))
         self.assertEqual(code, 2)
         self.assertIn("exists; pass --overwrite", logged[0])
+
+    def test_a_record_without_an_instrument_scope_is_refused(self) -> None:
+        # Without the recorded scope the candle post-check becomes an unpinned
+        # operator input that silently changes which coins are evaluated.
+        rec = {k: v for k, v in self.record(COHORT).items() if k != "scope"}
+        code, logged = self.run_main(self.argv(cohort=self.write_record(rec)))
+        self.assertEqual(code, 2)
+        self.assertIn("lacks 'scope'", logged[0])
 
     def test_a_record_whose_characterisation_window_is_not_the_plans_is_refused(self) -> None:
         rec = self.record(COHORT)

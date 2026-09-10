@@ -17,7 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from src.copyability.cohort import InstrumentScope
 from src.copyability.inputs import MarketData, SourceFill
-from src.live_data.storage import LiveDataStore
+from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
 from .cohort_pipeline_freeze import candle_complete_coins, coin_list_sha256
 
@@ -108,30 +108,81 @@ def split_by_scope(
 
 
 def sweep_closure(store: LiveDataStore, wallets: Sequence[str], *, window_end_ms: int, finished_by_ms: int) -> dict:
-    """Has the closing sweep touched every cohort wallet?
+    """Has the closing sweep reached every cohort wallet?
 
-    A completed ``sweep_wallet`` row that finished at or after the window end
-    (and within the closing grace) says the collection for that wallet ran
-    to the end, whatever it found. A wallet without one has not been closed,
-    and reading the arm before it is would be the interim look the approval
-    forbids.
+    A ``sweep_wallet`` row that finished at or after the window end (and
+    within the closing grace) says the closing pass reached that wallet.
+    Whether it *succeeded* is a different question: a wallet whose closing
+    walk failed is excluded by the coverage ledger and counted as a refusal,
+    which is what the plan prescribes. Blocking the whole decisive arm on one
+    unreachable wallet would be a stop rule the plan does not have.
+
+    What is still a wall is a wallet the closing pass never reached: the
+    collection is then simply not finished, and reading the arm would be the
+    interim look the approval forbids.
     """
     rows = store.connection.execute(
-        "SELECT wallet_address, MAX(finished_at_ms) AS finished FROM ingest_runs "
-        "WHERE mode = 'sweep_wallet' AND status = 'completed' AND finished_at_ms >= ? AND finished_at_ms <= ? "
-        "GROUP BY wallet_address",
+        "SELECT wallet_address, status, MAX(finished_at_ms) AS finished FROM ingest_runs "
+        "WHERE mode = 'sweep_wallet' AND finished_at_ms >= ? AND finished_at_ms <= ? "
+        "GROUP BY wallet_address, status",
         (window_end_ms, finished_by_ms),
     ).fetchall()
-    finished = {row["wallet_address"]: int(row["finished"]) for row in rows}
-    per_wallet = {w: finished.get(w) for w in wallets}
+    reached: dict[str, int] = {}
+    failed: set[str] = set()
+    for row in rows:
+        wallet, finished = row["wallet_address"], int(row["finished"])
+        reached[wallet] = max(reached.get(wallet, finished), finished)
+        if row["status"] != RUN_STATUS_COMPLETED:
+            failed.add(wallet)
+    succeeded = {w for w in reached if w not in failed or _completed_closing(store, w, window_end_ms, finished_by_ms)}
+    per_wallet = {w: reached.get(w) for w in wallets}
     present = [t for t in per_wallet.values() if t is not None]
     return {
-        "rule": "every cohort wallet carries a completed sweep_wallet row that finished at or after the "
-                "window end and within the closing grace",
+        "rule": "every cohort wallet carries a sweep_wallet row that finished at or after the window end and "
+                "within the closing grace; a wallet whose closing walk failed is reached, and is then excluded "
+                "by the ledger and counted as a refusal",
         "closed": all(t is not None for t in per_wallet.values()),
         "wallets_without_closing_sweep": sorted(w for w, t in per_wallet.items() if t is None),
+        "wallets_whose_closing_sweep_failed": sorted(w for w in wallets if w in failed and w not in succeeded),
         "earliest_closing_sweep_ms": min(present) if present else None,
         "latest_closing_sweep_ms": max(present) if present else None,
+    }
+
+
+def _completed_closing(store: LiveDataStore, wallet: str, window_end_ms: int, finished_by_ms: int) -> bool:
+    """Did any closing walk for this wallet actually complete?"""
+    row = store.connection.execute(
+        "SELECT COUNT(*) AS n FROM ingest_runs WHERE mode = 'sweep_wallet' AND status = ? "
+        "AND wallet_address = ? AND finished_at_ms >= ? AND finished_at_ms <= ?",
+        (RUN_STATUS_COMPLETED, wallet, window_end_ms, finished_by_ms),
+    ).fetchone()
+    return int(row["n"]) > 0
+
+
+def arm_b_preconditions(
+    store: LiveDataStore, *, t0_ms: int, benchmark_coin: str, max_age_ms: int, pool: Sequence[str]
+) -> dict:
+    """The three things the day-56 read needs that only collection can supply.
+
+    Counts and timestamps only, so this may be inspected while the arm runs.
+    None of it can be repaired after the window closes, which is why it is
+    reported from the first day rather than discovered on day 56.
+    """
+    row = store.connection.execute(
+        "SELECT MIN(observed_at_ms) AS first FROM mids WHERE coin = ?", (benchmark_coin,)
+    ).fetchone()
+    first_mid = None if row["first"] is None else int(row["first"])
+    swept = {
+        r["wallet_address"] for r in store.connection.execute(
+            "SELECT DISTINCT wallet_address FROM ingest_runs WHERE mode = 'sweep_wallet'"
+        )
+    }
+    return {
+        "benchmark_coin": benchmark_coin,
+        "benchmark_first_mid_ms": first_mid,
+        "benchmark_first_mid_within_bound": first_mid is not None and first_mid < t0_ms + max_age_ms,
+        "pool_wallets_total": len(pool),
+        "pool_wallets_never_swept": sorted(w for w in pool if w not in swept),
     }
 
 

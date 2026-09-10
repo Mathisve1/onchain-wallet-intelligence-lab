@@ -150,6 +150,8 @@ class ArmBStoreTestCase(unittest.TestCase):
             "t0_ms": T0, "cohort": cohort, "cohort_sha256": cohort_hash(cohort), "plan_commit": PLAN,
             "hard_stop": hard_stop, "minimum_evaluable": 200,
             "stage_counts": {"discovered": 5, "evaluable": len(cohort)}, "per_wallet_reason": {"EVALUABLE": len(cohort)},
+            "pool": sorted(w.lower() for w in COHORT + POOL_ONLY),
+            "pool_sha256": cohort_hash(sorted(w.lower() for w in COHORT + POOL_ONLY)),
             "characterisation_window": {"start_ms": C_START, "end_ms": C_END, "days": 30.0},
             "scope": {"funding_coins": 1, "candle_complete_coins": 1, "excluded": [], "sources": {}},
         }
@@ -234,6 +236,46 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         self.assertFalse(self.out.exists())
         self.assertIn("not closed", logged[0])
 
+    def test_a_cohort_wallet_whose_closing_sweep_failed_is_excluded_not_a_wall(self) -> None:
+        # The plan excludes and counts a wallet the ledger cannot certify. A
+        # wallet the closing pass reached and could not collect is that case,
+        # not a reason to withhold the decisive arm from the other 299.
+        with LiveDataStore(self.db) as store:
+            store.connection.execute(
+                "DELETE FROM ingest_runs WHERE wallet_address = ? AND mode = 'sweep_wallet'", (COHORT[1],)
+            )
+            store.connection.commit()
+            _sweep(store, "closing-ok-1", COHORT[1], from_ms=T0, until_ms=T0 + 30 * DAY)
+            store.start_run("closing-failed-1", mode="sweep_wallet", started_at_ms=END + HOUR,
+                            wallet_address=COHORT[1])
+            store.finish_run("closing-failed-1", finished_at_ms=END + HOUR, status="failed",
+                             records_seen=0, records_written=0, error_count=1, notes="RestError: 500")
+        r = self.run_ok()
+        self.assertTrue(r["closure"]["closed"])
+        self.assertEqual(r["closure"]["wallets_whose_closing_sweep_failed"], [COHORT[1]])
+        self.assertEqual(r["counts"], {"wallets": 3, "scored": 2, "refused": 1, "in_primary": 2})
+        self.assertIn("not fully observed", r["refusals"][COHORT[1]])
+
+    def test_the_closing_grace_is_an_input_and_is_recorded(self) -> None:
+        with LiveDataStore(self.db) as store:  # the closing sweep finished five days late
+            store.connection.execute(
+                "UPDATE ingest_runs SET finished_at_ms = ? WHERE mode = 'sweep_wallet' AND finished_at_ms > ?",
+                (END + 5 * DAY, END),
+            )
+            store.connection.commit()
+        code, logged = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertIn("closing grace", logged[0])
+        self.assertIn("--closing-grace-days", logged[0])
+        r = self.run_ok(self.argv() + ["--closing-grace-days", "7"])
+        self.assertEqual(r["closure"]["closing_grace_days"], 7)
+        self.assertEqual(r["pool"]["ledger_finished_by_ms"], END + 7 * DAY)
+
+    def test_the_file_records_the_pool_the_freeze_named(self) -> None:
+        r = self.run_ok()
+        self.assertEqual(r["pool_record"], {"sha256": cohort_hash(sorted(w.lower() for w in COHORT + POOL_ONLY)),
+                                            "size": 5})
+
     def test_a_cohort_wallet_without_a_closing_sweep_stops_the_read(self) -> None:
         # The pool-only wallets are closed, one cohort wallet is not: the
         # collection is still running, so nothing may be computed.
@@ -245,7 +287,7 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         code, logged = self.run_main()
         self.assertEqual(code, 2)
         self.assertFalse(self.out.exists())
-        self.assertIn("1 of 3 cohort wallets have no completed sweep_wallet row", logged[0])
+        self.assertIn("1 of 3 cohort wallets were not reached by a sweep", logged[0])
 
     def test_a_closed_sweep_that_could_not_certify_a_wallet_refuses_that_wallet_only(self) -> None:
         # Closed for every wallet, but one wallet's coverage has a hole: it is

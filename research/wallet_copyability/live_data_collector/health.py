@@ -45,6 +45,9 @@ from typing import Any, Sequence
 
 from src.live_data.storage import LiveDataStore
 
+from .l2_arm_inputs import BENCHMARK_COIN, MAX_PRICE_AGE_MS
+from .l2_arm_report import arm_b_preconditions
+
 #: The venue's 15-minute candle spacing and the arm B mids poll cadence, as
 #: milliseconds. A gap wider than this in either series is flagged stale.
 FIFTEEN_MINUTE_MS = 900_000
@@ -469,8 +472,13 @@ def main(argv: Sequence[str] | None = None, *, log=print) -> int:
 
         wallet_rows = wallet_health(store, wallets, t0_ms=t0_ms)
         coin_rows = coin_health(store, coins, since_ms=t0_ms)
+        # What the day-56 read needs and no later step can repair.
+        preconditions = arm_b_preconditions(
+            store, t0_ms=t0_ms, benchmark_coin=BENCHMARK_COIN, max_age_ms=MAX_PRICE_AGE_MS,
+            pool=list(cohort_payload.get("pool") or cohort_payload["cohort"]))
 
-    totals = summary(wallet_rows, coin_rows, stale_after_ms=stale_after_ms)
+    totals = {**summary(wallet_rows, coin_rows, stale_after_ms=stale_after_ms),
+              "arm_b_preconditions": preconditions}
     _print_report(wallet_rows, coin_rows, totals, log=log)
 
     if args.json_out is not None:

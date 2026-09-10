@@ -22,6 +22,7 @@ from research.wallet_copyability.live_data_collector.cohort_pipeline import (
     main,
 )
 from research.wallet_copyability.live_data_collector.cohort_pipeline_freeze import (
+    FreezeInputError,
     MINIMUM_EVALUABLE,
     build_scope,
     candle_complete_coins,
@@ -30,6 +31,7 @@ from research.wallet_copyability.live_data_collector.cohort_pipeline_freeze impo
     funding_coins_in_db,
 )
 from src.live_data.models import Fill, FundingDelta, parse_funding
+from src.copyability.cohort import cohort_hash
 from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
 D = Decimal
@@ -217,6 +219,11 @@ class FreezeStoreTestCase(unittest.TestCase):
             # certified window is excluded before it is characterised.
             for index, wallet in enumerate((EVAL_WALLET, MAKER_WALLET, QUIET_WALLET)):
                 self._record_backfill(store, f"backfill-{index}", wallet, covered_until_ms=T0)
+            # The mids poller runs before the freeze: arm B's first quote must
+            # sit within the freshness bound of T0 and cannot be collected
+            # afterwards, so the freeze refuses a T0 the poller has not reached.
+            store.write_mids({"BTC": "64000"}, {"BTC": "64000"}, observed_at_ms=T0 - 60_000,
+                             ingested_at_ms=T0 - 60_000)
 
         self.candles_json = self.root / "L2_ARM_A_CANDLES_001.json"
         self.candles_json.write_text(json.dumps(CANDLE_POST_CHECK), encoding="utf-8")
@@ -328,6 +335,41 @@ class FreezeSelectionTests(FreezeStoreTestCase):
         self.assertTrue(record["hard_stop"])
         self.assertEqual(record["cohort"], [])
         self.assertEqual(record["evaluable_count"], 1)
+
+
+class FreezeMidsPreconditionTests(FreezeStoreTestCase):
+    """Arm B's first quote is a T0-day precondition, not a day-56 discovery."""
+
+    def test_a_t0_the_mids_poller_has_not_reached_is_refused(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM mids")
+            store.connection.commit()
+        out = self.root / "freeze.json"
+        logged: list[str] = []
+        with self.assertRaises(FreezeInputError) as caught:
+            main(self.freeze_argv(out, minimum=1), log=logged.append)
+        self.assertIn("start the mids poll before freezing", str(caught.exception))
+        self.assertFalse(out.exists())
+
+    def test_a_mid_after_t0_does_not_satisfy_it(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM mids")
+            store.write_mids({"BTC": "64000"}, {"BTC": "64000"}, observed_at_ms=T0 + 1,
+                             ingested_at_ms=T0 + 1)
+        with self.assertRaises(FreezeInputError):
+            main(self.freeze_argv(self.root / "freeze.json", minimum=1), log=_silent)
+
+    def test_the_record_carries_the_characterised_pool_and_the_first_mid(self) -> None:
+        out = self.root / "freeze.json"
+        main(self.freeze_argv(out, minimum=1), log=_silent)
+        record = json.loads(out.read_text(encoding="utf-8"))
+        # Every candidate the freeze judged, cohort member or not: only a
+        # swept wallet can be certified over arm B's window, and the sweep
+        # needs the list at T0.
+        self.assertEqual(record["pool"], sorted([EVAL_WALLET, MAKER_WALLET, QUIET_WALLET]))
+        self.assertEqual(record["pool_sha256"], cohort_hash(record["pool"]))
+        self.assertGreaterEqual(len(record["pool"]), len(record["cohort"]))
+        self.assertEqual(record["benchmark_first_mid_ms"], T0 - 60_000)
 
 
 class FreezeCoverageTests(FreezeStoreTestCase):

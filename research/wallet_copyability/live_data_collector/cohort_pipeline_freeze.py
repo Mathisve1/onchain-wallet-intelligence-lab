@@ -22,6 +22,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from src.copyability.cohort import (
     CohortSelection,
+    cohort_hash,
     InstrumentScope,
     freeze_record,
     select_cohort,
@@ -30,7 +31,7 @@ from src.copyability.loader import coverage_snapshot, load_coverage, load_fills
 from src.live_data.config import normalize_coin, normalize_wallet_address
 from src.live_data.storage import LiveDataStore
 
-from .l2_arm_inputs import L2_LEDGER_MODES
+from .l2_arm_inputs import BENCHMARK_COIN, L2_LEDGER_MODES, MAX_PRICE_AGE_MS
 
 MILLISECONDS_PER_DAY = 86_400_000
 
@@ -162,6 +163,21 @@ def freeze(
         raise FreezeInputError(
             "collection rows finished after T0; T0 is the freeze instant and must not precede the last backfill"
         )
+    # Arm B prices on the polled mids and its window opens at T0, so its first
+    # usable quote must sit within the freshness bound of T0. Nothing can
+    # supply that afterwards: a mids series that starts late makes the
+    # decisive arm unrunnable for the whole 56 days. The only moment this can
+    # be caught is here, so the freeze refuses a T0 the poller has not reached.
+    row = store.connection.execute(
+        "SELECT MIN(observed_at_ms) AS first FROM mids WHERE coin = ?", (BENCHMARK_COIN,)
+    ).fetchone()
+    first_mid = None if row["first"] is None else int(row["first"])
+    if first_mid is None or first_mid > t0_ms:
+        raise FreezeInputError(
+            f"no {BENCHMARK_COIN} mid at or before T0 ({first_mid} is the first): start the mids poll before "
+            f"freezing. Arm B's first quote must sit within {MAX_PRICE_AGE_MS} ms of T0 and cannot be collected "
+            "afterwards, so a freeze taken before the poller starts makes the decisive arm unrunnable."
+        )
     # The ledger, not an assertion, decides whether a candidate's window was
     # observed in full: a wallet whose backfill stopped inside the window is
     # excluded as WINDOW_UNOBSERVED rather than characterised on a fragment.
@@ -190,6 +206,19 @@ def freeze(
     record["per_wallet_reason"] = dict(Counter(selection.per_wallet.values()))
     record["minimum_evaluable"] = minimum
     record["ledger_snapshot"] = snapshot
+    # Every candidate this freeze judged, cohort member or not. Recording the
+    # set is not the same as deciding that the matched-random peers are drawn
+    # from it -- that is the owner's pre-T0 amendment -- but the set has to be
+    # named at T0 either way, because only wallets swept over the forward
+    # window can be certified over it, and the sweep needs a list.
+    pool = sorted(selection.per_wallet)
+    record["pool"] = pool
+    record["pool_sha256"] = cohort_hash(pool)
+    record["pool_definition"] = (
+        "every characterised wallet this freeze read, cohort member or not; whether the matched-random peers "
+        "are drawn from it is fixed by the plan, not by this record"
+    )
+    record["benchmark_first_mid_ms"] = first_mid
     return record, selection
 
 

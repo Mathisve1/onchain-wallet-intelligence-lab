@@ -51,7 +51,7 @@ from src.live_data.storage import LiveDataStore
 
 from . import l2_arm_report as report
 from .l2_arm_inputs import (  # noqa: F401 - the arm modules and the tests reach these through this namespace
-    ARM_B_CLOSE_GRACE_MS,
+    DEFAULT_CLOSING_GRACE_DAYS,
     BENCHMARK_COIN,
     CANDLE_INTERVAL,
     CANDLE_INTERVAL_MS,
@@ -106,7 +106,8 @@ from .l2_arm_statistics import (
 
 def run(
     store: LiveDataStore, cohort: dict, spec: ArmSpec, *, candles_json: Path, plan_commit: str,
-    dry_run: bool = False, checkpoint: Path | None = None, arm_a_json: Path | None = None, log=print,
+    dry_run: bool = False, checkpoint: Path | None = None, arm_a_json: Path | None = None,
+    closing_grace_days: int = DEFAULT_CLOSING_GRACE_DAYS, log=print,
 ) -> tuple[dict, int]:
     t0_ms = int(cohort["t0_ms"])
     wallets = list(cohort["cohort"])
@@ -119,7 +120,8 @@ def run(
     # that had finished by T0, and it must be the ledger the freeze recorded.
     # Arm B's is the REST-swept rows finishing within the closing grace.
     modes = L2_LEDGER_MODES
-    finished_by = t0_ms if spec.arm == "A" else window[1] + ARM_B_CLOSE_GRACE_MS
+    grace_ms = closing_grace_days * MILLISECONDS_PER_DAY
+    finished_by = t0_ms if spec.arm == "A" else window[1] + grace_ms
     ledger = load_coverage(store, modes=modes, finished_by_ms=finished_by)
     snapshot = coverage_snapshot(store, modes=modes, finished_by_ms=finished_by)
     closure: dict | None = None
@@ -138,11 +140,14 @@ def run(
         # refused and counted, as the plan says; a wallet without one means
         # the closing sweep has not finished.
         closure = report.sweep_closure(store, wallets, window_end_ms=window[1], finished_by_ms=finished_by)
+        closure["closing_grace_days"] = closing_grace_days
         if not closure["closed"]:
             missing = closure["wallets_without_closing_sweep"]
             raise ArmRunnerError(
                 f"arm B's window is not closed in this database: {len(missing)} of {len(wallets)} cohort wallets "
-                f"have no completed sweep_wallet row finishing at or after the window end {window[1]}"
+                f"were not reached by a sweep between the window end {window[1]} and {finished_by}, the end of the "
+                f"{closing_grace_days}-day closing grace. Run the closing sweep for them, or widen the grace with "
+                "--closing-grace-days if it has already run and finished later than that."
             )
         if not any(ledger.is_fully_known(w, *window) for w in wallets):
             raise ArmRunnerError("arm B's window is not closed in this database: no cohort wallet is certified over it")
@@ -285,6 +290,7 @@ def run(
                     "last quote at most end_tolerance_ms before the window end",
         },
         "ledger_snapshot": snapshot,
+        "pool_record": {"sha256": cohort.get("pool_sha256"), "size": len(cohort.get("pool", []) or [])},
         "dry_run_flag_passed": bool(dry_run),
         "record_minimum_evaluable": recorded_minimum,
         "assumptions": assumptions(seed),
@@ -357,6 +363,12 @@ def build_parser(spec: ArmSpec) -> argparse.ArgumentParser:
     parser.add_argument("--plan-commit", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--overwrite", action="store_true", help="replace an existing evidence file under --out")
+    if spec.decides:
+        parser.add_argument(
+            "--closing-grace-days", type=int, default=DEFAULT_CLOSING_GRACE_DAYS, dest="closing_grace_days",
+            help="how long after the window end the closing sweep may still have finished (default 3 days); "
+                 "the value is written into the evidence file",
+        )
     parser.add_argument("--allow-underpowered-dry-run", action="store_true", dest="dry_run",
                         help="evaluate a cohort under the plan's minimum; the file is stamped DRY_RUN_UNDERPOWERED")
     if spec.decides:
@@ -398,7 +410,8 @@ def main(spec: ArmSpec, argv: Sequence[str] | None = None, *, log=print) -> int:
         with LiveDataStore(args.db, create=False) as store:
             evidence, code = run(
                 store, cohort, spec, candles_json=args.candles_json, plan_commit=args.plan_commit,
-                dry_run=args.dry_run, checkpoint=checkpoint, arm_a_json=getattr(args, "arm_a_json", None), log=log,
+                dry_run=args.dry_run, checkpoint=checkpoint, arm_a_json=getattr(args, "arm_a_json", None),
+                closing_grace_days=getattr(args, "closing_grace_days", DEFAULT_CLOSING_GRACE_DAYS), log=log,
             )
     except BaseException as exc:  # rule 5: stop and report; nothing, Ctrl-C included, escapes without the line
         log(f"{spec.run_id}: stopped: {type(exc).__name__}: {exc}")

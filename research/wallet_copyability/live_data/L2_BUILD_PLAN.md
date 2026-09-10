@@ -67,4 +67,6 @@ Acceptance: runs on the L1 database without error and prints counts only.
 
 ## Phase 9 — review and verification
 
-`code-review` (high) on every file touched in phases 1–8 before any live request; verify each finding against the code; fix; full suite; manifest; commit. Then, in order: discovery sessions, characterisation backfill (background), freeze (hard stop check), candle fetch, arm A runner, first arm B sweep and `mids` run, health check.
+`code-review` (high) on every file touched in phases 1–8 before any live request; verify each finding against the code; fix; full suite; manifest; commit. Then, in order: discovery sessions, characterisation backfill (background), candle fetch, **first `mids` run and first arm B sweep**, freeze (hard stop check), arm A runner, health check.
+
+The mids poll precedes the freeze deliberately. T0 is the freeze instant, arm B's window opens at T0, and its first usable quote must sit within the 15-minute freshness bound of it. A series that starts after that cannot be repaired once the window is open, so the decisive arm would be unrunnable and nobody would learn it until day 56. The freeze refuses a T0 the poller has not reached, which is what makes this order binding rather than advisory.
