@@ -22,7 +22,6 @@ from research.wallet_copyability.live_data_collector.cohort_pipeline import (
     main,
 )
 from research.wallet_copyability.live_data_collector.cohort_pipeline_freeze import (
-    FreezeInputError,
     MINIMUM_EVALUABLE,
     build_scope,
     candle_complete_coins,
@@ -389,9 +388,11 @@ class FreezeMidsPreconditionTests(FreezeStoreTestCase):
             store.connection.commit()
         out = self.root / "freeze.json"
         logged: list[str] = []
-        with self.assertRaises(FreezeInputError) as caught:
-            main(self.freeze_argv(out, minimum=1), log=logged.append)
-        self.assertIn("start the mids poll before freezing", str(caught.exception))
+        # A refused input is a sentence and exit 2, not a traceback: this runs
+        # once, on the T0 day, in front of an operator with a clock.
+        self.assertEqual(main(self.freeze_argv(out, minimum=1), log=logged.append), 2)
+        self.assertIn("start the mids poll before freezing", logged[-1])
+        self.assertIn("refusing to freeze", logged[-1])
         self.assertFalse(out.exists())
 
     def test_a_mid_after_t0_does_not_satisfy_it(self) -> None:
@@ -399,8 +400,7 @@ class FreezeMidsPreconditionTests(FreezeStoreTestCase):
             store.connection.execute("DELETE FROM mids")
             store.write_mids({"BTC": "64000"}, {"BTC": "64000"}, observed_at_ms=T0 + 1,
                              ingested_at_ms=T0 + 1)
-        with self.assertRaises(FreezeInputError):
-            main(self.freeze_argv(self.root / "freeze.json", minimum=1), log=_silent)
+        self.assertEqual(main(self.freeze_argv(self.root / "freeze.json", minimum=1), log=_silent), 2)
 
     def test_the_record_carries_the_characterised_pool_and_the_first_mid(self) -> None:
         out = self.root / "freeze.json"

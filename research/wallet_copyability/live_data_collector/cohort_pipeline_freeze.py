@@ -338,10 +338,15 @@ def _resolve_candles(args: argparse.Namespace) -> tuple[frozenset[str], str]:
 def run_freeze(args: argparse.Namespace, *, log: Callable[[str], None] = print) -> int:
     """Run the freeze subcommand.
 
-    Exit 0 on a cohort at or above the minimum, 2 on the hard stop. The file is
-    written either way: the counts are what the owner needs in order to decide
-    whether to widen the candidate pool, and under a hard stop the record's
-    ``cohort`` is empty, so nothing can be run against it by accident.
+    Exit 0 on a cohort at or above the minimum, 2 on the hard stop and on any
+    input the freeze refuses. The file is written on the hard stop: the counts
+    are what the owner needs in order to decide whether to widen the candidate
+    pool, and the record's ``cohort`` is empty, so nothing can be run against
+    it by accident.
+
+    A refused input is a sentence, not a traceback. This runs once, on the T0
+    day, in front of an operator with a clock; the two things it can say are
+    what is wrong and what to do about it.
     """
     from .cohort_pipeline import UNMEASURED_COINS, read_candidate_file, write_evidence
 
@@ -365,16 +370,20 @@ def run_freeze(args: argparse.Namespace, *, log: Callable[[str], None] = print) 
             funding_source=funding_source,
             candle_source=candle_source,
         )
-        record, _ = freeze(
-            store,
-            t0_ms=args.t0_ms,
-            plan_commit=args.plan_commit,
-            scope=scope,
-            scope_record=scope_record,
-            window=window,
-            candidates=candidates,
-            minimum=args.minimum,
-        )
+        try:
+            record, _ = freeze(
+                store,
+                t0_ms=args.t0_ms,
+                plan_commit=args.plan_commit,
+                scope=scope,
+                scope_record=scope_record,
+                window=window,
+                candidates=candidates,
+                minimum=args.minimum,
+            )
+        except FreezeInputError as exc:
+            log(f"freeze: refusing to freeze: {exc}")
+            return 2
     write_evidence(args.out, record)
 
     log(json.dumps(record["stage_counts"], sort_keys=True))
