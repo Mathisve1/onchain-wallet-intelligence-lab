@@ -25,6 +25,7 @@ from types import SimpleNamespace
 from research.wallet_copyability.live_data_collector import l2_arm_report as report
 from research.wallet_copyability.live_data_collector import arm_a_runner as runner
 from research.wallet_copyability.live_data_collector import l2_arm_runner as core
+from research.wallet_copyability.live_data_collector import l2_arm_inputs as inputs
 from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
 from src.copyability.loader import coverage_snapshot
@@ -100,12 +101,14 @@ def _coverage(store: LiveDataStore, run_id: str, wallet: str, *, covered_until_m
 def patched_minimum(minimum: int):
     """Run as if the plan's minimum were ``minimum``, to reach the labels an
     adequately powered arm carries; the plan's own 200 is asserted elsewhere."""
-    original = core.MINIMUM_EVALUATED
-    core.MINIMUM_EVALUATED = minimum
+    # Two namespaces read it: the run's own, and the freeze-record check in
+    # l2_arm_inputs that decides whether the cohort may be evaluated at all.
+    originals = (core.MINIMUM_EVALUATED, inputs.MINIMUM_EVALUATED)
+    core.MINIMUM_EVALUATED = inputs.MINIMUM_EVALUATED = minimum
     try:
         yield
     finally:
-        core.MINIMUM_EVALUATED = original
+        core.MINIMUM_EVALUATED, inputs.MINIMUM_EVALUATED = originals
 
 
 class ArmARunnerStoreTestCase(unittest.TestCase):

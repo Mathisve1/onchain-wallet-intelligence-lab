@@ -4,9 +4,14 @@ import difflib
 import unittest
 from pathlib import Path
 
+import subprocess
 import tempfile
 
-from governance.regenerate_manifest import included_files, render_manifest
+from governance.regenerate_manifest import (
+    EXCLUDED_NAME_PATTERNS,
+    included_files,
+    render_manifest,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "governance/REPOSITORY_MANIFEST.sha256"
@@ -47,6 +52,28 @@ class RepositoryManifestExactTests(unittest.TestCase):
             # transient pair is not.
             names = {path.name for path in included_files(root)}
             self.assertEqual(names, {"L2_ARM_A_001.json", "L2_ARM_A_001.json.runtime.json"})
+
+
+    def test_every_excluded_pattern_is_also_ignored_by_git(self) -> None:
+        """The two exclusions must stay aligned. A pattern the manifest skips
+        while git tracks it would be repository content outside the canonical
+        file set, which is the one thing the manifest exists to prevent."""
+        ignored = {line.strip() for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()}
+        for pattern in EXCLUDED_NAME_PATTERNS:
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, ignored)
+
+    def test_no_tracked_file_is_excluded_by_name(self) -> None:
+        import fnmatch
+
+        tracked = subprocess.run(
+            ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+        for path in tracked:
+            name = path.rsplit("/", 1)[-1]
+            for pattern in EXCLUDED_NAME_PATTERNS:
+                with self.subTest(path=path, pattern=pattern):
+                    self.assertFalse(fnmatch.fnmatch(name, pattern), f"{path} is tracked but not hashed")
 
 
 if __name__ == "__main__":
