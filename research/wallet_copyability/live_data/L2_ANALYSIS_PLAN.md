@@ -3,7 +3,11 @@
 Status: `FROZEN`. Frozen on 2026-09-04 under DEC-043 and DEC-044, before any
 evaluation request; amended once on 2026-09-05 under DEC-046, still before T0 and
 before any collection request, to add the owner's pre-registered reading of arm A
-(the section "How arm A is read, fixed before it is seen"). The commit that contains this frozen text is cited in the T0
+(the section "How arm A is read, fixed before it is seen"); amended a second time
+on 2026-09-09, still before T0 and before any collection request, under the
+decision the owner records on accepting it, to fix the peer pool of the
+matched-random baseline (the section "Peer pool for the matched-random
+baseline, fixed before it is drawn"). The commit that contains this frozen text is cited in the T0
 evidence together with the cohort hash. Nothing in it changes after T0. It carries no
 validator and no tamper tests by owner instruction; its authority is that hash.
 
@@ -80,6 +84,43 @@ measure over the wallet's matched-random peers (seeded, same window, same costs)
 Primary statistic: mean of `d_i` over the evaluated set, two-sided one-sample t-test,
 alpha 0.05, computed separately for arm A and arm B. Secondary latencies (1 s, 5 s,
 2 min, 5 min, 15 min), buy-and-hold and momentum are reported and do not decide.
+
+## Peer pool for the matched-random baseline, fixed before it is drawn
+
+The primary measure contrasts each cohort wallet with its matched-random peers.
+The frozen text says the peers are wallets of similar activity over the same
+window at the same costs; it does not say which wallets they are drawn from.
+This amendment fixes that, before any peer is drawn.
+
+- **The pool.** Every wallet in the study database whose coverage ledger
+  certifies the arm's whole evaluation window, cohort member or not. Which
+  wallets those are follows from what was collected: for arm A, the wallets
+  characterised before T0, whose backfills cover `T0-52d` to `T0-7d`; for
+  arm B, the wallets the sweeps cover from T0 to `T0+56d`. The selection that
+  formed the cohort is not a condition either way, so the pool contains the
+  cohort and the characterised wallets the selection filtered out.
+- **The peers of wallet `i`.** Drawn from the pool without `i` itself, among
+  the wallets whose fill count over the window lies within 50 percent either
+  side of `i`'s own; 20 of them, sampled with a seed derived from the frozen
+  cohort hash; each scored over the same window, the same costs, the same
+  latency and the same price-age bound as `i`. Fewer than 20 eligible: all of
+  them, and the count is written per wallet. None: `i` has no `M_i`, enters no
+  primary statistic, and is counted as refused, never scored zero.
+- **Why the cohort cannot be its own pool.** With the cohort as its own pool,
+  the mean of `d_i` subtracts the cohort's own mean return from itself, and
+  any return the cohort earns in common, which is the copyable part, is
+  cancelled by construction. A Monte Carlo at three times the target effect
+  read as zero under that convention.
+- **One rule, both arms, and what it costs in arm B.** Arm A's pool is
+  certified by the backfills that already exist. Arm B's pool is certified
+  only by the sweeps, so during the 56 days the sweep covers the whole
+  characterised set, not the cohort alone; otherwise arm B's pool collapses
+  to the cohort and the contrast is lost in the decisive arm. The pool's
+  wallet list is frozen at T0 beside the cohort, with its own hash.
+- **Recorded, not corrected.** Each arm's evidence file carries the pool's
+  size and SHA-256 and the per-wallet peer counts. The two arms' pools may
+  differ in size through attrition; the difference is disclosed in the
+  limitations and is not adjusted for.
 
 ## Declared target effect and minimum detectable effect
 
