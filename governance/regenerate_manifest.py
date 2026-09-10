@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 from pathlib import Path
 
@@ -29,6 +30,16 @@ EXCLUDED_RELATIVE_PATHS = {
     ".claude/settings.local.json",
 }
 
+#: Files an arm runner writes while it is running, or leaves behind when it
+#: stops. A checkpoint exists only between two wallets and an aborted file
+#: only until the run is repeated, so hashing them would make the manifest
+#: report OUT_OF_DATE for the hours an arm takes and for as long as a failed
+#: run is kept. Neither is evidence, and .gitignore keeps both uncommitted.
+EXCLUDED_NAME_PATTERNS = (
+    "*.partial.json",
+    "*.aborted-*.json",
+)
+
 
 def included_files(root: Path = ROOT) -> list[Path]:
     files: list[Path] = []
@@ -46,6 +57,8 @@ def included_files(root: Path = ROOT) -> list[Path]:
         ):
             continue
         if path.suffix in {".pyc", ".pyo"}:
+            continue
+        if any(fnmatch.fnmatch(path.name, pattern) for pattern in EXCLUDED_NAME_PATTERNS):
             continue
         files.append(path)
     return sorted(
