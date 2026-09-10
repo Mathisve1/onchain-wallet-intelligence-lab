@@ -14,13 +14,14 @@ its tracked wallets for the time it was connected.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
 from src.live_data.ingest import MAX_FUNDING_PER_RESPONSE
-from src.live_data.storage import LiveDataStore
+from src.live_data.storage import COVERAGE_FILLS_BOUND_RULE, LiveDataStore
 
 from .coverage import CoverageLedger, ObservedInterval
 # Re-exported: it moved next to the simulator that consumes it, but the
@@ -59,12 +60,15 @@ def load_fills(store: LiveDataStore, wallets: Iterable[str] | None = None) -> di
     return result
 
 
-def load_funding_truncation(store: LiveDataStore, *, modes: Iterable[str] | None = None) -> dict[str, bool]:
+def load_funding_truncation(
+    store: LiveDataStore, *, modes: Iterable[str] | None = None, finished_by_ms: int | None = None
+) -> dict[str, bool]:
     """Per wallet: did any completed backfill hit the venue's funding cap?
 
-    ``modes`` restricts the rows consulted to those collection modes (a
-    caller that must not see rows written after its window closed passes the
-    modes that could only have run before it); ``None`` reads every mode.
+    ``modes`` restricts the rows consulted to those collection modes and
+    ``finished_by_ms`` to rows that finished at or before that instant, the
+    same bounds :func:`load_coverage` takes, so a study's truncation map is
+    built from exactly the rows its ledger was.
 
     Records that carry ``truncated_at_response_cap`` are believed: since
     ``_collect_funding`` gained pagination, ``seen`` is the sum across every
@@ -82,10 +86,12 @@ def load_funding_truncation(store: LiveDataStore, *, modes: Iterable[str] | None
         # A sweep_wallet row pages funding for the same wallet with the same
         # cap, so a sweep that hit it truncates the wallet just as a backfill
         # would; reading only backfills would leave that undisclosed.
-        "SELECT wallet_address, mode, coverage FROM ingest_runs "
+        "SELECT wallet_address, mode, finished_at_ms, coverage FROM ingest_runs "
         "WHERE mode IN ('backfill_wallet', 'sweep_wallet') AND status = 'completed'"
     ):
         if not run["coverage"] or (allowed is not None and run["mode"] not in allowed):
+            continue
+        if finished_by_ms is not None and (run["finished_at_ms"] is None or run["finished_at_ms"] > finished_by_ms):
             continue
         funding = json.loads(run["coverage"]).get("funding", {})
         if "truncated_at_response_cap" in funding:
@@ -190,22 +196,56 @@ def load_funding_rates(store: LiveDataStore, coins: Iterable[str]) -> FundingSch
     return FundingSchedule(FundingEvent(coin, t, rate) for (coin, t), rate in seen.items())
 
 
-def load_coverage(store: LiveDataStore, *, modes: Iterable[str] | None = None) -> CoverageLedger:
-    """The ledger from every completed run, or from ``modes`` only.
+def load_coverage(
+    store: LiveDataStore, *, modes: Iterable[str] | None = None, finished_by_ms: int | None = None
+) -> CoverageLedger:
+    """The ledger from every completed run, or from ``modes`` only, or only
+    from runs that finished at or before ``finished_by_ms``.
 
-    An arm whose window closed before another collection mode started (arm
-    A: backfills before T0, sweeps after) passes the modes that could have
-    observed its window, so a rerun after later collection reads the same
-    ledger and reaches the same pool.
+    A study whose window closed at an instant (arm A: T0) reads only the rows
+    that had finished by then, so a rerun after weeks of later collection
+    reads the same ledger and reaches the same pool; :func:`coverage_snapshot`
+    with the same bounds says which rows those were.
     """
+    return CoverageLedger(_observe(store, modes, finished_by_ms)[0])
+
+
+def coverage_snapshot(
+    store: LiveDataStore, *, modes: Iterable[str] | None = None, finished_by_ms: int | None = None
+) -> dict:
+    """Which completed runs the ledger under these bounds was built from.
+
+    Counts only rows that produced an observed interval, and hashes their
+    ``mode:run_id`` names, so two ledgers built from the same rows hash the
+    same and a ledger built from one row more does not.
+    """
+    _, consulted = _observe(store, modes, finished_by_ms)
+    finished = [f for _, _, f in consulted if f is not None]
+    names = sorted(f"{mode}:{run_id}" for mode, run_id, _ in consulted)
+    return {
+        "modes": sorted(set(modes)) if modes is not None else "all",
+        "finished_by_ms": finished_by_ms,
+        "runs_consulted": len(consulted),
+        "max_finished_at_ms": max(finished) if finished else None,
+        "run_ids_sha256": hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest(),
+    }
+
+
+def _observe(
+    store: LiveDataStore, modes: Iterable[str] | None, finished_by_ms: int | None
+) -> tuple[list[ObservedInterval], list[tuple[str, str, int | None]]]:
     allowed = None if modes is None else frozenset(modes)
     observed: list[ObservedInterval] = []
-    for run in store.connection.execute("SELECT * FROM ingest_runs"):
+    consulted: list[tuple[str, str, int | None]] = []
+    for run in store.connection.execute("SELECT * FROM ingest_runs ORDER BY run_id"):
         if run["status"] != "completed" or not run["coverage"]:
             continue
         if allowed is not None and run["mode"] not in allowed:
             continue
+        if finished_by_ms is not None and (run["finished_at_ms"] is None or run["finished_at_ms"] > finished_by_ms):
+            continue
         coverage = json.loads(run["coverage"])
+        before = len(observed)
         # ``sweep_wallet`` is the per-wallet row a sweep writes for each wallet
         # it touches. It carries the same window/fills coverage block a
         # backfill does, so it certifies by exactly the same rules.
@@ -227,7 +267,11 @@ def load_coverage(store: LiveDataStore, *, modes: Iterable[str] | None = None) -
             # would hand the simulator an interval with a known gap in it --
             # precisely what this ledger exists to prevent.
             forced = fills.get("forced_cursor_advances", 0)
-            if end is not None and forced and fills.get("completed"):
+            if end is not None and forced and fills.get("bound_rule") != COVERAGE_FILLS_BOUND_RULE:
+                # A row that says its bound already stops before the first
+                # forced advance is trusted as written. A row without that
+                # marker predates the fix and over-claims whether or not the
+                # walk completed, so it proves nothing past its start.
                 end = None
             if end is not None and end < start:
                 # The bound falls before the window even opened: nothing here
@@ -248,7 +292,9 @@ def load_coverage(store: LiveDataStore, *, modes: Iterable[str] | None = None) -
                     wallet=wallet, start_ms=run["started_at_ms"], end_ms=run["finished_at_ms"],
                     complete=not reconnected, source=f"watch:{run['run_id']}",
                 ))
-    return CoverageLedger(observed)
+        if len(observed) > before:
+            consulted.append((run["mode"], run["run_id"], run["finished_at_ms"]))
+    return observed, consulted
 
 
 def _watched_wallets(coverage: dict) -> list[str]:

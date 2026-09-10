@@ -59,6 +59,9 @@ class StudyConfig:
     def __post_init__(self) -> None:
         if not self.benchmark_coin:
             raise InputError("a benchmark coin is required for buy-and-hold and momentum")
+        # Decimal arithmetic downstream: a float here would raise inside the
+        # baseline, after every wallet's copy has been simulated.
+        object.__setattr__(self, "random_tolerance", Decimal(str(self.random_tolerance)))
         if not (0 <= self.random_tolerance < 1):
             raise InputError("random_tolerance must lie in [0, 1)")
         if not self.latencies_ms or any(latency < 0 for latency in self.latencies_ms):
@@ -77,10 +80,14 @@ class WalletStudy:
     funding_truncated: bool
     outcomes: tuple[Outcome, ...]
     refusal: str | None
-    #: The peers that actually entered the matched-random mean (at the last
-    #: latency with a sample), and the sampled peers that dropped out, by reason.
+    #: The peers that actually entered the matched-random mean at the last
+    #: latency with a sample, and the sampled peers that dropped out, by
+    #: reason. A reporter that names the peers behind one latency's baseline
+    #: reads ``matched_by_latency`` for that latency instead: the contributing
+    #: set can differ from one latency to the next.
     matched_peers: tuple[str, ...]
     matched_peers_dropped: dict[str, str] = field(default_factory=dict)
+    matched_by_latency: dict[int, baselines.MatchedRandom] = field(default_factory=dict)
 
 
 MarketFor = Callable[[str], MarketData]
@@ -138,6 +145,7 @@ def run_study(
             outcomes: list[Outcome] = []
             peers_seen: tuple[str, ...] = ()
             dropped_seen: dict[str, str] = {}
+            by_latency: dict[int, baselines.MatchedRandom] = {}
             for latency in config.latencies_ms:
                 run = _follower_on_deployed_capital(
                     interval, latency, fills, wallet_market, config, cutoff, opening
@@ -146,8 +154,10 @@ def run_study(
                     interval, latency, run, source.fill_count, fills_by_wallet, wallet_market,
                     ledger, config, cutoff,
                 )
-                if matched is not None and matched.chosen:
-                    peers_seen, dropped_seen = matched.contributed, dict(matched.dropped)
+                if matched is not None:
+                    by_latency[latency] = matched
+                    if matched.chosen:
+                        peers_seen, dropped_seen = matched.contributed, dict(matched.dropped)
                 outcomes.append(outcome_for(
                     run, source, returns, profile=profile, funding_truncated=truncated,
                     liquidity_assumed=assumed,
@@ -155,7 +165,8 @@ def run_study(
         except (UnknownIntervalError, InputError) as exc:
             results.append(WalletStudy(wallet, None, None, truncated, (), f"{type(exc).__name__}: {exc}", ()))
             continue
-        results.append(WalletStudy(wallet, interval, profile, truncated, tuple(outcomes), None, peers_seen, dropped_seen))
+        results.append(WalletStudy(wallet, interval, profile, truncated, tuple(outcomes), None,
+                                   peers_seen, dropped_seen, by_latency))
     return tuple(results)
 
 
@@ -208,7 +219,10 @@ def _baseline_returns(
     """Every baseline's return on exactly the capital the follower deployed."""
     capital = run.peak_deployed_notional
     if capital <= 0:
-        return {}, ()
+        # Nothing deployed at this latency: no baseline is computable and no
+        # peer was sampled. ``None``, not an empty sample, so the caller can
+        # tell "no baseline" from "a baseline nobody entered".
+        return {}, None
     equal = FollowerConfig(capital=capital, size_scale=Decimal(1))
     returns: dict[str, Decimal] = {"no_trade": baselines.no_trade(interval) / capital}
     hold = baselines.buy_and_hold(

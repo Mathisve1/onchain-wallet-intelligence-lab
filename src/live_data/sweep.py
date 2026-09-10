@@ -35,13 +35,14 @@ like a window nobody ever observed.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Sequence
 
 from .candles import DEFAULT_MAX_PAGES
 from .config import normalize_coin, normalize_wallet_address
 from .hyperliquid_rest import HyperliquidRestClient
 from .models import parse_all_mids
-from .storage import RUN_STATUS_COMPLETED, RUN_STATUS_FAILED, LiveDataStore
+from .storage import COVERAGE_FILLS_BOUND_RULE, RUN_STATUS_COMPLETED, RUN_STATUS_FAILED, LiveDataStore
 from .watch import IngestError
 
 #: How many wallets of the caller-ordered cohort get a position snapshot. The
@@ -145,12 +146,23 @@ class SweepMixin:
         ``(funding_seen, funding_written, funding_pages)``.
         """
         latest_fill = self._store.latest_fill_time_ms(address)
-        fills_from = t0_ms if latest_fill is None else latest_fill + 1
+        covered = self._latest_fills_covered_until_ms(address)
+        # Resume from the earlier of the newest stored fill and the last
+        # millisecond a completed walk proved observed. A fill another source
+        # wrote (a watch session) must not carry the resume past a range no
+        # walk requested, and a walk cut at the page cap is proven only to
+        # the millisecond before its last fill, so that millisecond is asked
+        # for again. Idempotent writes absorb the overlap either way.
+        resume_points = [bound + 1 for bound in (latest_fill, covered) if bound is not None]
+        # Never past the window's own end: a wallet already covered through it
+        # has nothing new to ask for, and a start after the end is a request
+        # the venue refuses, which would fail the wallet for the whole sweep.
+        fills_from = min(t0_ms if not resume_points else min(resume_points), end_time_ms)
         (
             fills_pages,
             fills_seen,
             fills_written,
-            _,
+            forced,
             fills_exhausted,
             covered_until_ms,
         ) = self._collect_fills(
@@ -184,6 +196,8 @@ class SweepMixin:
                 "completed": fills_exhausted,
                 "truncated_at_page_cap": not fills_exhausted,
                 "covered_until_ms": covered_until_ms,
+                "forced_cursor_advances": forced,
+                "bound_rule": COVERAGE_FILLS_BOUND_RULE,
                 "pages": fills_pages,
                 "seen": fills_seen,
                 "written": fills_written,
@@ -204,6 +218,25 @@ class SweepMixin:
             (fills_seen, fills_written),
             (funding_seen, funding_written, funding_pages),
         )
+
+    def _latest_fills_covered_until_ms(self, address: str) -> int | None:
+        """The furthest millisecond a completed walk proved observed for the wallet."""
+        best: int | None = None
+        for run in self._store.connection.execute(
+            "SELECT coverage FROM ingest_runs WHERE wallet_address = ? AND status = ? "
+            "AND mode IN ('backfill_wallet', 'sweep_wallet')",
+            (address, RUN_STATUS_COMPLETED),
+        ):
+            if not run["coverage"]:
+                continue
+            coverage = json.loads(run["coverage"])
+            fills = coverage.get("fills", {})
+            bound = fills.get("covered_until_ms")
+            if bound is None and fills.get("completed"):
+                bound = coverage.get("window", {}).get("end_time_ms")
+            if bound is not None and (best is None or int(bound) > best):
+                best = int(bound)
+        return best
 
     def _run_sweep_wallet(
         self, address: str, *, t0_ms: int, end_time_ms: int, max_pages: int

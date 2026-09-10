@@ -18,6 +18,7 @@ from .hyperliquid_ws import HyperliquidWebSocketClient
 from .models import ClearinghouseState, Fill, parse_funding, require_list
 from .results import BackfillResult, WalletBackfillResult
 from .storage import (
+    COVERAGE_FILLS_BOUND_RULE,
     RUN_STATUS_COMPLETED,
     RUN_STATUS_FAILED,
     LiveDataStore,
@@ -245,6 +246,7 @@ class IngestOrchestrator(WatchMixin, CandleFetchMixin, SweepMixin):
                 "written": written,
                 "pages": pages,
                 "forced_cursor_advances": forced,
+                "bound_rule": COVERAGE_FILLS_BOUND_RULE,
             }
 
             coverage["funding"] = {"attempted": True, "completed": False}

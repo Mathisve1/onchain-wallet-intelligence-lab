@@ -13,6 +13,7 @@ from src.copyability.execution import (
     source_pnl,
 )
 from src.copyability.inputs import (
+    InputError,
     FundingEvent,
     FundingSchedule,
     LiquidityProfile,
@@ -253,6 +254,32 @@ class BaselineTests(unittest.TestCase):
         )
         self.assertIsNone(result.mean)
         self.assertEqual(result.chosen, ())
+
+    def test_the_study_tolerance_reaches_the_peer_selection(self) -> None:
+        # A peer with half the target's fills is inside the default band and
+        # outside a tight one: the disclosed tolerance must be the one used.
+        ledger = CoverageLedger([ObservedInterval(w, 1_000, 100_000, True, "a") for w in (W, PEER)])
+        pool = {
+            W: [fill(W, 10_000, 1, "B", "100"), fill(W, 20_000, 2, "A", "100"),
+                fill(W, 30_000, 3, "B", "100"), fill(W, 40_000, 4, "A", "100")],
+            PEER: [fill(PEER, 12_000, 5, "B", "100"), fill(PEER, 22_000, 6, "A", "100")],
+        }
+
+        def peers_under(tolerance: str) -> tuple[str, ...]:
+            config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, latencies_ms=(0,),
+                                 random_tolerance=D(tolerance))
+            (study,) = run_study(fills_by_wallet=pool, market=market(FLAT), ledger=ledger, config=config,
+                                 funding_truncated={W: False}, wallets=[W], window=(1_000, 100_000))
+            return study.matched_peers
+
+        self.assertEqual(peers_under("0.5"), (PEER,))
+        self.assertEqual(peers_under("0.1"), ())
+
+    def test_a_float_tolerance_is_coerced_before_it_meets_decimal_arithmetic(self) -> None:
+        config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, random_tolerance=0.5)
+        self.assertEqual(config.random_tolerance, D("0.5"))
+        with self.assertRaises(InputError):
+            StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, random_tolerance=1)
 
     def test_matched_random_names_a_peer_it_could_not_price_instead_of_listing_it_as_averaged(self) -> None:
         ledger = CoverageLedger([ObservedInterval(w, 1_000, 100_000, True, "a") for w in (W, PEER)])
