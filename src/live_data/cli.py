@@ -148,6 +148,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="comma-separated coins to sample; defaults to the coins the cohort has traded",
     )
     sweep.add_argument(
+        "--sweep-pool",
+        action="store_true",
+        dest="sweep_pool",
+        help="walk every characterised wallet the freeze recorded, not the cohort alone; only swept wallets "
+             "can be certified over the forward window, so this decides which wallets can serve as peers",
+    )
+    sweep.add_argument(
         "--snapshot-top",
         type=int,
         default=DEFAULT_SNAPSHOT_TOP,
@@ -308,12 +315,16 @@ def _cmd_mids(args: argparse.Namespace, dependencies: Dependencies) -> int:
     return 0
 
 
-def _load_cohort(path: Path) -> tuple[int, tuple[str, ...]]:
-    """Read a frozen cohort record. Raises ``ValueError`` on anything malformed.
+def _load_cohort(path: Path) -> tuple[int, tuple[str, ...], tuple[str, ...]]:
+    """Read a frozen cohort record: its T0, its cohort and its recorded pool.
 
     The order in the file is the order the sweep uses, so the leading wallets
     are the ones that get a position snapshot. Sorting here would silently
     change which wallets those are.
+
+    The pool is every characterised wallet the freeze read. A record written
+    before the freeze recorded one yields an empty pool, and the caller then
+    has only the cohort to walk.
     """
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -327,7 +338,17 @@ def _load_cohort(path: Path) -> tuple[int, tuple[str, ...]]:
     addresses = tuple(normalize_wallet_address(address) for address in cohort)
     if len(set(addresses)) != len(addresses):
         raise ValueError(f"{path}: cohort lists the same wallet twice")
-    return t0_ms, addresses
+    pool_value = payload.get("pool") or ()
+    if not isinstance(pool_value, (list, tuple)):
+        raise ValueError(f"{path}: pool must be a list of addresses when present")
+    pool = tuple(dict.fromkeys(normalize_wallet_address(address) for address in pool_value))
+    return t0_ms, addresses, pool
+
+
+def _pool_order(cohort: tuple[str, ...], pool: tuple[str, ...]) -> tuple[str, ...]:
+    """The pool, cohort first: the snapshot-top wallets stay the cohort's."""
+    rest = [wallet for wallet in pool if wallet not in set(cohort)]
+    return cohort + tuple(rest)
 
 
 def _cmd_sweep(args: argparse.Namespace, dependencies: Dependencies) -> int:
@@ -343,10 +364,17 @@ def _cmd_sweep(args: argparse.Namespace, dependencies: Dependencies) -> int:
         print("snapshot-top must not be negative", file=sys.stderr)
         return 2
     try:
-        t0_ms, cohort = _load_cohort(args.cohort)
+        t0_ms, cohort, pool = _load_cohort(args.cohort)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"cannot read cohort: {exc}", file=sys.stderr)
         return 2
+    if args.sweep_pool and not pool:
+        print("--sweep-pool needs a record that carries a pool list; re-freeze", file=sys.stderr)
+        return 2
+    # Only a swept wallet can be certified over the forward window, so which
+    # wallets this walks decides which wallets can ever serve as peers. The
+    # cohort alone is the default; the wider set is asked for explicitly.
+    walked = _pool_order(cohort, pool) if args.sweep_pool else cohort
 
     with LiveDataStore(args.db) as store:
         coins = tuple(args.coins) if args.coins else tuple(store.distinct_fill_coins(cohort))
@@ -362,7 +390,7 @@ def _cmd_sweep(args: argparse.Namespace, dependencies: Dependencies) -> int:
         config = LiveDataConfig(database_path=args.db, tracked_coins=coins)
         orchestrator = _build_orchestrator(config, store, dependencies, with_ws=False)
         report = orchestrator.sweep(
-            cohort, coins, t0_ms=t0_ms, snapshot_top=args.snapshot_top
+            walked, coins, t0_ms=t0_ms, snapshot_top=args.snapshot_top
         )
         weight = orchestrator.consumed_weight
     failed = sorted(

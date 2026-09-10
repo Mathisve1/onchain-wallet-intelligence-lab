@@ -25,6 +25,10 @@ RUN_STATUS_RUNNING = "running"
 RUN_STATUS_COMPLETED = "completed"
 RUN_STATUS_FAILED = "failed"
 _RUN_STATUSES = frozenset({RUN_STATUS_RUNNING, RUN_STATUS_COMPLETED, RUN_STATUS_FAILED})
+#: Marker on a ``coverage["fills"]`` block: its ``covered_until_ms`` already
+#: stops before the first forced cursor advance, so a ledger may trust it as
+#: written even when the walk recorded such advances.
+COVERAGE_FILLS_BOUND_RULE = "covered_until_before_first_forced_advance"
 
 
 class StorageError(RuntimeError):

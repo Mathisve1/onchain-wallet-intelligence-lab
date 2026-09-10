@@ -233,6 +233,312 @@ Two governance notes from the same round:
   `TypeError` on a non-integer cap. Every watch step must now record an
   integer cap in `(0, 1000]`.
 
+## Arm A runner (2026-09-09)
+
+Phase 7's runner did not exist. DEC-045 and the stage log record phases 1 to 8
+as built and blind-verified; the opening-position and candle-price pieces of
+phase 7 were, but the script that runs arm A over the frozen cohort and writes
+`evidence/L2_ARM_A_001.json` was never written. Built on 2026-09-09 as
+`live_data_collector/arm_a_runner.py`, `arm_a_report.py` and
+`arm_a_statistics.py`, with an offline synthetic-store test suite, and put
+through an adversarial verification round before it was accepted. Two blockers
+came out of that round:
+
+- **Matched-random peers were not scored under the target's convention.**
+  `simulate._baseline_returns` never forwarded the common decision cutoff or
+  the 15-minute price-age bound to `baselines.matched_random`, so a peer fill
+  after the cutoff, or a peer copy priced on a quote the target would have
+  refused as stale, moved `M_i` while `R_i` excluded it. A pre-existing
+  `src/copyability` defect, reproduced and fixed with regression tests; every
+  study that reported `matched_random` before this date carried it.
+- **The peer pool cannot be the cohort itself.** With peers drawn from the
+  cohort, `mean(d_i)` is algebraically blind to any return the cohort earns in
+  common (a Monte Carlo at three times the target effect read as zero). The
+  plan says peers are "wallets of similar activity" and does not fix the pool;
+  the runner now draws them from every characterised wallet the ledger
+  certifies over the window, records the pool's size and hash, and says so in
+  the file's limitations. **Owner decision before T0:** confirm that pool
+  definition, ideally as a pre-T0 amendment to `L2_ANALYSIS_PLAN.md` in the
+  manner of DEC-046, so the primary measure's contrast is fixed before any
+  number exists.
+
+The runner also verifies the freeze record's own hash, refuses a cohort under
+the plan's minimum unless told in so many words that it is an underpowered dry
+run, labels a sub-minimum primary a case study rather than a read, measures
+survivorship on every fill with the cohort as denominator, carries the four
+never-drop disclosures and the candle provenance beside the primary, bounds
+everything it reads to T0, checkpoints after every wallet, and keeps wall-clock
+out of the evidence so identical inputs give a byte-identical file. Expect
+hours of single-threaded runtime on a 300-wallet cohort.
+
+## Arm B runner and the shared arm core (2026-09-09)
+
+Arm B's runner was built by generalising arm A's rather than copying it. The
+run is now one module, `live_data_collector/l2_arm_runner.py`, driven by an
+`ArmSpec` that each arm declares in its own thin file (`arm_a_runner.py`,
+`arm_b_runner.py`); the report and statistics helpers were renamed to
+`l2_arm_report.py` and `l2_arm_statistics.py` and the evidence keys that named
+candles now name the price source (`price_source`, `price_provenance`,
+`price_series_span_by_coin`). Both arms are computed by the same code, so a
+difference between their files is a difference in the data.
+
+What arm B adds, in order of what the plan requires of it:
+
+- **A closure guard.** The approval forbids interim result inspection, so the
+  runner raises before reading a fill unless the coverage ledger certifies at
+  least one cohort wallet over the whole of `[T0, T0+56d]`. Exit 2, no file.
+- **Mids as the price series**, with the same 15-minute freshness bound as arm
+  A, and a provenance block that counts the polled rows per coin and their mean
+  spacing instead of candle fetch runs.
+- **The decision rule.** B decides: `GO_TO_ENTITY_CLUSTER_RESEARCH` if the
+  rounded lower bound of the 95 percent interval is at or above 0.5 points per
+  14 days, `NO_GO_NO_COPYABLE_ALPHA` if the rounded upper bound is below it,
+  `REPAIR_AND_RERUN` otherwise, and `null` for a case study or an unmeasurable
+  primary. Arm A's file keeps `decision: null` by construction.
+- **Survivorship inflation** against arm A's file when `--arm-a-json` is given:
+  `mean d_A - mean d_B` as a number, plus a flag for the A-negative, B-GO
+  pattern that obliges a written diagnosis. Never a gate.
+
+Building the closure guard exposed a defect in the coverage ledger.
+`sweep.py` resumes a wallet at `latest_fill + 1`, and a walk cut at the page
+cap is covered until the last fill's own millisecond, so consecutive sweep rows
+meet as `[a, b]` and `[b+1, c]`. `CoverageLedger._merge` treated that as a gap.
+On integer-millisecond timestamps no millisecond is unobserved there, and on
+real data a single page-cap cut anywhere in the 56 days would have made arm B
+refuse forever. The merge rule now treats one-millisecond adjacency as
+touching; a two-millisecond gap is still a gap, and the tests say which is
+which.
+
+### Second adversarial pass (2026-09-09)
+
+Three of four lenses ran (the completeness critic hit the account's session
+limit twice; a third round is owed). One blocker and a set of should-fixes, all
+applied in the shared core:
+
+- **Peers were priced only on the cohort's coins.** The market was built over
+  the coins the cohort traded, so a pool wallet with a fill on any other
+  in-scope coin threw inside the baseline, was swallowed, dropped out of
+  `M_i`, and was still listed under `matched_peers_by_wallet`. On real data
+  that is the broad-book peers, systematically. The market is now built over
+  every pool wallet's in-scope coins; `baselines.matched_random` returns the
+  peers that entered the mean and the sampled peers that dropped, with the
+  reason; the file writes per wallet the contributing peers, the drops, their
+  count and the cohort share of the peers, and for the pool its cohort and
+  non-cohort counts and the mean cohort share.
+- **Arm A's ledger was not bounded.** A `sweep_wallet` row written weeks after
+  T0 could certify a wallet the T0 run refused and move the pool, the
+  refusals and every `d_i`. Arm A now builds its ledger and its
+  funding-truncation map from backfill rows only, and each file carries a
+  `ledger_snapshot` (runs consulted, latest finish, hash of the run ids);
+  a test writes a post-T0 sweep and asserts the pool hash and every `d_i`
+  are unchanged.
+- The plan's minimum of 200 is not the freeze record's to lower: a record
+  frozen with a smaller `minimum_evaluable` is refused, not evaluated at it.
+- An unspanned benchmark is missing data, not a result: refusal, no file
+  (buy-and-hold and momentum apply no age bound at their exit mark). What
+  still breaks after that carries `BROKE_SEE_WHAT_BROKE`, no decision, and
+  `broke=n` on the log line. The checkpoint is stamped `PARTIAL_CHECKPOINT`
+  with `decision: null`, is written before progress is reported, and on any
+  stop is kept as `.aborted.json`; no exception escapes without the stopped
+  line.
+- The span rule now admits what the freeze's post-check admits (two intervals
+  on close-stamped candles), the matched-random tolerance is threaded through
+  `StudyConfig` instead of being disclosed beside it, the out-of-scope count is
+  bounded to the evaluation window, and `DRY_RUN_UNDERPOWERED` is stamped
+  only when the cohort really is under the minimum. Arm B's closure guard also
+  requires the latest completed collection run to have finished at or after
+  the window end.
+- The tests lens ran mutation testing and found the suite pinned length, not
+  edges, and subsets, not sets. Added: strict peer sets, the literal window,
+  the frozen parameter block compared against the `StudyConfig` actually
+  built, T0 bounding (funding and fills written after T0 leave the file
+  byte-identical), survivorship on out-of-scope fills through the runner,
+  the first edge of the span rule, stale skips under the freshness bound,
+  checkpoint ordering, the abort path, the record-supplied minimum, the
+  characterisation-window check, and the scope split with priceable coins.
+
+Still open from that pass, for the owner with the pool decision: the pool
+contains wallets the selection kept out of the cohort (market makers,
+rebate-dependent, under-characterised), whose taker copies are bad a priori
+and pull `M_i` down; the file now discloses the composition, the plan
+amendment (PR #157) fixes the rule, and neither corrects for it.
+
+### Third adversarial pass (2026-09-09)
+
+Four lenses of five (the completeness critic hit the account limit again, as in
+round two; a critic pass is still owed). Refuted, with four blockers. Two came
+from round two's own fixes, which is the argument for running the round:
+
+- **A wallet that deploys nothing aborted the whole arm.** Round two changed
+  the matched-random return type; the nothing-deployed path still returned the
+  old shape, so the first idle or fully-out-of-scope cohort wallet raised an
+  `AttributeError` that took the run down with exit 2 and no file. The cohort
+  cannot be edited after T0, so one such wallet would have made the arm
+  unrunnable. Arm B expects stopped wallets by design.
+- **The peers named in the file were the wrong latency's.** The study kept the
+  peers of the last latency simulated (15 minutes), and the file wrote them as
+  the peers behind the primary at 30 seconds. A peer inside the primary's mean
+  could be listed as dropped. The simulator now keeps the matched-random
+  result per latency and the file writes the primary's, labelled with it.
+- **A post-T0 backfill still moved arm A's pool.** Round two bounded arm A's
+  ledger by collection mode, which a backfill written after T0 (a re-backfill,
+  a widened pool) passes. The bound is now time: rows finished by T0, and the
+  freeze records a hash of exactly those rows, which arm A refuses to run
+  without matching. The freeze also refuses a T0 that precedes its own last
+  collection row.
+- **The survivorship inflation subtracted any file that said arm A.** A
+  different cohort, another plan commit, a dry run, a broke file and a
+  checkpoint all produced `available: true` and a number. Arm A's file is now
+  read and judged before the hours of scoring, so a wrong file refuses in
+  seconds, and `a_negative_b_positive` follows arm A's written reading and arm
+  B's written decision rather than the two point estimates.
+
+Also applied: arm B's closure guard now requires a completed closing sweep row
+for **every** cohort wallet, not one certified wallet and any completed run, so
+a sweep that died at wallet 250 of 300 can no longer produce a decision that a
+later rerun contradicts; a pool that contains no wallet outside the cohort
+breaks the run rather than labelling it, because the mean cancels exactly the
+common return the study is looking for; arm B's file no longer carries arm A's
+reading vocabulary (its verdict is its decision, and `reading` is null); the
+mids series is disclosed as a deviation from the plan's wording, and its
+provenance counts polls separately from sweeps and reports the widest gap and
+how many exceed the freshness bound; the span rule takes both edges from the
+arm, so arm B tolerates the freshness bound at the end as well as the start;
+`--overwrite` is required to replace an evidence file and an abort is kept as
+`.aborted-<n>.json`; a Ctrl-C is reported and keeps its partial before it
+propagates; the freeze records a hash of each scope coin list, so the same
+number of different coins no longer passes the scope check.
+
+Two collector defects were found underneath all this. The sweep resumed from
+the newest stored fill, which steps over a page-cap cut (proven only to the
+millisecond before that fill) and over anything a websocket session wrote, so
+the skipped range was never requested again; it now resumes from the earlier of
+the newest fill and the last millisecond a walk proved observed. And the
+loader's forced-cursor guard keyed on whether a walk completed rather than on
+which bound rule wrote it; collection now marks its coverage with the rule, and
+the ledger trusts a marked bound and distrusts an unmarked one. The websocket
+mode no longer certifies anything for L2: a watch row claims its interval from
+the run's start rather than from the subscription it was given.
+
+The tests lens mutation-tested the suite again. Pinned since: the peers that
+contributed and those that dropped, the decisive path for both arms (every run
+in the suite was a case study, so a wiring regression that never decided passed),
+a coin leaving scope changing no number, the closure guard's two halves
+separately, the tolerance actually reaching the peer selection, the exact
+ledger-snapshot digest, the disclosure denominators, both span edges, and the
+arm B scope bound.
+
+### Completeness critic (2026-09-10)
+
+The critic that had died on the account limit in rounds two and three finally
+ran. It re-verified every round-three fix against the code (all confirmed
+landed) and found four blockers that no lens had looked for, because they are
+not in the runners at all: they are in the order the study is operated.
+
+- **The build plan made arm B unrunnable by construction.** Phase 9 put the
+  first `mids` run *after* the freeze and after arm A's hours of scoring, while
+  arm B's first quote must sit within the 15-minute freshness bound of T0 and
+  cannot be collected afterwards. The plan's own order guaranteed a dead
+  decisive arm that nobody would notice until day 56. Phase 9 now polls mids
+  before the freeze, and the freeze refuses a T0 with no benchmark mid at or
+  before it, so the order is binding rather than advisory.
+- **The closing grace was a hidden three-day deadline.** A closing sweep that
+  finished later than that made arm B permanently unrunnable, and the refusal
+  named the wrong cause. It is now `--closing-grace-days`, written into the
+  file, and the message says which wallets were not reached and what to do.
+- **One unreachable wallet blocked the whole decisive arm.** The closure guard
+  counted only completed sweep rows, so a wallet whose closing walk kept
+  failing was a wall in front of the other 299. The plan's remedy is that such
+  a wallet is excluded and counted. The guard now asks whether the closing pass
+  *reached* each wallet; one that failed is reached, then refused by the
+  ledger and counted, and the file names it.
+- **The pool arm B needs was never collectable.** The sweep walks the freeze
+  record's cohort and nothing else, so no non-cohort wallet could ever be
+  certified over the forward window: the peer pool would be the cohort, and the
+  run would break on day 56 with the 56 days already spent. The freeze now
+  records the characterised set it read, and `sweep --sweep-pool` walks it.
+  Recording and being able to sweep the set is not the same as deciding that
+  the peers are drawn from it; that is still the owner's amendment (PR #157),
+  and the flag stays opt-in until it is accepted.
+
+Also from the critic: a freeze record without an instrument scope disabled every
+scope check, so `scope` is now required like `ledger_snapshot`; and `health.py`,
+the only inspection the approval permits during collection, now reports arm B's
+three preconditions (the benchmark's first mid against T0, the pool wallets
+never swept, and the wallets whose sweeps keep failing) so none of them is
+discovered on day 56.
+
+Left open deliberately, with the critic's ranking: the arm A report renderer
+that the plan's fixed report order requires has no producer yet (needed before
+arm A is read, which is hours after T0); the runtime and checkpoint sidecars sit
+in the tree the manifest hashes, so a live run makes governance read
+OUT_OF_DATE until it finishes; and the pool-collapse guard is exact equality, so
+one non-cohort wallet in a large pool silences it rather than reporting the
+cohort share.
+
+### The report renderer and the transient run files (2026-09-10)
+
+Two of the three items the completeness critic left open are closed.
+
+`live_data_collector/l2_arm_render.py` renders a completed arm's evidence file
+in the order `L2_ANALYSIS_PLAN.md` fixed and DEC-046 recorded as binding: the
+answer in one sentence, the confidence interval, the survivorship measurement,
+n after every filter stage, what broke, and only then the tables. The evidence
+file is sorted alphabetically, which is right for a machine and wrong for that
+rule, so the renderer lays the same values out in the owner's order. It
+computes nothing: every figure is copied as written, and a test asserts that no
+number appears in the report that the evidence does not carry. The answer
+sentence is chosen by the file's own status, reading and decision fields, so a
+case study cannot be rendered as a reading and arm B's answer is its decision
+rather than an arm A label. It refuses a checkpoint, because the plan delivers
+a report only when the arm is complete, and it names what an incomplete file
+lacks.
+
+The manifest no longer hashes the files an arm writes while it runs. A
+checkpoint exists between two wallets and an aborted file until the run is
+repeated; hashing them made the repository read `OUT_OF_DATE` for the hours an
+arm takes, which trains a reader to ignore the one signal that says the tree
+was altered. Both patterns are excluded by name and are in `.gitignore`; the
+evidence file and its runtime record are still hashed, because they are
+committed.
+
+The renderer was then verified adversarially and refuted on every lens, which
+is the point of rendering a result at all: a clean page with a headline answer
+is the most forwardable thing this study produces. What the round found, and
+what the renderer now does:
+
+- It re-applies the plan's reading and decision rules to the interval the file
+  prints and refuses a label those bounds do not give. The module that states a
+  result must not be where a wrong one is laundered into prose.
+- It refuses a target that is not the plan's, an arm carrying the other arm's
+  verdict, a status it does not know, a schema it was not written for, and a
+  file whose disclosures or limitations are empty.
+- A run that broke, a dry run and an unmeasurable primary have their verdict
+  row withheld. The first version printed a live reading label two lines under
+  an answer that said no reading was produced.
+- It adds what the plan requires and the first version dropped: the instrument
+  scope as a filter stage with the fills it removed per wallet, the price
+  provenance, arm B's closure block, the survivorship definitions with the
+  denominator each share uses, the EXPLORATORY label the plan fixes for every
+  non-primary cut, the no-copyability-claim sentence, and the A-negative/B-GO
+  case as prose rather than a boolean in a table.
+- Every report opens with the plan's stop rule, its question and the definition
+  of d, so a reader who has not read the plan cannot mistake what they hold.
+  Table cells are escaped, so a pipe or a newline in a refusal cannot hide it.
+
+The critic also found that outcome 1 of the pre-registered reading, the hard
+stop under 200 evaluable wallets, had no report producer anywhere, and that the
+one figure the plan requires that report to state was computed nowhere. The
+freeze now writes it beside the record: the funnel, and the clock price of the
+delay measured against the probe's 15-minute retention of 52.2 days, so the
+owner can see what a week of widening the pool costs arm A.
+
+Left from the critic's list, and both are the owner's rather than mine: the
+pool-collapse guard is exact equality, so one non-cohort wallet in a large pool
+silences it instead of reporting the cohort share; and DEC-046 fixes a report
+order for arm A only, so extending it to arm B, where the survivorship section
+also carries the inflation against arm A, wants a decision.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and

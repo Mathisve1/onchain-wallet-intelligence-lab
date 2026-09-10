@@ -10,6 +10,10 @@ venv/
 .env
 .env.*
 !.env.example
+# Written by an arm runner while it runs, or left behind when it stops:
+# neither is evidence, and the manifest excludes both by the same names.
+*.partial.json
+*.aborted-*.json
 *.parquet
 *.feather
 *.arrow

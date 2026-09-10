@@ -13,6 +13,7 @@ from src.copyability.execution import (
     source_pnl,
 )
 from src.copyability.inputs import (
+    InputError,
     FundingEvent,
     FundingSchedule,
     LiquidityProfile,
@@ -64,7 +65,7 @@ class SimulatorRefusesUnknownIntervalsTests(unittest.TestCase):
     def test_the_study_refuses_a_wallet_with_a_gap_instead_of_scoring_zero(self) -> None:
         ledger = CoverageLedger([
             ObservedInterval(W, 1_000, 50_000, True, "a"),
-            ObservedInterval(W, 50_001, 100_000, True, "b"),
+            ObservedInterval(W, 50_002, 100_000, True, "b"),  # ms 50_001 nobody observed
         ])
         fills = {W: [fill(W, 60_000, 1, "B", "100")]}
         config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 2, latencies_ms=(0,))
@@ -237,22 +238,62 @@ class BaselineTests(unittest.TestCase):
             "0x" + "ef" * 20: [fill("0x" + "ef" * 20, 30_000, 1, "B", "100"), fill("0x" + "ef" * 20, 40_000, 2, "A", "100")],
         }
         interval = ledger.certify(W, 1_000, 100_000)
-        mean, chosen = baselines.matched_random(
+        result = baselines.matched_random(
             interval, latency_ms=0, target_fill_count=2, pool=pool, market=market(FLAT), cost_model=MODEL,
             config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
         )
-        self.assertEqual(chosen, (PEER,))
-        self.assertLess(mean, 0)  # flat market: a peer round trip costs money too
+        self.assertEqual((result.chosen, result.contributed, result.dropped), ((PEER,), (PEER,), {}))
+        self.assertLess(result.mean, 0)  # flat market: a peer round trip costs money too
 
     def test_matched_random_reports_none_rather_than_zero_when_no_peer_exists(self) -> None:
         ledger = CoverageLedger([ObservedInterval(W, 1_000, 100_000, True, "a")])
         interval = ledger.certify(W, 1_000, 100_000)
-        mean, chosen = baselines.matched_random(
+        result = baselines.matched_random(
             interval, latency_ms=0, target_fill_count=2, pool={W: []}, market=market(FLAT), cost_model=MODEL,
             config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
         )
-        self.assertIsNone(mean)
-        self.assertEqual(chosen, ())
+        self.assertIsNone(result.mean)
+        self.assertEqual(result.chosen, ())
+
+    def test_the_study_tolerance_reaches_the_peer_selection(self) -> None:
+        # A peer with half the target's fills is inside the default band and
+        # outside a tight one: the disclosed tolerance must be the one used.
+        ledger = CoverageLedger([ObservedInterval(w, 1_000, 100_000, True, "a") for w in (W, PEER)])
+        pool = {
+            W: [fill(W, 10_000, 1, "B", "100"), fill(W, 20_000, 2, "A", "100"),
+                fill(W, 30_000, 3, "B", "100"), fill(W, 40_000, 4, "A", "100")],
+            PEER: [fill(PEER, 12_000, 5, "B", "100"), fill(PEER, 22_000, 6, "A", "100")],
+        }
+
+        def peers_under(tolerance: str) -> tuple[str, ...]:
+            config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, latencies_ms=(0,),
+                                 random_tolerance=D(tolerance))
+            (study,) = run_study(fills_by_wallet=pool, market=market(FLAT), ledger=ledger, config=config,
+                                 funding_truncated={W: False}, wallets=[W], window=(1_000, 100_000))
+            return study.matched_peers
+
+        self.assertEqual(peers_under("0.5"), (PEER,))
+        self.assertEqual(peers_under("0.1"), ())
+
+    def test_a_float_tolerance_is_coerced_before_it_meets_decimal_arithmetic(self) -> None:
+        config = StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, random_tolerance=0.5)
+        self.assertEqual(config.random_tolerance, D("0.5"))
+        with self.assertRaises(InputError):
+            StudyConfig(CONFIG, MODEL, "BTC", 5_000, 1_000, 7, 5, random_tolerance=1)
+
+    def test_matched_random_names_a_peer_it_could_not_price_instead_of_listing_it_as_averaged(self) -> None:
+        ledger = CoverageLedger([ObservedInterval(w, 1_000, 100_000, True, "a") for w in (W, PEER)])
+        interval = ledger.certify(W, 1_000, 100_000)
+        eth = lambda t, tid, side: SourceFill(PEER, "ETH", t, side, D("100"), D("1"), D("0.05"), D("0"), tid)  # noqa: E731
+        pool = {W: [], PEER: [eth(30_000, 1, "B"), eth(40_000, 2, "A")]}
+        result = baselines.matched_random(  # the market prices BTC only
+            interval, latency_ms=0, target_fill_count=2, pool=pool, market=market(FLAT), cost_model=MODEL,
+            config=CONFIG, certify=ledger.certify, seed=1, sample_size=5,
+        )
+        self.assertIsNone(result.mean)
+        self.assertEqual((result.chosen, result.contributed), ((PEER,), ()))
+        self.assertEqual(list(result.dropped), [PEER])
+        self.assertTrue(result.dropped[PEER].startswith("unpriceable:"), result.dropped)
 
 
 class MetricsTests(unittest.TestCase):

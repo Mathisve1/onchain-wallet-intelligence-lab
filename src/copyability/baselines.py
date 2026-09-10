@@ -17,6 +17,7 @@ code path with different costs would not be a comparison.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Mapping, Sequence
 
@@ -106,11 +107,29 @@ def momentum(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class MatchedRandom:
+    """What the matched-random baseline averaged, and what it could not.
+
+    ``chosen`` is the seeded sample; ``contributed`` the peers whose copy was
+    priced and deployed capital, so exactly the wallets behind ``mean``;
+    ``dropped`` the rest of the sample with the reason each fell out. A
+    caller that reports the baseline reports ``contributed``, not ``chosen``:
+    a peer the market could not price was never averaged.
+    """
+
+    mean: Decimal | None
+    chosen: tuple[str, ...]
+    contributed: tuple[str, ...] = ()
+    dropped: dict[str, str] = field(default_factory=dict)
+
+
 def matched_random(
     interval: KnownInterval, *, latency_ms: int, target_fill_count: int,
     pool: Mapping[str, Sequence[SourceFill]], market: MarketData, cost_model: CostModel,
     config: FollowerConfig, certify, seed: int, sample_size: int, tolerance: Decimal = Decimal("0.5"),
-) -> tuple[Decimal | None, tuple[str, ...]]:
+    decision_cutoff_ms: int | None = None, max_price_age_ms: int | None = None,
+) -> MatchedRandom:
     """Mean follower return on deployed capital over similar-activity peers.
 
     Each peer is copied at the same latency and costs; its net is divided by
@@ -118,9 +137,14 @@ def matched_random(
     comparable and the result sits in the same return space as the target.
     ``certify(wallet, start, end)`` must return a :class:`KnownInterval` or
     raise; wallets whose coverage does not certify the same window are not
-    eligible, since scoring them would be scoring a gap. Returns ``None`` and
-    an empty tuple when no eligible peer exists (or none deployed capital),
-    which the caller must report rather than treat as zero.
+    eligible, since scoring them would be scoring a gap. The mean is ``None``
+    when no eligible peer exists (or none deployed capital), which the caller
+    must report rather than treat as zero.
+
+    ``decision_cutoff_ms`` and ``max_price_age_ms`` are the target's own and
+    must be passed through so a peer is scored under the same convention: a
+    study fixes one cutoff for every latency and one price-age bound, and a
+    peer copied without them is not "the same measure".
     """
     if sample_size <= 0:
         raise InputError("sample_size must be positive")
@@ -139,9 +163,11 @@ def matched_random(
             continue
         candidates.append(wallet)
     if not candidates:
-        return None, ()
+        return MatchedRandom(None, ())
     chosen = tuple(random.Random(seed).sample(candidates, min(sample_size, len(candidates))))
     returns: list[Decimal] = []
+    contributed: list[str] = []
+    dropped: dict[str, str] = {}
     for wallet in chosen:
         peer_interval = certify(wallet, interval.start_ms, interval.end_ms)
         try:
@@ -152,18 +178,24 @@ def matched_random(
             run = simulate_follower(
                 peer_interval, latency_ms=latency_ms, fills=pool[wallet], market=market,
                 cost_model=cost_model, config=config,
+                decision_cutoff_ms=decision_cutoff_ms, max_price_age_ms=max_price_age_ms,
                 opening_positions=opening_positions_for(peer_interval, pool[wallet]),
             )
-        except InputError:
+        except InputError as exc:
             # A peer the market cannot price (a coin with no series or no
             # liquidity profile) is not the target's problem; it drops out of
-            # the baseline rather than refusing the wallet being scored.
+            # the baseline rather than refusing the wallet being scored, and
+            # the drop is named so the caller cannot list it as averaged.
+            dropped[wallet] = f"unpriceable: {exc}"
             continue
         if run.peak_deployed_notional > 0:
             returns.append(run.pnl.net / run.peak_deployed_notional)
+            contributed.append(wallet)
+        else:
+            dropped[wallet] = "nothing deployed"
     if not returns:
-        return None, chosen
-    return sum(returns, Decimal(0)) / len(returns), chosen
+        return MatchedRandom(None, chosen, (), dropped)
+    return MatchedRandom(sum(returns, Decimal(0)) / len(returns), chosen, tuple(contributed), dropped)
 
 
 def _synthetic(

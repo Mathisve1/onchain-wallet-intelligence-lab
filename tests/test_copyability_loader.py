@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.copyability.coverage import UnknownIntervalError
 from src.copyability.loader import (
+    coverage_snapshot,
     load_coverage,
     load_fill_prices,
     load_fills,
@@ -15,7 +16,12 @@ from src.copyability.loader import (
     load_trade_prices,
 )
 from src.live_data.models import ClearinghouseState, Fill, FundingDelta
-from src.live_data.storage import RUN_STATUS_COMPLETED, RUN_STATUS_FAILED, LiveDataStore
+from src.live_data.storage import (
+    COVERAGE_FILLS_BOUND_RULE,
+    RUN_STATUS_COMPLETED,
+    RUN_STATUS_FAILED,
+    LiveDataStore,
+)
 from src.live_data.trades import Trade
 
 W = "0x" + "ab" * 20
@@ -118,6 +124,40 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(ledger.covered(FAILED), [])
         with self.assertRaises(UnknownIntervalError):
             ledger.certify(FAILED, 1_000, 1_100)
+
+    def test_the_ledger_can_be_bounded_by_mode_and_by_when_a_run_finished(self) -> None:
+        # A study whose window closed at an instant reads only the rows that
+        # had finished by then, so a rerun after later collection reads the
+        # same ledger; the snapshot says which rows those were.
+        late = "0x" + "77" * 20
+        finish(self.store, "late-backfill", mode="backfill_wallet", wallet=late, start=9_000, end=9_100,
+               coverage=backfill_coverage(1_000, 1_100, completed=True))
+        self.assertIn(late, load_coverage(self.store).wallets())
+        self.assertNotIn(late, load_coverage(self.store, finished_by_ms=1_500).wallets())
+        bounded = coverage_snapshot(self.store, finished_by_ms=1_500)
+        self.assertLessEqual(bounded["max_finished_at_ms"], 1_500)
+        self.assertEqual(bounded["finished_by_ms"], 1_500)
+        self.assertNotEqual(bounded["run_ids_sha256"], coverage_snapshot(self.store)["run_ids_sha256"])
+        # Counting only rows that produced an interval: a snapshot of the same
+        # rows hashes the same, one row more does not.
+        self.assertEqual(bounded, coverage_snapshot(self.store, finished_by_ms=1_500))
+        rest = coverage_snapshot(self.store, modes=("backfill_wallet", "sweep_wallet"))
+        self.assertEqual(rest["modes"], ["backfill_wallet", "sweep_wallet"])
+        self.assertLess(rest["runs_consulted"], coverage_snapshot(self.store)["runs_consulted"])
+
+    def test_a_forced_cursor_advance_is_trusted_only_where_the_bound_says_it_was_applied(self) -> None:
+        marked, unmarked = "0x" + "88" * 20, "0x" + "99" * 20
+        for wallet, extra in ((marked, {"bound_rule": COVERAGE_FILLS_BOUND_RULE}), (unmarked, {})):
+            coverage = backfill_coverage(1_000, 1_100, completed=True)
+            coverage["fills"].update(forced_cursor_advances=1, covered_until_ms=1_080, **extra)
+            finish(self.store, f"forced-{wallet[:6]}", mode="backfill_wallet", wallet=wallet,
+                   start=1_000, end=1_100, coverage=coverage)
+        ledger = load_coverage(self.store)
+        # The marked row's bound already stops before the skipped millisecond.
+        self.assertEqual(ledger.covered(marked), [(1_000, 1_080)])
+        # The unmarked row predates that rule, so its bound over-claims and
+        # proves nothing, whether or not the walk said it completed.
+        self.assertEqual(ledger.covered(unmarked), [])
 
     def test_fills_load_per_wallet_in_time_order(self) -> None:
         fills = load_fills(self.store, [W])
