@@ -114,6 +114,24 @@ class RequestSequenceTests(SweepTestCase):
         fills_body = next(b for b in transport.bodies if b["type"] == "userFillsByTime")
         self.assertEqual(fills_body["endTime"], self.now_ms)
 
+    def test_the_fills_resume_never_passes_what_a_walk_proved_observed(self) -> None:
+        # A walk cut at the page cap is proven only to the millisecond before
+        # its last fill, and a fill another source wrote sits ahead of every
+        # walk. Resuming from the newest fill would step over both, leaving a
+        # hole no later sweep ever asks for.
+        self.store_prior_fill(WALLET, PRIOR_FILL_MS)
+        self.store.start_run("cut-1", mode="sweep_wallet", started_at_ms=T0_MS, wallet_address=WALLET)
+        self.store.finish_run(
+            "cut-1", finished_at_ms=T0_MS, status=RUN_STATUS_COMPLETED, records_seen=1, records_written=1,
+            coverage={"window": {"start_time_ms": T0_MS, "end_time_ms": PRIOR_FILL_MS},
+                      "fills": {"attempted": True, "completed": False, "truncated_at_page_cap": True,
+                                "covered_until_ms": PRIOR_FILL_MS - 1}},
+        )
+        orchestrator, transport = self.build([ALL_MIDS, [], []])
+        report = orchestrator.sweep([WALLET], ["BTC"], t0_ms=T0_MS, snapshot_top=0)
+        self.assertEqual(request_sequence(transport)[1], ("userFillsByTime", WALLET, PRIOR_FILL_MS))
+        self.assertEqual(report["per_wallet"][WALLET]["fills_from_ms"], PRIOR_FILL_MS)
+
     def test_a_funding_resume_uses_the_stored_funding_time(self) -> None:
         orchestrator, _ = self.build([ALL_MIDS, [], [funding_row(T0_MS + 5_000)], []])
         orchestrator.sweep([WALLET], ["BTC"], t0_ms=T0_MS, snapshot_top=0)

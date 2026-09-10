@@ -19,6 +19,28 @@ class ArgumentParsingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.parser = cli.build_parser()
 
+    def test_the_sweep_can_be_told_to_walk_the_recorded_pool(self) -> None:
+        # Only a swept wallet can be certified over arm B's window, so which
+        # wallets the sweep walks decides which can ever serve as peers.
+        import json as _json
+        import tempfile
+        from pathlib import Path as _Path
+
+        cohort = ["0x" + "11" * 20, "0x" + "22" * 20]
+        pool = cohort + ["0x" + "33" * 20]
+        with tempfile.TemporaryDirectory() as tmp:
+            record = _Path(tmp) / "cohort.json"
+            record.write_text(_json.dumps({"t0_ms": 1, "cohort": cohort, "pool": pool}), encoding="utf-8")
+            t0_ms, loaded_cohort, loaded_pool = cli._load_cohort(record)
+            self.assertEqual((t0_ms, list(loaded_cohort)), (1, cohort))
+            self.assertEqual(list(loaded_pool), pool)
+            # The cohort keeps the front of the walk, so --snapshot-top still
+            # snapshots the cohort's leading wallets.
+            self.assertEqual(list(cli._pool_order(loaded_cohort, loaded_pool)), pool)
+            without = _Path(tmp) / "old.json"
+            without.write_text(_json.dumps({"t0_ms": 1, "cohort": cohort}), encoding="utf-8")
+            self.assertEqual(cli._load_cohort(without)[2], ())
+
     def test_a_subcommand_is_required(self) -> None:
         with self.assertRaises(SystemExit):
             self.parser.parse_args([])

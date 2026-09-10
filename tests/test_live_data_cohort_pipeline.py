@@ -30,6 +30,7 @@ from research.wallet_copyability.live_data_collector.cohort_pipeline_freeze impo
     funding_coins_in_db,
 )
 from src.live_data.models import Fill, FundingDelta, parse_funding
+from src.copyability.cohort import cohort_hash
 from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
 D = Decimal
@@ -217,6 +218,11 @@ class FreezeStoreTestCase(unittest.TestCase):
             # certified window is excluded before it is characterised.
             for index, wallet in enumerate((EVAL_WALLET, MAKER_WALLET, QUIET_WALLET)):
                 self._record_backfill(store, f"backfill-{index}", wallet, covered_until_ms=T0)
+            # The mids poller runs before the freeze: arm B's first quote must
+            # sit within the freshness bound of T0 and cannot be collected
+            # afterwards, so the freeze refuses a T0 the poller has not reached.
+            store.write_mids({"BTC": "64000"}, {"BTC": "64000"}, observed_at_ms=T0 - 60_000,
+                             ingested_at_ms=T0 - 60_000)
 
         self.candles_json = self.root / "L2_ARM_A_CANDLES_001.json"
         self.candles_json.write_text(json.dumps(CANDLE_POST_CHECK), encoding="utf-8")
@@ -328,6 +334,85 @@ class FreezeSelectionTests(FreezeStoreTestCase):
         self.assertTrue(record["hard_stop"])
         self.assertEqual(record["cohort"], [])
         self.assertEqual(record["evaluable_count"], 1)
+
+
+class HardStopReportTests(FreezeStoreTestCase):
+    """Outcome 1 of the plan's pre-registered reading has a report."""
+
+    def test_the_hard_stop_writes_the_report_the_plan_requires(self) -> None:
+        out = self.root / "freeze.json"
+        logged: list[str] = []
+        # A minimum no fixture cohort can reach: the hard stop the plan means.
+        code = main(self.freeze_argv(out, minimum=200), log=logged.append)
+        self.assertEqual(code, 2)
+        report_path = out.with_name("freeze_HARD_STOP.md")
+        self.assertTrue(report_path.exists())
+        self.assertIn(str(report_path), logged[-1])
+        report = report_path.read_text(encoding="utf-8")
+        record = json.loads(out.read_text(encoding="utf-8"))
+        self.assertIn("HARD STOP", report)
+        self.assertIn(f"Evaluable wallets: {record['evaluable_count']}, against a minimum of 200", report)
+        # n after every filter stage, from the record's own counts.
+        for stage, n in record["stage_counts"].items():
+            with self.subTest(stage=stage):
+                self.assertIn(f"| {stage} | {n} |", report)
+        for reason, n in record["per_wallet_reason"].items():
+            with self.subTest(reason=reason):
+                self.assertIn(f"| {reason} | {n} |", report)
+
+    def test_the_report_states_the_clock_price_of_the_delay(self) -> None:
+        # The plan requires this figure by name; nothing else in the
+        # repository states it, and it is what bounds how long the owner has.
+        out = self.root / "freeze.json"
+        main(self.freeze_argv(out, minimum=200), log=_silent)
+        report = out.with_name("freeze_HARD_STOP.md").read_text(encoding="utf-8")
+        self.assertIn("The clock price of the delay", report)
+        self.assertIn("52.2", report)  # the probe's measured 15-minute retention
+        self.assertIn("| 0 | 52.2 |", report)
+        self.assertIn("| 7 | 45.2 |", report)
+        self.assertIn("| 30 | 22.2 |", report)
+        self.assertIn("Lowering the minimum", report)
+
+    def test_a_freeze_that_does_not_hard_stop_writes_no_such_report(self) -> None:
+        out = self.root / "freeze.json"
+        self.assertEqual(main(self.freeze_argv(out, minimum=1), log=_silent), 0)
+        self.assertFalse(out.with_name("freeze_HARD_STOP.md").exists())
+
+
+class FreezeMidsPreconditionTests(FreezeStoreTestCase):
+    """Arm B's first quote is a T0-day precondition, not a day-56 discovery."""
+
+    def test_a_t0_the_mids_poller_has_not_reached_is_refused(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM mids")
+            store.connection.commit()
+        out = self.root / "freeze.json"
+        logged: list[str] = []
+        # A refused input is a sentence and exit 2, not a traceback: this runs
+        # once, on the T0 day, in front of an operator with a clock.
+        self.assertEqual(main(self.freeze_argv(out, minimum=1), log=logged.append), 2)
+        self.assertIn("start the mids poll before freezing", logged[-1])
+        self.assertIn("refusing to freeze", logged[-1])
+        self.assertFalse(out.exists())
+
+    def test_a_mid_after_t0_does_not_satisfy_it(self) -> None:
+        with LiveDataStore(self.db) as store:
+            store.connection.execute("DELETE FROM mids")
+            store.write_mids({"BTC": "64000"}, {"BTC": "64000"}, observed_at_ms=T0 + 1,
+                             ingested_at_ms=T0 + 1)
+        self.assertEqual(main(self.freeze_argv(self.root / "freeze.json", minimum=1), log=_silent), 2)
+
+    def test_the_record_carries_the_characterised_pool_and_the_first_mid(self) -> None:
+        out = self.root / "freeze.json"
+        main(self.freeze_argv(out, minimum=1), log=_silent)
+        record = json.loads(out.read_text(encoding="utf-8"))
+        # Every candidate the freeze judged, cohort member or not: only a
+        # swept wallet can be certified over arm B's window, and the sweep
+        # needs the list at T0.
+        self.assertEqual(record["pool"], sorted([EVAL_WALLET, MAKER_WALLET, QUIET_WALLET]))
+        self.assertEqual(record["pool_sha256"], cohort_hash(record["pool"]))
+        self.assertGreaterEqual(len(record["pool"]), len(record["cohort"]))
+        self.assertEqual(record["benchmark_first_mid_ms"], T0 - 60_000)
 
 
 class FreezeCoverageTests(FreezeStoreTestCase):

@@ -56,12 +56,23 @@ class CoverageLedgerTests(unittest.TestCase):
     def test_a_gap_between_two_runs_is_a_gap_however_small(self) -> None:
         ledger = CoverageLedger([
             ObservedInterval(W, 100, 200, True, "a"),
-            ObservedInterval(W, 201, 300, True, "b"),  # 1 ms nobody observed
+            ObservedInterval(W, 202, 300, True, "b"),  # ms 201 nobody observed
         ])
         self.assertTrue(ledger.is_fully_known(W, 100, 200))
-        self.assertTrue(ledger.is_fully_known(W, 201, 300))
+        self.assertTrue(ledger.is_fully_known(W, 202, 300))
         self.assertFalse(ledger.is_fully_known(W, 100, 300))
-        self.assertEqual(ledger.covered(W), [(100, 200), (201, 300)])
+        self.assertEqual(ledger.covered(W), [(100, 200), (202, 300)])
+
+    def test_integer_adjacent_runs_leave_no_millisecond_unobserved(self) -> None:
+        # The shape a resumed walk writes behind a page-cap cut: the first row
+        # is covered until the last fill's own millisecond, the next starts at
+        # latest_fill + 1. Every millisecond in [100, 300] was observed.
+        ledger = CoverageLedger([
+            ObservedInterval(W, 100, 200, True, "a"),
+            ObservedInterval(W, 201, 300, True, "b"),
+        ])
+        self.assertTrue(ledger.is_fully_known(W, 100, 300))
+        self.assertEqual(ledger.covered(W), [(100, 300)])
 
     def test_touching_runs_merge_into_one_interval(self) -> None:
         ledger = CoverageLedger([

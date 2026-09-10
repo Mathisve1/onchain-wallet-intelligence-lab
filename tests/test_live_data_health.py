@@ -16,7 +16,7 @@ from pathlib import Path
 
 from research.wallet_copyability.live_data_collector import health
 from src.live_data.models import Candle, Fill, FundingDelta
-from src.live_data.storage import LiveDataStore
+from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
 WALLET_A = "0x" + "aa" * 20
 WALLET_B = "0x" + "bb" * 20
@@ -436,6 +436,42 @@ class MainCohortFileTests(HealthTestCase):
         self.assertEqual(report["wallets"][0]["wallet_address"], WALLET_A)
         self.assertEqual(report["coins"][0]["coin"], "BTC")
         self.assertTrue(logged, "main did not print anything")
+
+    def test_the_report_carries_arm_bs_three_collection_preconditions(self) -> None:
+        # None of the three can be repaired after the window closes, so the
+        # only useful moment to see them is during collection.
+        pool_only = "0x" + "cc" * 20
+        self.store.write_fills(
+            [_fill(WALLET_A, "BTC", 1, T0_MS + 1_000)], source="test", ingested_at_ms=1
+        )
+        self.store.write_mids({"BTC": "100"}, {}, observed_at_ms=T0_MS + 60_000, ingested_at_ms=1)
+        self.store.start_run("swept-a", mode="sweep_wallet", started_at_ms=T0_MS, wallet_address=WALLET_A)
+        self.store.finish_run("swept-a", finished_at_ms=T0_MS, status=RUN_STATUS_COMPLETED,
+                              records_seen=0, records_written=0, coverage={})
+        self.store.close()
+
+        cohort_path = Path(self._tempdir.name) / "cohort.json"
+        cohort_path.write_text(json.dumps({"t0_ms": T0_MS, "cohort": [WALLET_A],
+                                           "pool": [WALLET_A, pool_only]}), encoding="utf-8")
+        json_out = Path(self._tempdir.name) / "health.json"
+        health.main(["--db", str(Path(self._tempdir.name) / "live.sqlite3"),
+                     "--cohort", str(cohort_path), "--json", str(json_out)], log=lambda _: None)
+        pre = json.loads(json_out.read_text(encoding="utf-8"))["summary"]["arm_b_preconditions"]
+        self.assertEqual(pre["benchmark_coin"], "BTC")
+        self.assertEqual(pre["benchmark_first_mid_ms"], T0_MS + 60_000)
+        self.assertTrue(pre["benchmark_first_mid_within_bound"])  # a minute after T0, inside the 15
+        self.assertEqual((pre["pool_wallets_total"], pre["pool_wallets_never_swept"]), (2, [pool_only]))
+
+    def test_a_benchmark_series_that_starts_too_late_is_reported_while_it_can_still_matter(self) -> None:
+        self.store.write_mids({"BTC": "100"}, {}, observed_at_ms=T0_MS + 20 * 60_000, ingested_at_ms=1)
+        self.store.close()
+        cohort_path = Path(self._tempdir.name) / "cohort.json"
+        cohort_path.write_text(json.dumps({"t0_ms": T0_MS, "cohort": [WALLET_A]}), encoding="utf-8")
+        json_out = Path(self._tempdir.name) / "health.json"
+        health.main(["--db", str(Path(self._tempdir.name) / "live.sqlite3"), "--coins", "BTC",
+                     "--cohort", str(cohort_path), "--json", str(json_out)], log=lambda _: None)
+        pre = json.loads(json_out.read_text(encoding="utf-8"))["summary"]["arm_b_preconditions"]
+        self.assertFalse(pre["benchmark_first_mid_within_bound"])
 
     def test_main_derives_coins_from_cohort_fills_when_coins_flag_is_omitted(self) -> None:
         self.store.write_fills(
