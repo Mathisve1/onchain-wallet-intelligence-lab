@@ -322,6 +322,7 @@ def run(
         "sample_limitations_disclosure": report.limitations(
             arm=spec.arm, survivorship_block=surviv, disclosures=disclosures, pool_size=len(pool),
             pool_cohort=pool_cohort, cohort_size=len(wallets),
+            unpriced=report.unpriced_summary(provenance, benchmark_coin=BENCHMARK_COIN),
         ),
         "what_broke": what_broke,
         "reading_rule": (

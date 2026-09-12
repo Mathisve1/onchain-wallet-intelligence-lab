@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 
 from research.wallet_copyability.live_data_collector import arm_b_runner as runner
+from research.wallet_copyability.live_data_collector import l2_arm_report as report
 from research.wallet_copyability.live_data_collector import l2_arm_runner as core
 from research.wallet_copyability.live_data_collector import l2_arm_statistics as stats
 from src.copyability.cohort import cohort_hash
@@ -196,6 +197,9 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         btc = r["price_provenance"]["sampled_by_coin"]["BTC"]
         self.assertGreater(btc["rows_in_window"], 16_000)
         self.assertEqual((btc["mean_spacing_ms"], btc["max_gap_ms"], btc["gaps_over_max_age"]), (FIVE_MIN, FIVE_MIN, 0))
+        self.assertEqual(btc["unpriced_ms"], 0)
+        self.assertTrue(any(n.startswith("Price coverage: no hole wider than 15 min")
+                            for n in r["sample_limitations_disclosure"]), r["sample_limitations_disclosure"])
         self.assertTrue(r["price_series_span_by_coin"]["BTC"]["spans_window"])
         self.assertEqual(r["counts"], {"wallets": 3, "scored": 3, "refused": 0, "in_primary": 3})
         self.assertEqual(r["pool"]["size"], 5)
@@ -401,6 +405,98 @@ class ArmBRunnerTests(ArmBStoreTestCase):
         r = json.loads(self.out.read_text(encoding="utf-8"))
         self.assertNotIn("fetch_runs", r["price_provenance"])
         self.assertEqual(r["price_source"]["kind"], "mids")
+
+
+class UnpricedTimeTests(unittest.TestCase):
+    """What the holes between two operator-started sessions cost, in the file and in the note.
+
+    The figure is the evidence file's own: it is measured from the ``mids``
+    table the database holds, never from the session logs the collecting
+    script keeps outside the repository.
+    """
+
+    BOUND = 900_000
+
+    def provenance(self, **by_coin) -> dict:
+        return {"kind": "mids", "max_age_ms": self.BOUND,
+                "sampled_by_coin": {coin: {"gaps_over_max_age": gaps, "unpriced_ms": unpriced, "max_gap_ms": longest}
+                                    for coin, (gaps, unpriced, longest) in by_coin.items()},
+                "polls": {}, "sweeps": {}}
+
+    def note(self, summary, *, stale: int = 0, catch_up: int = 0, of_n: int = 3) -> str:
+        notes = report.limitations(
+            arm="B", survivorship_block={"stopped": 0, "cohort": 3, "faded": 0, "faded_judged": 3},
+            disclosures={"of_n": of_n, "liquidity_assumed": 0, "funding_incomplete": 0,
+                         "stale_price_skips_present": stale, "catch_up_fills_present": catch_up},
+            pool_size=5, pool_cohort=3, cohort_size=3, unpriced=summary,
+        )
+        coverage = [n for n in notes if n.startswith("Price coverage")]
+        self.assertEqual(len(coverage), 1, notes)
+        return coverage[0]
+
+    def test_the_unpriced_time_is_what_a_hole_costs_beyond_the_bound(self) -> None:
+        # A quote prices a copy for the whole bound after it, so a hole of 20
+        # minutes leaves 5 unpriced and a hole of exactly the bound leaves none.
+        with contextlib.closing(LiveDataStore(":memory:")) as store:
+            start = 1_000_000_000_000
+            for offset in (0, self.BOUND, 2 * self.BOUND + 300_000, 2 * self.BOUND + 300_000 + 20 * 60_000):
+                store.connection.execute(
+                    "INSERT INTO mids (coin, observed_at_ms, mid, raw_payload, ingested_at_ms) VALUES (?, ?, ?, ?, ?)",
+                    ("BTC", start + offset, "1", "{}", start + offset))
+            store.connection.commit()
+            provenance = report.mids_provenance(
+                store, ["BTC"], window=(start, start + 10 * self.BOUND), max_age_ms=self.BOUND)
+        btc = provenance["sampled_by_coin"]["BTC"]
+        self.assertEqual((btc["gaps_over_max_age"], btc["unpriced_ms"]), (2, 300_000 + 300_000))
+        self.assertIsNone(report.unpriced_summary({"kind": "candles"}, benchmark_coin="BTC"))
+        self.assertEqual(report.unpriced_summary(provenance, benchmark_coin="BTC")["unpriced_ms_total"], 600_000)
+
+    def test_the_summary_rolls_the_coins_up_and_names_the_worst_and_the_benchmark(self) -> None:
+        summary = report.unpriced_summary(
+            self.provenance(BTC=(1, 300_000, 1_200_000), ETH=(2, 3_600_000, 2_400_000), SOL=(0, 0, self.BOUND)),
+            benchmark_coin="BTC")
+        self.assertEqual(summary["coins"], 3)
+        self.assertEqual(summary["coins_with_unpriced_time"], 2)
+        self.assertEqual(summary["unpriced_ms_total"], 3_900_000)
+        self.assertEqual(summary["gaps_over_max_age_total"], 3)
+        self.assertEqual((summary["worst_coin"], summary["worst_coin_unpriced_ms"]), ("ETH", 3_600_000))
+        self.assertEqual((summary["benchmark_coin"], summary["benchmark_unpriced_ms"]), ("BTC", 300_000))
+        self.assertEqual((summary["benchmark_gaps_over_max_age"], summary["benchmark_max_gap_ms"]), (1, 1_200_000))
+
+    def test_a_clean_series_says_so_instead_of_reporting_a_hole(self) -> None:
+        summary = report.unpriced_summary(self.provenance(BTC=(0, 0, self.BOUND), ETH=(0, 0, 300_000)),
+                                          benchmark_coin="BTC")
+        note = self.note(summary)
+        self.assertIn("no hole wider than 15 min between two quotes, on any of the 2 coins", note)
+        self.assertIn("Every copy was made at its own fill's time", note)
+
+    def test_the_note_states_the_hole_what_it_does_to_a_copy_and_the_wallets_it_touched(self) -> None:
+        summary = report.unpriced_summary(
+            self.provenance(BTC=(2, 7_200_000, 4_500_000), ETH=(1, 1_800_000, 2_700_000)), benchmark_coin="BTC")
+        note = self.note(summary, stale=2, catch_up=1, of_n=3)
+        self.assertIn("3 holes wider than 15 min inside the window, on 2 of 2 coins", note)
+        self.assertIn("leaving 2.5 h in which no copy could be priced", note)
+        self.assertIn("worst coin BTC, 2.0 h", note)
+        self.assertIn("the benchmark BTC carries 2 of them, 2.0 h unpriced, its longest hole 1.2 h", note)
+        self.assertIn("operator-started and bounded by decision, so the time between two sessions", note)
+        self.assertIn("re-aligns at the next priced fill as a catch-up trade", note)
+        self.assertIn("average entry price", note)
+        self.assertIn("2 of 3 wallets in the primary had a copy or an end-of-window mark resting on a stale quote", note)
+        self.assertIn("1 had a catch-up fill", note)
+        self.assertIn("two edges of the window are not in this sum", note)
+
+    def test_a_benchmark_that_was_never_priced_is_named_as_such(self) -> None:
+        summary = report.unpriced_summary(self.provenance(ETH=(1, 600_000, 1_500_000)), benchmark_coin="BTC")
+        self.assertIsNone(summary["benchmark_unpriced_ms"])
+        self.assertIn("the benchmark BTC was not priced at all", self.note(summary))
+
+    def test_arm_a_carries_no_price_coverage_note(self) -> None:
+        notes = report.limitations(
+            arm="A", survivorship_block={"stopped": 1, "cohort": 3, "faded": 0, "faded_judged": 3},
+            disclosures={"of_n": 3, "liquidity_assumed": 0, "funding_incomplete": 0,
+                         "stale_price_skips_present": 0, "catch_up_fills_present": 0},
+            pool_size=5, pool_cohort=3, cohort_size=3, unpriced=None)
+        self.assertFalse([n for n in notes if n.startswith("Price coverage")], notes)
 
 
 class DecisionRuleTests(unittest.TestCase):

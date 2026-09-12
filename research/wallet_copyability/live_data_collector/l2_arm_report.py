@@ -250,6 +250,11 @@ def mids_provenance(store: LiveDataStore, coins: Iterable[str], *, window: tuple
             "mean_spacing_ms": None if len(times) < 2 else int((times[-1] - times[0]) / (len(times) - 1)),
             "max_gap_ms": max(gaps) if gaps else None,
             "gaps_over_max_age": sum(1 for gap in gaps if gap > max_age_ms),
+            # Time inside the window during which no quote was fresh enough to
+            # price a copy: what each hole costs beyond the bound, summed. It
+            # counts holes *between* observations only; the two edges of the
+            # window are the span check's business, and that refuses outright.
+            "unpriced_ms": sum(gap - max_age_ms for gap in gaps if gap > max_age_ms),
         }
 
     def runs(mode: str) -> dict:
@@ -261,6 +266,40 @@ def mids_provenance(store: LiveDataStore, coins: Iterable[str], *, window: tuple
 
     return {"kind": "mids", "max_age_ms": max_age_ms, "sampled_by_coin": per_coin,
             "polls": runs("mids"), "sweeps": runs("sweep")}
+
+
+def unpriced_summary(provenance: Mapping[str, Any], *, benchmark_coin: str) -> dict | None:
+    """What the holes in the mids series cost, rolled up for the disclosure.
+
+    ``None`` for a candle-priced arm: a candle series is fetched in one run
+    after the fact, so a hole in it is a missing fetch, not unpriced time.
+    """
+    if provenance.get("kind") != "mids":
+        return None
+    per_coin: Mapping[str, Mapping[str, Any]] = provenance["sampled_by_coin"]
+    affected = {coin: row for coin, row in per_coin.items() if row["unpriced_ms"] > 0}
+    worst = max(affected, key=lambda coin: affected[coin]["unpriced_ms"], default=None)
+    benchmark = per_coin.get(benchmark_coin)
+    return {
+        "max_age_ms": provenance["max_age_ms"],
+        "coins": len(per_coin),
+        "coins_with_unpriced_time": len(affected),
+        "unpriced_ms_total": sum(row["unpriced_ms"] for row in per_coin.values()),
+        "gaps_over_max_age_total": sum(row["gaps_over_max_age"] for row in per_coin.values()),
+        "worst_coin": worst,
+        "worst_coin_unpriced_ms": affected[worst]["unpriced_ms"] if worst is not None else 0,
+        "benchmark_coin": benchmark_coin,
+        "benchmark_unpriced_ms": benchmark["unpriced_ms"] if benchmark is not None else None,
+        "benchmark_gaps_over_max_age": benchmark["gaps_over_max_age"] if benchmark is not None else None,
+        "benchmark_max_gap_ms": benchmark["max_gap_ms"] if benchmark is not None else None,
+    }
+
+
+def _hours(ms: int) -> str:
+    """Milliseconds as the operator reads them: minutes under an hour, else hours."""
+    if ms < 3_600_000:
+        return f"{ms / 60_000:.0f} min"
+    return f"{ms / 3_600_000:.1f} h"
 
 
 def _runs(store: LiveDataStore, mode: str, *, detail_key: str, fields: Sequence[str]) -> list[dict]:
@@ -389,7 +428,7 @@ def diagnostics_rollup(studies: Sequence[Any], *, latency_ms: int, coins_without
 
 def limitations(
     *, arm: str, survivorship_block: Mapping[str, Any], disclosures: Mapping[str, Any],
-    pool_size: int, pool_cohort: int, cohort_size: int,
+    pool_size: int, pool_cohort: int, cohort_size: int, unpriced: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """The plain-language caveats the approval requires beside the result."""
     notes = []
@@ -412,6 +451,37 @@ def limitations(
             "judged wallets faded; a wallet that quit is scored on what it did before it quit."
         )
         notes.append("Arm B decides by the rule fixed before T0; arm A cannot overrule it in either direction.")
+        if unpriced is not None:
+            bound = _hours(unpriced["max_age_ms"])
+            if unpriced["gaps_over_max_age_total"] == 0:
+                notes.append(
+                    f"Price coverage: no hole wider than {bound} between two quotes, on any of the "
+                    f"{unpriced['coins']} coins priced, for the whole window. Every copy was made at its "
+                    "own fill's time."
+                )
+            else:
+                benchmark = (
+                    f"the benchmark {unpriced['benchmark_coin']} carries "
+                    f"{unpriced['benchmark_gaps_over_max_age']} of them, {_hours(unpriced['benchmark_unpriced_ms'])} "
+                    f"unpriced, its longest hole {_hours(unpriced['benchmark_max_gap_ms'])}"
+                    if unpriced["benchmark_unpriced_ms"] is not None
+                    else f"the benchmark {unpriced['benchmark_coin']} was not priced at all"
+                )
+                notes.append(
+                    f"Price coverage: the mids series has {unpriced['gaps_over_max_age_total']} holes wider than "
+                    f"{bound} inside the window, on {unpriced['coins_with_unpriced_time']} of "
+                    f"{unpriced['coins']} coins, leaving {_hours(unpriced['unpriced_ms_total'])} in which no "
+                    f"copy could be priced (worst coin {unpriced['worst_coin']}, "
+                    f"{_hours(unpriced['worst_coin_unpriced_ms'])}); {benchmark}. Collection was operator-started "
+                    "and bounded by decision, so the time between two sessions is where these holes fall. A fill "
+                    "inside one is not copied at its own time: the follower re-aligns at the next priced fill as a "
+                    "catch-up trade, a round trip the source completed inside the hole is missed entirely, and a "
+                    f"funding hour inside it is charged at the position's average entry price. Measured here: "
+                    f"{disclosures['stale_price_skips_present']} of {disclosures['of_n']} wallets in the primary "
+                    f"had a copy or an end-of-window mark resting on a stale quote and "
+                    f"{disclosures['catch_up_fills_present']} had a catch-up fill. The two edges of the window are "
+                    "not in this sum; the benchmark span check covers them and refuses the arm outright."
+                )
     notes += [
         f"Liquidity is assumed, not measured, for every coin ({disclosures['liquidity_assumed']} of "
         f"{disclosures['of_n']} wallets in the primary): no order book is read on this surface.",
