@@ -251,8 +251,12 @@ def run(
         status = STATUS_CASE_STUDY
     else:
         status = STATUS_DECIDED if spec.decides else STATUS_EARLY_READ
+    # Priced on the coins the run actually evaluated: a coin the span check
+    # dropped is out of scope, and counting it would dilute the coverage
+    # figures with a series nothing was scored on.
+    coins_evaluated = sorted(spanning & set(coins))
     provenance = (report.candle_provenance(store, coins, interval=CANDLE_INTERVAL) if spec.price_source == "candles"
-                  else report.mids_provenance(store, coins, window=window, max_age_ms=MAX_PRICE_AGE_MS))
+                  else report.mids_provenance(store, coins_evaluated, window=window, max_age_ms=MAX_PRICE_AGE_MS))
     # The peers behind the primary's M_i: the sample at the primary latency,
     # not at whichever latency happened to be simulated last.
     cohort_set = set(wallets)
@@ -301,7 +305,7 @@ def run(
                  "cohort_wallets_in_pool": pool_cohort, "non_cohort_wallets_in_pool": len(pool) - pool_cohort,
                  "mean_cohort_share_of_peers": round(sum(shares) / len(shares), 4) if shares else None,
                  "cohort_wallets_not_in_pool": sorted(set(wallets) - set(pool))},
-        "scope": {**scope_lists, "record": cohort.get("scope"), "coins_evaluated": sorted(spanning & set(coins)),
+        "scope": {**scope_lists, "record": cohort.get("scope"), "coins_evaluated": coins_evaluated,
                   "out_of_scope_fills_by_wallet": {w: n for w, n in sorted(out_of_scope.items()) if w in wallets and n},
                   "out_of_scope_definition": "cohort fills inside the evaluation window whose coin is out of scope "
                                              "or has no price series spanning the window"},

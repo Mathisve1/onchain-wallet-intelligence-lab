@@ -19,6 +19,7 @@ from src.copyability.cohort import InstrumentScope
 from src.copyability.inputs import MarketData, SourceFill
 from src.live_data.storage import RUN_STATUS_COMPLETED, LiveDataStore
 
+from . import l2_arm_coverage as coverage
 from .cohort_pipeline_freeze import candle_complete_coins, coin_list_sha256
 
 MILLISECONDS_PER_DAY = 86_400_000
@@ -233,73 +234,8 @@ def candle_provenance(store: LiveDataStore, coins: Iterable[str], *, interval: s
 
 
 def mids_provenance(store: LiveDataStore, coins: Iterable[str], *, window: tuple[int, int], max_age_ms: int) -> dict:
-    """How densely each coin's mid was sampled over the window, where the
-    series has holes wider than the freshness bound, and by how many polls
-    and sweeps."""
-    start_ms, end_ms = window
-    per_coin: dict[str, dict] = {}
-    for coin in sorted(coins):
-        times = [int(r["observed_at_ms"]) for r in store.connection.execute(
-            "SELECT observed_at_ms FROM mids WHERE coin = ? AND observed_at_ms BETWEEN ? AND ? ORDER BY observed_at_ms",
-            (coin, start_ms, end_ms),
-        )]
-        gaps = [later - earlier for earlier, later in zip(times, times[1:])]
-        per_coin[coin] = {
-            "rows_in_window": len(times),
-            "first_observed_ms": times[0] if times else None, "last_observed_ms": times[-1] if times else None,
-            "mean_spacing_ms": None if len(times) < 2 else int((times[-1] - times[0]) / (len(times) - 1)),
-            "max_gap_ms": max(gaps) if gaps else None,
-            "gaps_over_max_age": sum(1 for gap in gaps if gap > max_age_ms),
-            # Time inside the window during which no quote was fresh enough to
-            # price a copy: what each hole costs beyond the bound, summed. It
-            # counts holes *between* observations only; the two edges of the
-            # window are the span check's business, and that refuses outright.
-            "unpriced_ms": sum(gap - max_age_ms for gap in gaps if gap > max_age_ms),
-        }
-
-    def runs(mode: str) -> dict:
-        row = store.connection.execute(
-            "SELECT COUNT(*) AS n, MIN(started_at_ms) AS first, MAX(finished_at_ms) AS last "
-            "FROM ingest_runs WHERE mode = ? AND status = 'completed'", (mode,)
-        ).fetchone()
-        return {"completed": int(row["n"]), "first_started_ms": row["first"], "last_finished_ms": row["last"]}
-
-    return {"kind": "mids", "max_age_ms": max_age_ms, "sampled_by_coin": per_coin,
-            "polls": runs("mids"), "sweeps": runs("sweep")}
-
-
-def unpriced_summary(provenance: Mapping[str, Any], *, benchmark_coin: str) -> dict | None:
-    """What the holes in the mids series cost, rolled up for the disclosure.
-
-    ``None`` for a candle-priced arm: a candle series is fetched in one run
-    after the fact, so a hole in it is a missing fetch, not unpriced time.
-    """
-    if provenance.get("kind") != "mids":
-        return None
-    per_coin: Mapping[str, Mapping[str, Any]] = provenance["sampled_by_coin"]
-    affected = {coin: row for coin, row in per_coin.items() if row["unpriced_ms"] > 0}
-    worst = max(affected, key=lambda coin: affected[coin]["unpriced_ms"], default=None)
-    benchmark = per_coin.get(benchmark_coin)
-    return {
-        "max_age_ms": provenance["max_age_ms"],
-        "coins": len(per_coin),
-        "coins_with_unpriced_time": len(affected),
-        "unpriced_ms_total": sum(row["unpriced_ms"] for row in per_coin.values()),
-        "gaps_over_max_age_total": sum(row["gaps_over_max_age"] for row in per_coin.values()),
-        "worst_coin": worst,
-        "worst_coin_unpriced_ms": affected[worst]["unpriced_ms"] if worst is not None else 0,
-        "benchmark_coin": benchmark_coin,
-        "benchmark_unpriced_ms": benchmark["unpriced_ms"] if benchmark is not None else None,
-        "benchmark_gaps_over_max_age": benchmark["gaps_over_max_age"] if benchmark is not None else None,
-        "benchmark_max_gap_ms": benchmark["max_gap_ms"] if benchmark is not None else None,
-    }
-
-
-def _hours(ms: int) -> str:
-    """Milliseconds as the operator reads them: minutes under an hour, else hours."""
-    if ms < 3_600_000:
-        return f"{ms / 60_000:.0f} min"
-    return f"{ms / 3_600_000:.1f} h"
+    """See :mod:`l2_arm_coverage`; re-exported so both arms keep one import."""
+    return coverage.mids_provenance(store, coins, window=window, max_age_ms=max_age_ms)
 
 
 def _runs(store: LiveDataStore, mode: str, *, detail_key: str, fields: Sequence[str]) -> list[dict]:
@@ -426,6 +362,12 @@ def diagnostics_rollup(studies: Sequence[Any], *, latency_ms: int, coins_without
     }
 
 
+unpriced_ms = coverage.unpriced_ms
+unpriced_summary = coverage.unpriced_summary
+_hours = coverage._hours
+_plural = coverage._plural
+
+
 def limitations(
     *, arm: str, survivorship_block: Mapping[str, Any], disclosures: Mapping[str, Any],
     pool_size: int, pool_cohort: int, cohort_size: int, unpriced: Mapping[str, Any] | None = None,
@@ -453,34 +395,51 @@ def limitations(
         notes.append("Arm B decides by the rule fixed before T0; arm A cannot overrule it in either direction.")
         if unpriced is not None:
             bound = _hours(unpriced["max_age_ms"])
-            if unpriced["gaps_over_max_age_total"] == 0:
+            window = _hours(unpriced["window_ms"])
+            wallets = (
+                f"Measured on the wallets: {disclosures['stale_price_skips_present']} of {disclosures['of_n']} in "
+                "the primary had a copy or an end-of-window mark resting on a stale quote and "
+                f"{disclosures['catch_up_fills_present']} had a catch-up fill."
+            )
+            if unpriced["coins_with_unpriced_time"] == 0:
                 notes.append(
-                    f"Price coverage: no hole wider than {bound} between two quotes, on any of the "
-                    f"{unpriced['coins']} coins priced, for the whole window. Every copy was made at its "
-                    "own fill's time."
+                    f"Price coverage: over the whole {window} window, and on every one of the "
+                    f"{unpriced['coins']} coins evaluated, a quote no older than {bound} stood behind every "
+                    "instant, so every copy was priced from a quote inside the bound at its own action time. "
+                    f"{wallets}"
                 )
             else:
-                benchmark = (
-                    f"the benchmark {unpriced['benchmark_coin']} carries "
-                    f"{unpriced['benchmark_gaps_over_max_age']} of them, {_hours(unpriced['benchmark_unpriced_ms'])} "
-                    f"unpriced, its longest hole {_hours(unpriced['benchmark_max_gap_ms'])}"
-                    if unpriced["benchmark_unpriced_ms"] is not None
-                    else f"the benchmark {unpriced['benchmark_coin']} was not priced at all"
+                if not unpriced["benchmark_in_scope"]:
+                    benchmark = f"the benchmark {unpriced['benchmark_coin']} is not among the coins evaluated"
+                elif unpriced["benchmark_rows_in_window"] == 0:
+                    benchmark = (
+                        f"the benchmark {unpriced['benchmark_coin']} has no quote inside the window at all, so "
+                        f"its {_hours(unpriced['benchmark_unpriced_ms'])} is the window itself less what the last "
+                        "quote before it still covered"
+                    )
+                else:
+                    benchmark = (
+                        f"the benchmark {unpriced['benchmark_coin']} carries "
+                        f"{_hours(unpriced['benchmark_unpriced_ms'])}, {unpriced['benchmark_share']} percent "
+                        "of the window"
+                    )
+                shared = (
+                    " Every coin with unpriced time carries the same figure, which is what a stretch with no poll "
+                    "at all looks like." if unpriced["coins_share_one_figure"] else ""
                 )
                 notes.append(
-                    f"Price coverage: the mids series has {unpriced['gaps_over_max_age_total']} holes wider than "
-                    f"{bound} inside the window, on {unpriced['coins_with_unpriced_time']} of "
-                    f"{unpriced['coins']} coins, leaving {_hours(unpriced['unpriced_ms_total'])} in which no "
-                    f"copy could be priced (worst coin {unpriced['worst_coin']}, "
-                    f"{_hours(unpriced['worst_coin_unpriced_ms'])}); {benchmark}. Collection was operator-started "
-                    "and bounded by decision, so the time between two sessions is where these holes fall. A fill "
-                    "inside one is not copied at its own time: the follower re-aligns at the next priced fill as a "
-                    "catch-up trade, a round trip the source completed inside the hole is missed entirely, and a "
-                    f"funding hour inside it is charged at the position's average entry price. Measured here: "
-                    f"{disclosures['stale_price_skips_present']} of {disclosures['of_n']} wallets in the primary "
-                    f"had a copy or an end-of-window mark resting on a stale quote and "
-                    f"{disclosures['catch_up_fills_present']} had a catch-up fill. The two edges of the window are "
-                    "not in this sum; the benchmark span check covers them and refuses the arm outright."
+                    f"Price coverage: {_plural(unpriced['coins_with_unpriced_time'], 'coin')} of "
+                    f"{unpriced['coins']} evaluated had time inside the {window} window with no quote younger "
+                    f"than {bound} behind it, so a copy falling there could not be priced. Worst: "
+                    f"{unpriced['worst_coin']}, {_hours(unpriced['worst_coin_unpriced_ms'])}, "
+                    f"{unpriced['worst_coin_share']} percent of the window; {benchmark}.{shared} The figures are "
+                    "per coin and are wall-clock time inside the window, the head and the tail of it included; "
+                    "they are not added across coins, because one stretch with no poll leaves the same hole in "
+                    "every coin at once. A fill in such a stretch is not copied at its own time: the follower "
+                    "re-aligns at the next priced fill as a catch-up trade, a round trip the source completed "
+                    "inside it is missed entirely, and a funding hour inside it is charged at the position's "
+                    "average entry price and counted as priced, so it does not appear in the funding disclosure "
+                    f"below. {wallets}"
                 )
     notes += [
         f"Liquidity is assumed, not measured, for every coin ({disclosures['liquidity_assumed']} of "
