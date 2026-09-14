@@ -371,115 +371,297 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
         self._reject(lambda c: c["retained_schema"].update(tables=[t for t in c["retained_schema"]["tables"] if t != "trades"]))
 
 
+#: The L2 approval texts, pinned the way APPROVAL_SHA256 pins L1's. A change to
+#: an approval and its decision row in one edit passes the validator, which
+#: binds one against the other; it does not pass these, so the diff a reviewer
+#: reads has to touch a test constant too. That is the point of the literals.
+TWO_ARM_SHA256 = "3ac5e20aac54837419743c2f094578418f2eacb7601b164e17108f874694a8b4"
+ARM_A_WINDOW_SHA256 = "df082701ec412fcb112660f125b37ace095180a2cefdd00051f7896ee08ecc96"
+FORWARD_STUDY_SHA256 = "7caa6b249fdf28dda63d91595acb77948a8884cf52178eac81f9b5faab373deb"
+RETAINED_APPROVALS = {
+    "APPROVE_HL_LIVE_DATA_COLLECTION_L1_001": APPROVAL_SHA256,
+    "APPROVE_HL_LIVE_DATA_L2_FORWARD_STUDY_001": FORWARD_STUDY_SHA256,
+    "APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001": TWO_ARM_SHA256,
+    "APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001": ARM_A_WINDOW_SHA256,
+}
+
+
 class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
     """DEC-045's known issue: an approval text nothing binds is a text an edit can widen.
 
     The L2 approval's own ``additional_rest_request_types=`` line decides which
     request types the collector may make and which schema widening is retained,
-    so a silent edit to it is a silent widening. Each test mutates a real file
-    and restores it, the way the drift tests above do.
+    so a silent edit to it is a silent widening.
+
+    Most cases here assert the guard directly rather than through ``main()``. A
+    malformed decision row should fail these two or three tests by name, not
+    every test in the module that happens to call the validator.
     """
 
     L2_APPROVAL = BASE / "APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001.txt"
+    ARM_A_APPROVAL = BASE / "APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001.txt"
     DECISION_LOG = ROOT / "DECISION_LOG.md"
 
-    def assert_rejected(self, path: Path, replacement: bytes, *, expect: str) -> None:
-        original = path.read_bytes()
-        path.write_bytes(replacement)
+    @staticmethod
+    def sha256(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def assert_guard_refuses(self, edits: dict, *, expect: str) -> None:
+        """Mutate real files, assert the guard refuses, and always restore them."""
+        originals = {path: (path.read_bytes() if path.exists() else None) for path in edits}
         try:
-            with self.assertRaises(SystemExit) as caught:
-                validator.main()
-            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+            for path, content in edits.items():
+                path.write_bytes(content)
+            with self.assertRaises(validator.ValidationError) as caught:
+                validator.validate_approvals_match_their_record()
             self.assertIn(expect, str(caught.exception))
         finally:
-            path.write_bytes(original)
-        self.assertEqual(validator.main(), 0)
+            for path, original in originals.items():
+                if original is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_bytes(original)
+        self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
 
-    def test_every_retained_approval_is_bound_to_a_row_that_records_its_hash(self) -> None:
-        bindings = validator.recorded_approval_hashes()
-        on_disk = sorted(p.stem for p in BASE.glob("APPROVE_*.txt"))
-        self.assertEqual(len(on_disk), 4, on_disk)
-        for approval_id in on_disk:
+    @staticmethod
+    def row(dec: str, text: str, status: str = "accepted") -> bytes:
+        return f"| {dec} | 2026-01-01 | {status} | {text} |\n".encode("utf-8")
+
+    def test_every_retained_approval_hashes_to_its_pinned_literal(self) -> None:
+        on_disk = {path.stem: path for path in BASE.glob("APPROVE_*.txt")}
+        # A new approval is added deliberately, with its literal, or this fails.
+        self.assertEqual(set(on_disk), set(RETAINED_APPROVALS), "the retained approval set changed")
+        for approval_id, expected in RETAINED_APPROVALS.items():
             with self.subTest(approval=approval_id):
-                recorded = bindings.get(approval_id)
-                self.assertIsNotNone(recorded, f"{approval_id} is retained but no decision row records it")
-                actual = hashlib.sha256((BASE / f"{approval_id}.txt").read_bytes()).hexdigest()
-                self.assertIn(actual, recorded)
+                self.assertEqual(self.sha256(on_disk[approval_id]), expected)
+
+    def test_the_log_binds_every_retained_approval_to_that_same_hash(self) -> None:
+        bindings = validator.recorded_approval_hashes()
+        for approval_id, expected in RETAINED_APPROVALS.items():
+            with self.subTest(approval=approval_id):
+                self.assertIn(approval_id, bindings, "no accepted row binds this approval")
+                recorded, row = bindings[approval_id]
+                self.assertEqual(recorded, expected)
+                self.assertRegex(row, r"^DEC-\d{3}$")
+        self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
 
     def test_an_edit_to_the_l2_approval_is_refused_rather_than_obeyed(self) -> None:
         # The line the collector's request-type scope and retained schema hang on.
         raw = self.L2_APPROVAL.read_bytes()
         self.assertIn(b"additional_rest_request_types=candleSnapshot\n", raw)
-        widened = raw.replace(b"additional_rest_request_types=candleSnapshot\n",
-                              b"additional_rest_request_types=candleSnapshot,l2Book\n")
-        self.assertNotEqual(widened, raw)
         self.assertEqual(validator.additional_rest_request_types(), {"candleSnapshot"})
-        self.assert_rejected(self.L2_APPROVAL, widened, expect="not the one the owner approved")
+        self.assert_guard_refuses(
+            {self.L2_APPROVAL: raw.replace(b"additional_rest_request_types=candleSnapshot\n",
+                                           b"additional_rest_request_types=candleSnapshot,l2Book\n")},
+            expect="not the one the owner approved")
 
-    def test_a_narrowed_l2_approval_is_refused_too_so_the_record_cannot_drift_either_way(self) -> None:
+    def test_a_narrowed_approval_is_refused_too_so_the_record_cannot_drift_either_way(self) -> None:
         raw = self.L2_APPROVAL.read_bytes()
-        self.assert_rejected(self.L2_APPROVAL, raw.replace(b"maximum_candidate_wallets=600\n",
-                                                           b"maximum_candidate_wallets=300\n"),
-                             expect="not the one the owner approved")
+        self.assert_guard_refuses(
+            {self.L2_APPROVAL: raw.replace(b"maximum_candidate_wallets=600\n", b"maximum_candidate_wallets=300\n")},
+            expect="not the one the owner approved")
+
+    def test_a_second_row_cannot_re_authorise_a_rewritten_approval(self) -> None:
+        # The substitution the first draft of this guard allowed: leave DEC-044
+        # untouched and append a row recording the rewritten text's hash.
+        rewritten = self.ARM_A_APPROVAL.read_bytes().replace(b"decisive_arm=B\n", b"decisive_arm=A\n")
+        self.assertNotEqual(rewritten, self.ARM_A_APPROVAL.read_bytes())
+        fresh = hashlib.sha256(rewritten).hexdigest()
+        self.assert_guard_refuses(
+            {self.ARM_A_APPROVAL: rewritten,
+             self.DECISION_LOG: self.DECISION_LOG.read_bytes() + self.row(
+                 "DEC-990", f"`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `{fresh}`")},
+            expect="one approval has one hash")
+
+    def test_only_an_accepted_decision_row_binds(self) -> None:
+        rewritten = self.ARM_A_APPROVAL.read_bytes().replace(b"decisive_arm=B\n", b"decisive_arm=A\n")
+        fresh = hashlib.sha256(rewritten).hexdigest()
+        binding = f"`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `{fresh}`"
+        log = self.DECISION_LOG.read_bytes()
+        for label, addition in (
+            ("an HTML comment", f"<!-- {binding} -->\n".encode("utf-8")),
+            ("a fenced block", f"```\n| DEC-991 | d | accepted | {binding} |\n```\n".encode("utf-8")),
+            ("a blockquote", f"> | DEC-992 | d | accepted | {binding} |\n".encode("utf-8")),
+            ("an indented line", f"    | DEC-993 | d | accepted | {binding} |\n".encode("utf-8")),
+            ("a rejected row", self.row("DEC-994", binding, status="rejected")),
+        ):
+            with self.subTest(written_in=label):
+                self.assert_guard_refuses({self.ARM_A_APPROVAL: rewritten, self.DECISION_LOG: log + addition},
+                                          expect="not the one the owner approved")
 
     def test_an_approval_text_no_row_records_is_refused(self) -> None:
         stray = BASE / "APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001.txt"
-        stray.write_bytes(b"APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001\nscheduled_execution_authorized=true\n")
+        self.assert_guard_refuses(
+            {stray: b"APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001\nscheduled_execution_authorized=true\n"},
+            expect="no accepted row in DECISION_LOG.md names this approval")
+
+    def test_a_row_that_records_a_live_data_approval_with_no_retained_text_is_refused(self) -> None:
+        self.assert_guard_refuses(
+            {self.DECISION_LOG: self.DECISION_LOG.read_bytes() + self.row(
+                "DEC-995", f"`APPROVE_HL_LIVE_DATA_L2_ABSENT_001`, SHA-256 `{'a' * 64}`")},
+            expect="no text is retained for it")
+
+    def test_another_track_records_its_own_approvals_without_failing_this_one(self) -> None:
+        # Archive-track rows name approvals retained with that track, not here.
+        original = self.DECISION_LOG.read_bytes()
         try:
-            with self.assertRaises(SystemExit) as caught:
-                validator.main()
-            self.assertIn("no row in DECISION_LOG.md records this approval", str(caught.exception))
+            self.DECISION_LOG.write_bytes(original + self.row(
+                "DEC-996", f"`APPROVE_HL_ARCHIVE_SOMETHING_001`, retained with that track, SHA-256 `{'c' * 64}`"))
+            self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
         finally:
-            stray.unlink()
-        self.assertEqual(validator.main(), 0)
-
-    def test_a_row_that_records_an_approval_with_no_retained_text_is_refused(self) -> None:
-        raw = self.DECISION_LOG.read_bytes()
-        row = ("| DEC-999 | 2026-01-01 | accepted | Accept the owner's exact "
-               "`APPROVE_HL_LIVE_DATA_L2_ABSENT_001`, SHA-256 `" + "a" * 64 + "`. |\n").encode("utf-8")
-        self.assert_rejected(self.DECISION_LOG, raw + row, expect="no text is retained for it")
-
-    def test_a_row_that_binds_ambiguously_is_refused_rather_than_guessed_at(self) -> None:
-        raw = self.DECISION_LOG.read_bytes()
-        two_hashes = ("| DEC-998 | 2026-01-01 | accepted | `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` "
-                      "SHA-256 `" + "b" * 64 + "` and SHA-256 `" + "c" * 64 + "`. |\n").encode("utf-8")
-        self.assert_rejected(self.DECISION_LOG, raw + two_hashes, expect="the binding is ambiguous")
-        two_names = ("| DEC-997 | 2026-01-01 | accepted | `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` and "
-                     "`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001`, SHA-256 `" + "d" * 64 + "`. |\n").encode("utf-8")
-        self.assert_rejected(self.DECISION_LOG, raw + two_names, expect="the binding is ambiguous")
+            self.DECISION_LOG.write_bytes(original)
 
     def test_a_row_naming_an_approval_without_a_hash_binds_nothing(self) -> None:
-        # DEC-045 refers back to the L2 approval in prose; that must not be read as a binding.
-        bindings = validator.recorded_approval_hashes()
-        self.assertEqual(len(bindings["APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001"]), 1)
+        # DEC-045 refers back to the L2 approval in prose; not a binding.
+        original = self.DECISION_LOG.read_bytes()
+        try:
+            self.DECISION_LOG.write_bytes(original + self.row(
+                "DEC-997", "This confirms `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` still governs."))
+            bindings = validator.recorded_approval_hashes()
+            self.assertEqual(bindings["APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001"][1], "DEC-043")
+        finally:
+            self.DECISION_LOG.write_bytes(original)
 
-    def test_the_l2_approval_is_parsed_as_strictly_as_the_l1_one(self) -> None:
+    def test_a_row_may_also_record_a_hash_that_is_not_an_approvals(self) -> None:
+        # Row A of L2_OPERATOR_SESSIONS.md is completed with the session tool's
+        # SHA-256; a hash no approval name introduces must not bind.
+        original = self.DECISION_LOG.read_bytes()
+        try:
+            self.DECISION_LOG.write_bytes(original + self.row(
+                "DEC-998", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001`, SHA-256 "
+                           f"`{TWO_ARM_SHA256}`. The revised tool is recorded with SHA-256 `{'d' * 64}`."))
+            bindings = validator.recorded_approval_hashes()
+            self.assertEqual(bindings["APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001"][0], TWO_ARM_SHA256)
+            self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
+        finally:
+            self.DECISION_LOG.write_bytes(original)
+
+    def test_the_owner_can_record_a_new_approval_and_the_validator_accepts_it(self) -> None:
+        # What the owner does next, per L2_OPERATOR_SESSIONS.md: a new amending
+        # approval text beside the others and a row that records it.
+        text = (b"APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001\n"
+                b"bound_commit=" + b"a" * 40 + b"\n"
+                b"amends=APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001\n"
+                b"operator=OWNER\n")
+        path = BASE / "APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001.txt"
+        original = self.DECISION_LOG.read_bytes()
+        try:
+            path.write_bytes(text)
+            self.DECISION_LOG.write_bytes(original + self.row(
+                "DEC-999", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001` (four lines, "
+                           f"retained beside the other approvals, SHA-256 `{hashlib.sha256(text).hexdigest()}`)"))
+            self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS) + 1)
+        finally:
+            path.unlink(missing_ok=True)
+            self.DECISION_LOG.write_bytes(original)
+
+    def test_every_approval_is_parsed_as_strictly_as_the_l1_one(self) -> None:
         raw = self.L2_APPROVAL.read_bytes()
-        for label, mutation in (
-            ("crlf", raw.replace(b"\n", b"\r\n")),
-            ("no trailing newline", raw.rstrip(b"\n")),
-            ("two trailing newlines", raw + b"\n"),
-            ("wrong first line", b"NOT_THE_APPROVAL_ID\n" + raw.split(b"\n", 1)[1]),
-            ("a line that is not key=value", raw + b"a bare sentence\n"),
-            ("a duplicated key", raw + b"bound_commit=3edfbf3\n"),
+        for label, mutation, expect in (
+            ("crlf", raw.replace(b"\n", b"\r\n"), "not LF-only"),
+            ("a lone CR inside a value", raw.replace(b"bound_commit=", b"bound_commit=\r"), "not LF-only"),
+            ("no trailing newline", raw.rstrip(b"\n"), "exactly one LF"),
+            ("two trailing newlines", raw + b"\n", "exactly one LF"),
+            ("a UTF-8 BOM", b"\xef\xbb\xbf" + raw, "UTF-8 BOM"),
+            ("bytes that are not UTF-8", raw + b"k=\xff\xfe\n", "not UTF-8"),
+            ("wrong first line", b"NOT_THE_APPROVAL_ID\n" + raw.split(b"\n", 1)[1], "does not start with"),
+            ("a line that is not key=value", raw + b"a bare sentence\n", "not key=value"),
+            ("a duplicated key", raw + b"bound_commit=3edfbf3\n", "duplicate approval key"),
         ):
             with self.subTest(mutation=label):
-                # Each one changes the bytes, so the hash check fires first; the
-                # parser is asserted directly so both guards are proven.
                 original = self.L2_APPROVAL.read_bytes()
                 self.L2_APPROVAL.write_bytes(mutation)
                 try:
-                    with self.assertRaises(validator.ValidationError):
+                    with self.assertRaises(validator.ValidationError) as caught:
                         validator.parse_approval_file(self.L2_APPROVAL, self.L2_APPROVAL.stem)
+                    self.assertIn(expect, str(caught.exception))
                 finally:
                     self.L2_APPROVAL.write_bytes(original)
-        self.assertEqual(validator.main(), 0)
+
+    def test_the_guard_itself_parses_every_approval_not_only_hashes_it(self) -> None:
+        # Without the parse call in the guard, a well-hashed but malformed text
+        # would pass; the hash is recomputed here so only the parse can fail.
+        raw = self.L2_APPROVAL.read_bytes()
+        malformed = raw + b"a bare sentence\n"
+        original_log = self.DECISION_LOG.read_bytes()
+        rebound = original_log.replace(TWO_ARM_SHA256.encode(), hashlib.sha256(malformed).hexdigest().encode())
+        self.assert_guard_refuses({self.L2_APPROVAL: malformed, self.DECISION_LOG: rebound},
+                                  expect="not key=value")
+
+    def test_the_l2_request_type_scope_is_read_through_the_strict_parser(self) -> None:
+        raw = self.L2_APPROVAL.read_bytes()
+        original = self.L2_APPROVAL.read_bytes()
+        try:
+            self.L2_APPROVAL.write_bytes(raw.replace(b"\n", b"\r\n"))
+            with self.assertRaises(validator.ValidationError):
+                validator.additional_rest_request_types()
+        finally:
+            self.L2_APPROVAL.write_bytes(original)
+        self.assertEqual(validator.additional_rest_request_types(), {"candleSnapshot"})
+
+    def test_the_whole_hash_is_compared_not_a_prefix(self) -> None:
+        raw = self.L2_APPROVAL.read_bytes()
+        original_log = self.DECISION_LOG.read_bytes()
+        # A recorded hash that shares its first 32 characters with the real one.
+        near_miss = TWO_ARM_SHA256[:32] + ("0" * 32)
+        self.assertNotEqual(near_miss, TWO_ARM_SHA256)
+        self.assert_guard_refuses(
+            {self.DECISION_LOG: original_log.replace(TWO_ARM_SHA256.encode(), near_miss.encode())},
+            expect="not the one the owner approved")
+        self.assertEqual(len(raw), len(self.L2_APPROVAL.read_bytes()))
 
     def test_the_l1_approval_keeps_its_own_binding_as_well(self) -> None:
         raw = APPROVAL_TEXT.read_bytes()
-        self.assert_rejected(APPROVAL_TEXT, raw.replace(b"maximum_watch_iterations=1000",
-                                                        b"maximum_watch_iterations=100000"),
-                             expect="not the one the owner approved")
+        self.assert_guard_refuses(
+            {APPROVAL_TEXT: raw.replace(b"maximum_watch_iterations=1000", b"maximum_watch_iterations=100000")},
+            expect="not the one the owner approved")
+
+
+    def test_the_validator_itself_refuses_a_tampered_approval(self) -> None:
+        # The one case that goes through main(): without it, removing the call
+        # from the entry point would leave every other test here still green.
+        raw = self.L2_APPROVAL.read_bytes()
+        original = self.L2_APPROVAL.read_bytes()
+        try:
+            self.L2_APPROVAL.write_bytes(raw.replace(b"maximum_candidate_wallets=600\n",
+                                                     b"maximum_candidate_wallets=6000\n"))
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+            self.assertIn("not the one the owner approved", str(caught.exception))
+        finally:
+            self.L2_APPROVAL.write_bytes(original)
+        self.assertEqual(validator.main(), 0)
+
+    def test_only_a_backticked_name_binds_so_prose_cannot_authorise_a_text(self) -> None:
+        # A decision that discusses an approval in prose and states some hash
+        # nearby must not thereby bind it; the log writes a binding in backticks.
+        stray = BASE / "APPROVE_HL_LIVE_DATA_L2_PROSE_001.txt"
+        text = b"APPROVE_HL_LIVE_DATA_L2_PROSE_001\nkey=value\n"
+        self.assert_guard_refuses(
+            {stray: text,
+             self.DECISION_LOG: self.DECISION_LOG.read_bytes() + self.row(
+                 "DEC-989", f"The approval APPROVE_HL_LIVE_DATA_L2_PROSE_001 was discussed, "
+                            f"SHA-256 `{hashlib.sha256(text).hexdigest()}`")},
+            expect="no accepted row in DECISION_LOG.md names this approval")
+
+    def test_a_hash_far_from_the_name_is_not_that_approvals_hash(self) -> None:
+        # A row may run long and mention a hash that belongs to something else.
+        # Only a hash stated for the approval, near its name, binds it.
+        stray = BASE / "APPROVE_HL_LIVE_DATA_L2_DISTANT_001.txt"
+        text = b"APPROVE_HL_LIVE_DATA_L2_DISTANT_001\nkey=value\n"
+        filler = "The row goes on about the pipeline and the ledger and the closing sweep. " * 8
+        self.assertGreater(len(filler), 400)
+        self.assert_guard_refuses(
+            {stray: text,
+             self.DECISION_LOG: self.DECISION_LOG.read_bytes() + self.row(
+                 "DEC-988", f"`APPROVE_HL_LIVE_DATA_L2_DISTANT_001` is accepted. {filler} "
+                            f"The database is recorded with SHA-256 `{hashlib.sha256(text).hexdigest()}`")},
+            expect="no accepted row in DECISION_LOG.md names this approval")
+
+    def test_the_validator_reports_what_it_verified(self) -> None:
+        self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
+        self.assertEqual(validator.main(), 0)
 
 
 if __name__ == "__main__":
