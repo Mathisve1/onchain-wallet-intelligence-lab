@@ -421,7 +421,7 @@ class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
                     path.unlink(missing_ok=True)
                 else:
                     path.write_bytes(original)
-        self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
+        validator.validate_approvals_match_their_record()
 
     @staticmethod
     def row(dec: str, text: str, status: str = "accepted") -> bytes:
@@ -430,7 +430,9 @@ class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
     def test_every_retained_approval_hashes_to_its_pinned_literal(self) -> None:
         on_disk = {path.stem: path for path in BASE.glob("APPROVE_*.txt")}
         # A new approval is added deliberately, with its literal, or this fails.
-        self.assertEqual(set(on_disk), set(RETAINED_APPROVALS), "the retained approval set changed")
+        self.assertEqual(set(on_disk), set(RETAINED_APPROVALS),
+                         "the set of retained approvals changed: add the new one to RETAINED_APPROVALS above "
+                         "with its SHA-256, or remove the one that went")
         for approval_id, expected in RETAINED_APPROVALS.items():
             with self.subTest(approval=approval_id):
                 self.assertEqual(self.sha256(on_disk[approval_id]), expected)
@@ -471,23 +473,97 @@ class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
             {self.ARM_A_APPROVAL: rewritten,
              self.DECISION_LOG: self.DECISION_LOG.read_bytes() + self.row(
                  "DEC-990", f"`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `{fresh}`")},
-            expect="one approval has one hash")
+            expect="One approval has one hash")
 
-    def test_only_an_accepted_decision_row_binds(self) -> None:
+    def test_a_binding_written_where_it_would_not_be_read_is_refused_not_ignored(self) -> None:
+        """Hiding a binding must fail, because ignoring it is what made hiding work.
+
+        Both rounds of review walked the same path: put the re-authorising hash
+        somewhere the parser looks away from, and the rendered log is unchanged.
+        So anything carrying an approval name beside a SHA-256 has to be a real
+        row of the table, wherever it sits.
+        """
         rewritten = self.ARM_A_APPROVAL.read_bytes().replace(b"decisive_arm=B\n", b"decisive_arm=A\n")
         fresh = hashlib.sha256(rewritten).hexdigest()
         binding = f"`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `{fresh}`"
         log = self.DECISION_LOG.read_bytes()
         for label, addition in (
-            ("an HTML comment", f"<!-- {binding} -->\n".encode("utf-8")),
-            ("a fenced block", f"```\n| DEC-991 | d | accepted | {binding} |\n```\n".encode("utf-8")),
-            ("a blockquote", f"> | DEC-992 | d | accepted | {binding} |\n".encode("utf-8")),
-            ("an indented line", f"    | DEC-993 | d | accepted | {binding} |\n".encode("utf-8")),
-            ("a rejected row", self.row("DEC-994", binding, status="rejected")),
+            ("a one-line HTML comment", f"<!-- {binding} -->\n".encode("utf-8")),
+            ("a multi-line HTML comment", f"<!--\n| DEC-991 | d | accepted | {binding} |\n-->\n".encode("utf-8")),
+            ("a backtick fence", f"```\n| DEC-992 | d | accepted | {binding} |\n```\n".encode("utf-8")),
+            ("a tilde fence", f"~~~\n| DEC-993 | d | accepted | {binding} |\n~~~\n".encode("utf-8")),
+            ("a blockquote", f"> | DEC-994 | d | accepted | {binding} |\n".encode("utf-8")),
+            ("an indented line", f"    | DEC-995 | d | accepted | {binding} |\n".encode("utf-8")),
+            ("prose after the table", f"\nSee {binding} for the detail.\n".encode("utf-8")),
         ):
             with self.subTest(written_in=label):
                 self.assert_guard_refuses({self.ARM_A_APPROVAL: rewritten, self.DECISION_LOG: log + addition},
-                                          expect="not the one the owner approved")
+                                          expect="is not a row of the decision table")
+
+    def test_a_row_that_carries_a_binding_but_does_not_read_as_accepted_is_refused(self) -> None:
+        """Disabling a row is the same attack from the other end.
+
+        A status cell that renders as ``accepted`` but does not compare equal
+        would stop a real row binding, leaving the approval unrecorded and the
+        way clear for a second row. Each of these renders as an ordinary row.
+        """
+        text = self.DECISION_LOG.read_text(encoding="utf-8")
+        real = "| DEC-044 | 2026-09-04 | accepted |"
+        self.assertIn(real, text)
+        for label, status in (
+            ("a zero-width space", "accepted\u200b"),
+            ("a capital letter", "Accepted"),
+            ("emphasis", "**accepted**"),
+        ):
+            # These render as an ordinary accepted row, so they still bind: the
+            # status is compared the way a reader sees it, not as it is typed.
+            with self.subTest(renders_as_accepted=label):
+                original = self.DECISION_LOG.read_bytes()
+                try:
+                    self.DECISION_LOG.write_bytes(
+                        text.replace(real, f"| DEC-044 | 2026-09-04 | {status} |").encode("utf-8"))
+                    self.assertEqual(
+                        validator.recorded_approval_hashes()["APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001"],
+                        (ARM_A_WINDOW_SHA256, "DEC-044"))
+                finally:
+                    self.DECISION_LOG.write_bytes(original)
+        for status in ("superseded", "rejected", "withdrawn"):
+            # A status that reads as something else does not bind, and says so
+            # rather than leaving the approval quietly unrecorded.
+            with self.subTest(status=status):
+                self.assert_guard_refuses(
+                    {self.DECISION_LOG: text.replace(real, f"| DEC-044 | 2026-09-04 | {status} |").encode("utf-8")},
+                    expect="not 'accepted'")
+
+    def test_prose_that_names_an_approval_plainly_is_not_an_attempt_to_bind(self) -> None:
+        # The refusal above is aimed at a binding written where it would not be
+        # read. A note that happens to mention an approval and a hash, without
+        # writing the name as the log writes a binding, is not that.
+        original = self.DECISION_LOG.read_bytes()
+        try:
+            self.DECISION_LOG.write_bytes(
+                original + f"\nThe approval APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001 was reviewed; the database "
+                           f"of that session had SHA-256 `{'e' * 64}`.\n".encode("utf-8"))
+            self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS))
+        finally:
+            self.DECISION_LOG.write_bytes(original)
+
+    def test_a_row_the_table_does_not_contain_cannot_bind(self) -> None:
+        # Wrapping a real row in a fence used to remove it from the scan, which
+        # unbound it silently; now the row is still seen, and refused.
+        text = self.DECISION_LOG.read_text(encoding="utf-8")
+        fenced = text.replace("| DEC-044 |", "```\n| DEC-044 |", 1).replace(" |\n| DEC-045 |", " |\n```\n| DEC-045 |", 1)
+        self.assertNotEqual(fenced, text)
+        self.assert_guard_refuses({self.DECISION_LOG: fenced.encode("utf-8")},
+                                  expect="is not a row of the decision table")
+
+    def test_a_character_that_splits_a_line_invisibly_is_refused(self) -> None:
+        # A form feed makes one physical line act as two, so a binding can be
+        # injected inside an existing cell without adding a line to the file.
+        text = self.DECISION_LOG.read_text(encoding="utf-8")
+        injected = text.replace("| DEC-045 |", "\x0c| DEC-996 | d | accepted | x |\x0c| DEC-045 |", 1)
+        self.assert_guard_refuses({self.DECISION_LOG: injected.encode("utf-8")},
+                                  expect="can make one line act as several")
 
     def test_an_approval_text_no_row_records_is_refused(self) -> None:
         stray = BASE / "APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001.txt"
@@ -539,16 +615,19 @@ class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
     def test_the_owner_can_record_a_new_approval_and_the_validator_accepts_it(self) -> None:
         # What the owner does next, per L2_OPERATOR_SESSIONS.md: a new amending
         # approval text beside the others and a row that records it.
-        text = (b"APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001\n"
+        text = (b"APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999\n"
                 b"bound_commit=" + b"a" * 40 + b"\n"
                 b"amends=APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001\n"
                 b"operator=OWNER\n")
-        path = BASE / "APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001.txt"
+        path = BASE / "APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999.txt"
+        # Never a name a real approval could occupy: this fixture is deleted at
+        # the end, and an approval the owner retained must not be deletable here.
+        self.assertFalse(path.exists(), "the test fixture collides with a retained approval")
         original = self.DECISION_LOG.read_bytes()
         try:
             path.write_bytes(text)
             self.DECISION_LOG.write_bytes(original + self.row(
-                "DEC-999", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001` (four lines, "
+                "DEC-999", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999` (four lines, "
                            f"retained beside the other approvals, SHA-256 `{hashlib.sha256(text).hexdigest()}`)"))
             self.assertEqual(validator.validate_approvals_match_their_record(), len(RETAINED_APPROVALS) + 1)
         finally:
