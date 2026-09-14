@@ -43,14 +43,24 @@ So this does not interpret the record. It asks one question that has a
 mechanical answer: is this text still the one whose hash the owner wrote down?
 
 What that catches: an approval text edited while the record is left alone, a
-text retained that the record never mentions, and a record that names an
-approval with a hash but retains no text for it. What it does not catch, and
-does not claim to: an edit of the text and the record together, and the exact
-place in the file where the hash is written. Against those the defences are the
-approval hashes pinned as literals in
-``tests/test_live_data_l1_preregistration.py``, which the test suite enforces on
-every run and such an edit would also have to change, and the byte-exact
-repository manifest, which makes the change visible in a diff.
+text retained that the record never mentions, and a record that names a
+live-data approval beside a hash but retains no text for it.
+
+Three things it does not do, said plainly. It accepts any hash the record states
+on a line naming the approval, so a row that restates a superseded hash keeps the
+superseded text acceptable; the accepted set only grows. It reads every
+``APPROVE_HL_LIVE_DATA_*`` token on a hash-bearing line as an approval that ought
+to be retained, so a rejection or a proposal honestly recorded with its hash
+would fail here until this rule is given an exception. And it does not survive an
+edit of the text and the record together. Against that last one the defences are
+the approval hashes pinned as literals in
+``tests/test_live_data_l1_preregistration.py`` and the byte-exact repository
+manifest; CI runs both, through the test suite (which also calls this validator
+on the live tree) and through ``validate_repository.py``.
+
+The record must keep an approval's name and its backticked lowercase hash on one
+physical line. Reflowing that row, dropping the backticks or upper-casing the hex
+un-records the approval, and the refusal says so.
 """
 
 from __future__ import annotations

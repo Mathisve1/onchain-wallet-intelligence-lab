@@ -376,8 +376,9 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
 #: The retained approval texts, pinned the way APPROVAL_SHA256 pins L1's. The
 #: validator checks each text against the hash the decision log states for it;
 #: an edit to both together passes that check and fails these, so the diff a
-#: reviewer reads has to touch a constant here. This is the half CI enforces:
-#: ci.yml runs the test suite, and does not run the validator directly.
+#: reviewer reads has to touch a constant here. CI runs this suite, which also
+#: calls the validator against the live tree, and runs validate_repository.py,
+#: which recomputes the byte-exact manifest over both artefacts.
 TWO_ARM_SHA256 = "3ac5e20aac54837419743c2f094578418f2eacb7601b164e17108f874694a8b4"
 ARM_A_WINDOW_SHA256 = "df082701ec412fcb112660f125b37ace095180a2cefdd00051f7896ee08ecc96"
 FORWARD_STUDY_SHA256 = "7caa6b249fdf28dda63d91595acb77948a8884cf52178eac81f9b5faab373deb"
@@ -422,6 +423,11 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
     def check(self) -> int:
         return validator.validate_approvals_match_their_record()
 
+    def retained(self) -> int:
+        """How many approvals the copy holds, so adding one reddens the pinned
+        literal test with its instruction rather than every count here."""
+        return len(list(self.base.glob("APPROVE_*.txt")))
+
     def assert_refused(self, expect: str) -> None:
         with self.assertRaises(validator.ValidationError) as caught:
             self.check()
@@ -447,7 +453,7 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
         for approval_id, expected in RETAINED_APPROVALS.items():
             with self.subTest(approval=approval_id):
                 self.assertIn(expected, recorded.get(approval_id, set()))
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS))
+        self.assertEqual(self.check(), self.retained())
 
     # -- what the validator refuses ----------------------------------------------------
 
@@ -507,7 +513,7 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
         self.log.write_text(self.log.read_text(encoding="utf-8") + self.row(
             "DEC-996", f"`APPROVE_HL_ARCHIVE_SOMETHING_001`, retained with that track, SHA-256 `{'c' * 64}`"),
             encoding="utf-8")
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS))
+        self.assertEqual(self.check(), self.retained())
 
     def test_a_row_may_state_another_artefacts_hash_beside_the_approval(self) -> None:
         # Row A of L2_OPERATOR_SESSIONS.md is completed with the session tool's
@@ -515,7 +521,7 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
         self.log.write_text(self.log.read_text(encoding="utf-8") + self.row(
             "DEC-998", f"Under `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001`, SHA-256 `{TWO_ARM_SHA256}`, the revised "
                        f"tool is recorded with SHA-256 `{'d' * 64}`"), encoding="utf-8")
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS))
+        self.assertEqual(self.check(), self.retained())
 
     def test_a_row_naming_several_approvals_does_not_break(self) -> None:
         # Row D of L2_OPERATOR_SESSIONS.md names three approvals in one cell.
@@ -524,23 +530,23 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
                        "`APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001`, amended by "
                        f"`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001`, SHA-256 `{ARM_A_WINDOW_SHA256}`"),
             encoding="utf-8")
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS))
+        self.assertEqual(self.check(), self.retained())
 
     def test_the_owner_can_record_a_new_approval_and_the_validator_accepts_it(self) -> None:
-        text = (b"APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001\n"
+        text = (b"APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999\n"
                 b"bound_commit=" + b"a" * 40 + b"\n"
                 b"amends=APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001\n"
                 b"operator=OWNER\n")
-        (self.base / "APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001.txt").write_bytes(text)
+        (self.base / "APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999.txt").write_bytes(text)
         self.log.write_text(self.log.read_text(encoding="utf-8") + self.row(
-            "DEC-999", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001` (four lines, "
+            "DEC-999", f"Accept the owner's exact `APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999` (four lines, "
                        f"retained beside the other approvals, SHA-256 `{hashlib.sha256(text).hexdigest()}`)"),
             encoding="utf-8")
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS) + 1)
+        self.assertEqual(self.check(), self.retained())
 
     def test_the_owner_writing_the_row_before_the_text_is_told_which_is_missing(self) -> None:
         self.log.write_text(self.log.read_text(encoding="utf-8") + self.row(
-            "DEC-999", f"Accept `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001`, SHA-256 `{'f' * 64}`"),
+            "DEC-999", f"Accept `APPROVE_HL_LIVE_DATA_L2_TEST_ONLY_999`, SHA-256 `{'f' * 64}`"),
             encoding="utf-8")
         self.assert_refused("no text is retained for it")
 
@@ -585,7 +591,7 @@ class ApprovalsMatchTheirRecordTests(unittest.TestCase):
         self.assertEqual(validator.additional_rest_request_types(), {"candleSnapshot"})
 
     def test_the_validator_runs_the_check_and_reports_what_it_verified(self) -> None:
-        self.assertEqual(self.check(), len(RETAINED_APPROVALS))
+        self.assertEqual(self.check(), self.retained())
         # main() must call it: a sentinel proves the wiring without touching a file.
         def boom() -> int:
             raise validator.ValidationError("sentinel: the guard ran")
