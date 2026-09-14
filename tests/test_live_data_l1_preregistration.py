@@ -371,5 +371,116 @@ class L1ValidatorRejectsDriftTests(unittest.TestCase):
         self._reject(lambda c: c["retained_schema"].update(tables=[t for t in c["retained_schema"]["tables"] if t != "trades"]))
 
 
+class ApprovalsBoundToTheDecisionLogTests(unittest.TestCase):
+    """DEC-045's known issue: an approval text nothing binds is a text an edit can widen.
+
+    The L2 approval's own ``additional_rest_request_types=`` line decides which
+    request types the collector may make and which schema widening is retained,
+    so a silent edit to it is a silent widening. Each test mutates a real file
+    and restores it, the way the drift tests above do.
+    """
+
+    L2_APPROVAL = BASE / "APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001.txt"
+    DECISION_LOG = ROOT / "DECISION_LOG.md"
+
+    def assert_rejected(self, path: Path, replacement: bytes, *, expect: str) -> None:
+        original = path.read_bytes()
+        path.write_bytes(replacement)
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("L1_PREREGISTRATION_INVALID", str(caught.exception))
+            self.assertIn(expect, str(caught.exception))
+        finally:
+            path.write_bytes(original)
+        self.assertEqual(validator.main(), 0)
+
+    def test_every_retained_approval_is_bound_to_a_row_that_records_its_hash(self) -> None:
+        bindings = validator.recorded_approval_hashes()
+        on_disk = sorted(p.stem for p in BASE.glob("APPROVE_*.txt"))
+        self.assertEqual(len(on_disk), 4, on_disk)
+        for approval_id in on_disk:
+            with self.subTest(approval=approval_id):
+                recorded = bindings.get(approval_id)
+                self.assertIsNotNone(recorded, f"{approval_id} is retained but no decision row records it")
+                actual = hashlib.sha256((BASE / f"{approval_id}.txt").read_bytes()).hexdigest()
+                self.assertIn(actual, recorded)
+
+    def test_an_edit_to_the_l2_approval_is_refused_rather_than_obeyed(self) -> None:
+        # The line the collector's request-type scope and retained schema hang on.
+        raw = self.L2_APPROVAL.read_bytes()
+        self.assertIn(b"additional_rest_request_types=candleSnapshot\n", raw)
+        widened = raw.replace(b"additional_rest_request_types=candleSnapshot\n",
+                              b"additional_rest_request_types=candleSnapshot,l2Book\n")
+        self.assertNotEqual(widened, raw)
+        self.assertEqual(validator.additional_rest_request_types(), {"candleSnapshot"})
+        self.assert_rejected(self.L2_APPROVAL, widened, expect="not the one the owner approved")
+
+    def test_a_narrowed_l2_approval_is_refused_too_so_the_record_cannot_drift_either_way(self) -> None:
+        raw = self.L2_APPROVAL.read_bytes()
+        self.assert_rejected(self.L2_APPROVAL, raw.replace(b"maximum_candidate_wallets=600\n",
+                                                           b"maximum_candidate_wallets=300\n"),
+                             expect="not the one the owner approved")
+
+    def test_an_approval_text_no_row_records_is_refused(self) -> None:
+        stray = BASE / "APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001.txt"
+        stray.write_bytes(b"APPROVE_HL_LIVE_DATA_L2_NOT_RECORDED_001\nscheduled_execution_authorized=true\n")
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                validator.main()
+            self.assertIn("no row in DECISION_LOG.md records this approval", str(caught.exception))
+        finally:
+            stray.unlink()
+        self.assertEqual(validator.main(), 0)
+
+    def test_a_row_that_records_an_approval_with_no_retained_text_is_refused(self) -> None:
+        raw = self.DECISION_LOG.read_bytes()
+        row = ("| DEC-999 | 2026-01-01 | accepted | Accept the owner's exact "
+               "`APPROVE_HL_LIVE_DATA_L2_ABSENT_001`, SHA-256 `" + "a" * 64 + "`. |\n").encode("utf-8")
+        self.assert_rejected(self.DECISION_LOG, raw + row, expect="no text is retained for it")
+
+    def test_a_row_that_binds_ambiguously_is_refused_rather_than_guessed_at(self) -> None:
+        raw = self.DECISION_LOG.read_bytes()
+        two_hashes = ("| DEC-998 | 2026-01-01 | accepted | `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` "
+                      "SHA-256 `" + "b" * 64 + "` and SHA-256 `" + "c" * 64 + "`. |\n").encode("utf-8")
+        self.assert_rejected(self.DECISION_LOG, raw + two_hashes, expect="the binding is ambiguous")
+        two_names = ("| DEC-997 | 2026-01-01 | accepted | `APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001` and "
+                     "`APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001`, SHA-256 `" + "d" * 64 + "`. |\n").encode("utf-8")
+        self.assert_rejected(self.DECISION_LOG, raw + two_names, expect="the binding is ambiguous")
+
+    def test_a_row_naming_an_approval_without_a_hash_binds_nothing(self) -> None:
+        # DEC-045 refers back to the L2 approval in prose; that must not be read as a binding.
+        bindings = validator.recorded_approval_hashes()
+        self.assertEqual(len(bindings["APPROVE_HL_LIVE_DATA_L2_TWO_ARM_STUDY_001"]), 1)
+
+    def test_the_l2_approval_is_parsed_as_strictly_as_the_l1_one(self) -> None:
+        raw = self.L2_APPROVAL.read_bytes()
+        for label, mutation in (
+            ("crlf", raw.replace(b"\n", b"\r\n")),
+            ("no trailing newline", raw.rstrip(b"\n")),
+            ("two trailing newlines", raw + b"\n"),
+            ("wrong first line", b"NOT_THE_APPROVAL_ID\n" + raw.split(b"\n", 1)[1]),
+            ("a line that is not key=value", raw + b"a bare sentence\n"),
+            ("a duplicated key", raw + b"bound_commit=3edfbf3\n"),
+        ):
+            with self.subTest(mutation=label):
+                # Each one changes the bytes, so the hash check fires first; the
+                # parser is asserted directly so both guards are proven.
+                original = self.L2_APPROVAL.read_bytes()
+                self.L2_APPROVAL.write_bytes(mutation)
+                try:
+                    with self.assertRaises(validator.ValidationError):
+                        validator.parse_approval_file(self.L2_APPROVAL, self.L2_APPROVAL.stem)
+                finally:
+                    self.L2_APPROVAL.write_bytes(original)
+        self.assertEqual(validator.main(), 0)
+
+    def test_the_l1_approval_keeps_its_own_binding_as_well(self) -> None:
+        raw = APPROVAL_TEXT.read_bytes()
+        self.assert_rejected(APPROVAL_TEXT, raw.replace(b"maximum_watch_iterations=1000",
+                                                        b"maximum_watch_iterations=100000"),
+                             expect="not the one the owner approved")
+
+
 if __name__ == "__main__":
     unittest.main()
