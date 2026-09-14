@@ -29,27 +29,28 @@ retained text no longer hashes to it. Without that, editing the L2 approval
 would silently widen the request types and the retained schema, because both are
 read from its own line.
 
-Reading a prose table for this is only safe if nothing can make the reader look
-away. Two rounds of adversarial review found the same shape of attack each time:
-hide a binding where the parser does not look (an HTML comment, a fenced block,
-a line wearing the row's prefix), or make the real row unreadable (a zero-width
-character in its status cell, a fence wrapped around it) so its hash stops
-binding. Skipping what it cannot read is what made that work. So this refuses
-instead: every line anywhere in the file that carries a backticked approval name
-beside a SHA-256 must be a well-formed row of the one decision table with the
-status ``accepted``, or the validator fails and names the line. A hidden binding
-and a disabled row are both loud.
+The rule is deliberately narrow: a retained approval must still hash to a value
+the decision log states on the same line as its name. Three rounds of
+adversarial review taught the narrowness. Earlier drafts parsed the log as a
+table and tried to decide which row meant what, and each draft lost to a
+different disagreement between ``str.split("|")`` and the Markdown a reader
+actually sees: a binding in a fifth column the renderer drops, an escaped pipe
+that shifts every cell index, a status cell that renders as one word and
+compares as another. A guard that reads a prose document differently from the
+person reading it is worse than no guard, because both of them believe it.
 
-What it does and does not defend against, stated plainly because a guard
-believed to do more than it does is worse than none. It catches a one-sided
-edit: the text changed and the record left alone, or the record changed and the
-text left alone. It catches a text nobody recorded, a record whose text is
-missing, and an attempt to write a binding somewhere it would not be read. It
-does **not** survive an edit of the text and its row together, in the open, by
-someone who may commit. Against that the defences are the approval hashes pinned
-as literals in ``tests/test_live_data_l1_preregistration.py``, which such an edit
-must also change, and the byte-exact repository manifest, which makes the change
-visible in a diff rather than preventing it.
+So this does not interpret the record. It asks one question that has a
+mechanical answer: is this text still the one whose hash the owner wrote down?
+
+What that catches: an approval text edited while the record is left alone, a
+text retained that the record never mentions, and a record that names an
+approval with a hash but retains no text for it. What it does not catch, and
+does not claim to: an edit of the text and the record together, and the exact
+place in the file where the hash is written. Against those the defences are the
+approval hashes pinned as literals in
+``tests/test_live_data_l1_preregistration.py``, which the test suite enforces on
+every run and such an edit would also have to change, and the byte-exact
+repository manifest, which makes the change visible in a diff.
 """
 
 from __future__ import annotations
@@ -59,7 +60,6 @@ import hashlib
 import json
 import re
 import sys
-import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -87,20 +87,8 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 #: The approvals this validator binds: the ones retained beside the
 #: preregistration. Other tracks record their own approvals in the same log.
 LIVE_DATA_APPROVAL_PREFIX = "APPROVE_HL_LIVE_DATA_"
-#: A binding as the log writes one: the approval named in backticks, then the
-#: first SHA-256 stated for it, inside one table cell. A later hash in the same
-#: row (a tool's, a database's) is not a binding, because no approval name
-#: introduces it. The approval a row binds is therefore the first backticked
-#: approval name in its decision cell, and its hash the first SHA-256 after it.
-BINDING_RE = re.compile(r"`(APPROVE_[A-Z0-9_]+)`[^|]{0,400}?SHA-256 `([0-9a-f]{64})`")
-#: Anything that carries both marks is treated as an attempt to bind, wherever
-#: it sits, so that hiding one is a failure rather than a way to be ignored.
-APPROVAL_MARK_RE = re.compile(r"`APPROVE_[A-Z0-9_]+`")
-RECORDED_SHA256_RE = re.compile(r"SHA-256 `[0-9a-f]{64}`")
-#: Characters that would let one physical line act as several, or make a status
-#: cell read as one thing and compare as another.
-FORBIDDEN_LOG_CHARS = {"\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"}
-
+#: A hash as the decision log states one, anywhere on a line.
+RECORDED_SHA256_RE = re.compile(r"`([0-9a-f]{64})`")
 REQUIRED_PATHS = {
     "research/wallet_copyability/live_data/README.md",
     "research/wallet_copyability/live_data/STATUS.md",
@@ -267,121 +255,56 @@ def parse_approval_text() -> tuple[str, dict[str, str]]:
     return parse_approval_file(APPROVAL_TEXT, APPROVAL_ID)
 
 
-def _plain(cell: str) -> str:
-    """A table cell as it reads, not as it is typed: no invisible characters, no
-    emphasis, folded case. A status that renders as ``accepted`` compares as it."""
-    folded = unicodedata.normalize("NFKC", cell)
-    folded = "".join(ch for ch in folded if unicodedata.category(ch) != "Cf")
-    return folded.replace("*", "").replace("_", "").strip().casefold()
+def recorded_hashes_by_approval() -> dict[str, set[str]]:
+    """For each approval the decision log names, the hashes stated on its lines.
 
-
-def _decision_rows(lines: Sequence[str]) -> dict[int, list[str]]:
-    """The rows of the one decision table, found by position rather than by prefix.
-
-    A line that merely starts like a row is not a row; the table is the block
-    that follows its header and separator, and it ends at the first line that
-    does not continue it.
+    No table, no columns, no status: a line that carries an approval's id and
+    a backticked 64-character hash associates them, and that is all. The log is
+    the owner's prose, and this reads it the way a search would.
     """
-    header = None
-    for index, line in enumerate(lines[:-1]):
-        if _plain(line).startswith("| id | date | status | decision |") and set(lines[index + 1]) <= set("|- "):
-            header = index
-            break
-    require(header is not None, "DECISION_LOG.md has no decision table to read approvals from")
-    rows: dict[int, list[str]] = {}
-    for index in range(header + 2, len(lines)):
-        if not lines[index].startswith("|"):
-            break
-        rows[index] = lines[index].split("|")
-    return rows
-
-
-def recorded_approval_hashes() -> dict[str, tuple[str, str]]:
-    """Every approval the decision log binds, as ``{approval: (hash, row)}``.
-
-    Every line that carries a backticked approval name beside a SHA-256 is an
-    attempt to bind and is treated as one wherever it sits. If it is not a
-    well-formed accepted row of the decision table, the validator fails and says
-    which line: a binding hidden in a comment or a code block, and a real row
-    made unreadable so that it stops binding, are the same attack from either
-    end, and both are loud here rather than skipped.
-
-    One approval, one hash, across the whole log. Two rows recording different
-    hashes for the same approval would let a second row re-authorise a rewritten
-    text while the first row still reads as it always did, which is precisely
-    the substitution this check exists to prevent.
-    """
-    require(DECISION_LOG.is_file(), "DECISION_LOG.md is missing; approvals cannot be bound to their record")
-    text = DECISION_LOG.read_text(encoding="utf-8")
-    stray = sorted(FORBIDDEN_LOG_CHARS & set(text))
-    require(not stray,
-            f"DECISION_LOG.md carries {', '.join(repr(ch) for ch in stray)}, which can make one line act as "
-            "several or hide a character from a reader; approvals cannot be bound from it")
-    lines = text.split("\n")
-    rows = _decision_rows(lines)
-    bindings: dict[str, tuple[str, str]] = {}
-    for index, line in enumerate(lines):
-        if not (APPROVAL_MARK_RE.search(line) and RECORDED_SHA256_RE.search(line)):
+    require(DECISION_LOG.is_file(), "DECISION_LOG.md is missing; approvals cannot be checked against their record")
+    found: dict[str, set[str]] = {}
+    for line in DECISION_LOG.read_text(encoding="utf-8").splitlines():
+        hashes = set(RECORDED_SHA256_RE.findall(line))
+        if not hashes:
             continue
-        cells = rows.get(index)
-        require(cells is not None,
-                f"DECISION_LOG.md line {index + 1} states a SHA-256 beside an approval but is not a row of the "
-                "decision table; an approval is bound by the owner's record, not by a comment, a code block or "
-                "a line that resembles one")
-        require(len(cells) >= 5,
-                f"DECISION_LOG.md line {index + 1} binds an approval but is not a four-column row")
-        row = cells[1].strip()
-        status = _plain(cells[3])
-        require(status == "accepted",
-                f"{row} states a SHA-256 beside an approval but its status reads {status!r}, not 'accepted'; "
-                "a row that does not bind must not look like one")
-        for approval_id, recorded in BINDING_RE.findall(line):
-            seen = bindings.get(approval_id)
-            if seen is not None and seen[0] != recorded:
-                raise ValidationError(
-                    f"{approval_id}: {seen[1]} records {seen[0]} and {row} records {recorded}. One approval has "
-                    "one hash, or a later row could re-authorise a rewritten text. If this row means to record "
-                    "another artefact's hash, name that artefact before the hash and after the approval, so the "
-                    "approval is not the last thing named before it"
-                )
-            bindings[approval_id] = (recorded, row)
-    return bindings
+        for approval_id in set(re.findall(r"APPROVE_[A-Z0-9_]+", line)):
+            found.setdefault(approval_id, set()).update(hashes)
+    return found
 
 
 def validate_approvals_match_their_record() -> int:
-    """Every retained approval text still hashes to what its decision row records.
+    """Every retained approval text still hashes to a value its record states.
 
     The hardening DEC-045 listed as a known issue. It runs over the files on
-    disk, so an approval text that arrives without a decision row fails too: an
-    unrecorded approval is not an approval, and the L2 text is read for the
-    request types and the retained schema widening. Returns how many texts it
-    checked, so the printed count is what was verified rather than a directory
-    listing. Only the approvals retained here are bound; other tracks record
+    disk, so an approval text that arrives without a mention in the record fails
+    too: an unrecorded approval is not an approval, and the L2 text is read for
+    the request types and the retained schema widening. Returns how many texts it
+    checked. Only the approvals retained here are checked; other tracks record
     their own in the same log and keep them elsewhere.
     """
-    bindings = recorded_approval_hashes()
+    recorded = recorded_hashes_by_approval()
     checked = 0
     for path in sorted(BASE.glob("APPROVE_*.txt")):
         approval_id = path.stem
         require(path.is_file(), f"{path.name}: an approval must be a file")
-        binding = bindings.get(approval_id)
-        require(binding is not None,
-                f"{path.name}: no accepted row in DECISION_LOG.md names this approval in backticks and states its "
-                "SHA-256; an approval the owner has not recorded binds nothing")
-        recorded, row = binding
+        stated = recorded.get(approval_id)
+        require(stated is not None,
+                f"{path.name}: no line of DECISION_LOG.md names this approval beside a SHA-256; an approval the "
+                "owner has not recorded is not an approval")
         actual = sha256_of(path)
-        require(actual == recorded,
-                f"{path.name}: the retained text hashes to {actual}, but {row} records {recorded}; "
-                "the text is not the one the owner approved")
+        require(actual in stated,
+                f"{path.name}: the retained text hashes to {actual}, which DECISION_LOG.md does not state on any "
+                f"line naming it (it states {', '.join(sorted(stated))}); the text is not the one the owner recorded")
         # Parsed as strictly as L1's, so a key nothing reads today cannot be
         # malformed for the reader that comes later.
         parse_approval_file(path, approval_id)
         checked += 1
-    for approval_id, (_, row) in sorted(bindings.items()):
+    for approval_id in sorted(recorded):
         if not approval_id.startswith(LIVE_DATA_APPROVAL_PREFIX):
             continue  # another track's approval, retained with that track
         require((BASE / f"{approval_id}.txt").is_file(),
-                f"{approval_id}: {row} records this approval with a SHA-256, but no text is retained for it")
+                f"{approval_id}: DECISION_LOG.md names this approval beside a SHA-256, but no text is retained for it")
     return checked
 
 
