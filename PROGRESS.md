@@ -31,8 +31,14 @@ implementation merge, then one hash-bound owner approval.
 read-only `/info` endpoint and public websocket. Merged to `main` on
 2026-09-08 (PR #153): the L1 preregistration, owner decision and consumed
 release, the `src/copyability` simulator, the L2 two-arm collector and two
-review rounds. What remains is the L2 collection run under the approved
-envelope, which nothing on `main` schedules or starts on its own.
+review rounds. Since then, #157 to #162 (2026-09-10 to 2026-09-16): the
+peer-pool amendment, both arm runners on one core with the report renderer
+and the hard-stop report, the proposal of the four operator-session decisions,
+the arm B price-coverage note, and the validator's binding of every approval
+text to the hash the decision log records. What remains before T0 is the
+owner's: the decision rows (the log ends at DEC-046 on 2026-09-16), one
+amending approval text, the funnel rehearsal and a dry run of the session
+runner. Nothing on `main` schedules or starts a collection run.
 
 ## Stage log
 
@@ -68,6 +74,13 @@ closed it.
 | Arm A window decision | 2026-09-04 | `DECIDED_A45` | DEC-044; `APPROVE_HL_LIVE_DATA_L2_ARM_A_WINDOW_001` SHA-256 `df082701…ecc96` bound to `3311338`; arm A = T0-52 to T0-7 on 15-minute candles, 15-minute freshness, no mixed resolution; B decisive, A is the early read and the survivorship measurement; `L2_ANALYSIS_PLAN.md` frozen at `1833f34` |
 | L2 pipeline build | 2026-09-04 | `BUILT_VERIFIED` | DEC-045; phases 1 to 8 of `L2_BUILD_PLAN.md`: size-weighted rate limiting, paged funding, `candleSnapshot` with schema v4, arm B `sweep` and `mids`, cohort discover/characterise/freeze with the 200-wallet hard stop, arm A candle fetch, opening positions in the simulator, arm B health script; every phase blind-verified; 1522 tests pass locally (two Windows-only `st_blocks` failures remain) |
 | Plan amendment (reading rules) | 2026-09-05 | `FROZEN_AMENDED_PRE_T0` | DEC-046; owner's reading of arm A, the `EXPLORATORY` rule and the report order written into `L2_ANALYSIS_PLAN.md` before T0 |
+| Plan amendment (peer pool) | 2026-09-10 | `FROZEN_AMENDED_PRE_T0_ROW_PENDING` | PR #157 (`f2c34ba`): the matched-random peers are drawn from every wallet the coverage ledger certifies over the window, cohort member or not, so the primary contrast cannot cancel the cohort's common return; arm B's sweep therefore covers the whole characterised set (`--sweep-pool`). The decision row, DEC-047, is the owner's and is not yet recorded |
+| Arm runners, renderer, hard-stop report | 2026-09-10 | `BUILT_VERIFIED` | PR #158 (`18bfecd`): one arm core (`l2_arm_runner.py`, `l2_arm_report.py`, `l2_arm_statistics.py`) behind `arm_a_runner.py` and `arm_b_runner.py`; `l2_arm_render.py` renders the evidence file in the order DEC-046 fixed and refuses a label the bounds do not give; the freeze writes the hard-stop report with the clock price of delay; five adversarial rounds |
+| Session runner (outside the repository) | 2026-09-12 | `BUILT_VERIFIED_OUTSIDE_REPO` | `C:\Users\mathi\owil-data\loop\collect_session.ps1` v3.2 (`e356d1d`), 105 offline tests: one operator-started, bounded mids session; refuses more than 8 h or clock-started sweeps without a decision row that exists in `DECISION_LOG.md`; measures the gap since the previous session and the cumulative unpriced time; lock beside the database; Ctrl-C measured (exit 130). Four adversarial rounds, three rewrites |
+| Operator-session decisions | 2026-09-12 | `PROPOSED_ROWS_PENDING` | PR #159 (`77cfc18`): `L2_OPERATOR_SESSIONS.md`, third draft after two adversarial rounds; rows A to D and two exact sixteen-line amending approval texts (`OPERATOR_SESSIONS_001` recommended, `ATTENDED_SESSIONS_001` if overnight sessions are rejected). Nothing is in force until the owner sends one text and records the rows |
+| Arm B price coverage | 2026-09-12 | `BUILT_VERIFIED` | PR #160 (`7a98c26`) was merged before its verification finished and was refuted: it claimed the span check covers the window edges (it reads the whole series, so a three-day blackout passed as full coverage), summed unpriced time across coins as if it were elapsed time, and crashed when the benchmark had fewer than two in-window quotes while
+another coin had a hole. PR #161 (`2d6628a`) fixed all three: `l2_arm_coverage.py` measures wall-clock unpriced time per coin from the `mids` table, head and tail included, no cross-coin sum; the arm B limitation note states it |
+| Validator approval binding | 2026-09-16 | `BUILT_VERIFIED_ROW_PENDING` | PR #162 (`d280441`), four drafts: every retained approval text must hash to a backticked SHA-256 on a `DECISION_LOG.md` line naming it and is parsed as strictly as L1's; the L2 request-type read goes through that parser; the four hashes are pinned as test literals. Closes the known issue DEC-045 named; the row recording that is the owner's |
 | Live-data review rounds | 2026-09-06…08 | `SEVENTEEN_FINDINGS_ALL_ADDRESSED` | `20af38f..eb3f30a`, 30 commits, one concern each; fifteen findings on the collector and simulator plus two from a second `src/copyability` pass (skipped copies desynchronising the follower; freeze characterising on an uncertified window); concurrent `sweep_wallet` work landed with the venue's documented surcharge divisors; ruflo hook and manifest-hygiene fixes; every commit verified alone, `1555` tests pass in a clean checkout, `REPOSITORY_VALIDATION_PASS` |
 | Live-data merge | 2026-09-08 | `MERGED` | PR #153, merge `2f427c72128a2df15395163ca553ad889596ed01` (`1d21875` + `eb3f30a`), after exact-head ubuntu CI on `eb3f30a` |
 
@@ -75,23 +88,37 @@ closed it.
 
 Ordered by what unblocks the most.
 
-1. **L2 collection run** — the pipeline is built, reviewed twice and merged
-   (`2f427c7`); the collection modules have had their `code-review`. Next:
+1. **Decision rows and one approval text** — the owner's, in this order:
+   DEC-047 for the peer-pool amendment (text in PR #157); a row recording
+   that DEC-045's known issue is closed by #162 and what that check does and
+   does not cover; one of the two amending approval texts in
+   `L2_OPERATOR_SESSIONS.md` sent unmodified with its 40-character commit, and
+   rows A to D with the numbers the owner assigns. The session runner refuses
+   an overnight session whose row is not in the log, and the validator
+   refuses an approval text whose hash is not on a log line naming it, so
+   these rows unblock the dry run and the first live session.
+2. **Funnel rehearsal and dry run** — a rehearsal of the funnel (discover,
+   characterise, freeze) on a small candidate set, recommended in the
+   operator's action list rather than prescribed by any document here, is
+   the only way to learn before T0 whether 600 candidates yield the plan's
+   200 evaluable wallets; below that is a pre-registered hard stop. Then one full session of 23.75 hours against a
+   throwaway database, read as row B specifies, before row B is recorded.
+3. **L2 collection run** — the pipeline is built, reviewed and merged. Next:
    discovery sessions, a 90-day characterisation backfill, the freeze with
    its 200-wallet hard stop, the arm A candle fetch and the arm A runner,
-   all from the frozen plan at `1833f34`. Arm B then runs 56 days of
-   operator-started sweeps with health checks only. Every step is started
-   by the operator; nothing on `main` schedules it.
-2. **Validator hardening** — the L1 validator honours the DEC-043 widening
-   from the approval file's key line without checking that file's SHA-256
-   against DEC-043; add the comparison before the arm A report.
-3. **R11A implementation merge** — review and merge the fully inert R11A
+   all from the frozen plan at `1833f34` as amended. Arm B then runs 56 days
+   of operator-started sessions and sweeps with health checks only. The
+   margin between arm A's 52-day window and the venue's 52.2-day candle
+   retention is 0.2 days, which leaves no room to fetch the candles later
+   than the T0 day.
+   Every step is started by the operator; nothing on `main` schedules it.
+4. **R11A implementation merge** — review and merge the fully inert R11A
    implementation and workflow candidate, kept outside `.github/workflows`.
-4. **R11A owner approval** — one hash-bound approval of the diagnostic scope,
+5. **R11A owner approval** — one hash-bound approval of the diagnostic scope,
    role reuse and the 72-request / zero-retry envelope.
-5. **R11A activation and run** — separate workflow-installation,
+6. **R11A activation and run** — separate workflow-installation,
    release-candidate and single-use activation stages, then one diagnostic run.
-6. **R11 closure and R12 readiness** — evidence-gated, after the diagnostic
+7. **R11 closure and R12 readiness** — evidence-gated, after the diagnostic
    resolves the duplicate root cause.
 
 ## R11A review (2026-09-03)
@@ -539,6 +566,78 @@ silences it instead of reporting the cohort share; and DEC-046 fixes a report
 order for arm A only, so extending it to arm B, where the survivorship section
 also carries the inflation against arm A, wants a decision.
 
+## Session runner, owner decisions, price coverage, approval binding (2026-09-11 to 2026-09-16)
+
+Four pieces landed between the arm runners and T0. Each was verified
+adversarially before it was offered, with one exception recorded below because
+it is the kind of thing this log exists to record.
+
+**The session runner** lives outside the repository, at
+`C:\Users\mathi\owil-data\loop\` in its own git, because the approval template
+excludes scheduled or unattended execution and the build plan names a sleep
+loop that runs unattended as an anti-pattern. It is one operator-started,
+bounded mids session that stops at its bound, on Ctrl-C or on a stop file,
+registers nothing and never restarts itself. Four adversarial rounds rewrote it
+three times. The first version fired sweeps on a timer and called itself
+attended; the second could not see the one gap the model structurally creates,
+the time between two sessions; the third could be walked around with a
+different log directory, a shell as the collector command, or an invented
+decision number. Version 3.2 measures the gap since the previous session and
+carries the unpriced time across sessions, refuses more than 8 hours or
+clock-started sweeps without a decision row that exists in `DECISION_LOG.md`,
+requires the collector command to be the collector itself, and finds the
+previous session through a pointer beside the database. Two PowerShell 5.1
+facts were measured rather than assumed: after Ctrl-C the first cmdlet in a
+`finally` block ends it silently and the process exits 0, so that block uses no
+cmdlet and yields exit 130 with its summary; Ctrl-Break opens the debugger.
+
+**The four owner decisions** on what "operator-started" covers over 56 days on
+one laptop are proposed in `L2_OPERATOR_SESSIONS.md` (#159): a series of
+attended sessions of at most 8 hours (row A), an overnight session of at most
+24 hours on conditions (row B, recommended, with its cost stated both ways),
+no clock-started sweeps (row C), and a restatement of the repeated-sweeps
+permission that stands only in the superseded FORWARD_STUDY_001 (row D). Two
+rounds refuted the first two drafts: a false L1 precedent (a watch iteration is
+a websocket pump step, not a minute) was
+withdrawn (its two watch runs lasted 254 s and 209 s inside a session of about
+fifteen minutes), the attended alternative was priced fairly on the L1 fill profile
+(33.7 percent of fills in 09:00 to 17:00 Brussels, 14.2 percent at night, 0 to
+40 percent per wallet), and the dry run was made executable under row A.
+
+**The price-coverage note** in the arm B report is the pre-T0 change that
+document commits to. PR #160 was opened and merged while its verification was
+still running, and the verification then refuted it: the note claimed the span
+check covers the window's edges when it reads the whole series and let a
+three-day blackout pass as full coverage; it summed unpriced time across coins
+and rendered the sum as elapsed time, so the plan's own healthy shape read as
+110 hours where the truth was 4.6; and it crashed after scoring every wallet
+when the benchmark had fewer than two in-window quotes while another coin
+had a hole. PR #161 fixed all three
+the same day. The rule since then is that a change is offered only after the
+panel has read it.
+
+**The approval binding** (#162) closes the known issue DEC-045 named: the
+validator read the L2 approval's request-type line without checking that the
+file was the one the owner approved. It took four drafts, and the history is in
+the commits. The first three parsed `DECISION_LOG.md` as a table and each was
+refuted by a disagreement between `str.split("|")` and the Markdown a reader
+sees: a binding in a fifth column the renderer drops, an escaped pipe that
+shifts every cell index so a row rendering "rejected" still bound, invisible
+characters in a status cell or a hash, a real row wrapped in a fence to unbind
+it. Skipping what the parser could not read was itself the bypass. The version
+that holds asks one mechanical question: does each retained approval still hash
+to a backticked lowercase SHA-256 stated on a log line naming it? Its limits are
+in its docstring: the accepted set only grows, so a row restating a superseded
+hash keeps the superseded text acceptable; every `APPROVE_HL_LIVE_DATA_*` token
+on a hash-bearing line is read as an approval that ought to be retained, so a
+rejection recorded with its hash would fail until an exception exists; and an
+edit of text and record together is not caught. Against that last one the four
+approval hashes are pinned as literals in the test suite, which CI runs, and the
+manifest is byte-exact. One draft's tests mutated the owner's signed approval
+texts in the working tree and restored them in a `finally`; a killed process
+would have left `l2Book`, a request type DEC-039 excludes by name, in a signed
+approval. The tests now run against a copy in a temporary directory.
+
 ## Known issues
 
 - `tests/test_archive_inventory_r11a_activity_storage_schema.py` and
@@ -546,7 +645,19 @@ also carries the inflation against arm A, wants a decision.
   `research/archive_inventory/r11a_implementation/storage.py` reads
   `stat.st_blocks`, which CPython only populates on POSIX. Pre-existing,
   unrelated to the live-data work, and green in Linux CI. Everything else
-  passes: 1545 of 1547 local after the 2026-09-06 review round.
+  passes: 1695 passed with those two deselected on the command line, measured
+  locally on 2026-09-16 after the merge of #162, out of 1697 collected.
+- The approval binding in `governance/validate_l1_live_data_preregistration.py`
+  (#162) accepts any hash the log states on a line naming an approval, so a row
+  restating a superseded hash keeps the superseded text acceptable; and it reads
+  every `APPROVE_HL_LIVE_DATA_*` token on a hash-bearing line as an approval
+  that ought to be retained, so a rejection or proposal recorded with its hash
+  would fail the validator until that rule is given an exception. Both are
+  disclosed in the module docstring and in PR #162; neither is a live defect
+  today, and the second becomes one the day the owner records such a row.
+- `DECISION_LOG.md` ends at DEC-046. The peer-pool amendment (#157), the
+  closure of DEC-045's known issue (#162) and the four operator-session
+  decisions (#159) have no row yet; the rows are the owner's to write.
 - `C:\Users\mathi\Desktop\onchain-wallet-intelligence-lab-main` is an unpacked
   zip with no `.git`. Its contents match `origin/main`, so it looks current,
   but it can never produce a branch, commit or PR and it lacks everything on
