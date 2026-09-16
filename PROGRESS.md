@@ -36,7 +36,8 @@ peer-pool amendment, both arm runners on one core with the report renderer
 and the hard-stop report, the proposal of the four operator-session decisions,
 the arm B price-coverage note, and the validator's binding of every approval
 text to the hash the decision log records. What remains before T0 is the
-owner's: the decision rows (the log ends at DEC-046 on 2026-09-16), one
+owner's: the decision rows (as of 2026-09-16 the log ends at DEC-046, dated
+2026-09-05), one
 amending approval text, the funnel rehearsal and a dry run of the session
 runner. Nothing on `main` schedules or starts a collection run.
 
