@@ -95,7 +95,8 @@ class PackageSurfaceTests(unittest.TestCase):
         self.assertEqual(
             {path.name for path in collector_sources()},
             {"__init__.py", "__main__.py", "transports.py", "candle_probe.py", "arm_a_candles.py", "arm_a_runner.py", "arm_b_runner.py", "health.py", "l2_arm_inputs.py", "l2_arm_render.py", "l2_arm_report.py", "l2_arm_coverage.py", "l2_arm_runner.py",
-             "l2_arm_statistics.py", "cohort_pipeline.py", "cohort_pipeline_freeze.py"},
+             "l2_arm_statistics.py", "cohort_pipeline.py", "cohort_pipeline_freeze.py",
+             "funnel_arithmetic.py", "funnel_projection.py"},
         )
 
     def test_both_layers_are_actually_being_scanned(self) -> None:
