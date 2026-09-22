@@ -15,6 +15,9 @@ from typing import Callable, Sequence
 DEFAULT_CONFIDENCE = 0.95
 #: The largest fresh discovery :func:`candidates_for_chance` will consider.
 SEARCH_CAP = 100_000
+#: Steps the incomplete beta's continued fraction may take before it is declared not to
+#: converge; a million characterised candidates need about 430 at the switch point.
+BETACF_ITERATIONS = 3000
 
 
 class ProjectionInputError(ValueError):
@@ -33,7 +36,8 @@ def _betacf(a: float, b: float, x: float) -> float:
     d = tiny if abs(d) < tiny else d
     d = 1.0 / d
     h = d
-    for m in range(1, 300):
+    converged = False
+    for m in range(1, BETACF_ITERATIONS):
         m2 = 2 * m
         aa = m * (b - m) * x / ((qam + m2) * (a + m2))
         d = 1.0 + aa * d
@@ -51,7 +55,10 @@ def _betacf(a: float, b: float, x: float) -> float:
         delta = d * c
         h *= delta
         if abs(delta - 1.0) < 1e-15:
+            converged = True
             break
+    if not converged:
+        raise ArithmeticError(f"the incomplete beta did not converge for a={a}, b={b}, x={x}")
     return h
 
 

@@ -87,6 +87,17 @@ class ExactArithmeticTests(unittest.TestCase):
         self.assertLess(lower, 0.4)
         self.assertGreater(upper, 0.4)
         self.assertAlmostEqual(fp.binomial_cdf(2000, 5000, upper), 0.025, places=6)
+        # a million candidates at the continued fraction's switch point still converges under the raised
+        # cap: at p = 1/2 the two halves of the distribution are exact mirror images
+        n = 1_000_000
+        self.assertAlmostEqual(fp.binomial_cdf(n // 2, n, 0.5) + fp.binomial_cdf(n // 2 - 1, n, 0.5), 1.0, places=9)
+
+    def test_the_continued_fraction_says_so_when_it_does_not_converge(self) -> None:
+        from unittest import mock
+        from research.wallet_copyability.live_data_collector import funnel_arithmetic as fa
+        with mock.patch.object(fa, "BETACF_ITERATIONS", 5), self.assertRaises(ArithmeticError) as caught:
+            fa.binomial_cdf(500_000, 1_000_000, 0.5)
+        self.assertIn("did not converge", str(caught.exception))
 
     def test_clopper_pearson_refuses_impossible_counts_and_confidence(self) -> None:
         for args in ((5, 4), (0, 0), (-1, 4)):
@@ -215,19 +226,32 @@ class FunnelTests(unittest.TestCase):
         self.assertEqual([r["remaining"] for r in rows], [95, 75, 60, 50, 30])
         self.assertEqual(rows[1]["share_of_discovered"], 0.2)
 
-    def test_counts_that_do_not_add_up_are_warned_about_not_refused(self) -> None:
+    def test_counts_that_do_not_add_up_are_refused(self) -> None:
+        counts = record(discovered=100, insufficient=20)["stage_counts"]
+        counts["prefiltered_directional"] = 79
+        with self.assertRaises(fp.ProjectionInputError) as caught:
+            fp.funnel_rows(counts)
+        self.assertIn("prefiltered_directional is 79", str(caught.exception))
         counts = record(discovered=100, insufficient=20)["stage_counts"]
         counts["evaluable"] = 70
-        counts["prefiltered_directional"] = 79
-        _, warnings = fp.funnel_rows(counts)
-        self.assertEqual(len(warnings), 2)
+        with self.assertRaises(fp.ProjectionInputError):
+            fp.funnel_rows(counts)
 
-    def test_an_evaluable_count_that_contradicts_the_funnel_is_warned_about(self) -> None:
+    def test_an_evaluable_count_that_contradicts_the_funnel_is_refused_even_without_the_key(self) -> None:
         payload = record(discovered=100, insufficient=20)
         payload["evaluable_count"] = 12
-        projection = fp.project(payload)
-        self.assertEqual(projection["inputs"]["evaluable"], 12)
-        self.assertTrue(any("disagrees with itself" in w for w in projection["warnings"]))
+        del payload["stage_counts"]["evaluable"]
+        payload["hard_stop"] = True
+        with self.assertRaises(fp.ProjectionInputError) as caught:
+            fp.project(payload)
+        self.assertIn("the funnel leaves 80", str(caught.exception))
+
+    def test_a_hard_stop_flag_that_contradicts_the_counts_is_refused(self) -> None:
+        payload = record(discovered=100)  # 100 evaluable under a minimum of 200: hard_stop must be True
+        payload["hard_stop"] = False
+        with self.assertRaises(fp.ProjectionInputError) as caught:
+            fp.project(payload)
+        self.assertIn("hard_stop is False", str(caught.exception))
 
 
 class PlanMinimumTests(unittest.TestCase):
@@ -252,11 +276,28 @@ class PlanMinimumTests(unittest.TestCase):
         projection = fp.project(record(discovered=100), minimum=250)
         self.assertEqual(projection["inputs"]["minimum"], 250)
         self.assertTrue(any("above the plan's" in w for w in projection["warnings"]))
+        self.assertIn("Projected against a minimum of 250 (the plan's is 200)", fp.render(projection))
 
-    def test_a_record_that_did_not_hard_stop_is_warned_about(self) -> None:
-        payload = record(discovered=100)
-        payload["hard_stop"] = False
-        self.assertTrue(any("did not hard-stop" in w for w in fp.project(payload)["warnings"]))
+    def test_a_record_made_with_a_minimum_above_the_plans_is_named_not_adopted_silently(self) -> None:
+        projection = fp.project(record(discovered=100, minimum=300))
+        self.assertEqual(projection["inputs"]["minimum"], 300)
+        self.assertTrue(any("above the plan's 200; projected against 300" in w for w in projection["warnings"]))
+
+    def test_a_record_at_or_above_the_projected_minimum_says_there_is_nothing_to_project_towards(self) -> None:
+        reached = record(discovered=250)  # 250 evaluable, hard_stop False by the helper
+        self.assertTrue(any("nothing to project towards" in w for w in fp.project(reached)["warnings"]))
+        # the flag alone is not enough: an underpowered record that passed its own bar is still under the plan's
+        under = record(discovered=200, insufficient=50, minimum=120)  # 150 evaluable, hard_stop False
+        projection = fp.project(under, allow_underpowered=True)
+        self.assertFalse(any("nothing to project towards" in w for w in projection["warnings"]))
+        self.assertIsNotNone(projection["candidates_needed"]["50_percent"])
+
+    def test_a_target_other_than_the_plans_is_labelled_and_warned_about(self) -> None:
+        projection = fp.project(record(discovered=100, insufficient=60), target=1000)
+        self.assertEqual(projection["fresh_discovery"][0]["label"], "--target 1000")
+        self.assertTrue(any("projected at --target 1000" in w for w in projection["warnings"]))
+        self.assertEqual(fp.project(record(discovered=100, insufficient=60))["fresh_discovery"][0]["label"],
+                         "the plan's target")
 
 
 class ProjectionTests(unittest.TestCase):
@@ -279,7 +320,9 @@ class ProjectionTests(unittest.TestCase):
         self.assertGreater(reading["chance_of_minimum"], 0.0)
         self.assertLess(reading["chance_of_minimum"], 0.5)
         self.assertEqual(set(projection["candidates_needed"]), {"50_percent", "80_percent", "90_percent"})
-        self.assertEqual(projection["largest_loss"], "insufficient_fills")
+        self.assertEqual(projection["largest_losses"], ["insufficient_fills", "scope_excluded"])  # 20 each
+        self.assertEqual(projection["plan"], {"minimum": 200, "discovery_target": 600})
+        self.assertEqual(projection["search_cap"], fp.SEARCH_CAP)
 
     def test_a_discovery_short_of_the_target_is_read_as_a_second_reading(self) -> None:
         projection = fp.project(record(discovered=100, insufficient=60),
@@ -294,7 +337,17 @@ class ProjectionTests(unittest.TestCase):
         projection = fp.project(record(discovered=100))
         self.assertGreater(projection["fresh_discovery"][0]["chance_of_minimum"], 0.99)
         self.assertIsNone(projection["rehearsal_set"])
-        self.assertIsNone(projection["largest_loss"])
+        self.assertEqual(projection["largest_losses"], [])
+
+    def test_tied_largest_losses_are_all_named(self) -> None:
+        projection = fp.project(record(discovered=100, rebate=20, scope=20))
+        self.assertEqual(projection["largest_losses"], ["rebate_excluded", "scope_excluded"])
+        self.assertIn("The largest losses are `rebate_excluded` and `scope_excluded`, tied.", fp.render(projection))
+
+    def test_the_fresh_reading_states_the_representativeness_it_rests_on(self) -> None:
+        projection = fp.project(record(discovered=100, insufficient=70), discovery={"candidate_count": 600})
+        self.assertTrue(any("representative of what a discovery yields" in a for a in projection["assumptions"]))
+        self.assertTrue(any("here unstated" in w for w in projection["warnings"]))
 
     def test_the_own_set_reading_needs_the_callers_word_that_the_sample_was_random(self) -> None:
         payload = record(discovered=100, insufficient=70)
@@ -335,6 +388,10 @@ class RenderingTests(unittest.TestCase):
         payload = kwargs.pop("payload", record(discovered=100, insufficient=40, scope=30))
         return fp.render(fp.project(payload, **kwargs))
 
+    def test_a_needed_count_past_the_cap_prints_the_cap(self) -> None:
+        projection = fp.project(record(discovered=100, insufficient=100))  # nothing evaluable
+        self.assertIn("more than 100000 (the search cap)", fp.render(projection))
+
     def test_the_rendering_names_the_readings_and_the_source(self) -> None:
         text = self.text(discovery={"candidate_count": 600}, sampled_at_random=True, source="REP_FREEZE.json")
         for phrase in ("# Funnel projection from a freeze record", "not an evidence file", "decides nothing",
@@ -354,9 +411,7 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("exact 95 % interval", self.text())
 
     def test_warnings_are_rendered_where_the_owner_will_see_them(self) -> None:
-        payload = record(discovered=100, insufficient=40)
-        payload["hard_stop"] = False
-        self.assertIn("## Warnings", fp.render(fp.project(payload)))
+        self.assertIn("## Warnings", fp.render(fp.project(record(discovered=250))))
 
 
 class CommandLineTests(unittest.TestCase):
@@ -424,7 +479,7 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(fp.main(["--freeze", str(freeze)], log=logged.append), 2)
         self.assertIn("--allow-underpowered-dry-run", logged[0])
         self.assertEqual(fp.main(["--freeze", str(freeze), "--allow-underpowered-dry-run"], log=logged.append), 0)
-        self.assertIn("The plan's minimum is 200", logged[-1])
+        self.assertIn("Projected against a minimum of 200.", logged[-1])
 
     def test_a_file_with_a_byte_order_mark_is_read(self) -> None:
         freeze = self.write("REP_FREEZE.json", record(discovered=100, insufficient=40))
