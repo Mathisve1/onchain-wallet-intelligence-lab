@@ -11,12 +11,12 @@ refused, as :mod:`.l2_arm_inputs` refuses it.
 
 Three readings, each labelled with what it assumes:
 
-* **Exact interval on the survival rate.** The freeze judged ``n`` candidates
-  and found ``k`` evaluable. The Clopper-Pearson interval is the exact
+* **Exact interval on the evaluable share.** The freeze read ``n``
+  characterised candidates and found ``k`` evaluable. The Clopper-Pearson interval is the exact
   binomial interval: its bounds are Beta quantiles, computed here by bisection
   on the regularised incomplete beta function rather than by summing terms, so
   the arithmetic does not depend on the size of the judged set.
-* **A fresh discovery at T0.** Under a uniform prior on the rate, the number
+* **A fresh discovery at T0.** Under a uniform prior on the share, the number
   evaluable among ``T`` fresh candidates is beta-binomial. The module reports
   its posterior mean, a central interval, the chance of reaching the minimum,
   and the smallest ``T`` reaching that chance at 50, 80 and 90 percent, beside
@@ -201,9 +201,9 @@ def project(
     n = _count(stage_counts, "discovered", "stage_counts")
     k = _count(freeze, "evaluable_count", "freeze record")
     if n == 0:
-        raise ProjectionInputError("the freeze judged no candidates; nothing to project from")
+        raise ProjectionInputError("the freeze read no candidates; nothing to project from")
     if k > n:
-        raise ProjectionInputError(f"evaluable_count {k} is larger than the {n} candidates judged")
+        raise ProjectionInputError(f"evaluable_count {k} is larger than the {n} candidates characterised")
 
     rows, warnings = funnel_rows(stage_counts)
     if "evaluable" in stage_counts and _count(stage_counts, "evaluable", "stage_counts") != k:
@@ -233,20 +233,20 @@ def project(
     if population is not None:
         if population < n:
             warnings.append(
-                f"discovery found {population} candidates but the freeze judged {n}; the freeze did not "
+                f"discovery found {population} candidates but the freeze read {n}; the freeze did not "
                 "sample that discovery, so the own-set reading is skipped"
             )
         elif population == n:
             own_set = {
                 "discovered": population, "sampled": n, "degenerate": True,
-                "note": f"the freeze judged the whole discovered set; the count is the record's {k}, "
+                "note": f"the freeze read the whole discovered set; the count is the record's {k}, "
                         "nothing is inferred",
             }
         elif not sampled_at_random:
             warnings.append(
-                f"the freeze judged {n} of {population} discovered candidates, but nothing in the record "
+                f"the freeze read {n} of {population} discovered candidates, but nothing in the record "
                 "says how those were chosen; the own-set reading needs --sampled-at-random, which asserts "
-                "the judged wallets were drawn from the discovery at random"
+                "the characterised wallets were drawn from the discovery at random"
             )
         else:
             posterior = hypergeometric_posterior(n, k, population)
@@ -264,7 +264,7 @@ def project(
         "the T0 tape yields candidates like the rehearsal's tape did; the rehearsal cannot test this",
         "the T0 discovery reaches the size each reading names; the plan discovers up to "
         f"{PLAN_DISCOVERY_TARGET}",
-        "a uniform prior on the survival rate, which moves the rate by (n - 2k) / (n(n + 2)): it matters "
+        "a uniform prior on the evaluable share, which moves the share by (n - 2k) / (n(n + 2)): it matters "
         "whenever few candidates survived or few fell out, at any size of judged set. The plug-in reading "
         "beside each posterior mean is the same number without the prior",
         f"the plan's minimum of {PLAN_MINIMUM_EVALUABLE} is not lowered and the freeze is not rerun with "
@@ -272,11 +272,11 @@ def project(
     ]
     if own_set is not None and not own_set["degenerate"]:
         assumptions.append(
-            "the judged wallets were drawn from the discovered set at random, as --sampled-at-random states; "
+            "the characterised wallets were drawn from the discovered set at random, as --sampled-at-random states; "
             "the own-set reading is worth nothing otherwise"
         )
     return {
-        "kind": "funnel projection from a rehearsal freeze; not an evidence file, and it decides nothing",
+        "kind": "funnel projection from a freeze record; not an evidence file, and it decides nothing",
         "source": {
             "file": source,
             "t0_utc": freeze.get("t0_utc"),
@@ -284,8 +284,8 @@ def project(
             "attempted_sha256": freeze.get("attempted_sha256"),
             "hard_stop": freeze.get("hard_stop"),
         },
-        "inputs": {"judged": n, "evaluable": k, "minimum": the_minimum, "confidence": confidence},
-        "survival_rate": {
+        "inputs": {"characterised": n, "evaluable": k, "minimum": the_minimum, "confidence": confidence},
+        "evaluable_share": {
             "estimate": k / n,
             "interval": list(clopper_pearson(k, n, confidence)),
             "method": "Clopper-Pearson, the exact binomial interval",
@@ -315,8 +315,8 @@ def _level(confidence: float) -> str:
 
 def render(projection: Mapping[str, Any]) -> str:
     """The projection as short Markdown for the owner."""
-    inputs, rate, source = projection["inputs"], projection["survival_rate"], projection["source"]
-    n, k, minimum = inputs["judged"], inputs["evaluable"], inputs["minimum"]
+    inputs, rate, source = projection["inputs"], projection["evaluable_share"], projection["source"]
+    n, k, minimum = inputs["characterised"], inputs["evaluable"], inputs["minimum"]
     level = _level(inputs["confidence"])
     provenance = ", ".join(
         part for part in (
@@ -327,11 +327,11 @@ def render(projection: Mapping[str, Any]) -> str:
         ) if part
     )
     lines = [
-        "# Funnel projection from the rehearsal",
+        "# Funnel projection from a freeze record",
         "",
         f"*{projection['kind']}.*" + (f" Read from: {provenance}." if provenance else ""),
         "",
-        f"The freeze judged {n} candidates and found {k} evaluable: a survival rate of "
+        f"The freeze read {n} characterised candidates and found {k} evaluable: an evaluable share of "
         f"{_pct(rate['estimate'])}, exact {level} interval {_pct(rate['interval'][0])} to "
         f"{_pct(rate['interval'][1])}. The plan's minimum is {minimum}.",
         "",
@@ -367,7 +367,7 @@ def render(projection: Mapping[str, Any]) -> str:
     own = projection["rehearsal_set"]
     if own is not None:
         lines += ["", f"## The rehearsal's own discovered set ({own['discovered']} candidates, "
-                      f"{own['sampled']} judged)", ""]
+                      f"{own['sampled']} characterised)", ""]
         if own["degenerate"]:
             lines.append(own["note"].capitalize() + ".")
         else:
@@ -409,7 +409,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="funnel_projection",
         description="Project the T0 funnel from a rehearsal freeze record. Reads counts only.",
     )
-    parser.add_argument("--freeze", type=Path, required=True, help="the freeze record (REP_FREEZE.json)")
+    parser.add_argument("--freeze", type=Path, required=True,
+                        help="the freeze record the rehearsal's freeze wrote (repetitie.ps1 names it REP_FREEZE.json)")
     parser.add_argument("--discovery", type=Path, default=None, help="the discovery report the rehearsal wrote")
     parser.add_argument("--target", type=int, default=PLAN_DISCOVERY_TARGET,
                         help="candidates the T0 discovery aims for")

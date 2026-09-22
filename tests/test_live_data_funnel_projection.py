@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import tempfile
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from research.wallet_copyability.live_data_collector import funnel_projection as fp
 from research.wallet_copyability.live_data_collector.cohort_pipeline_freeze import MINIMUM_EVALUABLE
-from src.copyability.cohort import STAGE_NAMES
+from src.copyability.cohort import STAGE_NAMES, select_cohort
 
 
 def record(*, discovered: int = 100, unobserved: int = 0, insufficient: int = 0, makers: int = 0,
@@ -194,9 +195,18 @@ class CountReadingTests(unittest.TestCase):
 
 class FunnelTests(unittest.TestCase):
     def test_the_funnel_names_every_stage_the_cohort_module_counts(self) -> None:
+        # STAGE_NAMES is the record's declaration order; the funnel is select_cohort's application
+        # order (window, classifier, rebate, scope), which this module states itself.
         stages = [stage for stage, _ in fp.EXCLUSION_STAGES]
         self.assertEqual(set(stages) | {"discovered", "prefiltered_directional", "evaluable"}, set(STAGE_NAMES))
         self.assertEqual(stages[:3], list(fp.CLASSIFIER_STAGES))
+
+    def test_the_funnel_order_is_the_order_select_cohort_increments_its_counts(self) -> None:
+        # The application order is read off select_cohort's own source: the position at which each
+        # stage's counter is incremented. A reordering of the filters would move those lines.
+        source = inspect.getsource(select_cohort)
+        positions = [source.index(f'counts["{stage}"] += 1') for stage, _ in fp.EXCLUSION_STAGES]
+        self.assertEqual(positions, sorted(positions), [stage for stage, _ in fp.EXCLUSION_STAGES])
 
     def test_survivors_chain_through_every_stage(self) -> None:
         rows, warnings = fp.funnel_rows(record(discovered=100, unobserved=5, insufficient=20, makers=15,
@@ -253,8 +263,9 @@ class ProjectionTests(unittest.TestCase):
     def test_the_projection_carries_every_reading_with_traceable_inputs(self) -> None:
         payload = record(discovered=100, unobserved=5, insufficient=20, makers=15, rebate=10, scope=20)
         projection = fp.project(payload, discovery={"candidate_count": 600, "target": 600}, source="REP_FREEZE.json")
-        self.assertEqual(projection["inputs"], {"judged": 100, "evaluable": 30, "minimum": 200, "confidence": 0.95})
-        self.assertAlmostEqual(projection["survival_rate"]["estimate"], 0.3)
+        self.assertEqual(projection["inputs"],
+                         {"characterised": 100, "evaluable": 30, "minimum": 200, "confidence": 0.95})
+        self.assertAlmostEqual(projection["evaluable_share"]["estimate"], 0.3)
         self.assertEqual(projection["source"]["plan_commit"], "1833f34")
         self.assertEqual(projection["source"]["file"], "REP_FREEZE.json")
         self.assertTrue(projection["source"]["hard_stop"])
@@ -326,7 +337,7 @@ class RenderingTests(unittest.TestCase):
 
     def test_the_rendering_names_the_readings_and_the_source(self) -> None:
         text = self.text(discovery={"candidate_count": 600}, sampled_at_random=True, source="REP_FREEZE.json")
-        for phrase in ("# Funnel projection from the rehearsal", "not an evidence file", "decides nothing",
+        for phrase in ("# Funnel projection from a freeze record", "not an evidence file", "decides nothing",
                        "freeze REP_FREEZE.json", "plan commit `1833f34`", "## The funnel, in selection order",
                        "## What a fresh discovery at T0 gives", "| the plan's target | 600 |",
                        "## The rehearsal's own discovered set", "## What this assumes",
@@ -368,7 +379,7 @@ class CommandLineTests(unittest.TestCase):
                         "--out", str(out), "--markdown", str(md)], log=logged.append)
         self.assertEqual(code, 0, logged)
         payload = json.loads(out.read_text(encoding="utf-8"))
-        self.assertEqual(payload["inputs"]["judged"], 100)
+        self.assertEqual(payload["inputs"]["characterised"], 100)
         self.assertEqual(payload["source"]["file"], "REP_FREEZE.json")
         self.assertEqual(payload["rehearsal_set"]["discovered"], 580)
         self.assertIn("# Funnel projection", md.read_text(encoding="utf-8"))
