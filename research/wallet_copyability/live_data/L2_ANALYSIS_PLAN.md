@@ -7,7 +7,10 @@ before any collection request, to add the owner's pre-registered reading of arm 
 on 2026-09-09, still before T0 and before any collection request, under the
 decision the owner records on accepting it, to fix the peer pool of the
 matched-random baseline (the section "Peer pool for the matched-random
-baseline, fixed before it is drawn"). The commit that contains this frozen text is cited in the T0
+baseline, fixed before it is drawn"); amended a third time on 2026-09-23, still
+before T0 and before any collection request, under the decision the owner
+records on accepting it, to fix the report order of arm B, the decisive arm
+(the section "Report order for arm B"). The commit that contains this frozen text is cited in the T0
 evidence together with the cohort hash. Nothing in it changes after T0. It carries no
 validator and no tamper tests by owner instruction; its authority is that hash.
 
@@ -151,6 +154,18 @@ hard stop above applies.
   itself, but obliges a written diagnosis of where it comes from before any GO is
   acted on. The case "A negative, B positive" is named explicitly in the report,
   never handled silently.
+
+### Report order for arm B
+
+Delivered only when arm B is complete, in the order fixed below for arm A: the
+answer in one sentence, which for the decisive arm states the decision the rule
+above gives and, when arm A's file is present, the measured survivorship
+inflation, `mean d_A minus mean d_B`, as a number and never a gate, with the
+case "A negative, B positive" named explicitly; the confidence interval; the
+survivorship measurement (both measures declared below); n after every filter
+stage; what broke; only then the tables. The report copies figures from the
+evidence file and computes nothing; a label that does not follow from the
+written interval is a refusal, not a sentence.
 
 ## How arm A is read, fixed before it is seen
 
