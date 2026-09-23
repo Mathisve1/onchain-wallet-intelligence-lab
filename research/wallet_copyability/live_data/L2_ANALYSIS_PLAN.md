@@ -162,7 +162,7 @@ answer in one sentence, which for the decisive arm states the decision the rule
 above gives and, when arm A's file is present, the measured survivorship
 inflation, `mean d_A minus mean d_B`, as a number and never a gate, with the
 case "A negative, B positive" named explicitly; the confidence interval; the
-survivorship measurement (both measures declared below); n after every filter
+survivorship measurement (both measures declared above); n after every filter
 stage; what broke; only then the tables. The report copies figures from the
 evidence file and computes nothing; a label that does not follow from the
 written interval is a refusal, not a sentence.
