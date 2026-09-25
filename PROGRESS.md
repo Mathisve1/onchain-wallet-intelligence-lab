@@ -36,10 +36,14 @@ peer-pool amendment, both arm runners on one core with the report renderer
 and the hard-stop report, the proposal of the four operator-session decisions,
 the arm B price-coverage note, and the validator's binding of every approval
 text to the hash the decision log records. On 2026-09-18 the owner merged
-#164 and #165: the log ends at DEC-052 and the amending approval
-`APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001` is sent and bound. What
-remains before T0 is the owner's: the funnel rehearsal and the dry run of the
-session runner. Nothing on `main` schedules or starts a collection run.
+#164 and #165: the amending approval `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001`
+is sent and bound. Since then #167 added the funnel projection that reads a
+rehearsal freeze, and on 2026-09-24 the owner merged #168, the third pre-T0
+amendment: the log ends at DEC-053 and the plan now fixes the report order of
+arm B, the decisive arm. What remains before T0 is the owner's: the funnel
+rehearsal, the dry run of the session runner, and the choice of the commit the
+T0 evidence cites for the frozen plan. Nothing on `main` schedules or starts a
+collection run.
 
 ## Stage log
 
@@ -83,6 +87,9 @@ closed it.
 another coin had a hole. PR #161 (`2d6628a`) fixed all three: `l2_arm_coverage.py` measures wall-clock unpriced time per coin from the `mids` table, head and tail included, no cross-coin sum; the arm B limitation note states it |
 | Validator approval binding | 2026-09-16 | `BUILT_VERIFIED` | PR #162 (`d280441`), four drafts: every retained approval text must hash to a backticked SHA-256 on a `DECISION_LOG.md` line naming it and is parsed as strictly as L1's; the L2 request-type read goes through that parser; the four hashes are pinned as test literals. Closes the known issue DEC-045 named; recorded as DEC-048 (#164); five approvals bound since #165 |
 | Decision rows DEC-047 to DEC-052 | 2026-09-18 | `RECORDED_BY_OWNER` | PRs #164 (`e3ffcbb`) and #165 (`3ef2feb`), merged by the owner in that order, then #163 (`3caff63`) for this file; merging was the owner's act of recording, stated in each PR; an independent read-only check compared every row and the approval file against their sources before the PRs were opened, and a second one checked the wording fixes; CI green on all three merge commits |
+| Funnel projection | 2026-09-23 | `BUILT_VERIFIED` | PR #167 (`a0a4d28`): `funnel_projection.py` with its arithmetic in `funnel_arithmetic.py` reads a rehearsal freeze's counts and gives the exact Clopper-Pearson interval on the evaluable share, the beta-binomial predictive at the plan's target and at the rehearsal's own yield, the smallest discovery reaching 50, 80 and 90 percent, and, only with `--sampled-at-random`, the finite-population reading of the rehearsal's own set. It refuses a record made under the plan's minimum as `l2_arm_inputs` does, refuses `--minimum` below 200, and refuses a record whose counts disagree with each other. Two adversarial panels reviewed it; every finding that reproduced under an independent verifier is fixed, and the second panel's verdicts (23 confirmed, 3 refuted) are in PR #167's body. 57 tests |
+| Plan amendment (arm B report order) | 2026-09-24 | `FROZEN_AMENDED_PRE_T0` | PR #168 (`d969c77`): the report order DEC-046 fixed for arm A is the plan's order for arm B too, the decisive arm, in the new section "Report order for arm B"; the renderer has applied it to both arms since #158. Recorded as DEC-053 by the owner's merge; an independent check found one wrong direction word before the PR was opened |
+| Operator step scripts (outside the repository) | 2026-09-23…24 | `BUILT_VERIFIED_OUTSIDE_REPO` | `C:\Users\mathi\owil-data\loop\`: one script per step to day 56 (`repetitie`, `proefdraai`, `t0dag`, `dag`, `sweep`, `sluiting`, with `dagstaat.py` and the synthetic `repetitie_dag56.py`), each checking what it can without a request, printing the exact command, waiting for the operator's Enter before every request and stopping at the first failure. Two adversarial panels, 21 confirmed findings, all fixed: the shared step function swallowed output and returned an array instead of the exit code, a hard-stop freeze record read as a frozen cohort, a redirected stdin counted as an Enter, and the session runner ended the operator's console. The second panel's sixteen confirmed findings are named in the loop repository's commit `04ed8ec`; the first panel's are in `8e9a5e5`. 151 offline tests |
 | Live-data review rounds | 2026-09-06…08 | `SEVENTEEN_FINDINGS_ALL_ADDRESSED` | `20af38f..eb3f30a`, 30 commits, one concern each; fifteen findings on the collector and simulator plus two from a second `src/copyability` pass (skipped copies desynchronising the follower; freeze characterising on an uncertified window); concurrent `sweep_wallet` work landed with the venue's documented surcharge divisors; ruflo hook and manifest-hygiene fixes; every commit verified alone, `1555` tests pass in a clean checkout, `REPOSITORY_VALIDATION_PASS` |
 | Live-data merge | 2026-09-08 | `MERGED` | PR #153, merge `2f427c72128a2df15395163ca553ad889596ed01` (`1d21875` + `eb3f30a`), after exact-head ubuntu CI on `eb3f30a` |
 
@@ -90,22 +97,32 @@ another coin had a hole. PR #161 (`2d6628a`) fixed all three: `l2_arm_coverage.p
 
 Ordered by what unblocks the most.
 
-1. **Decision rows and one approval text** — closed on 2026-09-18. DEC-047
-   (peer pool) and DEC-048 (DEC-045's issue closed by #162) via #164;
+1. **Decision rows and one approval text** — closed. DEC-047 (peer pool)
+   and DEC-048 (DEC-045's issue closed by #162) via #164;
    `APPROVE_HL_LIVE_DATA_L2_OPERATOR_SESSIONS_001` sent and DEC-049 to
-   DEC-052 recorded via #165. The session runner finds the rows it cites in
-   `DECISION_LOG.md` on `main`, and the validator binds five approvals.
+   DEC-052 recorded via #165, both on 2026-09-18; DEC-053, the report order
+   of arm B, via #168 on 2026-09-24. The session runner finds the rows it
+   cites in `DECISION_LOG.md` on `main`, and the validator binds five
+   approvals.
 2. **Funnel rehearsal and dry run** — a rehearsal of the funnel (discover,
    characterise, freeze) on a small candidate set, recommended in the
    operator's action list rather than prescribed by any document here, is
    the only way to learn before T0 whether 600 candidates yield the plan's
-   200 evaluable wallets; below that is a pre-registered hard stop. Then one full session of 23.75 hours against a
-   throwaway database under DEC-049's exception, read as DEC-050 specifies,
-   before the first overnight session on the study database.
+   200 evaluable wallets; below that is a pre-registered hard stop. The
+   rehearsal ends with `funnel_projection.py`, which turns its counts into
+   what a discovery of 600 is likely to give. Then one full session of 23.75
+   hours against a throwaway database under DEC-049's exception, read as
+   DEC-050 specifies by `check_dryrun.py`, before the first overnight session
+   on the study database. Both are one script each, outside the repository;
+   every request in them waits for the operator's Enter.
 3. **L2 collection run** — the pipeline is built, reviewed and merged. Next:
    discovery sessions, a 90-day characterisation backfill, the freeze with
    its 200-wallet hard stop, the arm A candle fetch and the arm A runner,
-   all from the frozen plan at `1833f34` as amended. Arm B then runs 56 days
+   all from the frozen plan at `1833f34` as amended three times before T0.
+   Which commit the T0 evidence cites for that text is the owner's choice on
+   the day: the plan says "the commit that contains this frozen text", DEC-047
+   named its own amendment's merge commit, and the candidates now differ, so
+   the T0-day script requires the hash rather than guessing it. Arm B then runs 56 days
    of operator-started sessions and sweeps with health checks only. The
    margin between arm A's 52-day window and the venue's 52.2-day candle
    retention is 0.2 days, which leaves no room to fetch the candles later
@@ -565,11 +582,13 @@ silences it instead of reporting the cohort share; and DEC-046 fixes a report
 order for arm A only, so extending it to arm B, where the survivorship section
 also carries the inflation against arm A, wants a decision.
 
-## Session runner, owner decisions, price coverage, approval binding (2026-09-11 to 2026-09-18)
+## Session runner, owner decisions, price coverage, approval binding (2026-09-11 to 2026-09-24)
 
-Four pieces landed between the arm runners and T0. Each was verified
-adversarially before it was offered, with one exception recorded below because
-it is the kind of thing this log exists to record.
+Five pieces landed between the arm runners and T0: the session runner, the
+four owner decisions, the price-coverage note, the approval binding, and the
+operator's step scripts. Each was verified adversarially before it was
+offered, with one exception recorded below because it is the kind of thing
+this log exists to record.
 
 **The session runner** lives outside the repository, at
 `C:\Users\mathi\owil-data\loop\` in its own git, because the approval template
@@ -608,6 +627,27 @@ check of the rows and the approval file against the proposal; the one
 departure, the dry run's place, is stated in DEC-050. The runner's version 3.3
 (`ae0a23e`) names DEC-049 to DEC-052 in its header comment, DEC-049 to DEC-051
 on its banner, and DEC-051 in its refusal of clock-started sweeps.
+
+**The operator's step scripts** (2026-09-23 and 24, outside the repository)
+turn every step from the rehearsal to the day-56 read into one script of the
+same shape: it checks what it can without a request, prints the exact command,
+waits for the operator's Enter before every request, streams the command's
+output to the screen and stops at the first failure. Two adversarial panels
+reviewed them, and every finding an independent verifier could reproduce is
+fixed. Four of them would have cost
+something real. The shared step function captured each command's output into
+its own return value, so the operator would have seen none of the counts and
+refusals the notes tell them to read, and the caller received an array instead
+of an exit code, which would have made the day-56 script run six live closing
+sweeps after a successful read. A freeze record written by a hard stop was
+read as a frozen cohort by three scripts, because they keyed on the file's
+existence rather than on its `hard_stop` flag. A redirected standard input was
+accepted as an Enter, so the scripts would have run unattended under a wrapper.
+And the session runner ends its host with its own exit code, which closed the
+operator's console when it was started in process; it is now a child process.
+The plan commit the T0 day cites was taken from git until the second panel
+showed that no rule reproduces the owner's own choice; it is now required as
+an argument, with the candidates printed.
 
 **The price-coverage note** in the arm B report is the pre-T0 change that
 document commits to. PR #160 was opened and merged while its verification was
@@ -660,6 +700,17 @@ approval. The tests now run against a copy in a temporary directory.
   would fail the validator until that rule is given an exception. Both are
   disclosed in the module docstring and in PR #162; neither is a live defect
   today, and the second becomes one the day the owner records such a row.
+- No rule reproduces the owner's choice of the commit the T0 evidence cites
+  for the frozen plan. The plan's status paragraph says "the commit that
+  contains this frozen text"; DEC-047 named `f2c34ba`, the merge commit of the
+  pull request that carried its own amendment (`a603e33`); on `main` today the
+  last commit that touched the plan is `60084c6` and the merge that brought it
+  in is `d969c77`. Each names the frozen text of its own moment, and the two
+  pairs differ: `f2c34ba` and `a603e33` carry the plan as it stood after the
+  peer-pool amendment, `60084c6` and `d969c77` carry it with DEC-053's section
+  as well. The
+  T0-day script therefore requires `-PlanCommit` and prints the candidates;
+  both arm runners refuse any hash but the one the freeze record carries.
 - The rows DEC-048 to DEC-052 carry 2026-09-16, the day they were written
   for the owner, as DEC-047 carries the day #157 proposed it; the merge
   commits of 2026-09-18 carry the day the owner acted. In this log's practice
